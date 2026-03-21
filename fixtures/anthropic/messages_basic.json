@@ -1,0 +1,20 @@
+{
+  "request": {
+    "model": "claude-opus-4-6",
+    "max_tokens": 256,
+    "system": "You are a concise assistant.",
+    "messages": [
+      { "role": "user", "content": "Explain what an LLM proxy does." }
+    ]
+  },
+  "response": {
+    "id": "msg_01XFDUDYJgAACzvnptvVoYEL",
+    "type": "message",
+    "role": "assistant",
+    "content": [{ "type": "text", "text": "An LLM proxy sits between a client and a language model API, translating requests and responses between different API formats." }],
+    "model": "claude-opus-4-6",
+    "stop_reason": "end_turn",
+    "stop_sequence": null,
+    "usage": { "input_tokens": 25, "output_tokens": 30 }
+  }
+}

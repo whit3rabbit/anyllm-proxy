@@ -1,0 +1,38 @@
+{
+  "request": {
+    "model": "claude-opus-4-6",
+    "max_tokens": 512,
+    "messages": [
+      { "role": "user", "content": "What is the S&P 500 at today?" }
+    ],
+    "tools": [
+      {
+        "name": "get_stock_price",
+        "description": "Get the latest price for an index or ticker.",
+        "input_schema": {
+          "type": "object",
+          "properties": { "ticker": { "type": "string" } },
+          "required": ["ticker"]
+        }
+      }
+    ],
+    "tool_choice": { "type": "any" }
+  },
+  "response": {
+    "id": "msg_01ABC123",
+    "type": "message",
+    "role": "assistant",
+    "content": [
+      {
+        "type": "tool_use",
+        "id": "toolu_01D7FLrfh4GYq7yT1ULFeyMV",
+        "name": "get_stock_price",
+        "input": { "ticker": "^GSPC" }
+      }
+    ],
+    "model": "claude-opus-4-6",
+    "stop_reason": "tool_use",
+    "stop_sequence": null,
+    "usage": { "input_tokens": 50, "output_tokens": 20 }
+  }
+}

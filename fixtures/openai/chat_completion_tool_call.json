@@ -1,0 +1,52 @@
+{
+  "request": {
+    "model": "gpt-5.4",
+    "messages": [
+      { "role": "user", "content": "What is the S&P 500 at today?" }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "get_stock_price",
+          "description": "Get the latest price for an index or ticker.",
+          "parameters": {
+            "type": "object",
+            "properties": { "ticker": { "type": "string" } },
+            "required": ["ticker"]
+          }
+        }
+      }
+    ],
+    "tool_choice": "required"
+  },
+  "response": {
+    "id": "chatcmpl-def456",
+    "object": "chat.completion",
+    "model": "gpt-5.4",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "tool_calls": [
+            {
+              "id": "call_xyz789",
+              "type": "function",
+              "function": {
+                "name": "get_stock_price",
+                "arguments": "{\"ticker\":\"^GSPC\"}"
+              }
+            }
+          ]
+        },
+        "finish_reason": "tool_calls"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 50,
+      "completion_tokens": 15,
+      "total_tokens": 65
+    }
+  }
+}
