@@ -59,8 +59,14 @@ impl OpenAIClient {
         &self,
         req: &openai::ChatCompletionRequest,
     ) -> Result<reqwest::Response, OpenAIClientError> {
-        super::send_with_retry(&self.client, &self.chat_completions_url, &self.auth, req, "OpenAI")
-            .await
+        super::send_with_retry(
+            &self.client,
+            &self.chat_completions_url,
+            &self.auth,
+            req,
+            "OpenAI",
+        )
+        .await
     }
 
     /// Send a non-streaming chat completion request with retry on 429/5xx.
@@ -124,8 +130,8 @@ impl RetryableError for OpenAIClientError {
     }
 
     fn from_api_response(status: u16, body: &str) -> Self {
-        let error = serde_json::from_str::<openai::errors::ErrorResponse>(body)
-            .unwrap_or_else(|e| {
+        let error =
+            serde_json::from_str::<openai::errors::ErrorResponse>(body).unwrap_or_else(|e| {
                 tracing::debug!("failed to parse OpenAI error response: {e}");
                 OpenAIClient::fallback_error(status)
             });

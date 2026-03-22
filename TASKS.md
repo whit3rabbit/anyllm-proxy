@@ -389,12 +389,12 @@ The `anthropic_openai_translate` crate is already pure (no IO, no async, no netw
 - [x] Example: existing OpenAI-based axum service gains Anthropic API compatibility by adding one middleware layer
 - [x] Test: middleware integration test with mock backend (6 tests: non-streaming, streaming SSE, error translation, Tower layer passthrough, invalid JSON, model mapping)
 
-## Phase 22: Future Work (not started)
+## Phase 22: Hardening and Operability
 
+- [x] Graceful shutdown with in-flight request draining (SIGINT + SIGTERM, axum `with_graceful_shutdown`)
+- [x] Rate limit header passthrough (OpenAI `x-ratelimit-*` headers mapped to Anthropic `anthropic-ratelimit-*` equivalents)
+- [x] Error/edge case fixtures (9 fixture files: OpenAI 401/429/500/malformed, Gemini 400/429, Anthropic errors; 13 tests)
+- [x] Request/response logging toggle (`LOG_BODIES=true` env var, debug-level body logging)
 - [ ] OpenAI Responses API backend: wire up `ResponsesRequest`/`ResponsesResponse` types with runtime backend selection
 - [ ] Live API integration tests (requires OPENAI_API_KEY, currently golden fixtures only)
-- [ ] Error/edge case fixtures (4xx/5xx responses, oversized requests, malformed JSON)
-- [ ] Graceful shutdown with in-flight request draining
-- [ ] Rate limit header passthrough (OpenAI rate limit headers to Anthropic equivalents)
-- [ ] Request/response logging toggle (opt-in body logging for debugging, redacted by default)
 - [ ] Publish `anthropic_openai_translate` crate to crates.io

@@ -364,14 +364,11 @@ async fn messages_stream(
                             );
 
                         let completed = read_sse_frames(response, &tx, &metrics, |json_str| {
-                            match serde_json::from_str::<gemini::GenerateContentResponse>(
-                                json_str,
-                            ) {
+                            match serde_json::from_str::<gemini::GenerateContentResponse>(json_str)
+                            {
                                 Ok(chunk) => Some(translator.process_chunk(&chunk)),
                                 Err(e) => {
-                                    tracing::debug!(
-                                        "failed to parse Gemini streaming chunk: {e}"
-                                    );
+                                    tracing::debug!("failed to parse Gemini streaming chunk: {e}");
                                     None
                                 }
                             }

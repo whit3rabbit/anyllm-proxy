@@ -125,8 +125,8 @@ impl RetryableError for GeminiClientError {
     }
 
     fn from_api_response(status: u16, body: &str) -> Self {
-        let error = serde_json::from_str::<gemini::errors::ErrorResponse>(body)
-            .unwrap_or_else(|e| {
+        let error =
+            serde_json::from_str::<gemini::errors::ErrorResponse>(body).unwrap_or_else(|e| {
                 tracing::debug!("failed to parse Gemini error response: {e}");
                 GeminiClient::fallback_error(status)
             });

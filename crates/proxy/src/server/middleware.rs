@@ -51,7 +51,13 @@ pub async fn add_request_id(mut request: Request<Body>, next: Next) -> Response 
         .map(|s| s.to_string())
         .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
-    let header_value: axum::http::HeaderValue = request_id.parse().unwrap();
+    let header_value: axum::http::HeaderValue = request_id.parse().unwrap_or_else(|_| {
+        // Client-provided x-request-id contained invalid header characters; replace it.
+        uuid::Uuid::new_v4()
+            .to_string()
+            .parse()
+            .expect("UUID is always a valid header value")
+    });
     request
         .headers_mut()
         .insert("x-request-id", header_value.clone());

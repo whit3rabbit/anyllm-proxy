@@ -12,7 +12,7 @@ See PLAN.md for the full specification and TASKS.md for phased implementation st
 
 **Working (verified):**
 - Build: `cargo build` clean, `cargo clippy -- -D warnings` clean
-- Tests: ~303 tests passing (224 translator, 79 proxy)
+- Tests: ~371 tests passing (273 translator, 98 proxy)
 - Full Anthropic Messages API translation: non-streaming, streaming SSE, tool calling, file/document blocks
 - Proxy middleware: health, auth, request ID, size limits, concurrency limits, retry with backoff
 - Compatibility endpoints: /v1/models, count_tokens (approximate via tiktoken), batches (stub)
@@ -27,7 +27,7 @@ See PLAN.md for the full specification and TASKS.md for phased implementation st
 
 ```bash
 cargo build                          # build everything
-cargo test                           # run all tests (~303 tests)
+cargo test                           # run all tests (~371 tests)
 cargo test -p anthropic_openai_translate  # translator crate only
 cargo test -p anthropic_openai_proxy      # proxy crate only
 cargo test health_endpoint            # single test by name
@@ -59,6 +59,7 @@ OPENAI_API_KEY=sk-... cargo run -p anthropic_openai_proxy
 - `GOOGLE_ACCESS_TOKEN`: OAuth bearer token for Vertex AI (alternative to VERTEX_API_KEY)
 - `GEMINI_API_KEY`: Google API key for Gemini Developer API (required when BACKEND=gemini)
 - `GEMINI_BASE_URL`: Gemini API base URL (default: `https://generativelanguage.googleapis.com/v1beta`)
+- `LOG_BODIES`: Enable request/response body logging at debug level (`true` or `1`, default: disabled)
 
 ## Architecture
 

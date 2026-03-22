@@ -110,5 +110,8 @@ async fn new_connections_refused_after_shutdown() {
 
     // New connection should fail (connection refused)
     let result = reqwest::get(format!("http://{addr}/health")).await;
-    assert!(result.is_err(), "expected connection refused after shutdown");
+    assert!(
+        result.is_err(),
+        "expected connection refused after shutdown"
+    );
 }

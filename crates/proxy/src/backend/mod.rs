@@ -34,16 +34,16 @@ pub(crate) async fn send_with_retry<E: RetryableError>(
     body: &impl Serialize,
     label: &str,
 ) -> Result<reqwest::Response, E> {
-    for attempt in 0..MAX_RETRIES {
+    for attempt in 0..=MAX_RETRIES {
         let rb = apply_auth(client.post(url).json(body), auth);
         let response = rb.send().await.map_err(E::from_request)?;
         let status = response.status().as_u16();
 
-        if response.status().is_success() {
+        if (200..300).contains(&status) {
             return Ok(response);
         }
 
-        if is_retryable(status) {
+        if attempt < MAX_RETRIES && is_retryable(status) {
             let retry_after = parse_retry_after(response.headers());
             let delay = backoff_delay(attempt, retry_after);
             tracing::warn!(
@@ -53,6 +53,8 @@ pub(crate) async fn send_with_retry<E: RetryableError>(
                 delay_ms = delay.as_millis() as u64,
                 "retryable error from {label}, backing off"
             );
+            // Drain body so the connection can be returned to the pool
+            drop(response.bytes().await);
             sleep(delay).await;
             continue;
         }
@@ -64,18 +66,7 @@ pub(crate) async fn send_with_retry<E: RetryableError>(
         return Err(E::from_api_response(status, &text));
     }
 
-    // Final attempt: no retry on failure
-    let rb = apply_auth(client.post(url).json(body), auth);
-    let response = rb.send().await.map_err(E::from_request)?;
-    if response.status().is_success() {
-        return Ok(response);
-    }
-    let status = response.status().as_u16();
-    let text = response.text().await.unwrap_or_else(|e| {
-        tracing::warn!("failed to read error response body: {e}");
-        String::new()
-    });
-    Err(E::from_api_response(status, &text))
+    unreachable!("loop runs MAX_RETRIES+1 times and always returns")
 }
 
 /// Build a reqwest HTTP client with optional mTLS identity and custom CA cert.
@@ -251,11 +242,27 @@ impl RateLimitHeaders {
 
     /// Inject Anthropic-format rate limit headers into a response HeaderMap.
     pub fn inject_anthropic_headers(&self, map: &mut HeaderMap) {
-        set_if_some(map, "anthropic-ratelimit-requests-limit", &self.requests_limit);
-        set_if_some(map, "anthropic-ratelimit-requests-remaining", &self.requests_remaining);
-        set_if_some(map, "anthropic-ratelimit-requests-reset", &self.requests_reset);
+        set_if_some(
+            map,
+            "anthropic-ratelimit-requests-limit",
+            &self.requests_limit,
+        );
+        set_if_some(
+            map,
+            "anthropic-ratelimit-requests-remaining",
+            &self.requests_remaining,
+        );
+        set_if_some(
+            map,
+            "anthropic-ratelimit-requests-reset",
+            &self.requests_reset,
+        );
         set_if_some(map, "anthropic-ratelimit-tokens-limit", &self.tokens_limit);
-        set_if_some(map, "anthropic-ratelimit-tokens-remaining", &self.tokens_remaining);
+        set_if_some(
+            map,
+            "anthropic-ratelimit-tokens-remaining",
+            &self.tokens_remaining,
+        );
         set_if_some(map, "anthropic-ratelimit-tokens-reset", &self.tokens_reset);
         set_if_some(map, "retry-after", &self.retry_after);
     }
@@ -310,8 +317,14 @@ mod rate_limit_tests {
         let mut map = HeaderMap::new();
         rl.inject_anthropic_headers(&mut map);
 
-        assert_eq!(map.get("anthropic-ratelimit-requests-limit").unwrap(), "100");
-        assert_eq!(map.get("anthropic-ratelimit-tokens-remaining").unwrap(), "39500");
+        assert_eq!(
+            map.get("anthropic-ratelimit-requests-limit").unwrap(),
+            "100"
+        );
+        assert_eq!(
+            map.get("anthropic-ratelimit-tokens-remaining").unwrap(),
+            "39500"
+        );
         assert_eq!(map.get("retry-after").unwrap(), "3");
         // Fields that were None should not be present
         assert!(map.get("anthropic-ratelimit-requests-remaining").is_none());

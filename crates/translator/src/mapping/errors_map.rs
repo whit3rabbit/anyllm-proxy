@@ -329,7 +329,10 @@ mod tests {
     fn fixture_anthropic_error_invalid_request_deserializes() {
         let json = include_str!("../../../../fixtures/anthropic/error_invalid_request.json");
         let err: anthropic::errors::ErrorResponse = serde_json::from_str(json).unwrap();
-        assert_eq!(err.error.error_type, anthropic::ErrorType::InvalidRequestError);
+        assert_eq!(
+            err.error.error_type,
+            anthropic::ErrorType::InvalidRequestError
+        );
     }
 
     #[test]
@@ -347,7 +350,10 @@ mod tests {
         let json = include_str!("../../../../fixtures/openai/error_401.json");
         let openai_err: openai::errors::ErrorResponse = serde_json::from_str(json).unwrap();
         let anthropic_err = openai_to_anthropic_error(&openai_err, 401, Some("req_test".into()));
-        assert_eq!(anthropic_err.error.error_type, anthropic::ErrorType::AuthenticationError);
+        assert_eq!(
+            anthropic_err.error.error_type,
+            anthropic::ErrorType::AuthenticationError
+        );
     }
 
     #[test]
@@ -355,7 +361,10 @@ mod tests {
         let json = include_str!("../../../../fixtures/openai/error_429.json");
         let openai_err: openai::errors::ErrorResponse = serde_json::from_str(json).unwrap();
         let anthropic_err = openai_to_anthropic_error(&openai_err, 429, None);
-        assert_eq!(anthropic_err.error.error_type, anthropic::ErrorType::RateLimitError);
+        assert_eq!(
+            anthropic_err.error.error_type,
+            anthropic::ErrorType::RateLimitError
+        );
     }
 
     #[test]
@@ -363,7 +372,10 @@ mod tests {
         let json = include_str!("../../../../fixtures/openai/error_500.json");
         let openai_err: openai::errors::ErrorResponse = serde_json::from_str(json).unwrap();
         let anthropic_err = openai_to_anthropic_error(&openai_err, 500, None);
-        assert_eq!(anthropic_err.error.error_type, anthropic::ErrorType::ApiError);
+        assert_eq!(
+            anthropic_err.error.error_type,
+            anthropic::ErrorType::ApiError
+        );
     }
 
     #[test]
@@ -371,7 +383,10 @@ mod tests {
         let json = include_str!("../../../../fixtures/gemini/error_400.json");
         let gemini_err: gemini::errors::ErrorResponse = serde_json::from_str(json).unwrap();
         let anthropic_err = gemini_to_anthropic_error(&gemini_err, 400, None);
-        assert_eq!(anthropic_err.error.error_type, anthropic::ErrorType::InvalidRequestError);
+        assert_eq!(
+            anthropic_err.error.error_type,
+            anthropic::ErrorType::InvalidRequestError
+        );
     }
 
     #[test]
@@ -379,6 +394,9 @@ mod tests {
         let json = include_str!("../../../../fixtures/gemini/error_429.json");
         let gemini_err: gemini::errors::ErrorResponse = serde_json::from_str(json).unwrap();
         let anthropic_err = gemini_to_anthropic_error(&gemini_err, 429, None);
-        assert_eq!(anthropic_err.error.error_type, anthropic::ErrorType::RateLimitError);
+        assert_eq!(
+            anthropic_err.error.error_type,
+            anthropic::ErrorType::RateLimitError
+        );
     }
 }
