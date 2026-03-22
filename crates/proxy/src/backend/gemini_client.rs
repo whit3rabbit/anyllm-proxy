@@ -1,11 +1,10 @@
 // reqwest client for calling native Gemini API endpoints
 // Developer API: https://ai.google.dev/api/generate-content
 
-use super::build_http_client;
+use super::{build_http_client, RateLimitHeaders, RetryableError};
 use crate::config::{BackendAuth, Config};
 use anthropic_openai_translate::gemini;
 use reqwest::Client;
-use tokio::time::sleep;
 
 /// HTTP client for Gemini's native generateContent API with retry logic.
 ///
@@ -53,51 +52,12 @@ impl GeminiClient {
         }
     }
 
-    /// Send a request with retry on 429/5xx. Returns the raw successful response.
     async fn send_with_retry(
         &self,
         req: &gemini::GenerateContentRequest,
         url: &str,
     ) -> Result<reqwest::Response, GeminiClientError> {
-        for attempt in 0..=crate::backend::MAX_RETRIES {
-            let mut rb = self.client.post(url).json(req);
-            rb = match &self.auth {
-                BackendAuth::BearerToken(token) => rb.bearer_auth(token),
-                BackendAuth::GoogleApiKey(key) => rb.header("x-goog-api-key", key),
-            };
-            let response = rb.send().await.map_err(GeminiClientError::Request)?;
-
-            let status = response.status().as_u16();
-
-            if !response.status().is_success() {
-                if crate::backend::is_retryable(status) && attempt < crate::backend::MAX_RETRIES {
-                    let retry_after = crate::backend::parse_retry_after(response.headers());
-                    let delay = crate::backend::backoff_delay(attempt, retry_after);
-                    tracing::warn!(
-                        status,
-                        attempt = attempt + 1,
-                        max_retries = crate::backend::MAX_RETRIES,
-                        delay_ms = delay.as_millis() as u64,
-                        "retryable error from Gemini, backing off"
-                    );
-                    sleep(delay).await;
-                    continue;
-                }
-
-                let error_body = response
-                    .json::<gemini::errors::ErrorResponse>()
-                    .await
-                    .unwrap_or_else(|_| Self::fallback_error(status));
-                return Err(GeminiClientError::ApiError {
-                    status,
-                    error: error_body,
-                });
-            }
-
-            return Ok(response);
-        }
-
-        unreachable!("retry loop should always return")
+        super::send_with_retry(&self.client, url, &self.auth, req, "Gemini").await
     }
 
     /// Send a non-streaming generateContent request with retry on 429/5xx.
@@ -107,7 +67,7 @@ impl GeminiClient {
         &self,
         req: &gemini::GenerateContentRequest,
         model: &str,
-    ) -> Result<(gemini::GenerateContentResponse, u16), GeminiClientError> {
+    ) -> Result<(gemini::GenerateContentResponse, u16, RateLimitHeaders), GeminiClientError> {
         let url = self.generate_content_url(model);
         let response = self.send_with_retry(req, &url).await?;
         let status = response.status().as_u16();
@@ -115,20 +75,24 @@ impl GeminiClient {
             .json::<gemini::GenerateContentResponse>()
             .await
             .map_err(GeminiClientError::Deserialization)?;
-        Ok((body, status))
+        // Gemini does not send rate limit headers; return defaults.
+        Ok((body, status, RateLimitHeaders::default()))
     }
 
     /// Send a streaming generateContent request with retry on 429/5xx.
-    /// Returns the raw response for SSE parsing once a successful connection is established.
+    /// Returns the raw response and (default) rate limit headers once a
+    /// successful connection is established.
     ///
     /// See <https://ai.google.dev/api/generate-content#v1beta.models.streamGenerateContent>
     pub async fn generate_content_stream(
         &self,
         req: &gemini::GenerateContentRequest,
         model: &str,
-    ) -> Result<reqwest::Response, GeminiClientError> {
+    ) -> Result<(reqwest::Response, RateLimitHeaders), GeminiClientError> {
         let url = self.stream_generate_content_url(model);
-        self.send_with_retry(req, &url).await
+        let response = self.send_with_retry(req, &url).await?;
+        // Gemini does not send rate limit headers; return defaults.
+        Ok((response, RateLimitHeaders::default()))
     }
 }
 
@@ -152,6 +116,21 @@ impl std::fmt::Display for GeminiClientError {
                 write!(f, "Gemini API error ({status}): {}", error.error.message)
             }
         }
+    }
+}
+
+impl RetryableError for GeminiClientError {
+    fn from_request(e: reqwest::Error) -> Self {
+        Self::Request(e)
+    }
+
+    fn from_api_response(status: u16, body: &str) -> Self {
+        let error = serde_json::from_str::<gemini::errors::ErrorResponse>(body)
+            .unwrap_or_else(|e| {
+                tracing::debug!("failed to parse Gemini error response: {e}");
+                GeminiClient::fallback_error(status)
+            });
+        Self::ApiError { status, error }
     }
 }
 

@@ -1,11 +1,10 @@
 // reqwest client for calling OpenAI endpoints
 // PLAN.md lines 649-650
 
-use super::build_http_client;
+use super::{build_http_client, RateLimitHeaders, RetryableError};
 use crate::config::{BackendAuth, BackendKind, Config};
 use anthropic_openai_translate::openai;
 use reqwest::Client;
-use tokio::time::sleep;
 
 /// HTTP client for OpenAI-compatible Chat Completions APIs with retry logic.
 /// Works with both OpenAI and Vertex AI OpenAI-compatible endpoints.
@@ -56,50 +55,12 @@ impl OpenAIClient {
         }
     }
 
-    /// Send a request with retry on 429/5xx. Returns the raw successful response.
     async fn send_with_retry(
         &self,
         req: &openai::ChatCompletionRequest,
     ) -> Result<reqwest::Response, OpenAIClientError> {
-        for attempt in 0..=crate::backend::MAX_RETRIES {
-            let mut rb = self.client.post(&self.chat_completions_url).json(req);
-            rb = match &self.auth {
-                BackendAuth::BearerToken(token) => rb.bearer_auth(token),
-                BackendAuth::GoogleApiKey(key) => rb.header("x-goog-api-key", key),
-            };
-            let response = rb.send().await.map_err(OpenAIClientError::Request)?;
-
-            let status = response.status().as_u16();
-
-            if !response.status().is_success() {
-                if crate::backend::is_retryable(status) && attempt < crate::backend::MAX_RETRIES {
-                    let retry_after = crate::backend::parse_retry_after(response.headers());
-                    let delay = crate::backend::backoff_delay(attempt, retry_after);
-                    tracing::warn!(
-                        status,
-                        attempt = attempt + 1,
-                        max_retries = crate::backend::MAX_RETRIES,
-                        delay_ms = delay.as_millis() as u64,
-                        "retryable error from OpenAI, backing off"
-                    );
-                    sleep(delay).await;
-                    continue;
-                }
-
-                let error_body = response
-                    .json::<openai::errors::ErrorResponse>()
-                    .await
-                    .unwrap_or_else(|_| Self::fallback_error(status));
-                return Err(OpenAIClientError::ApiError {
-                    status,
-                    error: error_body,
-                });
-            }
-
-            return Ok(response);
-        }
-
-        unreachable!("retry loop should always return")
+        super::send_with_retry(&self.client, &self.chat_completions_url, &self.auth, req, "OpenAI")
+            .await
     }
 
     /// Send a non-streaming chat completion request with retry on 429/5xx.
@@ -108,25 +69,29 @@ impl OpenAIClient {
     pub async fn chat_completion(
         &self,
         req: &openai::ChatCompletionRequest,
-    ) -> Result<(openai::ChatCompletionResponse, u16), OpenAIClientError> {
+    ) -> Result<(openai::ChatCompletionResponse, u16, RateLimitHeaders), OpenAIClientError> {
         let response = self.send_with_retry(req).await?;
         let status = response.status().as_u16();
+        let rate_limits = RateLimitHeaders::from_openai_headers(response.headers());
         let body = response
             .json::<openai::ChatCompletionResponse>()
             .await
             .map_err(OpenAIClientError::Deserialization)?;
-        Ok((body, status))
+        Ok((body, status, rate_limits))
     }
 
     /// Send a streaming chat completion request with retry on 429/5xx.
-    /// Returns the raw response for SSE parsing once a successful connection is established.
+    /// Returns the raw response and rate limit headers for SSE parsing once a
+    /// successful connection is established.
     ///
     /// OpenAI: <https://platform.openai.com/docs/api-reference/chat/streaming>
     pub async fn chat_completion_stream(
         &self,
         req: &openai::ChatCompletionRequest,
-    ) -> Result<reqwest::Response, OpenAIClientError> {
-        self.send_with_retry(req).await
+    ) -> Result<(reqwest::Response, RateLimitHeaders), OpenAIClientError> {
+        let response = self.send_with_retry(req).await?;
+        let rate_limits = RateLimitHeaders::from_openai_headers(response.headers());
+        Ok((response, rate_limits))
     }
 }
 
@@ -150,6 +115,21 @@ impl std::fmt::Display for OpenAIClientError {
                 write!(f, "OpenAI API error ({status}): {}", error.error.message)
             }
         }
+    }
+}
+
+impl RetryableError for OpenAIClientError {
+    fn from_request(e: reqwest::Error) -> Self {
+        Self::Request(e)
+    }
+
+    fn from_api_response(status: u16, body: &str) -> Self {
+        let error = serde_json::from_str::<openai::errors::ErrorResponse>(body)
+            .unwrap_or_else(|e| {
+                tracing::debug!("failed to parse OpenAI error response: {e}");
+                OpenAIClient::fallback_error(status)
+            });
+        Self::ApiError { status, error }
     }
 }
 
