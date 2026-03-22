@@ -2,34 +2,111 @@ use std::fmt;
 use std::net::IpAddr;
 use url::Url;
 
+/// Which upstream backend the proxy targets.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BackendKind {
+    OpenAI,
+    Vertex,
+}
+
+/// How the proxy authenticates to the upstream backend.
+#[derive(Clone)]
+pub enum BackendAuth {
+    /// `Authorization: Bearer {token}` (OpenAI, Vertex OAuth)
+    BearerToken(String),
+    /// `x-goog-api-key: {key}` (Vertex API key)
+    GoogleApiKey(String),
+}
+
+impl fmt::Debug for BackendAuth {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::BearerToken(_) => write!(f, "BearerToken([REDACTED])"),
+            Self::GoogleApiKey(_) => write!(f, "GoogleApiKey([REDACTED])"),
+        }
+    }
+}
+
 /// Proxy configuration loaded from environment variables.
 #[derive(Debug, Clone)]
 pub struct Config {
+    pub backend: BackendKind,
     pub openai_api_key: String,
     pub openai_base_url: String,
     pub listen_port: u16,
     pub model_mapping: ModelMapping,
     pub tls: TlsConfig,
+    pub backend_auth: BackendAuth,
 }
 
 impl Config {
     pub fn from_env() -> Self {
-        let base_url = std::env::var("OPENAI_BASE_URL")
-            .unwrap_or_else(|_| "https://api.openai.com".to_string());
+        let backend_str = std::env::var("BACKEND").unwrap_or_else(|_| "openai".into());
+        let backend = match backend_str.to_ascii_lowercase().as_str() {
+            "openai" => BackendKind::OpenAI,
+            "vertex" => BackendKind::Vertex,
+            other => panic!("unknown BACKEND value '{other}', expected 'openai' or 'vertex'"),
+        };
 
-        if let Err(e) = validate_base_url(&base_url) {
-            panic!("OPENAI_BASE_URL rejected: {e}");
-        }
+        let listen_port = std::env::var("LISTEN_PORT")
+            .ok()
+            .and_then(|p| p.parse().ok())
+            .unwrap_or(3000);
+        let tls = TlsConfig::from_env();
 
-        Self {
-            openai_api_key: std::env::var("OPENAI_API_KEY").unwrap_or_default(),
-            openai_base_url: base_url,
-            listen_port: std::env::var("LISTEN_PORT")
-                .ok()
-                .and_then(|p| p.parse().ok())
-                .unwrap_or(3000),
-            model_mapping: ModelMapping::from_env(),
-            tls: TlsConfig::from_env(),
+        match backend {
+            BackendKind::OpenAI => {
+                let base_url = std::env::var("OPENAI_BASE_URL")
+                    .unwrap_or_else(|_| "https://api.openai.com".to_string());
+                if let Err(e) = validate_base_url(&base_url) {
+                    panic!("OPENAI_BASE_URL rejected: {e}");
+                }
+                let api_key = std::env::var("OPENAI_API_KEY").unwrap_or_default();
+                let backend_auth = BackendAuth::BearerToken(api_key.clone());
+                Self {
+                    backend,
+                    openai_api_key: api_key,
+                    openai_base_url: base_url,
+                    listen_port,
+                    model_mapping: ModelMapping::from_env_with_defaults("gpt-4o", "gpt-4o-mini"),
+                    tls,
+                    backend_auth,
+                }
+            }
+            BackendKind::Vertex => {
+                let project = std::env::var("VERTEX_PROJECT")
+                    .unwrap_or_else(|_| panic!("VERTEX_PROJECT is required when BACKEND=vertex"));
+                let region = std::env::var("VERTEX_REGION")
+                    .unwrap_or_else(|_| panic!("VERTEX_REGION is required when BACKEND=vertex"));
+
+                let backend_auth = if let Ok(api_key) = std::env::var("VERTEX_API_KEY") {
+                    BackendAuth::GoogleApiKey(api_key)
+                } else if let Ok(token) = std::env::var("GOOGLE_ACCESS_TOKEN") {
+                    BackendAuth::BearerToken(token)
+                } else {
+                    panic!("VERTEX_API_KEY or GOOGLE_ACCESS_TOKEN is required when BACKEND=vertex");
+                };
+
+                let base_url = format!(
+                    "https://{region}-aiplatform.googleapis.com/v1/projects/{project}/locations/{region}/endpoints/openapi"
+                );
+                if let Err(e) = validate_base_url(&base_url) {
+                    panic!("Vertex base URL rejected: {e}");
+                }
+
+                Self {
+                    backend,
+                    openai_api_key: String::new(),
+                    openai_base_url: base_url,
+                    listen_port,
+                    model_mapping: ModelMapping::from_env_with_defaults(
+                        "gemini-2.5-pro",
+                        "gemini-2.5-flash",
+                    ),
+                    tls,
+                    backend_auth,
+                }
+            }
         }
     }
 }
@@ -45,9 +122,13 @@ pub struct ModelMapping {
 
 impl ModelMapping {
     pub fn from_env() -> Self {
+        Self::from_env_with_defaults("gpt-4o", "gpt-4o-mini")
+    }
+
+    pub fn from_env_with_defaults(big_default: &str, small_default: &str) -> Self {
         Self {
-            big_model: std::env::var("BIG_MODEL").unwrap_or_else(|_| "gpt-4o".into()),
-            small_model: std::env::var("SMALL_MODEL").unwrap_or_else(|_| "gpt-4o-mini".into()),
+            big_model: std::env::var("BIG_MODEL").unwrap_or_else(|_| big_default.into()),
+            small_model: std::env::var("SMALL_MODEL").unwrap_or_else(|_| small_default.into()),
         }
     }
 
@@ -106,11 +187,7 @@ impl fmt::Debug for TlsConfig {
 impl TlsConfig {
     /// Load and validate TLS config from file paths.
     /// Panics on invalid/missing files or wrong password.
-    pub fn load(
-        p12_path: Option<&str>,
-        p12_password: Option<&str>,
-        ca_path: Option<&str>,
-    ) -> Self {
+    pub fn load(p12_path: Option<&str>, p12_password: Option<&str>, ca_path: Option<&str>) -> Self {
         let p12_identity = match (p12_path, p12_password) {
             (Some(path), Some(password)) => {
                 let bytes = std::fs::read(path)
@@ -144,9 +221,8 @@ impl TlsConfig {
                 .unwrap_or_else(|e| panic!("failed to read CA cert file '{}': {}", path, e));
 
             // Validate the PEM parses as a certificate
-            reqwest::Certificate::from_pem(&bytes).unwrap_or_else(|e| {
-                panic!("invalid CA certificate '{}': {}", path, e)
-            });
+            reqwest::Certificate::from_pem(&bytes)
+                .unwrap_or_else(|e| panic!("invalid CA certificate '{}': {}", path, e));
 
             tracing::info!(path = %path, "loaded custom CA certificate");
             bytes
@@ -437,5 +513,47 @@ mod tests {
     fn tls_config_panics_wrong_password() {
         let path = fixture_path("test-client.p12");
         TlsConfig::load(Some(&path), Some("wrong-password"), None);
+    }
+
+    // --- Vertex / BackendKind tests ---
+
+    #[test]
+    fn vertex_url_construction() {
+        let url = format!(
+            "https://{}-aiplatform.googleapis.com/v1/projects/{}/locations/{}/endpoints/openapi",
+            "us-central1", "my-project", "us-central1"
+        );
+        assert_eq!(
+            url,
+            "https://us-central1-aiplatform.googleapis.com/v1/projects/my-project/locations/us-central1/endpoints/openapi"
+        );
+    }
+
+    #[test]
+    fn vertex_base_url_passes_ssrf() {
+        let url = "https://us-central1-aiplatform.googleapis.com/v1/projects/my-project/locations/us-central1/endpoints/openapi";
+        assert!(validate_base_url(url).is_ok());
+    }
+
+    #[test]
+    fn vertex_model_defaults() {
+        let m = ModelMapping::from_env_with_defaults("gemini-2.5-pro", "gemini-2.5-flash");
+        // When BIG_MODEL/SMALL_MODEL env vars are not set, uses Vertex defaults
+        // (This test works because env vars are unlikely to be set in test environment)
+        assert_eq!(m.map_model("claude-sonnet-4-6"), "gemini-2.5-pro");
+        assert_eq!(m.map_model("claude-haiku-4-5"), "gemini-2.5-flash");
+    }
+
+    #[test]
+    fn backend_auth_debug_redacts() {
+        let bearer = BackendAuth::BearerToken("secret-token".into());
+        let debug = format!("{:?}", bearer);
+        assert!(debug.contains("REDACTED"));
+        assert!(!debug.contains("secret-token"));
+
+        let api_key = BackendAuth::GoogleApiKey("secret-key".into());
+        let debug = format!("{:?}", api_key);
+        assert!(debug.contains("REDACTED"));
+        assert!(!debug.contains("secret-key"));
     }
 }

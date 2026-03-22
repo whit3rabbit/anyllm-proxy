@@ -12,15 +12,11 @@ See PLAN.md for the full specification and TASKS.md for phased implementation st
 
 **Working (verified):**
 - Build: `cargo build` clean, `cargo clippy -- -D warnings` clean
-- Tests: 169 tests passing (135 translator, 21 proxy unit, 7 golden fixtures, 5 integration, 1 health)
-- Non-streaming translation: Anthropic Messages -> OpenAI Chat Completions, round-trip
-- Streaming SSE: state machine translates OpenAI chunks -> Anthropic stream events
-- Tool calling: tool definitions, tool_use/tool_result, ID passthrough, JSON string/object conversion
-- File/document blocks: image and PDF base64 translation with size limits
-- Proxy: health, auth, request ID, size limits, concurrency limits, retry with backoff
-- Compatibility stubs: /v1/models (dynamic list), /v1/messages/count_tokens and /v1/messages/batches (return unsupported error)
-- Model mapping: BIG_MODEL/SMALL_MODEL env vars, pattern-matches haiku/sonnet/opus to configured models
-- Transparent proxy: accepts anthropic-version/anthropic-beta headers, warns on lossy translations (metadata, cache_control, top_k, document blocks, stop_sequences truncation)
+- Tests: ~219 tests passing (158 translator, 61 proxy)
+- Full Anthropic Messages API translation: non-streaming, streaming SSE, tool calling, file/document blocks
+- Proxy middleware: health, auth, request ID, size limits, concurrency limits, retry with backoff
+- Compatibility stubs: /v1/models, count_tokens, batches
+- Model mapping and lossy-translation warnings
 
 **Not implemented (types exist but not wired up):**
 - OpenAI Responses API backend: `ResponsesRequest`/`ResponsesResponse` types are defined in `crates/translator/src/openai/responses.rs` but the proxy only calls Chat Completions. PLAN.md envisions runtime selection between the two.
@@ -31,7 +27,7 @@ See PLAN.md for the full specification and TASKS.md for phased implementation st
 
 ```bash
 cargo build                          # build everything
-cargo test                           # run all tests (204 tests)
+cargo test                           # run all tests (~219 tests)
 cargo test -p anthropic_openai_translate  # translator crate only
 cargo test -p anthropic_openai_proxy      # proxy crate only
 cargo test health_endpoint            # single test by name
@@ -47,15 +43,20 @@ OPENAI_API_KEY=sk-... cargo run -p anthropic_openai_proxy
 
 ## Environment Variables
 
-- `OPENAI_API_KEY`: OpenAI API key (required for proxying, empty default)
+- `BACKEND`: Backend provider: `openai` (default) or `vertex`
+- `OPENAI_API_KEY`: OpenAI API key (required when BACKEND=openai, empty default)
 - `OPENAI_BASE_URL`: OpenAI base URL (default: `https://api.openai.com`)
 - `LISTEN_PORT`: Server port (default: `3000`)
-- `BIG_MODEL`: OpenAI model for sonnet/opus requests (default: `gpt-4o`)
-- `SMALL_MODEL`: OpenAI model for haiku requests (default: `gpt-4o-mini`)
+- `BIG_MODEL`: OpenAI model for sonnet/opus requests (default: `gpt-4o` for OpenAI, `gemini-2.5-pro` for Vertex)
+- `SMALL_MODEL`: OpenAI model for haiku requests (default: `gpt-4o-mini` for OpenAI, `gemini-2.5-flash` for Vertex)
 - `RUST_LOG`: Tracing filter (e.g., `info`, `anthropic_openai_proxy=debug`)
 - `TLS_CLIENT_CERT_P12`: Path to PKCS#12 (.p12/.pfx) client certificate for mTLS to the backend (optional)
 - `TLS_CLIENT_CERT_PASSWORD`: Password to decrypt the P12 file (required if P12 is set)
 - `TLS_CA_CERT`: Path to PEM-encoded CA certificate for verifying the backend server (optional)
+- `VERTEX_PROJECT`: GCP project ID (required when BACKEND=vertex)
+- `VERTEX_REGION`: GCP region, e.g. `us-central1` (required when BACKEND=vertex)
+- `VERTEX_API_KEY`: Google API key for Vertex AI (one of VERTEX_API_KEY or GOOGLE_ACCESS_TOKEN required when BACKEND=vertex)
+- `GOOGLE_ACCESS_TOKEN`: OAuth bearer token for Vertex AI (alternative to VERTEX_API_KEY)
 
 ## Architecture
 
@@ -107,7 +108,7 @@ Client (Anthropic format) -> proxy (axum)
 - Most source files reference their PLAN.md line ranges in a comment at the top.
 - Test files live alongside source (`#[cfg(test)]` modules) and in `crates/proxy/tests/` for integration tests.
 - Error types use `thiserror` derive macros.
-- Test distribution: translator has bulk of tests (135), proxy tests focus on SSE formatting (11) and client retry logic (8).
+- Test distribution: translator (~158 tests), proxy (~61 tests including integration/compatibility).
 
 ## References
 

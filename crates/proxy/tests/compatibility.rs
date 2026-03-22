@@ -6,6 +6,7 @@ use reqwest::Client;
 
 fn test_config() -> Config {
     Config {
+        backend: config::BackendKind::OpenAI,
         openai_api_key: "test-key".to_string(),
         openai_base_url: "https://api.openai.com".to_string(),
         listen_port: 0,
@@ -14,6 +15,7 @@ fn test_config() -> Config {
             small_model: "gpt-4o-mini".into(),
         },
         tls: config::TlsConfig::default(),
+        backend_auth: config::BackendAuth::BearerToken("test-key".into()),
     }
 }
 

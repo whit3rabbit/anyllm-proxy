@@ -251,21 +251,21 @@ Research phase only. Two competing proxies support Gemini as a backend. Need to 
 
 **Recommendation:** Implement Vertex OpenAI-compatible mode first (Phase 20a, minimal work). Build native Gemini translation (Phases 20c-20g) only if Vertex OpenAI-compatible mode has gaps (tool calling, streaming, schema handling).
 
-## Phase 20a: Vertex AI OpenAI-Compatible Backend (not started)
+## Phase 20a: Vertex AI OpenAI-Compatible Backend
 **Priority: high** | Depends on P15 (model mapping), P20 (research)
 
 Quick win: Vertex AI exposes an OpenAI-compatible Chat Completions endpoint. The existing Anthropic-to-OpenAI translation layer works as-is. Only need different auth, base URL, and model mapping.
 
-- [ ] Backend selection: `BACKEND` env var (`openai` default, `vertex` option)
-- [ ] Vertex config: `VERTEX_PROJECT`, `VERTEX_REGION` env vars
-- [ ] Vertex auth: `VERTEX_API_KEY` (via `x-goog-api-key` header) or `GOOGLE_ACCESS_TOKEN` (OAuth bearer)
-- [ ] URL construction: `https://{REGION}-aiplatform.googleapis.com/v1/projects/{PROJECT}/locations/{REGION}/endpoints/openapi/chat/completions`
-- [ ] Model name mapping: Claude names -> Gemini names (via Phase 15 model mapping infrastructure)
-- [ ] SSRF validation: allow `*.googleapis.com` hostnames in `validate_base_url`
-- [ ] Update `Config` struct with backend variant, keep existing OpenAI fields, add Vertex fields
-- [ ] Reuse `OpenAIClient` with different base URL and auth header (no new client needed)
+- [x] Backend selection: `BACKEND` env var (`openai` default, `vertex` option)
+- [x] Vertex config: `VERTEX_PROJECT`, `VERTEX_REGION` env vars
+- [x] Vertex auth: `VERTEX_API_KEY` (via `x-goog-api-key` header) or `GOOGLE_ACCESS_TOKEN` (OAuth bearer)
+- [x] URL construction: `https://{REGION}-aiplatform.googleapis.com/v1/projects/{PROJECT}/locations/{REGION}/endpoints/openapi/chat/completions`
+- [x] Model name mapping: Claude names -> Gemini names (via Phase 15 model mapping infrastructure, defaults to gemini-2.5-pro/gemini-2.5-flash)
+- [x] SSRF validation: `*.googleapis.com` hostnames pass existing validation (no changes needed)
+- [x] Update `Config` struct with `BackendKind`, `BackendAuth`, keep existing OpenAI fields
+- [x] Reuse `OpenAIClient` with different base URL and auth header (no new client needed)
 - [ ] Research: validate Vertex OpenAI-compat endpoint supports streaming, tool calling, all Gemini models
-- [ ] Test: config parsing, URL construction, auth header selection, model mapping
+- [x] Test: config parsing, URL construction, auth header selection, model mapping, SSRF validation
 - [ ] Validate: manual test against real Vertex endpoint (non-streaming, streaming, tool calling)
 - [ ] Document gaps found in Vertex OpenAI-compatible mode -> update `docs/gemini-api-diffs.md`
 

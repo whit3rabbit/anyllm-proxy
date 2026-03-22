@@ -1,7 +1,7 @@
 // reqwest client for calling OpenAI endpoints
 // PLAN.md lines 649-650
 
-use crate::config::Config;
+use crate::config::{BackendAuth, BackendKind, Config};
 use anthropic_openai_translate::openai;
 use reqwest::Client;
 use std::time::Duration;
@@ -10,14 +10,15 @@ use tokio::time::sleep;
 const MAX_RETRIES: u32 = 3;
 const BASE_DELAY_MS: u64 = 500;
 
-/// HTTP client for OpenAI Chat Completions API with retry logic.
+/// HTTP client for OpenAI-compatible Chat Completions APIs with retry logic.
+/// Works with both OpenAI and Vertex AI OpenAI-compatible endpoints.
 ///
 /// OpenAI: <https://platform.openai.com/docs/api-reference/chat/create>
 #[derive(Clone)]
 pub struct OpenAIClient {
     client: Client,
     chat_completions_url: String,
-    api_key: String,
+    auth: BackendAuth,
 }
 
 impl OpenAIClient {
@@ -33,17 +34,27 @@ impl OpenAIClient {
         }
 
         if let Some(ref ca_pem) = config.tls.ca_cert_pem {
-            let cert = reqwest::Certificate::from_pem(ca_pem)
-                .expect("CA cert was validated at startup");
+            let cert =
+                reqwest::Certificate::from_pem(ca_pem).expect("CA cert was validated at startup");
             builder = builder.add_root_certificate(cert);
         }
 
         let client = builder.build().expect("failed to build HTTP client");
 
+        // OpenAI base URL does not include /v1, Vertex base URL ends at /openapi
+        let chat_completions_url = match config.backend {
+            BackendKind::OpenAI => {
+                format!("{}/v1/chat/completions", config.openai_base_url)
+            }
+            BackendKind::Vertex => {
+                format!("{}/chat/completions", config.openai_base_url)
+            }
+        };
+
         Self {
             client,
-            chat_completions_url: format!("{}/v1/chat/completions", config.openai_base_url),
-            api_key: config.openai_api_key.clone(),
+            chat_completions_url,
+            auth: config.backend_auth.clone(),
         }
     }
 
@@ -90,14 +101,12 @@ impl OpenAIClient {
         req: &openai::ChatCompletionRequest,
     ) -> Result<reqwest::Response, OpenAIClientError> {
         for attempt in 0..=MAX_RETRIES {
-            let response = self
-                .client
-                .post(&self.chat_completions_url)
-                .bearer_auth(&self.api_key)
-                .json(req)
-                .send()
-                .await
-                .map_err(OpenAIClientError::Request)?;
+            let mut rb = self.client.post(&self.chat_completions_url).json(req);
+            rb = match &self.auth {
+                BackendAuth::BearerToken(token) => rb.bearer_auth(token),
+                BackendAuth::GoogleApiKey(key) => rb.header("x-goog-api-key", key),
+            };
+            let response = rb.send().await.map_err(OpenAIClientError::Request)?;
 
             let status = response.status().as_u16();
 
@@ -249,8 +258,9 @@ mod tests {
 
     #[test]
     fn client_builds_without_tls() {
-        use crate::config::{ModelMapping, TlsConfig};
+        use crate::config::{BackendKind, ModelMapping, TlsConfig};
         let config = Config {
+            backend: BackendKind::OpenAI,
             openai_api_key: "test".into(),
             openai_base_url: "https://api.openai.com".into(),
             listen_port: 3000,
@@ -259,8 +269,31 @@ mod tests {
                 small_model: "gpt-4o-mini".into(),
             },
             tls: TlsConfig::default(),
+            backend_auth: BackendAuth::BearerToken("test".into()),
         };
         // Should not panic
         let _client = OpenAIClient::new(&config);
+    }
+
+    #[test]
+    fn client_builds_vertex_config() {
+        use crate::config::{BackendKind, ModelMapping, TlsConfig};
+        let config = Config {
+            backend: BackendKind::Vertex,
+            openai_api_key: String::new(),
+            openai_base_url: "https://us-central1-aiplatform.googleapis.com/v1/projects/my-project/locations/us-central1/endpoints/openapi".into(),
+            listen_port: 3000,
+            model_mapping: ModelMapping {
+                big_model: "gemini-2.5-pro".into(),
+                small_model: "gemini-2.5-flash".into(),
+            },
+            tls: TlsConfig::default(),
+            backend_auth: BackendAuth::GoogleApiKey("test-key".into()),
+        };
+        let client = OpenAIClient::new(&config);
+        // Verify URL construction for Vertex (no /v1 prefix)
+        assert!(client
+            .chat_completions_url
+            .ends_with("/openapi/chat/completions"));
     }
 }

@@ -194,7 +194,8 @@ impl StreamingTranslator {
 
             // Grow the accumulator vec if needed
             while self.active_tool_calls.len() <= idx {
-                self.active_tool_calls.push(ToolCallAccumulator { block_index: 0 });
+                self.active_tool_calls
+                    .push(ToolCallAccumulator { block_index: 0 });
             }
             self.active_tool_calls[idx] = ToolCallAccumulator { block_index };
         }
