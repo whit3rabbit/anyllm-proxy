@@ -270,4 +270,115 @@ mod tests {
             anthropic::ToolChoice::Auto
         ));
     }
+
+    // --- Claude Code tool schema round-trips ---
+
+    #[test]
+    fn claude_code_read_tool_roundtrip() {
+        let tool = anthropic::Tool {
+            name: "Read".into(),
+            description: Some("Reads a file from the local filesystem.".into()),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "file_path": {"type": "string", "description": "The absolute path to the file to read"},
+                    "offset": {"type": "number", "description": "The line number to start reading from"},
+                    "limit": {"type": "number", "description": "The number of lines to read"}
+                },
+                "required": ["file_path"]
+            }),
+        };
+        let openai = anthropic_tools_to_openai(&[tool.clone()]);
+        let back = openai_tools_to_anthropic(&openai);
+        assert_eq!(back[0].name, tool.name);
+        assert_eq!(back[0].description, tool.description);
+        assert_eq!(back[0].input_schema, tool.input_schema);
+    }
+
+    #[test]
+    fn claude_code_bash_tool_roundtrip() {
+        let tool = anthropic::Tool {
+            name: "Bash".into(),
+            description: Some("Executes a given bash command and returns its output.".into()),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "command": {"type": "string", "description": "The command to execute"},
+                    "description": {"type": "string", "description": "Description of the command"},
+                    "timeout": {"type": "number", "description": "Optional timeout in milliseconds"}
+                },
+                "required": ["command"]
+            }),
+        };
+        let openai = anthropic_tools_to_openai(&[tool.clone()]);
+        let back = openai_tools_to_anthropic(&openai);
+        assert_eq!(back[0].name, tool.name);
+        assert_eq!(back[0].input_schema, tool.input_schema);
+    }
+
+    #[test]
+    fn claude_code_edit_tool_roundtrip() {
+        let tool = anthropic::Tool {
+            name: "Edit".into(),
+            description: Some("Performs exact string replacements in files.".into()),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "file_path": {"type": "string"},
+                    "old_string": {"type": "string"},
+                    "new_string": {"type": "string"},
+                    "replace_all": {"type": "boolean", "default": false}
+                },
+                "required": ["file_path", "old_string", "new_string"]
+            }),
+        };
+        let openai = anthropic_tools_to_openai(&[tool.clone()]);
+        let back = openai_tools_to_anthropic(&openai);
+        assert_eq!(back[0].name, tool.name);
+        assert_eq!(back[0].input_schema, tool.input_schema);
+    }
+
+    #[test]
+    fn claude_code_grep_tool_with_enum_roundtrip() {
+        // Grep has an enum field (output_mode) which must survive translation
+        let tool = anthropic::Tool {
+            name: "Grep".into(),
+            description: Some("A powerful search tool built on ripgrep.".into()),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "pattern": {"type": "string"},
+                    "path": {"type": "string"},
+                    "output_mode": {
+                        "type": "string",
+                        "enum": ["content", "files_with_matches", "count"]
+                    }
+                },
+                "required": ["pattern"]
+            }),
+        };
+        let openai = anthropic_tools_to_openai(&[tool.clone()]);
+        let back = openai_tools_to_anthropic(&openai);
+        assert_eq!(back[0].input_schema, tool.input_schema);
+    }
+
+    #[test]
+    fn claude_code_all_six_tools_preserved() {
+        // All 6 core Claude Code tools survive batch translation
+        let tools: Vec<anthropic::Tool> = ["Read", "Write", "Edit", "Bash", "Glob", "Grep"]
+            .iter()
+            .map(|name| anthropic::Tool {
+                name: (*name).to_string(),
+                description: Some(format!("{} tool", name)),
+                input_schema: json!({"type": "object"}),
+            })
+            .collect();
+        let openai = anthropic_tools_to_openai(&tools);
+        assert_eq!(openai.len(), 6);
+        let back = openai_tools_to_anthropic(&openai);
+        assert_eq!(back.len(), 6);
+        for (orig, rt) in tools.iter().zip(back.iter()) {
+            assert_eq!(orig.name, rt.name);
+        }
+    }
 }

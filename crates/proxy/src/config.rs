@@ -7,6 +7,7 @@ use url::Url;
 pub enum BackendKind {
     OpenAI,
     Vertex,
+    Gemini,
 }
 
 /// How the proxy authenticates to the upstream backend.
@@ -45,7 +46,10 @@ impl Config {
         let backend = match backend_str.to_ascii_lowercase().as_str() {
             "openai" => BackendKind::OpenAI,
             "vertex" => BackendKind::Vertex,
-            other => panic!("unknown BACKEND value '{other}', expected 'openai' or 'vertex'"),
+            "gemini" => BackendKind::Gemini,
+            other => {
+                panic!("unknown BACKEND value '{other}', expected 'openai', 'vertex', or 'gemini'")
+            }
         };
 
         let listen_port = std::env::var("LISTEN_PORT")
@@ -93,6 +97,32 @@ impl Config {
                 if let Err(e) = validate_base_url(&base_url) {
                     panic!("Vertex base URL rejected: {e}");
                 }
+
+                Self {
+                    backend,
+                    openai_api_key: String::new(),
+                    openai_base_url: base_url,
+                    listen_port,
+                    model_mapping: ModelMapping::from_env_with_defaults(
+                        "gemini-2.5-pro",
+                        "gemini-2.5-flash",
+                    ),
+                    tls,
+                    backend_auth,
+                }
+            }
+            BackendKind::Gemini => {
+                let api_key = std::env::var("GEMINI_API_KEY")
+                    .unwrap_or_else(|_| panic!("GEMINI_API_KEY is required when BACKEND=gemini"));
+
+                let base_url = std::env::var("GEMINI_BASE_URL").unwrap_or_else(|_| {
+                    "https://generativelanguage.googleapis.com/v1beta".to_string()
+                });
+                if let Err(e) = validate_base_url(&base_url) {
+                    panic!("Gemini base URL rejected: {e}");
+                }
+
+                let backend_auth = BackendAuth::GoogleApiKey(api_key);
 
                 Self {
                     backend,

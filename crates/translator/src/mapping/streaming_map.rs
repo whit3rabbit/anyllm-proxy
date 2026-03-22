@@ -180,13 +180,32 @@ impl StreamingTranslator {
                 .as_ref()
                 .and_then(|f| f.name.clone())
                 .unwrap_or_default();
+            // Local LLMs may send empty name on first chunk
+            let name = if name.is_empty() {
+                tracing::warn!("streaming tool call has empty function name; using \"unknown\"");
+                "unknown".to_string()
+            } else {
+                name
+            };
+
+            // Local LLMs may send empty tool call ID
+            let tool_id = if id.is_empty() {
+                let synthetic = crate::util::ids::generate_tool_use_id();
+                tracing::warn!(
+                    synthetic_id = synthetic,
+                    "streaming tool call had empty ID; generated synthetic toolu_ ID"
+                );
+                synthetic
+            } else {
+                id.clone()
+            };
 
             let block_index = self.content_block_index + idx as u32;
 
             events.push(anthropic::StreamEvent::ContentBlockStart {
                 index: block_index,
                 content_block: anthropic::ContentBlock::ToolUse {
-                    id: id.clone(),
+                    id: tool_id,
                     name: name.clone(),
                     input: serde_json::Value::Object(serde_json::Map::new()),
                 },
@@ -694,5 +713,66 @@ mod tests {
                 "message_stop",
             ]
         );
+    }
+
+    // --- Local LLM robustness ---
+
+    #[test]
+    fn streaming_tool_call_empty_id_gets_synthetic() {
+        let mut translator = StreamingTranslator::new("llama".into());
+        translator.process_chunk(&role_chunk("c1", "llama"));
+
+        // First tool call chunk with empty string ID
+        let events = translator.process_chunk(&tool_call_chunk(
+            "c1",
+            "llama",
+            0,
+            Some(""), // empty ID from local LLM
+            Some("Read"),
+            Some("{\"file"),
+        ));
+
+        assert_eq!(events.len(), 2);
+        match &events[0] {
+            anthropic::StreamEvent::ContentBlockStart {
+                content_block: anthropic::ContentBlock::ToolUse { id, name, .. },
+                ..
+            } => {
+                assert!(
+                    id.starts_with("toolu_"),
+                    "expected synthetic toolu_ ID, got: {}",
+                    id
+                );
+                assert_eq!(name, "Read");
+            }
+            other => panic!("expected ContentBlockStart with ToolUse, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn streaming_tool_call_empty_name_gets_unknown() {
+        let mut translator = StreamingTranslator::new("llama".into());
+        translator.process_chunk(&role_chunk("c1", "llama"));
+
+        // First tool call chunk with no name
+        let events = translator.process_chunk(&tool_call_chunk(
+            "c1",
+            "llama",
+            0,
+            Some("call_1"),
+            None, // no name from local LLM
+            Some("{}"),
+        ));
+
+        assert_eq!(events.len(), 2);
+        match &events[0] {
+            anthropic::StreamEvent::ContentBlockStart {
+                content_block: anthropic::ContentBlock::ToolUse { name, .. },
+                ..
+            } => {
+                assert_eq!(name, "unknown");
+            }
+            other => panic!("expected ContentBlockStart with ToolUse, got {:?}", other),
+        }
     }
 }

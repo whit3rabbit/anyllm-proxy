@@ -12,7 +12,7 @@ See PLAN.md for the full specification and TASKS.md for phased implementation st
 
 **Working (verified):**
 - Build: `cargo build` clean, `cargo clippy -- -D warnings` clean
-- Tests: ~227 tests passing (158 translator, 69 proxy)
+- Tests: ~303 tests passing (224 translator, 79 proxy)
 - Full Anthropic Messages API translation: non-streaming, streaming SSE, tool calling, file/document blocks
 - Proxy middleware: health, auth, request ID, size limits, concurrency limits, retry with backoff
 - Compatibility endpoints: /v1/models, count_tokens (approximate via tiktoken), batches (stub)
@@ -27,7 +27,7 @@ See PLAN.md for the full specification and TASKS.md for phased implementation st
 
 ```bash
 cargo build                          # build everything
-cargo test                           # run all tests (~219 tests)
+cargo test                           # run all tests (~303 tests)
 cargo test -p anthropic_openai_translate  # translator crate only
 cargo test -p anthropic_openai_proxy      # proxy crate only
 cargo test health_endpoint            # single test by name
@@ -43,12 +43,12 @@ OPENAI_API_KEY=sk-... cargo run -p anthropic_openai_proxy
 
 ## Environment Variables
 
-- `BACKEND`: Backend provider: `openai` (default) or `vertex`
+- `BACKEND`: Backend provider: `openai` (default), `vertex`, or `gemini`
 - `OPENAI_API_KEY`: OpenAI API key (required when BACKEND=openai, empty default)
 - `OPENAI_BASE_URL`: OpenAI base URL (default: `https://api.openai.com`)
 - `LISTEN_PORT`: Server port (default: `3000`)
-- `BIG_MODEL`: OpenAI model for sonnet/opus requests (default: `gpt-4o` for OpenAI, `gemini-2.5-pro` for Vertex)
-- `SMALL_MODEL`: OpenAI model for haiku requests (default: `gpt-4o-mini` for OpenAI, `gemini-2.5-flash` for Vertex)
+- `BIG_MODEL`: Backend model for sonnet/opus requests (default: `gpt-4o` for OpenAI, `gemini-2.5-pro` for Vertex/Gemini)
+- `SMALL_MODEL`: Backend model for haiku requests (default: `gpt-4o-mini` for OpenAI, `gemini-2.5-flash` for Vertex/Gemini)
 - `RUST_LOG`: Tracing filter (e.g., `info`, `anthropic_openai_proxy=debug`)
 - `TLS_CLIENT_CERT_P12`: Path to PKCS#12 (.p12/.pfx) client certificate for mTLS to the backend (optional)
 - `TLS_CLIENT_CERT_PASSWORD`: Password to decrypt the P12 file (required if P12 is set)
@@ -57,6 +57,8 @@ OPENAI_API_KEY=sk-... cargo run -p anthropic_openai_proxy
 - `VERTEX_REGION`: GCP region, e.g. `us-central1` (required when BACKEND=vertex)
 - `VERTEX_API_KEY`: Google API key for Vertex AI (one of VERTEX_API_KEY or GOOGLE_ACCESS_TOKEN required when BACKEND=vertex)
 - `GOOGLE_ACCESS_TOKEN`: OAuth bearer token for Vertex AI (alternative to VERTEX_API_KEY)
+- `GEMINI_API_KEY`: Google API key for Gemini Developer API (required when BACKEND=gemini)
+- `GEMINI_BASE_URL`: Gemini API base URL (default: `https://generativelanguage.googleapis.com/v1beta`)
 
 ## Architecture
 
@@ -80,7 +82,9 @@ HTTP proxy built on axum + reqwest:
 - **`server/routes.rs`**: Axum router (POST /v1/messages, GET /health, GET /metrics, GET /v1/models, stubs for count_tokens and batches)
 - **`server/middleware.rs`**: Auth validation (x-api-key), request ID injection, 32MB size limit, concurrency limit, logging
 - **`server/sse.rs`**: SSE response helpers for Anthropic-format streaming
+- **`backend/mod.rs`**: `BackendClient` enum (OpenAI/Vertex/Gemini), `BackendError`, shared retry helpers
 - **`backend/openai_client.rs`**: reqwest client calling OpenAI Chat Completions with retry/backoff on 429/5xx
+- **`backend/gemini_client.rs`**: reqwest client calling Gemini native `generateContent`/`streamGenerateContent` with retry/backoff
 - **`metrics/`**: Request count, success/error tracking, exposed via GET /metrics
 
 ### Data Flow
@@ -108,7 +112,7 @@ Client (Anthropic format) -> proxy (axum)
 - Most source files reference their PLAN.md line ranges in a comment at the top.
 - Test files live alongside source (`#[cfg(test)]` modules) and in `crates/proxy/tests/` for integration tests.
 - Error types use `thiserror` derive macros.
-- Test distribution: translator (~158 tests), proxy (~61 tests including integration/compatibility).
+- Test distribution: translator (~224 tests), proxy (~79 tests including integration/compatibility).
 
 ## References
 

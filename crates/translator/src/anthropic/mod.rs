@@ -5,7 +5,8 @@ pub mod streaming;
 // Re-export primary types
 pub use errors::{ErrorDetail, ErrorResponse, ErrorType};
 pub use messages::{
-    Content, ContentBlock, InputMessage, MessageCreateRequest, MessageResponse, Role, StopReason,
-    System, ThinkingConfig, Tool, ToolChoice, Usage,
+    CacheControl, Content, ContentBlock, DocumentSource, ImageSource, InputMessage,
+    MessageCreateRequest, MessageResponse, Metadata, Role, StopReason, System, SystemBlock,
+    ThinkingConfig, Tool, ToolChoice, ToolResultContent, Usage,
 };
 pub use streaming::{Delta, StreamEvent};

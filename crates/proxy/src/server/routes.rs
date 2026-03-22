@@ -1,7 +1,7 @@
 use crate::backend::{BackendClient, BackendError};
-use crate::config::{Config, ModelMapping};
+use crate::config::{BackendKind, Config, ModelMapping};
 use crate::metrics::Metrics;
-use anthropic_openai_translate::{anthropic, mapping, openai};
+use anthropic_openai_translate::{anthropic, gemini, mapping, openai};
 use axum::{
     extract::{DefaultBodyLimit, State},
     http::StatusCode,
@@ -65,8 +65,8 @@ pub fn app(config: Config) -> Router {
         .with_state(state)
 }
 
-async fn models(State(_state): State<AppState>) -> Json<serde_json::Value> {
-    Json(serde_json::json!({
+static MODELS_RESPONSE: LazyLock<serde_json::Value> = LazyLock::new(|| {
+    serde_json::json!({
         "data": [
             {"id": "claude-opus-4-6", "display_name": "Claude Opus 4.6", "created_at": "2025-05-14T00:00:00Z", "type": "model"},
             {"id": "claude-sonnet-4-6", "display_name": "Claude Sonnet 4.6", "created_at": "2025-05-14T00:00:00Z", "type": "model"},
@@ -75,7 +75,11 @@ async fn models(State(_state): State<AppState>) -> Json<serde_json::Value> {
         "has_more": false,
         "first_id": "claude-opus-4-6",
         "last_id": "claude-haiku-4-5-20251001",
-    }))
+    })
+});
+
+async fn models(State(_state): State<AppState>) -> Json<serde_json::Value> {
+    Json(MODELS_RESPONSE.clone())
 }
 
 async fn count_tokens(Json(body): Json<anthropic::MessageCreateRequest>) -> impl IntoResponse {
@@ -199,97 +203,198 @@ async fn send_events(
     true
 }
 
-/// Build an SSE response that streams Anthropic events translated from OpenAI chunks.
+/// Send an SSE error event over the channel.
+async fn send_stream_error(
+    tx: &mpsc::Sender<Result<Event, std::convert::Infallible>>,
+    metrics: &Metrics,
+    error: impl std::fmt::Display,
+) {
+    tracing::error!("streaming request failed: {error}");
+    metrics.record_error();
+    let err_event = anthropic::StreamEvent::Error {
+        error: anthropic::streaming::StreamError {
+            error_type: "api_error".to_string(),
+            message: error.to_string(),
+        },
+    };
+    if let Ok(sse) = super::sse::stream_event_to_sse(&err_event) {
+        let _ = tx.send(Ok(sse)).await;
+    }
+}
+
+/// Read SSE bytes from a response, parse frames, and call `on_data` for each data line.
+/// Returns true if stream completed normally, false if client disconnected.
+async fn read_sse_frames<F>(
+    response: reqwest::Response,
+    tx: &mpsc::Sender<Result<Event, std::convert::Infallible>>,
+    metrics: &Metrics,
+    mut on_data: F,
+) -> bool
+where
+    F: FnMut(&str) -> Option<Vec<anthropic::StreamEvent>>,
+{
+    use futures::StreamExt;
+    let mut stream = response.bytes_stream();
+    let mut buffer = String::new();
+    // Reuse a single events buffer across all frames to avoid per-frame allocation
+    let mut frame_events: Vec<anthropic::StreamEvent> = Vec::new();
+
+    while let Some(chunk_result) = stream.next().await {
+        let bytes = match chunk_result {
+            Ok(b) => b,
+            Err(e) => {
+                tracing::error!("stream read error: {e}");
+                metrics.record_error();
+                return false;
+            }
+        };
+        match std::str::from_utf8(&bytes) {
+            Ok(s) => buffer.push_str(s),
+            Err(e) => {
+                tracing::warn!("non-UTF-8 chunk from backend: {e}");
+                buffer.push_str(&String::from_utf8_lossy(&bytes));
+            }
+        }
+
+        while let Some(pos) = buffer.find("\n\n") {
+            frame_events.clear();
+            for line in buffer[..pos].lines() {
+                let line = line.trim();
+                if let Some(json_str) = line.strip_prefix("data: ") {
+                    if let Some(mut events) = on_data(json_str) {
+                        frame_events.append(&mut events);
+                    }
+                }
+            }
+            buffer.drain(..pos + 2);
+
+            if !send_events(tx, &frame_events).await {
+                tracing::debug!("client disconnected during stream");
+                return false;
+            }
+        }
+    }
+
+    true
+}
+
+/// Build an SSE response that streams Anthropic events translated from backend chunks.
 async fn messages_stream(
     state: AppState,
     body: anthropic::MessageCreateRequest,
 ) -> Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>> {
-    let mut openai_req = mapping::message_map::anthropic_to_openai_request(&body);
-    openai_req.model = state.model_mapping.map_model(&openai_req.model);
-
-    let model = body.model.clone();
-
     let (tx, rx) = mpsc::channel::<Result<Event, std::convert::Infallible>>(32);
 
     let metrics = state.metrics.clone();
-    tokio::spawn(async move {
-        match state.backend.chat_completion_stream(&openai_req).await {
-            Ok(response) => {
-                let mut translator = mapping::streaming_map::StreamingTranslator::new(model);
-                let mut stream = response.bytes_stream();
-                use futures::StreamExt;
-                let mut buffer = String::new();
+    let backend_kind = state.backend.backend_kind();
 
-                while let Some(chunk_result) = stream.next().await {
-                    let bytes = match chunk_result {
-                        Ok(b) => b,
-                        Err(e) => {
-                            tracing::error!("stream read error: {e}");
-                            metrics.record_error();
-                            break;
-                        }
-                    };
-                    match std::str::from_utf8(&bytes) {
-                        Ok(s) => buffer.push_str(s),
-                        Err(e) => {
-                            tracing::warn!("non-UTF-8 chunk from OpenAI: {e}");
-                            buffer.push_str(&String::from_utf8_lossy(&bytes));
-                        }
-                    }
+    match backend_kind {
+        BackendKind::OpenAI | BackendKind::Vertex => {
+            let mut openai_req = mapping::message_map::anthropic_to_openai_request(&body);
+            openai_req.model = state.model_mapping.map_model(&openai_req.model);
+            let model = body.model.clone();
 
-                    // Process complete SSE frames delimited by double newline
-                    while let Some(pos) = buffer.find("\n\n") {
-                        let frame = &buffer[..pos];
+            tokio::spawn(async move {
+                match state.backend.chat_completion_stream(&openai_req).await {
+                    Ok(response) => {
+                        let mut translator =
+                            mapping::streaming_map::StreamingTranslator::new(model);
+                        let mut done = false;
 
-                        for line in frame.lines() {
-                            let line = line.trim();
-                            if line == "data: [DONE]" {
+                        let completed = read_sse_frames(response, &tx, &metrics, |json_str| {
+                            if json_str == "[DONE]" {
+                                done = true;
                                 let events = translator.finish();
-                                send_events(&tx, &events).await;
-                                metrics.record_success();
-                                return;
+                                return Some(events);
                             }
-                            if let Some(json_str) = line.strip_prefix("data: ") {
-                                if let Ok(chunk) =
-                                    serde_json::from_str::<openai::ChatCompletionChunk>(json_str)
-                                {
-                                    let events = translator.process_chunk(&chunk);
-                                    if !send_events(&tx, &events).await {
-                                        tracing::debug!("client disconnected during stream");
-                                        return;
-                                    }
-                                }
+                            if let Ok(chunk) =
+                                serde_json::from_str::<openai::ChatCompletionChunk>(json_str)
+                            {
+                                return Some(translator.process_chunk(&chunk));
                             }
-                        }
+                            None
+                        })
+                        .await;
 
-                        // Remove processed frame from buffer in-place
-                        let drain_to = pos + 2;
-                        buffer.drain(..drain_to);
+                        if completed && !done {
+                            // Stream ended without [DONE]; finish cleanly
+                            let events = translator.finish();
+                            send_events(&tx, &events).await;
+                        }
+                        if completed {
+                            metrics.record_success();
+                        }
+                    }
+                    Err(e) => {
+                        send_stream_error(&tx, &metrics, e).await;
                     }
                 }
-
-                // Stream ended without [DONE]; still finish cleanly
-                let events = translator.finish();
-                send_events(&tx, &events).await;
-                metrics.record_success();
-            }
-            Err(e) => {
-                tracing::error!("streaming request failed: {e}");
-                metrics.record_error();
-                let err_event = anthropic::StreamEvent::Error {
-                    error: anthropic::streaming::StreamError {
-                        error_type: "api_error".to_string(),
-                        message: format!("{e}"),
-                    },
-                };
-                if let Ok(sse) = super::sse::stream_event_to_sse(&err_event) {
-                    let _ = tx.send(Ok(sse)).await;
-                }
-            }
+            });
         }
-    });
+        BackendKind::Gemini => {
+            let mapped_model = state.model_mapping.map_model(&body.model);
+            let gemini_req = mapping::gemini_message_map::anthropic_to_gemini_request(&body);
+            let original_model = body.model.clone();
+
+            tokio::spawn(async move {
+                match state
+                    .backend
+                    .generate_content_stream(&gemini_req, &mapped_model)
+                    .await
+                {
+                    Ok(response) => {
+                        let mut translator =
+                            mapping::gemini_streaming_map::GeminiStreamingTranslator::new(
+                                original_model,
+                            );
+
+                        let completed = read_sse_frames(response, &tx, &metrics, |json_str| {
+                            if let Ok(chunk) =
+                                serde_json::from_str::<gemini::GenerateContentResponse>(json_str)
+                            {
+                                return Some(translator.process_chunk(&chunk));
+                            }
+                            None
+                        })
+                        .await;
+
+                        if completed {
+                            // Gemini has no [DONE] sentinel; finish when stream ends
+                            let events = translator.finish();
+                            send_events(&tx, &events).await;
+                            metrics.record_success();
+                        }
+                    }
+                    Err(e) => {
+                        send_stream_error(&tx, &metrics, e).await;
+                    }
+                }
+            });
+        }
+    }
 
     Sse::new(ReceiverStream::new(rx)).keep_alive(KeepAlive::default())
+}
+
+/// Convert a BackendError into an Anthropic error Response.
+fn backend_error_to_response(error: BackendError) -> Response {
+    if let Some((message, status)) = error.api_error_details() {
+        let anthropic_err = mapping::errors_map::status_to_anthropic_error(status, message, None);
+        let http_status = StatusCode::from_u16(
+            mapping::errors_map::anthropic_error_type_to_status(&anthropic_err.error.error_type),
+        )
+        .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+        return (http_status, Json(anthropic_err)).into_response();
+    }
+
+    // Transport or deserialization error
+    tracing::error!("backend client error: {error}");
+    let err = mapping::errors_map::create_anthropic_error(
+        anthropic::ErrorType::ApiError,
+        format!("Upstream error: {error}"),
+        None,
+    );
+    (StatusCode::INTERNAL_SERVER_ERROR, Json(err)).into_response()
 }
 
 async fn messages(
@@ -303,37 +408,50 @@ async fn messages(
         return sse.into_response();
     }
 
-    let mut openai_req = mapping::message_map::anthropic_to_openai_request(&body);
-    openai_req.model = state.model_mapping.map_model(&openai_req.model);
-    let original_model = body.model.clone();
+    match state.backend.backend_kind() {
+        BackendKind::OpenAI | BackendKind::Vertex => {
+            let mut openai_req = mapping::message_map::anthropic_to_openai_request(&body);
+            openai_req.model = state.model_mapping.map_model(&openai_req.model);
+            let original_model = body.model.clone();
 
-    match state.backend.chat_completion(&openai_req).await {
-        Ok((openai_resp, _status)) => {
-            state.metrics.record_success();
-            let anthropic_resp =
-                mapping::message_map::openai_to_anthropic_response(&openai_resp, &original_model);
-            (StatusCode::OK, Json(anthropic_resp)).into_response()
+            match state.backend.chat_completion(&openai_req).await {
+                Ok((openai_resp, _status)) => {
+                    state.metrics.record_success();
+                    let anthropic_resp = mapping::message_map::openai_to_anthropic_response(
+                        &openai_resp,
+                        &original_model,
+                    );
+                    (StatusCode::OK, Json(anthropic_resp)).into_response()
+                }
+                Err(e) => {
+                    state.metrics.record_error();
+                    backend_error_to_response(e)
+                }
+            }
         }
-        Err(BackendError::ApiError { status, error }) => {
-            state.metrics.record_error();
-            let anthropic_err =
-                mapping::errors_map::openai_to_anthropic_error(&error, status, None);
-            let http_status =
-                StatusCode::from_u16(mapping::errors_map::anthropic_error_type_to_status(
-                    &anthropic_err.error.error_type,
-                ))
-                .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
-            (http_status, Json(anthropic_err)).into_response()
-        }
-        Err(e) => {
-            state.metrics.record_error();
-            tracing::error!("OpenAI client error: {e}");
-            let err = mapping::errors_map::create_anthropic_error(
-                anthropic::ErrorType::ApiError,
-                format!("Upstream error: {e}"),
-                None,
-            );
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(err)).into_response()
+        BackendKind::Gemini => {
+            let mapped_model = state.model_mapping.map_model(&body.model);
+            let gemini_req = mapping::gemini_message_map::anthropic_to_gemini_request(&body);
+            let original_model = body.model.clone();
+
+            match state
+                .backend
+                .generate_content(&gemini_req, &mapped_model)
+                .await
+            {
+                Ok((gemini_resp, _status)) => {
+                    state.metrics.record_success();
+                    let anthropic_resp = mapping::gemini_message_map::gemini_to_anthropic_response(
+                        &gemini_resp,
+                        &original_model,
+                    );
+                    (StatusCode::OK, Json(anthropic_resp)).into_response()
+                }
+                Err(e) => {
+                    state.metrics.record_error();
+                    backend_error_to_response(e)
+                }
+            }
         }
     }
 }

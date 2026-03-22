@@ -52,7 +52,7 @@ pub enum System {
 /// System prompt text block with optional cache control.
 ///
 /// See <https://docs.anthropic.com/en/api/messages>
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct SystemBlock {
     #[serde(rename = "type")]
     pub block_type: String, // always "text"
@@ -64,7 +64,7 @@ pub struct SystemBlock {
 /// Cache control directive for prompt caching.
 ///
 /// See <https://docs.anthropic.com/en/api/messages>
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct CacheControl {
     #[serde(rename = "type")]
     pub cache_type: String,
@@ -189,7 +189,7 @@ pub struct Tool {
 /// How the model should use tools: auto, any, none, or specific tool.
 ///
 /// See <https://docs.anthropic.com/en/api/messages>
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 #[serde(tag = "type")]
 pub enum ToolChoice {
     #[serde(rename = "auto")]
@@ -205,7 +205,7 @@ pub enum ToolChoice {
 /// Request metadata for abuse detection.
 ///
 /// See <https://docs.anthropic.com/en/api/messages>
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct Metadata {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub user_id: Option<String>,
@@ -260,7 +260,7 @@ pub enum StopReason {
 /// Token usage counts for the request and response.
 ///
 /// See <https://docs.anthropic.com/en/api/messages>
-#[derive(Deserialize, Serialize, Debug, Clone, Default)]
+#[derive(Deserialize, Serialize, Debug, Clone, Default, PartialEq)]
 pub struct Usage {
     pub input_tokens: u32,
     pub output_tokens: u32,

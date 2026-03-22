@@ -2,6 +2,7 @@
 // PLAN.md lines 916-920
 
 use crate::anthropic;
+use crate::gemini;
 use crate::openai;
 
 /// Map an HTTP status code from OpenAI to the corresponding Anthropic error type.
@@ -40,23 +41,39 @@ pub fn anthropic_error_type_to_status(error_type: &anthropic::ErrorType) -> u16 
     }
 }
 
-/// Convert an OpenAI error response to an Anthropic error response.
-///
-/// Anthropic: <https://docs.anthropic.com/en/api/errors>
-/// OpenAI: <https://platform.openai.com/docs/guides/error-codes>
-pub fn openai_to_anthropic_error(
-    openai_err: &openai::errors::ErrorResponse,
+/// Convert an HTTP status code and error message to an Anthropic error response.
+/// Works for any backend (OpenAI, Gemini, etc.) since it only needs standard HTTP semantics.
+pub fn status_to_anthropic_error(
     status: u16,
+    message: &str,
     request_id: Option<String>,
 ) -> anthropic::errors::ErrorResponse {
     anthropic::errors::ErrorResponse {
         response_type: "error".to_string(),
         error: anthropic::errors::ErrorDetail {
             error_type: openai_status_to_anthropic_error_type(status),
-            message: openai_err.error.message.clone(),
+            message: message.to_string(),
         },
         request_id,
     }
+}
+
+/// Convert an OpenAI error response to an Anthropic error response.
+pub fn openai_to_anthropic_error(
+    openai_err: &openai::errors::ErrorResponse,
+    status: u16,
+    request_id: Option<String>,
+) -> anthropic::errors::ErrorResponse {
+    status_to_anthropic_error(status, &openai_err.error.message, request_id)
+}
+
+/// Convert a Gemini error response to an Anthropic error response.
+pub fn gemini_to_anthropic_error(
+    gemini_err: &gemini::errors::ErrorResponse,
+    status: u16,
+    request_id: Option<String>,
+) -> anthropic::errors::ErrorResponse {
+    status_to_anthropic_error(status, &gemini_err.error.message, request_id)
 }
 
 /// Create an Anthropic error response from scratch.
@@ -228,5 +245,45 @@ mod tests {
         assert_eq!(err.response_type, "error");
         assert_eq!(err.error.error_type, anthropic::ErrorType::ApiError);
         assert!(err.request_id.is_none());
+    }
+
+    #[test]
+    fn gemini_error_to_anthropic() {
+        let gemini_err = gemini::errors::ErrorResponse {
+            error: gemini::errors::ErrorDetail {
+                code: 400,
+                message: "Invalid value at 'contents'".into(),
+                status: "INVALID_ARGUMENT".into(),
+            },
+        };
+
+        let result = gemini_to_anthropic_error(&gemini_err, 400, Some("req_456".into()));
+
+        assert_eq!(result.response_type, "error");
+        assert_eq!(
+            result.error.error_type,
+            anthropic::ErrorType::InvalidRequestError
+        );
+        assert_eq!(result.error.message, "Invalid value at 'contents'");
+        assert_eq!(result.request_id.as_deref(), Some("req_456"));
+    }
+
+    #[test]
+    fn gemini_rate_limit_error_to_anthropic() {
+        let gemini_err = gemini::errors::ErrorResponse {
+            error: gemini::errors::ErrorDetail {
+                code: 429,
+                message: "Resource exhausted".into(),
+                status: "RESOURCE_EXHAUSTED".into(),
+            },
+        };
+
+        let result = gemini_to_anthropic_error(&gemini_err, 429, None);
+
+        assert_eq!(
+            result.error.error_type,
+            anthropic::ErrorType::RateLimitError
+        );
+        assert!(result.request_id.is_none());
     }
 }

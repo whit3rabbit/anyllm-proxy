@@ -1,0 +1,201 @@
+{
+  "request": {
+    "model": "claude-sonnet-4-20250514",
+    "max_completion_tokens": 8096,
+    "messages": [
+      {
+        "role": "user",
+        "content": "Read the main config file and list all test files."
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "Read",
+          "description": "Reads a file from the local filesystem.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "file_path": {
+                "type": "string",
+                "description": "The absolute path to the file to read"
+              },
+              "offset": {
+                "type": "number",
+                "description": "The line number to start reading from"
+              },
+              "limit": {
+                "type": "number",
+                "description": "The number of lines to read"
+              }
+            },
+            "required": ["file_path"]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "Bash",
+          "description": "Executes a given bash command and returns its output.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "command": {
+                "type": "string",
+                "description": "The command to execute"
+              },
+              "description": {
+                "type": "string",
+                "description": "Clear, concise description of what this command does"
+              },
+              "timeout": {
+                "type": "number",
+                "description": "Optional timeout in milliseconds (max 600000)"
+              }
+            },
+            "required": ["command"]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "Glob",
+          "description": "Fast file pattern matching tool that works with any codebase size.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "pattern": {
+                "type": "string",
+                "description": "The glob pattern to match files against"
+              },
+              "path": {
+                "type": "string",
+                "description": "The directory to search in"
+              }
+            },
+            "required": ["pattern"]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "Grep",
+          "description": "A powerful search tool built on ripgrep.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "pattern": {
+                "type": "string",
+                "description": "The regular expression pattern to search for"
+              },
+              "path": {
+                "type": "string",
+                "description": "File or directory to search in"
+              },
+              "output_mode": {
+                "type": "string",
+                "enum": ["content", "files_with_matches", "count"],
+                "description": "Output mode"
+              }
+            },
+            "required": ["pattern"]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "Edit",
+          "description": "Performs exact string replacements in files.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "file_path": {
+                "type": "string",
+                "description": "The absolute path to the file to modify"
+              },
+              "old_string": {
+                "type": "string",
+                "description": "The text to replace"
+              },
+              "new_string": {
+                "type": "string",
+                "description": "The text to replace it with"
+              },
+              "replace_all": {
+                "type": "boolean",
+                "default": false,
+                "description": "Replace all occurrences"
+              }
+            },
+            "required": ["file_path", "old_string", "new_string"]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "Write",
+          "description": "Writes a file to the local filesystem.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "file_path": {
+                "type": "string",
+                "description": "The absolute path to the file to write"
+              },
+              "content": {
+                "type": "string",
+                "description": "The content to write to the file"
+              }
+            },
+            "required": ["file_path", "content"]
+          }
+        }
+      }
+    ],
+    "tool_choice": "auto"
+  },
+  "response": {
+    "id": "chatcmpl-llama001",
+    "object": "chat.completion",
+    "model": "llama-3.3-70b",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "I'll read the config file and find the test files in parallel.",
+          "tool_calls": [
+            {
+              "id": "call_read_001",
+              "type": "function",
+              "function": {
+                "name": "Read",
+                "arguments": "{\"file_path\":\"/home/user/project/config.toml\"}"
+              }
+            },
+            {
+              "id": "call_glob_001",
+              "type": "function",
+              "function": {
+                "name": "Glob",
+                "arguments": "{\"pattern\":\"**/*test*\"}"
+              }
+            }
+          ]
+        },
+        "finish_reason": "tool_calls"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 1200,
+      "completion_tokens": 85,
+      "total_tokens": 1285
+    }
+  }
+}

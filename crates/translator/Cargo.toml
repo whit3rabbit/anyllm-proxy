@@ -5,6 +5,21 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+categories = ["api-bindings", "web-programming"]
+keywords = ["anthropic", "openai", "translation", "llm", "api"]
+readme = "README.md"
+
+[features]
+default = []
+middleware = [
+    "dep:axum",
+    "dep:reqwest",
+    "dep:tokio",
+    "dep:tokio-stream",
+    "dep:futures",
+    "dep:bytes",
+    "dep:tower",
+]
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
@@ -13,5 +28,21 @@ thiserror = "2"
 tracing = "0.1"
 uuid = { version = "1", features = ["v4"] }
 
+# Optional: middleware feature deps
+axum = { version = "0.8", optional = true }
+reqwest = { version = "0.12", optional = true, default-features = false, features = ["json", "stream"] }
+tokio = { version = "1", optional = true, features = ["rt", "sync"] }
+tokio-stream = { version = "0.1", optional = true }
+futures = { version = "0.3", optional = true }
+bytes = { version = "1", optional = true }
+tower = { version = "0.5", optional = true, features = ["util"] }
+
 [dev-dependencies]
 pretty_assertions = "1"
+axum = "0.8"
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream"] }
+tokio = { version = "1", features = ["full"] }
+tokio-stream = "0.1"
+futures = "0.3"
+bytes = "1"
+tower = { version = "0.5", features = ["util"] }

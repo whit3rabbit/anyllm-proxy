@@ -6,6 +6,24 @@ use crate::mapping::{streaming_map, tools_map, usage_map};
 use crate::openai;
 use crate::util;
 
+/// Extract system prompt text from Anthropic's System type.
+/// Warns if cache_control is present (no equivalent in downstream APIs).
+pub fn extract_system_text(system: &anthropic::System) -> String {
+    if let anthropic::System::Blocks(blocks) = system {
+        if blocks.iter().any(|b| b.cache_control.is_some()) {
+            tracing::warn!("cache_control on system blocks dropped: no downstream equivalent");
+        }
+    }
+    match system {
+        anthropic::System::Text(s) => s.clone(),
+        anthropic::System::Blocks(blocks) => blocks
+            .iter()
+            .map(|b| b.text.as_str())
+            .collect::<Vec<_>>()
+            .join("\n"),
+    }
+}
+
 /// Convert an Anthropic MessageCreateRequest to an OpenAI ChatCompletionRequest.
 ///
 /// Anthropic: <https://docs.anthropic.com/en/api/messages>
@@ -16,20 +34,7 @@ pub fn anthropic_to_openai_request(
     let mut messages = Vec::new();
 
     if let Some(ref system) = req.system {
-        // Warn if any system block has cache_control (dropped, no OpenAI equivalent)
-        if let anthropic::System::Blocks(blocks) = system {
-            if blocks.iter().any(|b| b.cache_control.is_some()) {
-                tracing::warn!("cache_control on system blocks dropped: no OpenAI equivalent");
-            }
-        }
-        let text = match system {
-            anthropic::System::Text(s) => s.clone(),
-            anthropic::System::Blocks(blocks) => blocks
-                .iter()
-                .map(|b| b.text.as_str())
-                .collect::<Vec<_>>()
-                .join("\n"),
-        };
+        let text = extract_system_text(system);
         messages.push(openai::ChatMessage {
             role: openai::ChatRole::Developer,
             content: Some(openai::ChatContent::Text(text)),
@@ -329,13 +334,29 @@ pub fn openai_to_anthropic_response(
             }
         }
 
-        // Map tool calls
+        // Map tool calls with robustness for local LLMs (llama-server, ollama)
+        // that may produce empty IDs, empty names, or malformed arguments.
         if let Some(ref tool_calls) = choice.message.tool_calls {
             for tc in tool_calls {
+                if tc.function.name.is_empty() {
+                    tracing::warn!(id = tc.id, "skipping tool call with empty function name");
+                    continue;
+                }
+                let id = if tc.id.is_empty() {
+                    let synthetic = util::ids::generate_tool_use_id();
+                    tracing::warn!(
+                        name = tc.function.name,
+                        synthetic_id = synthetic,
+                        "tool call had empty ID; generated synthetic toolu_ ID"
+                    );
+                    synthetic
+                } else {
+                    tc.id.clone()
+                };
                 content.push(anthropic::ContentBlock::ToolUse {
-                    id: tc.id.clone(),
+                    id,
                     name: tc.function.name.clone(),
-                    input: util::json::parse_json_lenient(&tc.function.arguments),
+                    input: util::json::parse_tool_arguments(&tc.function.arguments),
                 });
             }
         }
@@ -1170,8 +1191,8 @@ mod tests {
         let anth = openai_to_anthropic_response(&resp, "m");
         match &anth.content[0] {
             anthropic::ContentBlock::ToolUse { input, .. } => {
-                // Lenient parse wraps bad JSON as Value::String
-                assert_eq!(input, &json!("not json"));
+                // parse_tool_arguments wraps invalid JSON in an object
+                assert_eq!(input, &json!({"_raw_error": "not json"}));
             }
             other => panic!("expected ToolUse, got {:?}", other),
         }
@@ -1319,5 +1340,302 @@ mod tests {
         req.metadata = None;
         let oai = anthropic_to_openai_request(&req);
         assert!(oai.user.is_none());
+    }
+
+    // --- Claude Code parallel tool use ---
+
+    #[test]
+    fn claude_code_parallel_tool_use_request() {
+        // Assistant message with 2 tool_use blocks -> OpenAI message with 2 tool_calls
+        let mut req = basic_request();
+        req.messages = vec![
+            anthropic::InputMessage {
+                role: anthropic::Role::User,
+                content: anthropic::Content::Text("Read config and list tests.".into()),
+            },
+            anthropic::InputMessage {
+                role: anthropic::Role::Assistant,
+                content: anthropic::Content::Blocks(vec![
+                    anthropic::ContentBlock::Text {
+                        text: "I'll do both.".into(),
+                    },
+                    anthropic::ContentBlock::ToolUse {
+                        id: "toolu_01A".into(),
+                        name: "Read".into(),
+                        input: json!({"file_path": "/config.toml"}),
+                    },
+                    anthropic::ContentBlock::ToolUse {
+                        id: "toolu_01B".into(),
+                        name: "Glob".into(),
+                        input: json!({"pattern": "**/*test*"}),
+                    },
+                ]),
+            },
+        ];
+        let oai = anthropic_to_openai_request(&req);
+        // Should produce: user msg, assistant msg with tool_calls
+        let assistant_msg = &oai.messages[1];
+        assert_eq!(assistant_msg.role, openai::ChatRole::Assistant);
+        match assistant_msg.content.as_ref().unwrap() {
+            openai::ChatContent::Text(t) => assert_eq!(t, "I'll do both."),
+            other => panic!("expected Text content, got {:?}", other),
+        }
+        let tool_calls = assistant_msg.tool_calls.as_ref().unwrap();
+        assert_eq!(tool_calls.len(), 2);
+        assert_eq!(tool_calls[0].id, "toolu_01A");
+        assert_eq!(tool_calls[0].function.name, "Read");
+        assert_eq!(tool_calls[1].id, "toolu_01B");
+        assert_eq!(tool_calls[1].function.name, "Glob");
+    }
+
+    #[test]
+    fn claude_code_tool_result_request() {
+        // User message with tool_result blocks -> OpenAI tool-role messages
+        let mut req = basic_request();
+        req.messages = vec![anthropic::InputMessage {
+            role: anthropic::Role::User,
+            content: anthropic::Content::Blocks(vec![
+                anthropic::ContentBlock::ToolResult {
+                    tool_use_id: "toolu_01A".into(),
+                    content: Some(anthropic::messages::ToolResultContent::Text(
+                        "file contents here".into(),
+                    )),
+                    is_error: Some(false),
+                },
+                anthropic::ContentBlock::ToolResult {
+                    tool_use_id: "toolu_01B".into(),
+                    content: Some(anthropic::messages::ToolResultContent::Text(
+                        "test1.rs\ntest2.rs".into(),
+                    )),
+                    is_error: Some(false),
+                },
+            ]),
+        }];
+        let oai = anthropic_to_openai_request(&req);
+        // Should produce 2 tool-role messages
+        assert_eq!(oai.messages.len(), 2);
+        assert_eq!(oai.messages[0].role, openai::ChatRole::Tool);
+        assert_eq!(oai.messages[0].tool_call_id.as_deref(), Some("toolu_01A"));
+        assert_eq!(oai.messages[1].role, openai::ChatRole::Tool);
+        assert_eq!(oai.messages[1].tool_call_id.as_deref(), Some("toolu_01B"));
+    }
+
+    #[test]
+    fn claude_code_tool_response_roundtrip() {
+        // OpenAI tool_call response -> Anthropic tool_use, verify fields survive
+        let resp = openai::ChatCompletionResponse {
+            id: "chatcmpl-llama001".into(),
+            object: "chat.completion".into(),
+            model: "llama-3.3-70b".into(),
+            choices: vec![openai::Choice {
+                index: 0,
+                message: openai::ChatMessage {
+                    role: openai::ChatRole::Assistant,
+                    content: Some(openai::ChatContent::Text("Reading file.".into())),
+                    name: None,
+                    tool_calls: Some(vec![
+                        openai::ToolCall {
+                            id: "call_read_001".into(),
+                            call_type: "function".into(),
+                            function: openai::FunctionCall {
+                                name: "Read".into(),
+                                arguments: r#"{"file_path":"/config.toml"}"#.into(),
+                            },
+                        },
+                        openai::ToolCall {
+                            id: "call_glob_001".into(),
+                            call_type: "function".into(),
+                            function: openai::FunctionCall {
+                                name: "Glob".into(),
+                                arguments: r#"{"pattern":"**/*test*"}"#.into(),
+                            },
+                        },
+                    ]),
+                    tool_call_id: None,
+                    refusal: None,
+                },
+                finish_reason: Some(openai::FinishReason::ToolCalls),
+                logprobs: None,
+            }],
+            usage: Some(openai::ChatUsage {
+                prompt_tokens: 100,
+                completion_tokens: 50,
+                total_tokens: 150,
+                completion_tokens_details: None,
+                prompt_tokens_details: None,
+            }),
+            created: None,
+            system_fingerprint: None,
+            service_tier: None,
+        };
+
+        let anth = openai_to_anthropic_response(&resp, "claude-sonnet-4-20250514");
+        assert_eq!(anth.stop_reason, Some(anthropic::StopReason::ToolUse));
+        // First block is text
+        match &anth.content[0] {
+            anthropic::ContentBlock::Text { text } => assert_eq!(text, "Reading file."),
+            other => panic!("expected Text, got {:?}", other),
+        }
+        // Second and third blocks are tool_use
+        match &anth.content[1] {
+            anthropic::ContentBlock::ToolUse { id, name, input } => {
+                assert_eq!(id, "call_read_001");
+                assert_eq!(name, "Read");
+                assert_eq!(input["file_path"], "/config.toml");
+            }
+            other => panic!("expected ToolUse, got {:?}", other),
+        }
+        match &anth.content[2] {
+            anthropic::ContentBlock::ToolUse { id, name, input } => {
+                assert_eq!(id, "call_glob_001");
+                assert_eq!(name, "Glob");
+                assert_eq!(input["pattern"], "**/*test*");
+            }
+            other => panic!("expected ToolUse, got {:?}", other),
+        }
+    }
+
+    // --- Local LLM robustness ---
+
+    #[test]
+    fn tool_call_empty_id_gets_synthetic_id() {
+        let resp = openai::ChatCompletionResponse {
+            id: "x".into(),
+            object: "chat.completion".into(),
+            model: "llama".into(),
+            choices: vec![openai::Choice {
+                index: 0,
+                message: openai::ChatMessage {
+                    role: openai::ChatRole::Assistant,
+                    content: None,
+                    name: None,
+                    tool_calls: Some(vec![openai::ToolCall {
+                        id: "".into(), // empty ID from local LLM
+                        call_type: "function".into(),
+                        function: openai::FunctionCall {
+                            name: "Read".into(),
+                            arguments: r#"{"file_path":"/tmp/x"}"#.into(),
+                        },
+                    }]),
+                    tool_call_id: None,
+                    refusal: None,
+                },
+                finish_reason: Some(openai::FinishReason::ToolCalls),
+                logprobs: None,
+            }],
+            usage: None,
+            created: None,
+            system_fingerprint: None,
+            service_tier: None,
+        };
+
+        let anth = openai_to_anthropic_response(&resp, "m");
+        match &anth.content[0] {
+            anthropic::ContentBlock::ToolUse { id, name, .. } => {
+                assert!(
+                    id.starts_with("toolu_"),
+                    "expected synthetic toolu_ ID, got: {}",
+                    id
+                );
+                assert_eq!(name, "Read");
+            }
+            other => panic!("expected ToolUse, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn tool_call_empty_arguments_becomes_empty_object() {
+        let resp = openai::ChatCompletionResponse {
+            id: "x".into(),
+            object: "chat.completion".into(),
+            model: "llama".into(),
+            choices: vec![openai::Choice {
+                index: 0,
+                message: openai::ChatMessage {
+                    role: openai::ChatRole::Assistant,
+                    content: None,
+                    name: None,
+                    tool_calls: Some(vec![openai::ToolCall {
+                        id: "call_1".into(),
+                        call_type: "function".into(),
+                        function: openai::FunctionCall {
+                            name: "Bash".into(),
+                            arguments: "".into(), // empty args from local LLM
+                        },
+                    }]),
+                    tool_call_id: None,
+                    refusal: None,
+                },
+                finish_reason: Some(openai::FinishReason::ToolCalls),
+                logprobs: None,
+            }],
+            usage: None,
+            created: None,
+            system_fingerprint: None,
+            service_tier: None,
+        };
+
+        let anth = openai_to_anthropic_response(&resp, "m");
+        match &anth.content[0] {
+            anthropic::ContentBlock::ToolUse { input, .. } => {
+                assert_eq!(input, &json!({}));
+            }
+            other => panic!("expected ToolUse, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn tool_call_missing_name_skipped() {
+        let resp = openai::ChatCompletionResponse {
+            id: "x".into(),
+            object: "chat.completion".into(),
+            model: "llama".into(),
+            choices: vec![openai::Choice {
+                index: 0,
+                message: openai::ChatMessage {
+                    role: openai::ChatRole::Assistant,
+                    content: Some(openai::ChatContent::Text("text".into())),
+                    name: None,
+                    tool_calls: Some(vec![
+                        openai::ToolCall {
+                            id: "call_1".into(),
+                            call_type: "function".into(),
+                            function: openai::FunctionCall {
+                                name: "".into(), // empty name
+                                arguments: "{}".into(),
+                            },
+                        },
+                        openai::ToolCall {
+                            id: "call_2".into(),
+                            call_type: "function".into(),
+                            function: openai::FunctionCall {
+                                name: "Read".into(),
+                                arguments: r#"{"file_path":"/x"}"#.into(),
+                            },
+                        },
+                    ]),
+                    tool_call_id: None,
+                    refusal: None,
+                },
+                finish_reason: Some(openai::FinishReason::ToolCalls),
+                logprobs: None,
+            }],
+            usage: None,
+            created: None,
+            system_fingerprint: None,
+            service_tier: None,
+        };
+
+        let anth = openai_to_anthropic_response(&resp, "m");
+        // Empty-name tool call skipped; text + valid tool call remain
+        assert_eq!(anth.content.len(), 2);
+        match &anth.content[0] {
+            anthropic::ContentBlock::Text { text } => assert_eq!(text, "text"),
+            other => panic!("expected Text, got {:?}", other),
+        }
+        match &anth.content[1] {
+            anthropic::ContentBlock::ToolUse { name, .. } => assert_eq!(name, "Read"),
+            other => panic!("expected ToolUse, got {:?}", other),
+        }
     }
 }

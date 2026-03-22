@@ -295,97 +295,99 @@ Add Gemini-native request/response types to the translator crate. Pure types, no
 - [x] Test: 20 serde round-trip tests including fixture-based deserialization
 - [x] Add `fixtures/gemini/` directory with golden files (basic + tool_call)
 
-## Phase 20d: Gemini Schema Sanitizer (not started)
+## Phase 20d: Gemini Schema Sanitizer
 **Priority: low** | Depends on P20c
 
 Gemini's `FunctionDeclaration.parameters` accepts only a subset of JSON Schema. Schemas from Anthropic tool definitions need sanitization before forwarding to Gemini.
 
-- [ ] `crates/translator/src/mapping/gemini_schema_map.rs`: `clean_gemini_schema(schema: &serde_json::Value) -> serde_json::Value`
-- [ ] Strip unsupported keys: `$schema`, `$ref`, `$defs`, `definitions`, `default`, `pattern`, `examples`
-- [ ] Rewrite `anyOf`/`oneOf` to nearest valid representation (first variant, or `string` fallback)
-- [ ] Remove unsupported `format` values (keep only Gemini-supported ones)
-- [ ] Enforce max 128 function declarations per request (truncate with warning)
-- [ ] `tracing::warn` on every lossy transformation
-- [ ] Test: each transformation, passthrough for already-valid schemas, edge cases (nested $ref, empty oneOf)
+- [x] `crates/translator/src/mapping/gemini_schema_map.rs`: `clean_gemini_schema(schema: &serde_json::Value) -> serde_json::Value`
+- [x] Strip unsupported keys: `$schema`, `$ref`, `$defs`, `definitions`, `default`, `pattern`, `examples`
+- [x] Rewrite `anyOf`/`oneOf` to nearest valid representation (first variant, or `string` fallback)
+- [x] Remove unsupported `format` values (keep only Gemini-supported ones)
+- [x] Enforce max 128 function declarations per request (truncate with warning)
+- [x] `tracing::warn` on every lossy transformation
+- [x] Test: each transformation, passthrough for already-valid schemas, edge cases (nested $ref, empty oneOf)
 
-## Phase 20e: Gemini Message Mapping (not started)
+## Phase 20e: Gemini Message Mapping
 **Priority: low** | Depends on P20c, P20d
 
 Stateless mapping functions: Anthropic messages to Gemini `contents[]` and back.
 
-- [ ] `crates/translator/src/mapping/gemini_message_map.rs`
-- [ ] `anthropic_to_gemini_request(&MessageCreateRequest) -> GenerateContentRequest`
-  - [ ] System prompt -> `system_instruction` field (text-only `Content`)
-  - [ ] Role coercion: Anthropic `assistant` -> Gemini `model`, `user` -> `user`
-  - [ ] Strict alternation: merge consecutive same-role turns
-  - [ ] Content blocks: text -> `Part::Text`, image -> `Part::InlineData`, tool_use -> `Part::FunctionCall`, tool_result -> `Part::FunctionResponse`
-  - [ ] Generation params: `temperature`, `max_tokens` -> `maxOutputTokens`, `top_p` -> `topP`, `stop_sequences` -> `stopSequences`
-  - [ ] Tool definitions: use `clean_gemini_schema()` from P20d
-- [ ] `gemini_to_anthropic_response(&GenerateContentResponse, model) -> MessageResponse`
-  - [ ] `Candidate.content.parts[]` -> Anthropic content blocks
-  - [ ] Finish reasons: `STOP` -> `end_turn`, `MAX_TOKENS` -> `max_tokens`, `SAFETY` -> `end_turn` (with warning)
-  - [ ] Usage: `usageMetadata.promptTokenCount`/`candidatesTokenCount` -> Anthropic `input_tokens`/`output_tokens`
-- [ ] Test: text, system prompt, tool use round-trip, multi-turn, role alternation merging, lossy transformations
+- [x] `crates/translator/src/mapping/gemini_message_map.rs`
+- [x] `anthropic_to_gemini_request(&MessageCreateRequest) -> GenerateContentRequest`
+  - [x] System prompt -> `system_instruction` field (text-only `Content`)
+  - [x] Role coercion: Anthropic `assistant` -> Gemini `model`, `user` -> `user`
+  - [x] Strict alternation: merge consecutive same-role turns
+  - [x] Content blocks: text -> `Part::Text`, image -> `Part::InlineData`, tool_use -> `Part::FunctionCall`, tool_result -> `Part::FunctionResponse`
+  - [x] Generation params: `temperature`, `max_tokens` -> `maxOutputTokens`, `top_p` -> `topP`, `stop_sequences` -> `stopSequences`
+  - [x] Tool definitions: use `clean_gemini_schema()` from P20d
+- [x] `gemini_to_anthropic_response(&GenerateContentResponse, model) -> MessageResponse`
+  - [x] `Candidate.content.parts[]` -> Anthropic content blocks
+  - [x] Finish reasons: `STOP` -> `end_turn`, `MAX_TOKENS` -> `max_tokens`, `SAFETY` -> `end_turn` (with warning)
+  - [x] Usage: `usageMetadata.promptTokenCount`/`candidatesTokenCount` -> Anthropic `input_tokens`/`output_tokens`
+- [x] Test: text, system prompt, tool use round-trip, multi-turn, role alternation merging, lossy transformations
 
-## Phase 20f: Gemini Streaming Translation (not started)
+## Phase 20f: Gemini Streaming Translation
 **Priority: low** | Depends on P20e
 
 Streaming state machine for native Gemini backend. Similar pattern to existing `StreamingTranslator` for OpenAI.
 
-- [ ] `crates/translator/src/mapping/gemini_streaming_map.rs`
-- [ ] `GeminiStreamingTranslator` state machine
-- [ ] Gemini Dev API: SSE via `streamGenerateContent?alt=sse`, each event is a full `GenerateContentResponse` with incremental text
-- [ ] Vertex AI streaming: stream of `GenerateContentResponse` instances (different framing, same payload)
-- [ ] Map each chunk to Anthropic SSE events (message_start, content_block_start, content_block_delta, message_stop)
-- [ ] Handle tool call streaming (functionCall parts, partialArgs)
-- [ ] Test: text streaming, tool streaming, finish reasons, golden fixtures from `fixtures/gemini/`
+- [x] `crates/translator/src/mapping/gemini_streaming_map.rs`
+- [x] `GeminiStreamingTranslator` state machine
+- [x] Gemini Dev API: SSE via `streamGenerateContent?alt=sse`, each event is a full `GenerateContentResponse` with incremental text
+- [x] Vertex AI streaming: stream of `GenerateContentResponse` instances (different framing, same payload)
+- [x] Map each chunk to Anthropic SSE events (message_start, content_block_start, content_block_delta, message_stop)
+- [x] Handle tool call streaming (functionCall parts, partialArgs)
+- [x] Test: text streaming, tool streaming, finish reasons, golden fixtures from `fixtures/gemini/`
 
-## Phase 20g: Native Gemini Backend Client (not started)
+## Phase 20g: Native Gemini Backend Client
 **Priority: low** | Depends on P20b (backend abstraction), P20f (streaming)
 
 Wire native Gemini translation into the proxy. Separate from Vertex OpenAI-compatible mode (P20a).
 
-- [ ] `crates/proxy/src/backend/gemini_client.rs`: reqwest client calling `generateContent` / `streamGenerateContent`
-- [ ] Auth: API key via query param (`?key=`) for Developer API, bearer token for Vertex native
-- [ ] URL construction: `https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent` (Dev API)
-- [ ] Add `Gemini(GeminiClient)` variant to `BackendClient` enum from P20b
-- [ ] `BACKEND=gemini` config option (distinct from `vertex` which uses OpenAI-compatible endpoint)
-- [ ] Retry logic: reuse existing retry/backoff strategy (Gemini uses similar 429/5xx semantics)
-- [ ] Streaming: parse SSE from Gemini Dev API, feed through `GeminiStreamingTranslator`
-- [ ] Update `routes.rs` dispatch to handle `Gemini` backend variant
-- [ ] Test: non-streaming, streaming, error handling, tool calling (golden fixtures)
+- [x] `crates/proxy/src/backend/gemini_client.rs`: reqwest client calling `generateContent` / `streamGenerateContent`
+- [x] Auth: API key via `x-goog-api-key` header (Developer API), bearer token for Vertex native
+- [x] URL construction: `https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent` (Dev API)
+- [x] Add `Gemini(GeminiClient)` variant to `BackendClient` enum from P20b
+- [x] `BACKEND=gemini` config option (distinct from `vertex` which uses OpenAI-compatible endpoint)
+- [x] Retry logic: extracted shared retry/backoff helpers into `backend/mod.rs`, reused by both clients
+- [x] Streaming: parse SSE from Gemini Dev API (`streamGenerateContent?alt=sse`), feed through `GeminiStreamingTranslator`
+- [x] Update `routes.rs` dispatch to handle `Gemini` backend variant (branching on `backend_kind()`)
+- [x] Unified `BackendError` enum replacing type alias, with `as_openai_api_error()`/`as_gemini_api_error()` helpers
+- [x] `gemini_to_anthropic_error()` in translator `errors_map.rs`
+- [x] Test: URL construction, client builds, error mapping, all existing tests pass (303 total)
 - [ ] Validate: manual test against Gemini Developer API
 
-## Phase 21: Library Mode for Existing Codebases (not started)
+## Phase 21: Library Mode for Existing Codebases
 **Priority: medium** | Enables using the translation layer as a library, not just a standalone proxy
 
 The `anthropic_openai_translate` crate is already pure (no IO, no async, no network), but it's not designed for external consumption. This phase makes it a proper library that existing Rust, Python, and other codebases can embed directly, without running a separate proxy process.
 
 **21a: Rust library ergonomics**
-- [ ] Add top-level re-exports in `lib.rs` for common types (e.g., `pub use mapping::message_map::anthropic_to_openai_request`)
-- [ ] Add convenience `translate_request()` and `translate_response()` functions that wrap the mapping layer
-- [ ] Add a `TranslationConfig` struct (model mapping table, lossy behavior: warn/error/silent, feature flags)
-- [ ] Builder pattern for `TranslationConfig` with sensible defaults
-- [ ] Add `translate_stream_chunk()` convenience wrapper around `StreamingTranslator`
-- [ ] Public error type for translation failures (currently mapping is infallible, but model mapping and validation may fail)
-- [ ] Ensure all public types implement `Clone`, `Debug`, `Serialize`, `Deserialize`
-- [ ] Add crate-level doc comment with usage examples (`//! # Examples`)
-- [ ] Publish-ready `Cargo.toml` (categories, keywords, readme, documentation link)
-- [ ] Test: library usage without proxy crate (standalone translator tests)
+- [x] Add top-level re-exports in `lib.rs` for common types (`TranslationConfig`, `translate_request`, etc.)
+- [x] Add convenience `translate_request()` and `translate_response()` functions that wrap the mapping layer
+- [x] Add a `TranslationConfig` struct (model mapping table, lossy behavior: warn/error/silent)
+- [x] Builder pattern for `TranslationConfig` with sensible defaults
+- [x] Add `new_stream_translator()` and `new_gemini_stream_translator()` convenience constructors
+- [x] Public error type `TranslateError` for translation failures (model mapping, future validation)
+- [x] All public types implement `Clone`, `Debug`, `Serialize`, `Deserialize`; `PartialEq` added to leaf types (`Usage`, `Metadata`, `ToolChoice`, `CacheControl`, `SystemBlock`)
+- [x] Add crate-level doc comment with usage examples (`//! # Examples`)
+- [x] Publish-ready `Cargo.toml` (categories, keywords, readme)
+- [x] Test: library usage without proxy crate (`tests/library_usage.rs`, 4 integration tests)
 
 **21b: FFI / multi-language support (research)**
-- [ ] Evaluate C FFI via `cbindgen` for Python/Node/Go bindings
-- [ ] Evaluate WASM target (`wasm32-unknown-unknown`) for browser/edge use
-- [ ] Evaluate PyO3 for native Python module (`pip install anthropic-openai-translate`)
-- [ ] Document recommended integration pattern: embed library vs run proxy sidecar vs HTTP middleware
-- [ ] Deliverable: `docs/library-integration.md` with examples for each approach
+- [x] Evaluate C FFI via `cbindgen` for Python/Node/Go bindings
+- [x] Evaluate WASM target (`wasm32-unknown-unknown`) for browser/edge use
+- [x] Evaluate PyO3 for native Python module (`pip install anthropic-openai-translate`)
+- [x] Document recommended integration pattern: embed library vs run proxy sidecar vs HTTP middleware
+- [x] Deliverable: `docs/library-integration.md` with examples for each approach
 
 **21c: HTTP middleware mode**
-- [ ] Extract an axum middleware/layer that can be dropped into existing axum/tower services
-- [ ] The middleware intercepts Anthropic-format requests, translates, forwards to a configurable backend URL, translates response back
-- [ ] Configurable via `TranslationConfig` from 21a
-- [ ] Example: existing OpenAI-based axum service gains Anthropic API compatibility by adding one middleware layer
-- [ ] Test: middleware integration test with mock backend
+- [x] Extract an axum middleware/layer that can be dropped into existing axum/tower services
+- [x] The middleware intercepts Anthropic-format requests, translates, forwards to a configurable backend URL, translates response back
+- [x] Configurable via `TranslationConfig` from 21a
+- [x] Example: existing OpenAI-based axum service gains Anthropic API compatibility by adding one middleware layer
+- [x] Test: middleware integration test with mock backend (6 tests: non-streaming, streaming SSE, error translation, Tower layer passthrough, invalid JSON, model mapping)
 
 ## Phase 22: Future Work (not started)
 

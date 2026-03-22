@@ -1,0 +1,120 @@
+{
+  "request": {
+    "model": "claude-sonnet-4-20250514",
+    "max_tokens": 8096,
+    "messages": [
+      {
+        "role": "user",
+        "content": "Read the main config file and list all test files."
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "I'll read the config file and find the test files in parallel."
+          },
+          {
+            "type": "tool_use",
+            "id": "toolu_01UDAtfZkgcGYMBq7Ns84vfN",
+            "name": "Read",
+            "input": {
+              "file_path": "/home/user/project/config.toml"
+            }
+          },
+          {
+            "type": "tool_use",
+            "id": "toolu_01J3KzMqBf9tXyQFhVw2NxRG",
+            "name": "Glob",
+            "input": {
+              "pattern": "**/*test*"
+            }
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "tool_result",
+            "tool_use_id": "toolu_01UDAtfZkgcGYMBq7Ns84vfN",
+            "content": "[package]\nname = \"my-project\"\nversion = \"0.1.0\"\nedition = \"2021\""
+          },
+          {
+            "type": "tool_result",
+            "tool_use_id": "toolu_01J3KzMqBf9tXyQFhVw2NxRG",
+            "content": "tests/unit_test.rs\ntests/integration_test.rs\nsrc/lib_test.rs"
+          }
+        ]
+      }
+    ],
+    "tools": [
+      {
+        "name": "Read",
+        "description": "Reads a file from the local filesystem.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "file_path": {
+              "type": "string",
+              "description": "The absolute path to the file to read"
+            }
+          },
+          "required": ["file_path"]
+        }
+      },
+      {
+        "name": "Glob",
+        "description": "Fast file pattern matching tool that works with any codebase size.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "pattern": {
+              "type": "string",
+              "description": "The glob pattern to match files against"
+            }
+          },
+          "required": ["pattern"]
+        }
+      }
+    ]
+  },
+  "expected_openai_messages": [
+    {
+      "role": "user",
+      "content": "Read the main config file and list all test files."
+    },
+    {
+      "role": "assistant",
+      "content": "I'll read the config file and find the test files in parallel.",
+      "tool_calls": [
+        {
+          "id": "toolu_01UDAtfZkgcGYMBq7Ns84vfN",
+          "type": "function",
+          "function": {
+            "name": "Read",
+            "arguments": "{\"file_path\":\"/home/user/project/config.toml\"}"
+          }
+        },
+        {
+          "id": "toolu_01J3KzMqBf9tXyQFhVw2NxRG",
+          "type": "function",
+          "function": {
+            "name": "Glob",
+            "arguments": "{\"pattern\":\"**/*test*\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "toolu_01UDAtfZkgcGYMBq7Ns84vfN",
+      "content": "[package]\nname = \"my-project\"\nversion = \"0.1.0\"\nedition = \"2021\""
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "toolu_01J3KzMqBf9tXyQFhVw2NxRG",
+      "content": "tests/unit_test.rs\ntests/integration_test.rs\nsrc/lib_test.rs"
+    }
+  ]
+}

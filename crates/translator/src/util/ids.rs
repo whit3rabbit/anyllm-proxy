@@ -11,6 +11,11 @@ pub fn generate_content_block_id() -> String {
     format!("block_{}", uuid::Uuid::new_v4().as_simple())
 }
 
+/// Generate a tool use ID in Anthropic format (toolu_ prefix).
+pub fn generate_tool_use_id() -> String {
+    format!("toolu_{}", uuid::Uuid::new_v4().as_simple())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -31,6 +36,17 @@ mod tests {
             "expected block_ prefix, got: {id}"
         );
         // "block_" (6) + 32 hex chars = 38
+        assert_eq!(id.len(), 38, "unexpected length: {id}");
+    }
+
+    #[test]
+    fn tool_use_id_has_correct_prefix_and_length() {
+        let id = generate_tool_use_id();
+        assert!(
+            id.starts_with("toolu_"),
+            "expected toolu_ prefix, got: {id}"
+        );
+        // "toolu_" (6) + 32 hex chars = 38
         assert_eq!(id.len(), 38, "unexpected length: {id}");
     }
 
