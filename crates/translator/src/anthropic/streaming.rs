@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 use super::messages::{ContentBlock, StopReason, Usage};
 
 /// Top-level SSE event, internally tagged on `"type"`.
+///
+/// See <https://docs.anthropic.com/en/api/messages-streaming>
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(tag = "type")]
 pub enum StreamEvent {
@@ -34,6 +36,9 @@ pub enum StreamEvent {
     Error { error: StreamError },
 }
 
+/// Data payload for the message_start event.
+///
+/// See <https://docs.anthropic.com/en/api/messages-streaming>
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct MessageStartData {
     pub id: String,
@@ -47,8 +52,13 @@ pub struct MessageStartData {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stop_sequence: Option<String>,
     pub usage: Usage,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub created: Option<u64>,
 }
 
+/// Content block delta: text or tool input JSON.
+///
+/// See <https://docs.anthropic.com/en/api/messages-streaming>
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(tag = "type")]
 pub enum Delta {
@@ -56,8 +66,13 @@ pub enum Delta {
     TextDelta { text: String },
     #[serde(rename = "input_json_delta")]
     InputJsonDelta { partial_json: String },
+    #[serde(rename = "thinking_delta")]
+    ThinkingDelta { thinking: String },
 }
 
+/// Top-level message changes (stop_reason, stop_sequence).
+///
+/// See <https://docs.anthropic.com/en/api/messages-streaming>
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct MessageDeltaData {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -66,11 +81,17 @@ pub struct MessageDeltaData {
     pub stop_sequence: Option<String>,
 }
 
+/// Cumulative output token count in message_delta events.
+///
+/// See <https://docs.anthropic.com/en/api/messages-streaming>
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct DeltaUsage {
     pub output_tokens: u32,
 }
 
+/// Error event in the SSE stream.
+///
+/// See <https://docs.anthropic.com/en/api/messages-streaming>
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct StreamError {
     #[serde(rename = "type")]
@@ -284,6 +305,25 @@ mod tests {
                     _ => panic!("expected Delta::TextDelta"),
                 }
             }
+            other => panic!("expected ContentBlockDelta, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn thinking_delta_roundtrip() {
+        let j = json!({
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {"type": "thinking_delta", "thinking": "Let me think..."}
+        });
+        let event: StreamEvent = serde_json::from_value(j).unwrap();
+        match event {
+            StreamEvent::ContentBlockDelta { delta, .. } => match delta {
+                Delta::ThinkingDelta { thinking } => {
+                    assert_eq!(thinking, "Let me think...");
+                }
+                _ => panic!("expected Delta::ThinkingDelta"),
+            },
             other => panic!("expected ContentBlockDelta, got {:?}", other),
         }
     }

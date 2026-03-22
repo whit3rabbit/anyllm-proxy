@@ -3,11 +3,17 @@
 
 use serde::{Deserialize, Serialize};
 
+/// OpenAI API error response wrapper.
+///
+/// See <https://platform.openai.com/docs/guides/error-codes>
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct ErrorResponse {
     pub error: ErrorDetail,
 }
 
+/// Error details with message, type, param, and code.
+///
+/// See <https://platform.openai.com/docs/guides/error-codes>
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct ErrorDetail {
     pub message: String,

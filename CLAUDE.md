@@ -18,19 +18,20 @@ See PLAN.md for the full specification and TASKS.md for phased implementation st
 - Tool calling: tool definitions, tool_use/tool_result, ID passthrough, JSON string/object conversion
 - File/document blocks: image and PDF base64 translation with size limits
 - Proxy: health, auth, request ID, size limits, concurrency limits, retry with backoff
-- Compatibility stubs: /v1/models (static list), /v1/messages/count_tokens and /v1/messages/batches (return unsupported error)
+- Compatibility stubs: /v1/models (dynamic list), /v1/messages/count_tokens and /v1/messages/batches (return unsupported error)
+- Model mapping: BIG_MODEL/SMALL_MODEL env vars, pattern-matches haiku/sonnet/opus to configured models
+- Transparent proxy: accepts anthropic-version/anthropic-beta headers, warns on lossy translations (metadata, cache_control, top_k, document blocks, stop_sequences truncation)
 
 **Not implemented (types exist but not wired up):**
 - OpenAI Responses API backend: `ResponsesRequest`/`ResponsesResponse` types are defined in `crates/translator/src/openai/responses.rs` but the proxy only calls Chat Completions. PLAN.md envisions runtime selection between the two.
 - No live API integration tests (golden fixture tests only; live test requires OPENAI_API_KEY at runtime)
-- No metrics endpoint exposed (metrics struct exists in `crates/proxy/src/metrics/` but no GET /metrics route)
-- Model name mapping is static (hardcoded claude model list in routes.rs), not configurable
+- Metrics endpoint exists (GET /metrics returns JSON counters) but streaming requests only track total count, not success/error
 
 ## Build and Test
 
 ```bash
 cargo build                          # build everything
-cargo test                           # run all tests (169 tests)
+cargo test                           # run all tests (204 tests)
 cargo test -p anthropic_openai_translate  # translator crate only
 cargo test -p anthropic_openai_proxy      # proxy crate only
 cargo test health_endpoint            # single test by name
@@ -49,7 +50,12 @@ OPENAI_API_KEY=sk-... cargo run -p anthropic_openai_proxy
 - `OPENAI_API_KEY`: OpenAI API key (required for proxying, empty default)
 - `OPENAI_BASE_URL`: OpenAI base URL (default: `https://api.openai.com`)
 - `LISTEN_PORT`: Server port (default: `3000`)
+- `BIG_MODEL`: OpenAI model for sonnet/opus requests (default: `gpt-4o`)
+- `SMALL_MODEL`: OpenAI model for haiku requests (default: `gpt-4o-mini`)
 - `RUST_LOG`: Tracing filter (e.g., `info`, `anthropic_openai_proxy=debug`)
+- `TLS_CLIENT_CERT_P12`: Path to PKCS#12 (.p12/.pfx) client certificate for mTLS to the backend (optional)
+- `TLS_CLIENT_CERT_PASSWORD`: Password to decrypt the P12 file (required if P12 is set)
+- `TLS_CA_CERT`: Path to PEM-encoded CA certificate for verifying the backend server (optional)
 
 ## Architecture
 
@@ -70,11 +76,11 @@ Pure translation logic, no IO. Four modules:
 ### `crates/proxy` (bin: `anthropic_openai_proxy`)
 HTTP proxy built on axum + reqwest:
 - **`config.rs`**: Env-based configuration
-- **`server/routes.rs`**: Axum router (POST /v1/messages, GET /health, GET /v1/models, stubs for count_tokens and batches)
+- **`server/routes.rs`**: Axum router (POST /v1/messages, GET /health, GET /metrics, GET /v1/models, stubs for count_tokens and batches)
 - **`server/middleware.rs`**: Auth validation (x-api-key), request ID injection, 32MB size limit, concurrency limit, logging
 - **`server/sse.rs`**: SSE response helpers for Anthropic-format streaming
 - **`backend/openai_client.rs`**: reqwest client calling OpenAI Chat Completions with retry/backoff on 429/5xx
-- **`metrics/`**: Request count, latency, error rate tracking (internal only, no endpoint)
+- **`metrics/`**: Request count, success/error tracking, exposed via GET /metrics
 
 ### Data Flow
 ```
@@ -94,6 +100,7 @@ Client (Anthropic format) -> proxy (axum)
 - JSON fixtures in `fixtures/anthropic/` and `fixtures/openai/` are used for golden-file testing (4 fixture files).
 - Retry logic: 3 retries with exponential backoff + 25% jitter, respects retry-after header.
 - Backoff jitter is deterministic (upper bound, not random) to keep tests predictable.
+- `ChatCompletionRequest` uses `#[serde(flatten)] pub extra: serde_json::Map` to capture unknown OpenAI fields (e.g., `seed`, `logprobs`, `logit_bias`, `n`, `reasoning_effort`). These pass through to OpenAI without typed handling. Only fields that require translation logic (not just forwarding) need explicit struct fields.
 
 ## Conventions
 
@@ -101,3 +108,7 @@ Client (Anthropic format) -> proxy (axum)
 - Test files live alongside source (`#[cfg(test)]` modules) and in `crates/proxy/tests/` for integration tests.
 - Error types use `thiserror` derive macros.
 - Test distribution: translator has bulk of tests (135), proxy tests focus on SSE formatting (11) and client retry logic (8).
+
+## References
+
+- OpenAI API spec: https://github.com/openai/openai-openapi/blob/manual_spec/openapi.yaml (very large, ~70k+ lines). See https://simonwillison.net/2024/Dec/22/openai-openapi/ for context on the spec's size and structure. Do not attempt to load the full spec into context; reference specific sections as needed.

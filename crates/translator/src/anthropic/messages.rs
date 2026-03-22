@@ -5,6 +5,9 @@ use serde::{Deserialize, Serialize};
 
 // --- Request types ---
 
+/// Anthropic Messages API request body.
+///
+/// See <https://docs.anthropic.com/en/api/messages>
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct MessageCreateRequest {
     pub model: String,
@@ -18,6 +21,8 @@ pub struct MessageCreateRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub top_p: Option<f32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub top_k: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stop_sequences: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tools: Option<Vec<Tool>>,
@@ -26,6 +31,8 @@ pub struct MessageCreateRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<Metadata>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thinking: Option<ThinkingConfig>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stream: Option<bool>,
     /// Forward-compatible extension fields.
     #[serde(flatten)]
@@ -33,6 +40,8 @@ pub struct MessageCreateRequest {
 }
 
 /// System prompt: plain string or array of text blocks (with optional cache_control).
+///
+/// See <https://docs.anthropic.com/en/api/messages>
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum System {
@@ -40,6 +49,9 @@ pub enum System {
     Blocks(Vec<SystemBlock>),
 }
 
+/// System prompt text block with optional cache control.
+///
+/// See <https://docs.anthropic.com/en/api/messages>
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct SystemBlock {
     #[serde(rename = "type")]
@@ -49,18 +61,27 @@ pub struct SystemBlock {
     pub cache_control: Option<CacheControl>,
 }
 
+/// Cache control directive for prompt caching.
+///
+/// See <https://docs.anthropic.com/en/api/messages>
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct CacheControl {
     #[serde(rename = "type")]
     pub cache_type: String,
 }
 
+/// A single message in the conversation (user or assistant).
+///
+/// See <https://docs.anthropic.com/en/api/messages>
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct InputMessage {
     pub role: Role,
     pub content: Content,
 }
 
+/// Message role: user or assistant.
+///
+/// See <https://docs.anthropic.com/en/api/messages>
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum Role {
@@ -69,6 +90,8 @@ pub enum Role {
 }
 
 /// Message content: plain string or array of typed content blocks.
+///
+/// See <https://docs.anthropic.com/en/api/messages>
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum Content {
@@ -76,6 +99,9 @@ pub enum Content {
     Blocks(Vec<ContentBlock>),
 }
 
+/// Typed content block within a message.
+///
+/// See <https://docs.anthropic.com/en/api/messages>
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(tag = "type")]
 pub enum ContentBlock {
@@ -103,9 +129,17 @@ pub enum ContentBlock {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         is_error: Option<bool>,
     },
+    #[serde(rename = "thinking")]
+    Thinking {
+        thinking: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        signature: Option<String>,
+    },
 }
 
 /// Tool result content: plain string or array of content blocks.
+///
+/// See <https://docs.anthropic.com/en/api/messages>
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum ToolResultContent {
@@ -113,6 +147,9 @@ pub enum ToolResultContent {
     Blocks(Vec<ContentBlock>),
 }
 
+/// Image source for image content blocks (base64 or URL).
+///
+/// See <https://docs.anthropic.com/en/api/messages>
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct ImageSource {
     #[serde(rename = "type")]
@@ -125,6 +162,9 @@ pub struct ImageSource {
     pub url: Option<String>,
 }
 
+/// Document source for PDF content blocks (base64).
+///
+/// See <https://docs.anthropic.com/en/api/messages>
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct DocumentSource {
     #[serde(rename = "type")]
@@ -135,6 +175,9 @@ pub struct DocumentSource {
 
 // --- Tool types ---
 
+/// Tool definition with name, description, and JSON schema.
+///
+/// See <https://docs.anthropic.com/en/api/messages>
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct Tool {
     pub name: String,
@@ -143,6 +186,9 @@ pub struct Tool {
     pub input_schema: serde_json::Value,
 }
 
+/// How the model should use tools: auto, any, none, or specific tool.
+///
+/// See <https://docs.anthropic.com/en/api/messages>
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(tag = "type")]
 pub enum ToolChoice {
@@ -156,14 +202,32 @@ pub enum ToolChoice {
     Tool { name: String },
 }
 
+/// Request metadata for abuse detection.
+///
+/// See <https://docs.anthropic.com/en/api/messages>
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct Metadata {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub user_id: Option<String>,
 }
 
+/// Extended thinking configuration.
+///
+/// See <https://docs.anthropic.com/en/api/messages>
+#[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(tag = "type")]
+pub enum ThinkingConfig {
+    #[serde(rename = "enabled")]
+    Enabled { budget_tokens: u32 },
+    #[serde(rename = "disabled")]
+    Disabled,
+}
+
 // --- Response types ---
 
+/// Anthropic Messages API response body.
+///
+/// See <https://docs.anthropic.com/en/api/messages>
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct MessageResponse {
     pub id: String,
@@ -177,8 +241,13 @@ pub struct MessageResponse {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stop_sequence: Option<String>,
     pub usage: Usage,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub created: Option<u64>,
 }
 
+/// Why the model stopped generating.
+///
+/// See <https://docs.anthropic.com/en/api/messages>
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum StopReason {
@@ -188,6 +257,9 @@ pub enum StopReason {
     ToolUse,
 }
 
+/// Token usage counts for the request and response.
+///
+/// See <https://docs.anthropic.com/en/api/messages>
 #[derive(Deserialize, Serialize, Debug, Clone, Default)]
 pub struct Usage {
     pub input_tokens: u32,
@@ -408,6 +480,7 @@ mod tests {
                 cache_creation_input_tokens: None,
                 cache_read_input_tokens: None,
             },
+            created: None,
         };
         let serialized = serde_json::to_string(&resp).unwrap();
         let deserialized: MessageResponse = serde_json::from_str(&serialized).unwrap();
@@ -437,7 +510,8 @@ mod tests {
             "unknown_field": "value"
         });
         let req: MessageCreateRequest = serde_json::from_value(j).unwrap();
-        assert_eq!(req.extra.get("top_k").unwrap(), &json!(40));
+        assert_eq!(req.top_k, Some(40));
+        assert!(req.extra.get("top_k").is_none());
         assert_eq!(req.extra.get("unknown_field").unwrap(), &json!("value"));
     }
 
@@ -478,5 +552,61 @@ mod tests {
             .as_object()
             .unwrap()
             .contains_key("cache_read_input_tokens"));
+    }
+
+    #[test]
+    fn thinking_config_enabled_roundtrip() {
+        let cfg = ThinkingConfig::Enabled {
+            budget_tokens: 8192,
+        };
+        let json = serde_json::to_value(&cfg).unwrap();
+        assert_eq!(json, json!({"type": "enabled", "budget_tokens": 8192}));
+        let parsed: ThinkingConfig = serde_json::from_value(json).unwrap();
+        assert!(matches!(
+            parsed,
+            ThinkingConfig::Enabled {
+                budget_tokens: 8192
+            }
+        ));
+    }
+
+    #[test]
+    fn thinking_config_disabled_roundtrip() {
+        let cfg = ThinkingConfig::Disabled;
+        let json = serde_json::to_value(&cfg).unwrap();
+        assert_eq!(json, json!({"type": "disabled"}));
+        let parsed: ThinkingConfig = serde_json::from_value(json).unwrap();
+        assert!(matches!(parsed, ThinkingConfig::Disabled));
+    }
+
+    #[test]
+    fn thinking_content_block_roundtrip() {
+        let block = ContentBlock::Thinking {
+            thinking: "Let me reason about this...".into(),
+            signature: Some("sig_abc".into()),
+        };
+        let json = serde_json::to_value(&block).unwrap();
+        assert_eq!(json["type"], "thinking");
+        assert_eq!(json["thinking"], "Let me reason about this...");
+        assert_eq!(json["signature"], "sig_abc");
+        let parsed: ContentBlock = serde_json::from_value(json).unwrap();
+        assert!(matches!(parsed, ContentBlock::Thinking { .. }));
+    }
+
+    #[test]
+    fn request_with_thinking_deserializes() {
+        let j = json!({
+            "model": "claude-sonnet-4-6",
+            "max_tokens": 1024,
+            "messages": [],
+            "thinking": {"type": "enabled", "budget_tokens": 4096}
+        });
+        let req: MessageCreateRequest = serde_json::from_value(j).unwrap();
+        assert!(matches!(
+            req.thinking,
+            Some(ThinkingConfig::Enabled {
+                budget_tokens: 4096
+            })
+        ));
     }
 }

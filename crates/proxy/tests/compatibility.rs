@@ -9,6 +9,11 @@ fn test_config() -> Config {
         openai_api_key: "test-key".to_string(),
         openai_base_url: "https://api.openai.com".to_string(),
         listen_port: 0,
+        model_mapping: config::ModelMapping {
+            big_model: "gpt-4o".into(),
+            small_model: "gpt-4o-mini".into(),
+        },
+        tls: config::TlsConfig::default(),
     }
 }
 

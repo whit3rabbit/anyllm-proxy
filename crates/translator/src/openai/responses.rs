@@ -3,6 +3,9 @@
 
 use serde::{Deserialize, Serialize};
 
+/// OpenAI Responses API request body (stub, not wired up).
+///
+/// See <https://platform.openai.com/docs/api-reference/responses/create>
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct ResponsesRequest {
     pub model: String,
@@ -21,6 +24,9 @@ pub struct ResponsesRequest {
     pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
+/// Responses API input: text string or array of items (stub).
+///
+/// See <https://platform.openai.com/docs/api-reference/responses/create>
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum ResponsesInput {
@@ -28,6 +34,9 @@ pub enum ResponsesInput {
     Items(Vec<serde_json::Value>),
 }
 
+/// OpenAI Responses API response body (stub, not wired up).
+///
+/// See <https://platform.openai.com/docs/api-reference/responses/object>
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct ResponsesResponse {
     pub id: String,
@@ -42,6 +51,9 @@ pub struct ResponsesResponse {
     pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
+/// Token usage for Responses API (stub).
+///
+/// See <https://platform.openai.com/docs/api-reference/responses/object>
 #[derive(Deserialize, Serialize, Debug, Clone, Default)]
 pub struct ResponsesUsage {
     pub input_tokens: u32,

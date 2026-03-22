@@ -1,5 +1,5 @@
 use crate::backend::openai_client::{OpenAIClient, OpenAIClientError};
-use crate::config::Config;
+use crate::config::{Config, ModelMapping};
 use crate::metrics::Metrics;
 use anthropic_openai_translate::{anthropic, mapping, openai};
 use axum::{
@@ -16,43 +16,60 @@ use futures::stream::Stream;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
+/// Shared application state for all request handlers.
 #[derive(Clone)]
 pub struct AppState {
     pub openai_client: OpenAIClient,
     pub metrics: Metrics,
+    pub model_mapping: ModelMapping,
 }
 
+/// Build the axum router emulating Anthropic's POST /v1/messages endpoint.
+///
+/// Anthropic: <https://docs.anthropic.com/en/api/messages>
 pub fn app(config: Config) -> Router {
     let state = AppState {
         openai_client: OpenAIClient::new(&config),
         metrics: Metrics::new(),
+        model_mapping: config.model_mapping.clone(),
     };
 
-    // Auth-protected API routes
+    // Auth-protected API routes with concurrency limit.
+    // ConcurrencyLimit prevents self-DOS under upstream 429 incidents.
     let api_routes = Router::new()
         .route("/v1/messages", post(messages))
         .route("/v1/models", get(models))
         .route("/v1/messages/count_tokens", post(count_tokens))
         .route("/v1/messages/batches", post(batches))
-        .layer(axum::middleware::from_fn(super::middleware::validate_auth));
+        .layer(axum::middleware::from_fn(super::middleware::validate_auth))
+        .layer(axum::middleware::from_fn(
+            super::middleware::log_anthropic_headers,
+        ))
+        .layer(DefaultBodyLimit::max(super::middleware::MAX_BODY_SIZE))
+        .layer(tower::limit::ConcurrencyLimitLayer::new(
+            super::middleware::MAX_CONCURRENT_REQUESTS,
+        ));
 
-    // Health and metrics are public; merge API routes with auth layer applied.
-    // ConcurrencyLimit prevents self-DOS under upstream 429 incidents.
+    // Health and metrics are public, bypass auth and concurrency limits.
     Router::new()
         .route("/health", get(health))
         .route("/metrics", get(metrics_endpoint))
         .merge(api_routes)
-        .layer(DefaultBodyLimit::max(super::middleware::MAX_BODY_SIZE))
-        .layer(tower::limit::ConcurrencyLimitLayer::new(
-            super::middleware::MAX_CONCURRENT_REQUESTS,
-        ))
         .layer(axum::middleware::from_fn(super::middleware::add_request_id))
         .with_state(state)
 }
 
-async fn models() -> impl IntoResponse {
-    static MODELS_JSON: &str = r#"{"data":[{"id":"claude-opus-4-6","display_name":"Claude Opus 4.6","created_at":"2025-05-14T00:00:00Z","type":"model"},{"id":"claude-sonnet-4-6","display_name":"Claude Sonnet 4.6","created_at":"2025-05-14T00:00:00Z","type":"model"},{"id":"claude-haiku-4-5-20251001","display_name":"Claude Haiku 4.5","created_at":"2025-05-14T00:00:00Z","type":"model"}],"has_more":false,"first_id":"claude-opus-4-6","last_id":"claude-haiku-4-5-20251001"}"#;
-    ([("content-type", "application/json")], MODELS_JSON)
+async fn models(State(_state): State<AppState>) -> Json<serde_json::Value> {
+    Json(serde_json::json!({
+        "data": [
+            {"id": "claude-opus-4-6", "display_name": "Claude Opus 4.6", "created_at": "2025-05-14T00:00:00Z", "type": "model"},
+            {"id": "claude-sonnet-4-6", "display_name": "Claude Sonnet 4.6", "created_at": "2025-05-14T00:00:00Z", "type": "model"},
+            {"id": "claude-haiku-4-5-20251001", "display_name": "Claude Haiku 4.5", "created_at": "2025-05-14T00:00:00Z", "type": "model"},
+        ],
+        "has_more": false,
+        "first_id": "claude-opus-4-6",
+        "last_id": "claude-haiku-4-5-20251001",
+    }))
 }
 
 async fn count_tokens() -> impl IntoResponse {
@@ -103,15 +120,13 @@ async fn messages_stream(
     body: anthropic::MessageCreateRequest,
 ) -> Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>> {
     let mut openai_req = mapping::message_map::anthropic_to_openai_request(&body);
-    openai_req.stream = Some(true);
-    openai_req.stream_options = Some(openai::StreamOptions {
-        include_usage: true,
-    });
+    openai_req.model = state.model_mapping.map_model(&openai_req.model);
 
     let model = body.model.clone();
 
     let (tx, rx) = mpsc::channel::<Result<Event, std::convert::Infallible>>(32);
 
+    let metrics = state.metrics.clone();
     tokio::spawn(async move {
         match state
             .openai_client
@@ -129,6 +144,7 @@ async fn messages_stream(
                         Ok(b) => b,
                         Err(e) => {
                             tracing::error!("stream read error: {e}");
+                            metrics.record_error();
                             break;
                         }
                     };
@@ -149,6 +165,7 @@ async fn messages_stream(
                             if line == "data: [DONE]" {
                                 let events = translator.finish();
                                 send_events(&tx, &events).await;
+                                metrics.record_success();
                                 return;
                             }
                             if let Some(json_str) = line.strip_prefix("data: ") {
@@ -157,7 +174,8 @@ async fn messages_stream(
                                 {
                                     let events = translator.process_chunk(&chunk);
                                     if !send_events(&tx, &events).await {
-                                        return; // Client disconnected
+                                        tracing::debug!("client disconnected during stream");
+                                        return;
                                     }
                                 }
                             }
@@ -172,9 +190,11 @@ async fn messages_stream(
                 // Stream ended without [DONE]; still finish cleanly
                 let events = translator.finish();
                 send_events(&tx, &events).await;
+                metrics.record_success();
             }
             Err(e) => {
                 tracing::error!("streaming request failed: {e}");
+                metrics.record_error();
                 let err_event = anthropic::StreamEvent::Error {
                     error: anthropic::streaming::StreamError {
                         error_type: "api_error".to_string(),
@@ -198,13 +218,12 @@ async fn messages(
     state.metrics.record_request();
 
     if body.stream == Some(true) {
-        // Streaming: success/error tracked inside the spawned task is not
-        // straightforward to propagate, so we count the request only.
         let sse = messages_stream(state, body).await;
         return sse.into_response();
     }
 
-    let openai_req = mapping::message_map::anthropic_to_openai_request(&body);
+    let mut openai_req = mapping::message_map::anthropic_to_openai_request(&body);
+    openai_req.model = state.model_mapping.map_model(&openai_req.model);
     let original_model = body.model.clone();
 
     match state.openai_client.chat_completion(&openai_req).await {

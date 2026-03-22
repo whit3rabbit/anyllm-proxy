@@ -6,6 +6,6 @@ pub mod streaming;
 pub use errors::{ErrorDetail, ErrorResponse, ErrorType};
 pub use messages::{
     Content, ContentBlock, InputMessage, MessageCreateRequest, MessageResponse, Role, StopReason,
-    System, Tool, ToolChoice, Usage,
+    System, ThinkingConfig, Tool, ToolChoice, Usage,
 };
 pub use streaming::{Delta, StreamEvent};

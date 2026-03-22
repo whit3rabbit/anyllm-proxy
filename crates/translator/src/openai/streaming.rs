@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 use super::chat_completions::{ChatRole, ChatUsage, FinishReason};
 
 /// A single chunk in a streamed Chat Completions response.
+///
+/// See <https://platform.openai.com/docs/api-reference/chat/streaming>
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct ChatCompletionChunk {
     pub id: String,
@@ -16,16 +18,30 @@ pub struct ChatCompletionChunk {
     pub usage: Option<ChatUsage>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub created: Option<u64>,
+    /// Compat spec response: "Always empty".
+    /// See: https://docs.anthropic.com/en/api/openai-sdk#response-fields
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub system_fingerprint: Option<String>,
 }
 
+/// A choice within a streaming chunk.
+///
+/// See <https://platform.openai.com/docs/api-reference/chat/streaming>
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct ChunkChoice {
     pub index: u32,
     pub delta: ChunkDelta,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub finish_reason: Option<FinishReason>,
+    /// Compat spec response: "Always empty".
+    /// See: https://docs.anthropic.com/en/api/openai-sdk#response-fields
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub logprobs: Option<serde_json::Value>,
 }
 
+/// Incremental content delta in a streaming chunk.
+///
+/// See <https://platform.openai.com/docs/api-reference/chat/streaming>
 #[derive(Deserialize, Serialize, Debug, Clone, Default)]
 pub struct ChunkDelta {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -33,10 +49,14 @@ pub struct ChunkDelta {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub content: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub refusal: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tool_calls: Option<Vec<ChunkToolCall>>,
 }
 
 /// Streaming tool calls arrive incrementally, with partial function arguments.
+///
+/// See <https://platform.openai.com/docs/api-reference/chat/streaming>
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct ChunkToolCall {
     pub index: u32,
@@ -49,6 +69,9 @@ pub struct ChunkToolCall {
     pub function: Option<ChunkFunctionCall>,
 }
 
+/// Incremental function call data in a streaming chunk.
+///
+/// See <https://platform.openai.com/docs/api-reference/chat/streaming>
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct ChunkFunctionCall {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -195,16 +218,41 @@ mod tests {
                 delta: ChunkDelta {
                     role: None,
                     content: Some("world".into()),
+                    refusal: None,
                     tool_calls: None,
                 },
                 finish_reason: None,
+                logprobs: None,
             }],
             usage: None,
             created: Some(1700000000),
+            system_fingerprint: None,
         };
         let json_str = serde_json::to_string(&chunk).unwrap();
         let roundtrip: ChatCompletionChunk = serde_json::from_str(&json_str).unwrap();
         assert_eq!(roundtrip.choices[0].delta.content.as_deref(), Some("world"));
         assert_eq!(roundtrip.created, Some(1700000000));
+    }
+
+    #[test]
+    fn deserialize_realistic_streaming_chunk() {
+        // Real gpt-4o streaming chunk with all fields
+        let raw = json!({
+            "id": "chatcmpl-AKj3",
+            "object": "chat.completion.chunk",
+            "created": 1729800000,
+            "model": "gpt-4o-2024-08-06",
+            "system_fingerprint": "fp_a7d06e42a7",
+            "choices": [{
+                "index": 0,
+                "delta": {"content": "Hi"},
+                "logprobs": null,
+                "finish_reason": null
+            }]
+        });
+        let chunk: ChatCompletionChunk = serde_json::from_value(raw).unwrap();
+        assert_eq!(chunk.system_fingerprint.as_deref(), Some("fp_a7d06e42a7"));
+        assert!(chunk.choices[0].logprobs.is_none());
+        assert_eq!(chunk.choices[0].delta.content.as_deref(), Some("Hi"));
     }
 }

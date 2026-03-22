@@ -8,6 +8,8 @@ use axum::response::sse::Event;
 ///
 /// The event type string matches what Anthropic clients expect:
 /// `message_start`, `content_block_start`, `content_block_delta`, etc.
+///
+/// Anthropic: <https://docs.anthropic.com/en/api/messages-streaming>
 pub fn stream_event_to_sse(event: &StreamEvent) -> Result<Event, serde_json::Error> {
     let event_type = match event {
         StreamEvent::MessageStart { .. } => "message_start",
@@ -53,6 +55,7 @@ mod tests {
                 stop_reason: None,
                 stop_sequence: None,
                 usage: Usage::default(),
+                created: None,
             },
         };
         assert_sse_ok(&event);
@@ -161,6 +164,7 @@ mod tests {
                     stop_reason: None,
                     stop_sequence: None,
                     usage: Usage::default(),
+                    created: None,
                 },
             },
             StreamEvent::ContentBlockStart {

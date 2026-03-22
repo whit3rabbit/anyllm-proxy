@@ -25,3 +25,7 @@ Thumbs.db
 # Tool config
 .claude/
 .cook/
+
+# Script caches and venv
+scripts/.cache/
+scripts/.venv/

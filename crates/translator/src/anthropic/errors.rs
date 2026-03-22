@@ -3,6 +3,9 @@
 
 use serde::{Deserialize, Serialize};
 
+/// Anthropic API error response wrapper.
+///
+/// See <https://docs.anthropic.com/en/api/errors>
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct ErrorResponse {
     #[serde(rename = "type")]
@@ -12,6 +15,9 @@ pub struct ErrorResponse {
     pub request_id: Option<String>,
 }
 
+/// Inner error object containing the error type and human-readable message.
+///
+/// See <https://docs.anthropic.com/en/api/errors>
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct ErrorDetail {
     #[serde(rename = "type")]
@@ -19,16 +25,29 @@ pub struct ErrorDetail {
     pub message: String,
 }
 
+/// Anthropic API error type identifiers, mapped to HTTP status codes.
+///
+/// See <https://docs.anthropic.com/en/api/errors>
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum ErrorType {
+    /// 400: Issue with the format or content of the request.
     InvalidRequestError,
+    /// 401: Issue with the API key.
     AuthenticationError,
+    /// 402: Issue with billing or payment.
+    BillingError,
+    /// 403: API key lacks permission for the resource.
     PermissionError,
+    /// 404: Requested resource not found.
     NotFoundError,
+    /// 413: Request exceeds maximum allowed size (32 MB).
     RequestTooLarge,
+    /// 429: Account has hit a rate limit.
     RateLimitError,
+    /// 500: Unexpected internal error.
     ApiError,
+    /// 529: API is temporarily overloaded.
     OverloadedError,
 }
 
@@ -91,6 +110,7 @@ mod tests {
         let cases = [
             ("invalid_request_error", ErrorType::InvalidRequestError),
             ("authentication_error", ErrorType::AuthenticationError),
+            ("billing_error", ErrorType::BillingError),
             ("permission_error", ErrorType::PermissionError),
             ("not_found_error", ErrorType::NotFoundError),
             ("request_too_large", ErrorType::RequestTooLarge),

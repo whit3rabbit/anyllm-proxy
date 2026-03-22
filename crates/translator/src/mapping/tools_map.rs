@@ -5,6 +5,9 @@ use crate::anthropic;
 use crate::openai;
 
 /// Convert Anthropic tool definitions to OpenAI tool definitions.
+///
+/// Anthropic: <https://docs.anthropic.com/en/api/messages>
+/// OpenAI: <https://platform.openai.com/docs/api-reference/chat/create>
 pub fn anthropic_tools_to_openai(tools: &[anthropic::Tool]) -> Vec<openai::ChatTool> {
     tools
         .iter()
@@ -14,6 +17,9 @@ pub fn anthropic_tools_to_openai(tools: &[anthropic::Tool]) -> Vec<openai::ChatT
                 name: t.name.clone(),
                 description: t.description.clone(),
                 parameters: Some(t.input_schema.clone()),
+                // Compat spec: "Ignored". Anthropic has no equivalent.
+                // See: https://docs.anthropic.com/en/api/openai-sdk#tools--functions-fields
+                strict: None,
             },
         })
         .collect()
@@ -22,6 +28,9 @@ pub fn anthropic_tools_to_openai(tools: &[anthropic::Tool]) -> Vec<openai::ChatT
 /// Convert OpenAI tool definitions back to Anthropic tool definitions.
 /// When parameters is None, defaults to `{"type": "object"}` since Anthropic
 /// requires input_schema to be present.
+///
+/// OpenAI: <https://platform.openai.com/docs/api-reference/chat/create>
+/// Anthropic: <https://docs.anthropic.com/en/api/messages>
 pub fn openai_tools_to_anthropic(tools: &[openai::ChatTool]) -> Vec<anthropic::Tool> {
     tools
         .iter()
@@ -38,6 +47,9 @@ pub fn openai_tools_to_anthropic(tools: &[openai::ChatTool]) -> Vec<anthropic::T
 }
 
 /// Convert Anthropic tool_choice to OpenAI tool_choice.
+///
+/// Anthropic: <https://docs.anthropic.com/en/api/messages>
+/// OpenAI: <https://platform.openai.com/docs/api-reference/chat/create>
 pub fn anthropic_tool_choice_to_openai(tc: &anthropic::ToolChoice) -> openai::ChatToolChoice {
     match tc {
         anthropic::ToolChoice::Auto => openai::ChatToolChoice::Simple("auto".to_string()),
@@ -53,6 +65,9 @@ pub fn anthropic_tool_choice_to_openai(tc: &anthropic::ToolChoice) -> openai::Ch
 }
 
 /// Convert OpenAI tool_choice to Anthropic tool_choice.
+///
+/// OpenAI: <https://platform.openai.com/docs/api-reference/chat/create>
+/// Anthropic: <https://docs.anthropic.com/en/api/messages>
 pub fn openai_tool_choice_to_anthropic(tc: &openai::ChatToolChoice) -> anthropic::ToolChoice {
     match tc {
         openai::ChatToolChoice::Simple(s) => match s.as_str() {
@@ -99,6 +114,7 @@ mod tests {
                     },
                     "required": ["location"]
                 })),
+                strict: None,
             },
         }
     }
@@ -162,6 +178,7 @@ mod tests {
                 name: "simple".into(),
                 description: None,
                 parameters: None,
+                strict: None,
             },
         };
         let anthropic = openai_tools_to_anthropic(&[tool]);

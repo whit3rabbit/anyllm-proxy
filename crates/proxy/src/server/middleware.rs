@@ -13,6 +13,8 @@ use axum::{
 /// Validate that the request carries some form of authentication.
 /// The proxy does not verify the key itself; it just prevents accidental
 /// open proxying by requiring callers to present a credential.
+///
+/// Anthropic: <https://docs.anthropic.com/en/api/messages>
 pub async fn validate_auth(
     headers: HeaderMap,
     request: Request<Body>,
@@ -39,6 +41,8 @@ pub async fn validate_auth(
 
 /// Attach a request ID to the request and echo it on the response.
 /// Uses the incoming x-request-id if present, otherwise generates a UUID v4.
+///
+/// Anthropic: <https://docs.anthropic.com/en/api/errors>
 pub async fn add_request_id(mut request: Request<Body>, next: Next) -> Response {
     let request_id = request
         .headers()
@@ -53,10 +57,28 @@ pub async fn add_request_id(mut request: Request<Body>, next: Next) -> Response 
         .insert("x-request-id", header_value.clone());
 
     let mut response = next.run(request).await;
+    response.headers_mut().insert("x-request-id", header_value);
     response
-        .headers_mut()
-        .insert("x-request-id", header_value);
-    response
+}
+
+/// Log Anthropic-specific headers without rejecting requests that lack them.
+/// Claude Code CLI and other Anthropic SDK clients send these headers.
+pub async fn log_anthropic_headers(request: Request<Body>, next: Next) -> Response {
+    if let Some(v) = request
+        .headers()
+        .get("anthropic-version")
+        .and_then(|v| v.to_str().ok())
+    {
+        tracing::debug!(anthropic_version = %v, "anthropic-version header present");
+    }
+    if let Some(b) = request
+        .headers()
+        .get("anthropic-beta")
+        .and_then(|v| v.to_str().ok())
+    {
+        tracing::debug!(anthropic_beta = %b, "anthropic-beta header present");
+    }
+    next.run(request).await
 }
 
 /// Maximum request body size (32 MB, matching Anthropic's Messages endpoint limit).

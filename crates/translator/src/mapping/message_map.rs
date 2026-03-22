@@ -7,12 +7,21 @@ use crate::openai;
 use crate::util;
 
 /// Convert an Anthropic MessageCreateRequest to an OpenAI ChatCompletionRequest.
+///
+/// Anthropic: <https://docs.anthropic.com/en/api/messages>
+/// OpenAI: <https://platform.openai.com/docs/api-reference/chat/create>
 pub fn anthropic_to_openai_request(
     req: &anthropic::MessageCreateRequest,
 ) -> openai::ChatCompletionRequest {
     let mut messages = Vec::new();
 
     if let Some(ref system) = req.system {
+        // Warn if any system block has cache_control (dropped, no OpenAI equivalent)
+        if let anthropic::System::Blocks(blocks) = system {
+            if blocks.iter().any(|b| b.cache_control.is_some()) {
+                tracing::warn!("cache_control on system blocks dropped: no OpenAI equivalent");
+            }
+        }
         let text = match system {
             anthropic::System::Text(s) => s.clone(),
             anthropic::System::Blocks(blocks) => blocks
@@ -27,6 +36,7 @@ pub fn anthropic_to_openai_request(
             name: None,
             tool_calls: None,
             tool_call_id: None,
+            refusal: None,
         });
     }
 
@@ -44,8 +54,26 @@ pub fn anthropic_to_openai_request(
         .as_ref()
         .map(tools_map::anthropic_tool_choice_to_openai);
 
+    // Map metadata.user_id to OpenAI user field.
+    // Compat spec: user is "Ignored", but we forward it for traceability.
+    // See: https://docs.anthropic.com/en/api/openai-sdk#simple-fields
+    let user = req.metadata.as_ref().and_then(|m| m.user_id.clone());
+    if req.top_k.is_some() {
+        tracing::warn!("top_k parameter dropped: no OpenAI equivalent");
+    }
+    if req.thinking.is_some() {
+        tracing::warn!("thinking config stripped: no OpenAI equivalent");
+    }
+
     // OpenAI caps stop sequences at 4
     let stop = req.stop_sequences.as_ref().map(|seqs| {
+        if seqs.len() > 4 {
+            tracing::warn!(
+                count = seqs.len(),
+                "stop_sequences truncated from {} to 4 (OpenAI limit)",
+                seqs.len()
+            );
+        }
         let capped: Vec<String> = seqs.iter().take(4).cloned().collect();
         if capped.len() == 1 {
             openai::Stop::Single(capped.into_iter().next().unwrap())
@@ -57,8 +85,11 @@ pub fn anthropic_to_openai_request(
     openai::ChatCompletionRequest {
         model: req.model.clone(),
         messages,
-        max_tokens: Some(req.max_tokens),
-        temperature: req.temperature,
+        max_tokens: None,
+        max_completion_tokens: Some(req.max_tokens),
+        // Compat spec: "Between 0 and 1 (inclusive). Values greater than 1 are capped at 1."
+        // See: https://docs.anthropic.com/en/api/openai-sdk#simple-fields
+        temperature: req.temperature.map(|t| t.clamp(0.0, 1.0)),
         top_p: req.top_p,
         stop,
         tools,
@@ -74,6 +105,8 @@ pub fn anthropic_to_openai_request(
         presence_penalty: None,
         frequency_penalty: None,
         response_format: None,
+        user,
+        parallel_tool_calls: None,
         extra: serde_json::Map::new(),
     }
 }
@@ -95,6 +128,7 @@ fn convert_anthropic_message(msg: &anthropic::InputMessage, out: &mut Vec<openai
                 name: None,
                 tool_calls: None,
                 tool_call_id: None,
+                refusal: None,
             });
         }
         anthropic::Content::Blocks(blocks) => {
@@ -150,6 +184,7 @@ fn convert_assistant_blocks(
             Some(tool_calls)
         },
         tool_call_id: None,
+        refusal: None,
     });
 }
 
@@ -206,6 +241,10 @@ fn convert_user_blocks(blocks: &[anthropic::ContentBlock], out: &mut Vec<openai:
                 // Convert to a text note describing the document.
                 // Full support would require OpenAI Responses API with input_file.file_data.
                 let label = title.as_deref().unwrap_or("document");
+                tracing::warn!(
+                    label = label,
+                    "document block degraded to text note: no OpenAI Chat Completions equivalent"
+                );
                 let note = format!(
                     "[Attached {}: {} ({} bytes base64)]",
                     label,
@@ -214,8 +253,8 @@ fn convert_user_blocks(blocks: &[anthropic::ContentBlock], out: &mut Vec<openai:
                 );
                 content_parts.push(openai::ChatContentPart::Text { text: note });
             }
-            // ToolUse blocks don't appear in user messages; ignore if present
-            anthropic::ContentBlock::ToolUse { .. } => {}
+            // ToolUse and Thinking blocks don't appear in user messages; ignore if present
+            anthropic::ContentBlock::ToolUse { .. } | anthropic::ContentBlock::Thinking { .. } => {}
         }
     }
 
@@ -236,6 +275,7 @@ fn convert_user_blocks(blocks: &[anthropic::ContentBlock], out: &mut Vec<openai:
             name: None,
             tool_calls: None,
             tool_call_id: None,
+            refusal: None,
         });
     }
 
@@ -247,11 +287,15 @@ fn convert_user_blocks(blocks: &[anthropic::ContentBlock], out: &mut Vec<openai:
             name: None,
             tool_calls: None,
             tool_call_id: Some(tool_call_id),
+            refusal: None,
         });
     }
 }
 
 /// Convert an OpenAI ChatCompletionResponse back to an Anthropic MessageResponse.
+///
+/// OpenAI: <https://platform.openai.com/docs/api-reference/chat/object>
+/// Anthropic: <https://docs.anthropic.com/en/api/messages>
 pub fn openai_to_anthropic_response(
     resp: &openai::ChatCompletionResponse,
     model: &str,
@@ -312,6 +356,7 @@ pub fn openai_to_anthropic_response(
         stop_reason,
         stop_sequence: None,
         usage,
+        created: resp.created,
     }
 }
 
@@ -333,10 +378,12 @@ mod tests {
             system: None,
             temperature: None,
             top_p: None,
+            top_k: None,
             stop_sequences: None,
             tools: None,
             tool_choice: None,
             metadata: None,
+            thinking: None,
             stream: None,
             extra: serde_json::Map::new(),
         }
@@ -355,16 +402,21 @@ mod tests {
                     name: None,
                     tool_calls: None,
                     tool_call_id: None,
+                    refusal: None,
                 },
                 finish_reason: Some(openai::FinishReason::Stop),
+                logprobs: None,
             }],
             usage: Some(openai::ChatUsage {
                 prompt_tokens: 10,
                 completion_tokens: 5,
                 total_tokens: 15,
+                completion_tokens_details: None,
+                prompt_tokens_details: None,
             }),
             created: Some(1700000000),
             system_fingerprint: None,
+            service_tier: None,
         }
     }
 
@@ -376,7 +428,8 @@ mod tests {
         let oai = anthropic_to_openai_request(&req);
 
         assert_eq!(oai.model, "claude-3-5-sonnet-20241022");
-        assert_eq!(oai.max_tokens, Some(1024));
+        assert!(oai.max_tokens.is_none());
+        assert_eq!(oai.max_completion_tokens, Some(1024));
         assert_eq!(oai.messages.len(), 1);
         assert_eq!(oai.messages[0].role, openai::ChatRole::User);
         assert!(matches!(
@@ -774,16 +827,21 @@ mod tests {
                         },
                     }]),
                     tool_call_id: None,
+                    refusal: None,
                 },
                 finish_reason: Some(openai::FinishReason::ToolCalls),
+                logprobs: None,
             }],
             usage: Some(openai::ChatUsage {
                 prompt_tokens: 20,
                 completion_tokens: 10,
                 total_tokens: 30,
+                completion_tokens_details: None,
+                prompt_tokens_details: None,
             }),
             created: None,
             system_fingerprint: None,
+            service_tier: None,
         };
 
         let anth = openai_to_anthropic_response(&resp, "claude-3-5-sonnet-20241022");
@@ -835,12 +893,15 @@ mod tests {
                         name: None,
                         tool_calls: None,
                         tool_call_id: None,
+                        refusal: None,
                     },
                     finish_reason: Some(oai_reason),
+                    logprobs: None,
                 }],
                 usage: None,
                 created: None,
                 system_fingerprint: None,
+                service_tier: None,
             };
             let anth = openai_to_anthropic_response(&resp, "m");
             assert_eq!(anth.stop_reason, Some(expected));
@@ -861,12 +922,15 @@ mod tests {
                     name: None,
                     tool_calls: None,
                     tool_call_id: None,
+                    refusal: None,
                 },
                 finish_reason: Some(openai::FinishReason::Stop),
+                logprobs: None,
             }],
             usage: None,
             created: None,
             system_fingerprint: None,
+            service_tier: None,
         };
 
         let anth = openai_to_anthropic_response(&resp, "m");
@@ -884,6 +948,7 @@ mod tests {
             usage: None,
             created: None,
             system_fingerprint: None,
+            service_tier: None,
         };
 
         let anth = openai_to_anthropic_response(&resp, "m");
@@ -902,6 +967,7 @@ mod tests {
             usage: None,
             created: None,
             system_fingerprint: None,
+            service_tier: None,
         };
 
         let anth = openai_to_anthropic_response(&resp, "m");
@@ -1038,16 +1104,21 @@ mod tests {
                         },
                     }]),
                     tool_call_id: None,
+                    refusal: None,
                 },
                 finish_reason: Some(openai::FinishReason::ToolCalls),
+                logprobs: None,
             }],
             usage: Some(openai::ChatUsage {
                 prompt_tokens: 5,
                 completion_tokens: 3,
                 total_tokens: 8,
+                completion_tokens_details: None,
+                prompt_tokens_details: None,
             }),
             created: None,
             system_fingerprint: None,
+            service_tier: None,
         };
 
         let anth = openai_to_anthropic_response(&resp, "m");
@@ -1085,12 +1156,15 @@ mod tests {
                         },
                     }]),
                     tool_call_id: None,
+                    refusal: None,
                 },
                 finish_reason: Some(openai::FinishReason::ToolCalls),
+                logprobs: None,
             }],
             usage: None,
             created: None,
             system_fingerprint: None,
+            service_tier: None,
         };
 
         let anth = openai_to_anthropic_response(&resp, "m");
@@ -1127,10 +1201,12 @@ mod tests {
             system: None,
             temperature: None,
             top_p: None,
+            top_k: None,
             stop_sequences: None,
             tools: None,
             tool_choice: None,
             metadata: None,
+            thinking: None,
             stream: None,
             extra: serde_json::Map::new(),
         };
@@ -1151,5 +1227,97 @@ mod tests {
             }
             other => panic!("expected Parts, got {:?}", other),
         }
+    }
+
+    #[test]
+    fn created_timestamp_preserved_from_openai() {
+        let resp = basic_openai_response();
+        assert_eq!(resp.created, Some(1700000000));
+        let anth = openai_to_anthropic_response(&resp, "claude-sonnet-4-6");
+        assert_eq!(anth.created, Some(1700000000));
+    }
+
+    #[test]
+    fn created_timestamp_none_when_absent() {
+        let mut resp = basic_openai_response();
+        resp.created = None;
+        let anth = openai_to_anthropic_response(&resp, "claude-sonnet-4-6");
+        assert_eq!(anth.created, None);
+        // Verify None created is omitted from JSON
+        let json = serde_json::to_string(&anth).unwrap();
+        assert!(!json.contains("\"created\""));
+    }
+
+    #[test]
+    fn thinking_config_stripped_in_translation() {
+        let mut req = basic_request();
+        req.thinking = Some(anthropic::ThinkingConfig::Enabled {
+            budget_tokens: 4096,
+        });
+        let oai = anthropic_to_openai_request(&req);
+        // Thinking has no OpenAI equivalent; verify translation succeeds
+        // and the OpenAI request has no thinking field (it's not in the struct)
+        assert_eq!(oai.max_completion_tokens, Some(1024));
+    }
+
+    #[test]
+    fn thinking_block_dropped_in_assistant_translation() {
+        let mut req = basic_request();
+        req.messages = vec![anthropic::InputMessage {
+            role: anthropic::Role::Assistant,
+            content: anthropic::Content::Blocks(vec![
+                anthropic::ContentBlock::Thinking {
+                    thinking: "Let me reason...".into(),
+                    signature: Some("sig_abc".into()),
+                },
+                anthropic::ContentBlock::Text {
+                    text: "Here is my answer.".into(),
+                },
+            ]),
+        }];
+
+        let oai = anthropic_to_openai_request(&req);
+
+        // Thinking block dropped, text block preserved
+        assert_eq!(oai.messages.len(), 1);
+        assert!(matches!(
+            &oai.messages[0].content,
+            Some(openai::ChatContent::Text(t)) if t == "Here is my answer."
+        ));
+    }
+
+    #[test]
+    fn temperature_clamped_to_zero_one() {
+        let mut req = basic_request();
+        req.temperature = Some(1.5);
+        let oai = anthropic_to_openai_request(&req);
+        assert_eq!(oai.temperature, Some(1.0));
+
+        req.temperature = Some(0.5);
+        let oai = anthropic_to_openai_request(&req);
+        assert_eq!(oai.temperature, Some(0.5));
+
+        req.temperature = Some(-0.1);
+        let oai = anthropic_to_openai_request(&req);
+        assert_eq!(oai.temperature, Some(0.0));
+
+        req.temperature = None;
+        let oai = anthropic_to_openai_request(&req);
+        assert!(oai.temperature.is_none());
+    }
+
+    #[test]
+    fn metadata_user_id_maps_to_openai_user() {
+        let mut req = basic_request();
+        req.metadata = Some(anthropic::messages::Metadata {
+            user_id: Some("u-abc123".into()),
+        });
+        let oai = anthropic_to_openai_request(&req);
+        assert_eq!(oai.user.as_deref(), Some("u-abc123"));
+
+        // No metadata: user is None
+        req.metadata = None;
+        let oai = anthropic_to_openai_request(&req);
+        assert!(oai.user.is_none());
     }
 }

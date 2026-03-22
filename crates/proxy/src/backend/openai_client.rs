@@ -10,6 +10,9 @@ use tokio::time::sleep;
 const MAX_RETRIES: u32 = 3;
 const BASE_DELAY_MS: u64 = 500;
 
+/// HTTP client for OpenAI Chat Completions API with retry logic.
+///
+/// OpenAI: <https://platform.openai.com/docs/api-reference/chat/create>
 #[derive(Clone)]
 pub struct OpenAIClient {
     client: Client,
@@ -18,9 +21,27 @@ pub struct OpenAIClient {
 }
 
 impl OpenAIClient {
+    /// Create a new client from proxy configuration.
+    /// Configures mTLS identity and custom CA cert if present in config.
     pub fn new(config: &Config) -> Self {
+        let mut builder = Client::builder();
+
+        if let Some((ref p12_bytes, ref password)) = config.tls.p12_identity {
+            let identity = reqwest::Identity::from_pkcs12_der(p12_bytes, password)
+                .expect("P12 identity was validated at startup");
+            builder = builder.identity(identity);
+        }
+
+        if let Some(ref ca_pem) = config.tls.ca_cert_pem {
+            let cert = reqwest::Certificate::from_pem(ca_pem)
+                .expect("CA cert was validated at startup");
+            builder = builder.add_root_certificate(cert);
+        }
+
+        let client = builder.build().expect("failed to build HTTP client");
+
         Self {
-            client: Client::new(),
+            client,
             chat_completions_url: format!("{}/v1/chat/completions", config.openai_base_url),
             api_key: config.openai_api_key.clone(),
         }
@@ -63,11 +84,11 @@ impl OpenAIClient {
         base + Duration::from_millis(jitter_ms)
     }
 
-    /// Send a non-streaming chat completion request with retry on 429/5xx.
-    pub async fn chat_completion(
+    /// Send a request with retry on 429/5xx. Returns the raw successful response.
+    async fn send_with_retry(
         &self,
         req: &openai::ChatCompletionRequest,
-    ) -> Result<(openai::ChatCompletionResponse, u16), OpenAIClientError> {
+    ) -> Result<reqwest::Response, OpenAIClientError> {
         for attempt in 0..=MAX_RETRIES {
             let response = self
                 .client
@@ -81,7 +102,6 @@ impl OpenAIClient {
             let status = response.status().as_u16();
 
             if !response.status().is_success() {
-                // On retryable status, retry unless we've exhausted attempts
                 if Self::is_retryable(status) && attempt < MAX_RETRIES {
                     let retry_after = Self::parse_retry_after(response.headers());
                     let delay = Self::backoff_delay(attempt, retry_after);
@@ -106,49 +126,41 @@ impl OpenAIClient {
                 });
             }
 
-            let body = response
-                .json::<openai::ChatCompletionResponse>()
-                .await
-                .map_err(OpenAIClientError::Deserialization)?;
-
-            return Ok((body, status));
+            return Ok(response);
         }
 
-        // Unreachable: the loop always returns on success or final failure.
         unreachable!("retry loop should always return")
     }
 
-    /// Send a streaming chat completion request and return the raw response for SSE parsing.
+    /// Send a non-streaming chat completion request with retry on 429/5xx.
+    ///
+    /// OpenAI: <https://platform.openai.com/docs/api-reference/chat/create>
+    pub async fn chat_completion(
+        &self,
+        req: &openai::ChatCompletionRequest,
+    ) -> Result<(openai::ChatCompletionResponse, u16), OpenAIClientError> {
+        let response = self.send_with_retry(req).await?;
+        let status = response.status().as_u16();
+        let body = response
+            .json::<openai::ChatCompletionResponse>()
+            .await
+            .map_err(OpenAIClientError::Deserialization)?;
+        Ok((body, status))
+    }
+
+    /// Send a streaming chat completion request with retry on 429/5xx.
+    /// Returns the raw response for SSE parsing once a successful connection is established.
+    ///
+    /// OpenAI: <https://platform.openai.com/docs/api-reference/chat/streaming>
     pub async fn chat_completion_stream(
         &self,
         req: &openai::ChatCompletionRequest,
     ) -> Result<reqwest::Response, OpenAIClientError> {
-        let response = self
-            .client
-            .post(&self.chat_completions_url)
-            .bearer_auth(&self.api_key)
-            .json(req)
-            .send()
-            .await
-            .map_err(OpenAIClientError::Request)?;
-
-        let status = response.status().as_u16();
-
-        if !response.status().is_success() {
-            let error_body = response
-                .json::<openai::errors::ErrorResponse>()
-                .await
-                .unwrap_or_else(|_| Self::fallback_error(status));
-            return Err(OpenAIClientError::ApiError {
-                status,
-                error: error_body,
-            });
-        }
-
-        Ok(response)
+        self.send_with_retry(req).await
     }
 }
 
+/// Errors from the OpenAI HTTP client.
 #[derive(Debug)]
 pub enum OpenAIClientError {
     Request(reqwest::Error),
@@ -233,5 +245,22 @@ mod tests {
         );
         // Date format is not parsed; should return None
         assert_eq!(OpenAIClient::parse_retry_after(&headers), None);
+    }
+
+    #[test]
+    fn client_builds_without_tls() {
+        use crate::config::{ModelMapping, TlsConfig};
+        let config = Config {
+            openai_api_key: "test".into(),
+            openai_base_url: "https://api.openai.com".into(),
+            listen_port: 3000,
+            model_mapping: ModelMapping {
+                big_model: "gpt-4o".into(),
+                small_model: "gpt-4o-mini".into(),
+            },
+            tls: TlsConfig::default(),
+        };
+        // Should not panic
+        let _client = OpenAIClient::new(&config);
     }
 }

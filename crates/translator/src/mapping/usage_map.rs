@@ -5,6 +5,9 @@ use crate::anthropic;
 use crate::openai;
 
 /// Convert OpenAI usage to Anthropic usage.
+///
+/// OpenAI: <https://platform.openai.com/docs/api-reference/chat/object>
+/// Anthropic: <https://docs.anthropic.com/en/api/messages>
 pub fn openai_to_anthropic_usage(usage: &openai::ChatUsage) -> anthropic::Usage {
     anthropic::Usage {
         input_tokens: usage.prompt_tokens,
@@ -15,11 +18,18 @@ pub fn openai_to_anthropic_usage(usage: &openai::ChatUsage) -> anthropic::Usage 
 }
 
 /// Convert Anthropic usage to OpenAI usage.
+///
+/// Anthropic: <https://docs.anthropic.com/en/api/messages>
+/// OpenAI: <https://platform.openai.com/docs/api-reference/chat/create>
 pub fn anthropic_to_openai_usage(usage: &anthropic::Usage) -> openai::ChatUsage {
     openai::ChatUsage {
         prompt_tokens: usage.input_tokens,
         completion_tokens: usage.output_tokens,
         total_tokens: usage.input_tokens + usage.output_tokens,
+        // Compat spec response: "Always empty". No Anthropic equivalent.
+        // See: https://docs.anthropic.com/en/api/openai-sdk#response-fields
+        completion_tokens_details: None,
+        prompt_tokens_details: None,
     }
 }
 
@@ -33,6 +43,8 @@ mod tests {
             prompt_tokens: 100,
             completion_tokens: 50,
             total_tokens: 150,
+            completion_tokens_details: None,
+            prompt_tokens_details: None,
         };
         let anth = openai_to_anthropic_usage(&oai);
         assert_eq!(anth.input_tokens, 100);
@@ -61,6 +73,8 @@ mod tests {
             prompt_tokens: 0,
             completion_tokens: 0,
             total_tokens: 0,
+            completion_tokens_details: None,
+            prompt_tokens_details: None,
         };
         let anth = openai_to_anthropic_usage(&oai);
         assert_eq!(anth.input_tokens, 0);

@@ -5,10 +5,14 @@ use crate::anthropic;
 use crate::openai;
 
 /// Map an HTTP status code from OpenAI to the corresponding Anthropic error type.
+///
+/// Anthropic: <https://docs.anthropic.com/en/api/errors>
+/// OpenAI: <https://platform.openai.com/docs/guides/error-codes>
 pub fn openai_status_to_anthropic_error_type(status: u16) -> anthropic::ErrorType {
     match status {
         400 => anthropic::ErrorType::InvalidRequestError,
         401 => anthropic::ErrorType::AuthenticationError,
+        402 => anthropic::ErrorType::BillingError,
         403 => anthropic::ErrorType::PermissionError,
         404 => anthropic::ErrorType::NotFoundError,
         413 => anthropic::ErrorType::RequestTooLarge,
@@ -20,10 +24,13 @@ pub fn openai_status_to_anthropic_error_type(status: u16) -> anthropic::ErrorTyp
 }
 
 /// Map an Anthropic error type to an HTTP status code.
+///
+/// Anthropic: <https://docs.anthropic.com/en/api/errors>
 pub fn anthropic_error_type_to_status(error_type: &anthropic::ErrorType) -> u16 {
     match error_type {
         anthropic::ErrorType::InvalidRequestError => 400,
         anthropic::ErrorType::AuthenticationError => 401,
+        anthropic::ErrorType::BillingError => 402,
         anthropic::ErrorType::PermissionError => 403,
         anthropic::ErrorType::NotFoundError => 404,
         anthropic::ErrorType::RequestTooLarge => 413,
@@ -34,6 +41,9 @@ pub fn anthropic_error_type_to_status(error_type: &anthropic::ErrorType) -> u16 
 }
 
 /// Convert an OpenAI error response to an Anthropic error response.
+///
+/// Anthropic: <https://docs.anthropic.com/en/api/errors>
+/// OpenAI: <https://platform.openai.com/docs/guides/error-codes>
 pub fn openai_to_anthropic_error(
     openai_err: &openai::errors::ErrorResponse,
     status: u16,
@@ -50,6 +60,8 @@ pub fn openai_to_anthropic_error(
 }
 
 /// Create an Anthropic error response from scratch.
+///
+/// Anthropic: <https://docs.anthropic.com/en/api/errors>
 pub fn create_anthropic_error(
     error_type: anthropic::ErrorType,
     message: String,
@@ -75,6 +87,7 @@ mod tests {
         let cases: &[(u16, anthropic::ErrorType)] = &[
             (400, anthropic::ErrorType::InvalidRequestError),
             (401, anthropic::ErrorType::AuthenticationError),
+            (402, anthropic::ErrorType::BillingError),
             (403, anthropic::ErrorType::PermissionError),
             (404, anthropic::ErrorType::NotFoundError),
             (413, anthropic::ErrorType::RequestTooLarge),
@@ -97,7 +110,7 @@ mod tests {
 
     #[test]
     fn unknown_status_maps_to_api_error() {
-        for status in [0, 204, 418, 504, 599] {
+        for status in [0, 204, 418, 504] {
             assert_eq!(
                 openai_status_to_anthropic_error_type(status),
                 anthropic::ErrorType::ApiError,
@@ -112,6 +125,7 @@ mod tests {
         let cases: &[(anthropic::ErrorType, u16)] = &[
             (anthropic::ErrorType::InvalidRequestError, 400),
             (anthropic::ErrorType::AuthenticationError, 401),
+            (anthropic::ErrorType::BillingError, 402),
             (anthropic::ErrorType::PermissionError, 403),
             (anthropic::ErrorType::NotFoundError, 404),
             (anthropic::ErrorType::RequestTooLarge, 413),
@@ -132,6 +146,7 @@ mod tests {
         let all_types = [
             anthropic::ErrorType::InvalidRequestError,
             anthropic::ErrorType::AuthenticationError,
+            anthropic::ErrorType::BillingError,
             anthropic::ErrorType::PermissionError,
             anthropic::ErrorType::NotFoundError,
             anthropic::ErrorType::RequestTooLarge,

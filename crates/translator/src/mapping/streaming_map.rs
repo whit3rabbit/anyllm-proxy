@@ -9,6 +9,9 @@ use crate::util;
 ///
 /// Feed chunks via `process_chunk`, then call `finish` after the OpenAI `[DONE]` sentinel.
 /// Each call returns zero or more Anthropic SSE events to forward to the client.
+///
+/// Anthropic: <https://docs.anthropic.com/en/api/messages-streaming>
+/// OpenAI: <https://platform.openai.com/docs/api-reference/chat/streaming>
 pub struct StreamingTranslator {
     model: String,
     message_id: String,
@@ -19,19 +22,18 @@ pub struct StreamingTranslator {
     active_tool_calls: Vec<ToolCallAccumulator>,
     usage: anthropic::Usage,
     finished: bool,
+    created: Option<u64>,
 }
 
 struct ToolCallAccumulator {
-    #[allow(dead_code)]
-    id: String,
-    #[allow(dead_code)]
-    name: String,
-    #[allow(dead_code)]
-    arguments: String,
     block_index: u32,
 }
 
 impl StreamingTranslator {
+    /// Create a new streaming translator for the given model.
+    ///
+    /// Anthropic: <https://docs.anthropic.com/en/api/messages-streaming>
+    /// OpenAI: <https://platform.openai.com/docs/api-reference/chat/streaming>
     pub fn new(model: String) -> Self {
         Self {
             model,
@@ -42,10 +44,14 @@ impl StreamingTranslator {
             active_tool_calls: Vec::new(),
             usage: anthropic::Usage::default(),
             finished: false,
+            created: None,
         }
     }
 
     /// Process one OpenAI chunk and return zero or more Anthropic SSE events.
+    ///
+    /// Anthropic: <https://docs.anthropic.com/en/api/messages-streaming>
+    /// OpenAI: <https://platform.openai.com/docs/api-reference/chat/streaming>
     pub fn process_chunk(
         &mut self,
         chunk: &openai::ChatCompletionChunk,
@@ -55,6 +61,7 @@ impl StreamingTranslator {
         // Emit message_start on first chunk
         if !self.started {
             self.started = true;
+            self.created = chunk.created;
             events.push(self.make_message_start());
         }
 
@@ -122,6 +129,9 @@ impl StreamingTranslator {
     }
 
     /// Call after all chunks have been processed (when OpenAI sends `[DONE]`).
+    ///
+    /// Anthropic: <https://docs.anthropic.com/en/api/messages-streaming>
+    /// OpenAI: <https://platform.openai.com/docs/api-reference/chat/streaming>
     pub fn finish(&mut self) -> Vec<anthropic::StreamEvent> {
         let mut events = Vec::new();
         if !self.finished {
@@ -142,6 +152,7 @@ impl StreamingTranslator {
                 stop_reason: None,
                 stop_sequence: None,
                 usage: self.usage.clone(),
+                created: self.created,
             },
         }
     }
@@ -183,26 +194,15 @@ impl StreamingTranslator {
 
             // Grow the accumulator vec if needed
             while self.active_tool_calls.len() <= idx {
-                self.active_tool_calls.push(ToolCallAccumulator {
-                    id: String::new(),
-                    name: String::new(),
-                    arguments: String::new(),
-                    block_index: 0,
-                });
+                self.active_tool_calls.push(ToolCallAccumulator { block_index: 0 });
             }
-            self.active_tool_calls[idx] = ToolCallAccumulator {
-                id: id.clone(),
-                name,
-                arguments: String::new(),
-                block_index,
-            };
+            self.active_tool_calls[idx] = ToolCallAccumulator { block_index };
         }
 
-        // Accumulate argument fragments and emit input_json_delta
+        // Emit argument fragments as input_json_delta events
         if let Some(ref func) = tc.function {
             if let Some(ref args) = func.arguments {
                 if idx < self.active_tool_calls.len() {
-                    self.active_tool_calls[idx].arguments.push_str(args);
                     let block_index = self.active_tool_calls[idx].block_index;
                     events.push(anthropic::StreamEvent::ContentBlockDelta {
                         index: block_index,
@@ -225,6 +225,9 @@ impl StreamingTranslator {
 }
 
 /// Map OpenAI finish_reason to Anthropic stop_reason.
+///
+/// OpenAI: <https://platform.openai.com/docs/api-reference/chat/object>
+/// Anthropic: <https://docs.anthropic.com/en/api/messages>
 pub fn map_finish_reason(reason: &openai::FinishReason) -> anthropic::StopReason {
     match reason {
         openai::FinishReason::Stop => anthropic::StopReason::EndTurn,
@@ -251,12 +254,15 @@ mod tests {
                 delta: ChunkDelta {
                     role: None,
                     content: Some(text.into()),
+                    refusal: None,
                     tool_calls: None,
                 },
                 finish_reason: None,
+                logprobs: None,
             }],
             usage: None,
             created: None,
+            system_fingerprint: None,
         }
     }
 
@@ -271,12 +277,15 @@ mod tests {
                 delta: ChunkDelta {
                     role: Some(crate::openai::ChatRole::Assistant),
                     content: None,
+                    refusal: None,
                     tool_calls: None,
                 },
                 finish_reason: None,
+                logprobs: None,
             }],
             usage: None,
             created: None,
+            system_fingerprint: None,
         }
     }
 
@@ -294,9 +303,11 @@ mod tests {
                 index: 0,
                 delta: ChunkDelta::default(),
                 finish_reason: Some(reason),
+                logprobs: None,
             }],
             usage: None,
             created: None,
+            system_fingerprint: None,
         }
     }
 
@@ -311,8 +322,11 @@ mod tests {
                 prompt_tokens: prompt,
                 completion_tokens: completion,
                 total_tokens: prompt + completion,
+                completion_tokens_details: None,
+                prompt_tokens_details: None,
             }),
             created: None,
+            system_fingerprint: None,
         }
     }
 
@@ -334,6 +348,7 @@ mod tests {
                 delta: ChunkDelta {
                     role: None,
                     content: None,
+                    refusal: None,
                     tool_calls: Some(vec![ChunkToolCall {
                         index: tc_index,
                         id: tc_id.map(Into::into),
@@ -345,9 +360,11 @@ mod tests {
                     }]),
                 },
                 finish_reason: None,
+                logprobs: None,
             }],
             usage: None,
             created: None,
+            system_fingerprint: None,
         }
     }
 
@@ -599,6 +616,7 @@ mod tests {
             choices: vec![],
             usage: None,
             created: None,
+            system_fingerprint: None,
         };
         let events = translator.process_chunk(&chunk);
         // Only message_start on first call
