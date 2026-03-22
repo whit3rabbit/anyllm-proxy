@@ -16,6 +16,7 @@ fn test_config() -> Config {
         },
         tls: config::TlsConfig::default(),
         backend_auth: config::BackendAuth::BearerToken("test-key".into()),
+        log_bodies: false,
     }
 }
 

@@ -28,6 +28,7 @@ pub struct AppState {
     pub backend: BackendClient,
     pub metrics: Metrics,
     pub model_mapping: ModelMapping,
+    pub log_bodies: bool,
 }
 
 /// Build the axum router emulating Anthropic's POST /v1/messages endpoint.
@@ -38,6 +39,7 @@ pub fn app(config: Config) -> Router {
         backend: BackendClient::new(&config),
         metrics: Metrics::new(),
         model_mapping: config.model_mapping.clone(),
+        log_bodies: config.log_bodies,
     };
 
     // Auth-protected API routes with concurrency limit.
@@ -425,7 +427,20 @@ async fn messages(
 ) -> Response {
     state.metrics.record_request();
 
+    if state.log_bodies {
+        tracing::debug!(
+            model = %body.model,
+            stream = ?body.stream,
+            message_count = body.messages.len(),
+            body = %serde_json::to_string(&body).unwrap_or_else(|_| "[serialization failed]".into()),
+            "request body"
+        );
+    }
+
     if body.stream == Some(true) {
+        if state.log_bodies {
+            tracing::debug!(model = %body.model, "streaming request initiated");
+        }
         let (rate_limits, sse) = messages_stream(state, body).await;
         let mut response = sse.into_response();
         rate_limits.inject_anthropic_headers(response.headers_mut());
@@ -445,6 +460,12 @@ async fn messages(
                         &openai_resp,
                         &original_model,
                     );
+                    if state.log_bodies {
+                        tracing::debug!(
+                            body = %serde_json::to_string(&anthropic_resp).unwrap_or_else(|_| "[serialization failed]".into()),
+                            "response body"
+                        );
+                    }
                     let mut response = (StatusCode::OK, Json(anthropic_resp)).into_response();
                     rate_limits.inject_anthropic_headers(response.headers_mut());
                     response
@@ -467,6 +488,12 @@ async fn messages(
                         &gemini_resp,
                         &original_model,
                     );
+                    if state.log_bodies {
+                        tracing::debug!(
+                            body = %serde_json::to_string(&anthropic_resp).unwrap_or_else(|_| "[serialization failed]".into()),
+                            "response body"
+                        );
+                    }
                     let mut response = (StatusCode::OK, Json(anthropic_resp)).into_response();
                     rate_limits.inject_anthropic_headers(response.headers_mut());
                     response

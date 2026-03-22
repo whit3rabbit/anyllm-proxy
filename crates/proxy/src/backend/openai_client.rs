@@ -212,6 +212,7 @@ mod tests {
             },
             tls: TlsConfig::default(),
             backend_auth: BackendAuth::BearerToken("test".into()),
+            log_bodies: false,
         };
         // Should not panic
         let _client = OpenAIClient::new(&config);
@@ -231,6 +232,7 @@ mod tests {
             },
             tls: TlsConfig::default(),
             backend_auth: BackendAuth::GoogleApiKey("test-key".into()),
+            log_bodies: false,
         };
         let client = OpenAIClient::new(&config);
         // Verify URL construction for Vertex (no /v1 prefix)

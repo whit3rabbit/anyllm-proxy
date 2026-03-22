@@ -38,6 +38,8 @@ pub struct Config {
     pub model_mapping: ModelMapping,
     pub tls: TlsConfig,
     pub backend_auth: BackendAuth,
+    /// Enable request/response body logging at debug level.
+    pub log_bodies: bool,
 }
 
 impl Config {
@@ -57,6 +59,9 @@ impl Config {
             .and_then(|p| p.parse().ok())
             .unwrap_or(3000);
         let tls = TlsConfig::from_env();
+        let log_bodies = std::env::var("LOG_BODIES")
+            .map(|v| v == "true" || v == "1")
+            .unwrap_or(false);
 
         match backend {
             BackendKind::OpenAI => {
@@ -75,6 +80,7 @@ impl Config {
                     model_mapping: ModelMapping::from_env_with_defaults("gpt-4o", "gpt-4o-mini"),
                     tls,
                     backend_auth,
+                    log_bodies,
                 }
             }
             BackendKind::Vertex => {
@@ -109,6 +115,7 @@ impl Config {
                     ),
                     tls,
                     backend_auth,
+                    log_bodies,
                 }
             }
             BackendKind::Gemini => {
@@ -135,6 +142,7 @@ impl Config {
                     ),
                     tls,
                     backend_auth,
+                    log_bodies,
                 }
             }
         }
