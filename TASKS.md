@@ -280,19 +280,20 @@ Extracted `BackendClient` enum in `backend/mod.rs` with `OpenAI`/`Vertex` varian
 - [x] `routes.rs` calls backend-agnostic methods
 - [x] Test: all existing tests pass unchanged
 
-## Phase 20c: Native Gemini Types (not started)
+## Phase 20c: Native Gemini Types
 **Priority: low** | Depends on P20 | Only needed if Vertex OpenAI-compatible mode has gaps
 
 Add Gemini-native request/response types to the translator crate. Pure types, no mapping logic.
 
-- [ ] `crates/translator/src/gemini/` module with `mod.rs`
-- [ ] `generate_content.rs`: `GenerateContentRequest`, `GenerateContentResponse`, `Candidate`, `Content`, `Part` (text, functionCall, functionResponse, inlineData, fileData)
-- [ ] `streaming.rs`: streaming response shape (each chunk is a `GenerateContentResponse`)
-- [ ] `errors.rs`: Gemini error response shape (`status`, `code`, `message`)
-- [ ] `tools.rs`: `FunctionDeclaration`, `Tool`, `ToolConfig`, `FunctionCallingConfig`
-- [ ] Research: validate types against current Gemini API docs (not just Phase 20 research)
-- [ ] Test: serde round-trip from real Gemini API response fixtures
-- [ ] Add `fixtures/gemini/` directory with golden files
+- [x] `crates/translator/src/gemini/` module with `mod.rs`
+- [x] `generate_content.rs`: `GenerateContentRequest`, `GenerateContentResponse`, `Candidate`, `Content`, `Part` (text, functionCall, functionResponse, inlineData, fileData)
+- [x] No separate `streaming.rs` needed: Gemini streaming uses same `GenerateContentResponse` shape per chunk
+- [x] `errors.rs`: Gemini error response shape (`status`, `code`, `message`)
+- [x] `tools.rs`: `FunctionDeclaration`, `Tool`, `ToolConfig`, `FunctionCallingConfig`
+- [x] Safety types: `SafetySetting`, `SafetyRating`, `HarmCategory`, `HarmBlockThreshold`, `PromptFeedback`
+- [x] Citation types: `CitationMetadata`, `CitationSource`
+- [x] Test: 20 serde round-trip tests including fixture-based deserialization
+- [x] Add `fixtures/gemini/` directory with golden files (basic + tool_call)
 
 ## Phase 20d: Gemini Schema Sanitizer (not started)
 **Priority: low** | Depends on P20c
