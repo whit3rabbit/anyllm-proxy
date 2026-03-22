@@ -12,10 +12,10 @@ See PLAN.md for the full specification and TASKS.md for phased implementation st
 
 **Working (verified):**
 - Build: `cargo build` clean, `cargo clippy -- -D warnings` clean
-- Tests: ~219 tests passing (158 translator, 61 proxy)
+- Tests: ~227 tests passing (158 translator, 69 proxy)
 - Full Anthropic Messages API translation: non-streaming, streaming SSE, tool calling, file/document blocks
 - Proxy middleware: health, auth, request ID, size limits, concurrency limits, retry with backoff
-- Compatibility stubs: /v1/models, count_tokens, batches
+- Compatibility endpoints: /v1/models, count_tokens (approximate via tiktoken), batches (stub)
 - Model mapping and lossy-translation warnings
 
 **Not implemented (types exist but not wired up):**

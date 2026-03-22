@@ -1,4 +1,5 @@
 // Phase 9-10: compatibility endpoint and hardening integration tests
+// Phase 19: token counting integration tests
 
 use anthropic_openai_proxy::config::{self, Config};
 use anthropic_openai_proxy::server::routes;
@@ -44,7 +45,64 @@ async fn models_endpoint() {
 }
 
 #[tokio::test]
-async fn count_tokens_returns_unsupported() {
+async fn count_tokens_returns_count() {
+    let base = spawn_test_server().await;
+    let client = Client::new();
+    let resp = client
+        .post(format!("{base}/v1/messages/count_tokens"))
+        .header("x-api-key", "test")
+        .header("content-type", "application/json")
+        .body(r#"{"model":"claude-sonnet-4-6","max_tokens":1024,"messages":[{"role":"user","content":"Hello, world!"}]}"#)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+    let body: serde_json::Value = resp.json().await.unwrap();
+    let tokens = body["input_tokens"].as_u64().unwrap();
+    assert!(tokens > 0, "expected positive token count, got {tokens}");
+}
+
+#[tokio::test]
+async fn count_tokens_with_empty_messages() {
+    let base = spawn_test_server().await;
+    let client = Client::new();
+    let resp = client
+        .post(format!("{base}/v1/messages/count_tokens"))
+        .header("x-api-key", "test")
+        .header("content-type", "application/json")
+        .body(r#"{"model":"claude-sonnet-4-6","max_tokens":1024,"messages":[]}"#)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+    let body: serde_json::Value = resp.json().await.unwrap();
+    assert!(body["input_tokens"].is_u64());
+}
+
+#[tokio::test]
+async fn count_tokens_with_tools() {
+    let base = spawn_test_server().await;
+    let client = Client::new();
+    let resp = client
+        .post(format!("{base}/v1/messages/count_tokens"))
+        .header("x-api-key", "test")
+        .header("content-type", "application/json")
+        .body(r#"{"model":"claude-sonnet-4-6","max_tokens":1024,"messages":[{"role":"user","content":"Use the tool"}],"tools":[{"name":"get_weather","description":"Get current weather","input_schema":{"type":"object","properties":{"location":{"type":"string"}},"required":["location"]}}]}"#)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+    let body: serde_json::Value = resp.json().await.unwrap();
+    let tokens = body["input_tokens"].as_u64().unwrap();
+    // Tool definitions add tokens beyond just the message text
+    assert!(
+        tokens > 5,
+        "expected tool schema to contribute tokens, got {tokens}"
+    );
+}
+
+#[tokio::test]
+async fn count_tokens_invalid_body() {
     let base = spawn_test_server().await;
     let client = Client::new();
     let resp = client
@@ -55,9 +113,8 @@ async fn count_tokens_returns_unsupported() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.status(), 400);
-    let body: serde_json::Value = resp.json().await.unwrap();
-    assert_eq!(body["type"], "error");
+    // Missing required fields -> 422 (axum Json extractor rejection)
+    assert_eq!(resp.status(), 422);
 }
 
 #[tokio::test]

@@ -1,4 +1,4 @@
-use crate::backend::openai_client::{OpenAIClient, OpenAIClientError};
+use crate::backend::{BackendClient, BackendError};
 use crate::config::{Config, ModelMapping};
 use crate::metrics::Metrics;
 use anthropic_openai_translate::{anthropic, mapping, openai};
@@ -13,13 +13,19 @@ use axum::{
     Router,
 };
 use futures::stream::Stream;
+use std::sync::LazyLock;
+use tiktoken_rs::CoreBPE;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
+
+/// GPT-4o family tokenizer, initialized once. Used for approximate token counting.
+static TOKENIZER: LazyLock<CoreBPE> =
+    LazyLock::new(|| tiktoken_rs::o200k_base().expect("failed to load o200k_base tokenizer"));
 
 /// Shared application state for all request handlers.
 #[derive(Clone)]
 pub struct AppState {
-    pub openai_client: OpenAIClient,
+    pub backend: BackendClient,
     pub metrics: Metrics,
     pub model_mapping: ModelMapping,
 }
@@ -29,7 +35,7 @@ pub struct AppState {
 /// Anthropic: <https://docs.anthropic.com/en/api/messages>
 pub fn app(config: Config) -> Router {
     let state = AppState {
-        openai_client: OpenAIClient::new(&config),
+        backend: BackendClient::new(&config),
         metrics: Metrics::new(),
         model_mapping: config.model_mapping.clone(),
     };
@@ -72,13 +78,92 @@ async fn models(State(_state): State<AppState>) -> Json<serde_json::Value> {
     }))
 }
 
-async fn count_tokens() -> impl IntoResponse {
-    let err = mapping::errors_map::create_anthropic_error(
-        anthropic::ErrorType::InvalidRequestError,
-        "Token counting is not supported by this proxy.".to_string(),
-        None,
-    );
-    (StatusCode::BAD_REQUEST, Json(err))
+async fn count_tokens(Json(body): Json<anthropic::MessageCreateRequest>) -> impl IntoResponse {
+    let text = extract_text_for_counting(&body);
+    let token_count = TOKENIZER.encode_with_special_tokens(&text).len();
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({ "input_tokens": token_count })),
+    )
+}
+
+/// Flatten an Anthropic request into a single string for token counting.
+/// Covers system prompt, messages (text, tool_use, tool_result, thinking), and tool definitions.
+fn extract_text_for_counting(req: &anthropic::MessageCreateRequest) -> String {
+    let mut buf = String::new();
+
+    if let Some(system) = &req.system {
+        match system {
+            anthropic::System::Text(t) => append(&mut buf, t),
+            anthropic::System::Blocks(blocks) => {
+                for b in blocks {
+                    append(&mut buf, &b.text);
+                }
+            }
+        }
+    }
+
+    for msg in &req.messages {
+        append_content(&msg.content, &mut buf);
+    }
+
+    if let Some(tools) = &req.tools {
+        for tool in tools {
+            append(&mut buf, &tool.name);
+            if let Some(desc) = &tool.description {
+                append(&mut buf, desc);
+            }
+            if let Ok(schema) = serde_json::to_string(&tool.input_schema) {
+                append(&mut buf, &schema);
+            }
+        }
+    }
+
+    buf
+}
+
+/// Append a text segment to the buffer, separated by newline from prior content.
+fn append(buf: &mut String, text: &str) {
+    if !buf.is_empty() {
+        buf.push('\n');
+    }
+    buf.push_str(text);
+}
+
+fn append_content(content: &anthropic::Content, buf: &mut String) {
+    match content {
+        anthropic::Content::Text(t) => append(buf, t),
+        anthropic::Content::Blocks(blocks) => {
+            for block in blocks {
+                match block {
+                    anthropic::ContentBlock::Text { text } => append(buf, text),
+                    anthropic::ContentBlock::ToolUse { name, input, .. } => {
+                        append(buf, name);
+                        if let Ok(s) = serde_json::to_string(input) {
+                            append(buf, &s);
+                        }
+                    }
+                    anthropic::ContentBlock::ToolResult {
+                        content: Some(c), ..
+                    } => match c {
+                        anthropic::messages::ToolResultContent::Text(t) => append(buf, t),
+                        anthropic::messages::ToolResultContent::Blocks(inner) => {
+                            for b in inner {
+                                if let anthropic::ContentBlock::Text { text } = b {
+                                    append(buf, text);
+                                }
+                            }
+                        }
+                    },
+                    anthropic::ContentBlock::Thinking { thinking, .. } => {
+                        append(buf, thinking);
+                    }
+                    // Image and Document blocks are not text-tokenizable
+                    _ => {}
+                }
+            }
+        }
+    }
 }
 
 async fn batches() -> impl IntoResponse {
@@ -128,11 +213,7 @@ async fn messages_stream(
 
     let metrics = state.metrics.clone();
     tokio::spawn(async move {
-        match state
-            .openai_client
-            .chat_completion_stream(&openai_req)
-            .await
-        {
+        match state.backend.chat_completion_stream(&openai_req).await {
             Ok(response) => {
                 let mut translator = mapping::streaming_map::StreamingTranslator::new(model);
                 let mut stream = response.bytes_stream();
@@ -226,14 +307,14 @@ async fn messages(
     openai_req.model = state.model_mapping.map_model(&openai_req.model);
     let original_model = body.model.clone();
 
-    match state.openai_client.chat_completion(&openai_req).await {
+    match state.backend.chat_completion(&openai_req).await {
         Ok((openai_resp, _status)) => {
             state.metrics.record_success();
             let anthropic_resp =
                 mapping::message_map::openai_to_anthropic_response(&openai_resp, &original_model);
             (StatusCode::OK, Json(anthropic_resp)).into_response()
         }
-        Err(OpenAIClientError::ApiError { status, error }) => {
+        Err(BackendError::ApiError { status, error }) => {
             state.metrics.record_error();
             let anthropic_err =
                 mapping::errors_map::openai_to_anthropic_error(&error, status, None);

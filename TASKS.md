@@ -218,16 +218,16 @@ OpenAI deprecated `max_tokens` in favor of `max_completion_tokens`. Our translat
 - [x] Drop in `anthropic_to_openai_request` (no OpenAI equivalent, warns)
 - [x] Test: field accepted as typed field, not in extra
 
-## Phase 19: Token Counting Endpoint (not started)
+## Phase 19: Token Counting Endpoint
 **Priority: low** | Gap found in: [1rgs/claude-code-proxy](https://github.com/1rgs/claude-code-proxy), [jimmc414/claude_n_codex_api_proxy](https://github.com/jimmc414/claude_n_codex_api_proxy)
 
-POST `/v1/messages/count_tokens` is a real Anthropic endpoint. Currently returns 400 "not supported". Other proxies implement via tokenizer libraries.
+POST `/v1/messages/count_tokens` implemented using `tiktoken-rs` with `o200k_base` encoder (GPT-4o family). Returns approximate token counts.
 
-- [ ] Add `tiktoken-rs` dependency for OpenAI tokenizer
-- [ ] Implement POST /v1/messages/count_tokens (replace stub)
-- [ ] Convert Anthropic message format, count tokens via tiktoken
-- [ ] Return `{"input_tokens": N}` response (approximate, model-dependent)
-- [ ] Test: basic counting, empty messages, tool definitions
+- [x] Add `tiktoken-rs` dependency for OpenAI tokenizer
+- [x] Implement POST /v1/messages/count_tokens (replace stub)
+- [x] Convert Anthropic message format, count tokens via tiktoken
+- [x] Return `{"input_tokens": N}` response (approximate, model-dependent)
+- [x] Test: basic counting, empty messages, tool definitions, invalid body
 
 ## Phase 20: Gemini Backend Research (complete)
 **Priority: medium** | Reference: [SovranAMR/claude-code-via-antigravity](https://github.com/SovranAMR/claude-code-via-antigravity), [1rgs/claude-code-proxy](https://github.com/1rgs/claude-code-proxy)
@@ -269,16 +269,16 @@ Quick win: Vertex AI exposes an OpenAI-compatible Chat Completions endpoint. The
 - [ ] Validate: manual test against real Vertex endpoint (non-streaming, streaming, tool calling)
 - [ ] Document gaps found in Vertex OpenAI-compatible mode -> update `docs/gemini-api-diffs.md`
 
-## Phase 20b: Backend Abstraction (not started)
+## Phase 20b: Backend Abstraction
 **Priority: medium** | Depends on P20a
 
-Currently `routes.rs` calls `OpenAIClient` directly. Before adding a native Gemini client, extract backend dispatch. Pure refactor, no behavior change.
+Extracted `BackendClient` enum in `backend/mod.rs` with `OpenAI`/`Vertex` variants. Routes dispatch through enum methods. Pure refactor, no behavior change.
 
-- [ ] `BackendClient` enum: `OpenAI(OpenAIClient)` | `Vertex(OpenAIClient)` | future `Gemini(GeminiClient)`
-- [ ] Move `chat_completion` and `chat_completion_stream` behind enum dispatch (not trait objects, matches codebase style)
-- [ ] `AppState` holds `BackendClient` instead of `OpenAIClient`
-- [ ] `routes.rs` calls backend-agnostic methods
-- [ ] Test: all existing tests pass unchanged
+- [x] `BackendClient` enum: `OpenAI(OpenAIClient)` | `Vertex(OpenAIClient)` | future `Gemini(GeminiClient)`
+- [x] Move `chat_completion` and `chat_completion_stream` behind enum dispatch (not trait objects, matches codebase style)
+- [x] `AppState` holds `BackendClient` instead of `OpenAIClient`
+- [x] `routes.rs` calls backend-agnostic methods
+- [x] Test: all existing tests pass unchanged
 
 ## Phase 20c: Native Gemini Types (not started)
 **Priority: low** | Depends on P20 | Only needed if Vertex OpenAI-compatible mode has gaps
