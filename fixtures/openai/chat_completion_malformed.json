@@ -1,0 +1,4 @@
+{
+    "id": "chatcmpl-abc123",
+    "object": "chat.completion"
+}

@@ -286,4 +286,99 @@ mod tests {
         );
         assert!(result.request_id.is_none());
     }
+
+    // --- Fixture deserialization tests ---
+
+    #[test]
+    fn fixture_openai_error_401_deserializes() {
+        let json = include_str!("../../../../fixtures/openai/error_401.json");
+        let err: openai::errors::ErrorResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(err.error.code.as_deref(), Some("invalid_api_key"));
+    }
+
+    #[test]
+    fn fixture_openai_error_429_deserializes() {
+        let json = include_str!("../../../../fixtures/openai/error_429.json");
+        let err: openai::errors::ErrorResponse = serde_json::from_str(json).unwrap();
+        assert!(err.error.message.contains("Rate limit"));
+    }
+
+    #[test]
+    fn fixture_openai_error_500_deserializes() {
+        let json = include_str!("../../../../fixtures/openai/error_500.json");
+        let err: openai::errors::ErrorResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(err.error.error_type, "server_error");
+    }
+
+    #[test]
+    fn fixture_gemini_error_400_deserializes() {
+        let json = include_str!("../../../../fixtures/gemini/error_400.json");
+        let err: gemini::errors::ErrorResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(err.error.code, 400);
+        assert_eq!(err.error.status, "INVALID_ARGUMENT");
+    }
+
+    #[test]
+    fn fixture_gemini_error_429_deserializes() {
+        let json = include_str!("../../../../fixtures/gemini/error_429.json");
+        let err: gemini::errors::ErrorResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(err.error.code, 429);
+    }
+
+    #[test]
+    fn fixture_anthropic_error_invalid_request_deserializes() {
+        let json = include_str!("../../../../fixtures/anthropic/error_invalid_request.json");
+        let err: anthropic::errors::ErrorResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(err.error.error_type, anthropic::ErrorType::InvalidRequestError);
+    }
+
+    #[test]
+    fn fixture_anthropic_error_rate_limit_deserializes() {
+        let json = include_str!("../../../../fixtures/anthropic/error_rate_limit.json");
+        let err: anthropic::errors::ErrorResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(err.error.error_type, anthropic::ErrorType::RateLimitError);
+        assert_eq!(err.request_id.as_deref(), Some("req_01XYZ"));
+    }
+
+    // --- Fixture translation tests ---
+
+    #[test]
+    fn fixture_openai_401_translates_to_anthropic_auth_error() {
+        let json = include_str!("../../../../fixtures/openai/error_401.json");
+        let openai_err: openai::errors::ErrorResponse = serde_json::from_str(json).unwrap();
+        let anthropic_err = openai_to_anthropic_error(&openai_err, 401, Some("req_test".into()));
+        assert_eq!(anthropic_err.error.error_type, anthropic::ErrorType::AuthenticationError);
+    }
+
+    #[test]
+    fn fixture_openai_429_translates_to_anthropic_rate_limit() {
+        let json = include_str!("../../../../fixtures/openai/error_429.json");
+        let openai_err: openai::errors::ErrorResponse = serde_json::from_str(json).unwrap();
+        let anthropic_err = openai_to_anthropic_error(&openai_err, 429, None);
+        assert_eq!(anthropic_err.error.error_type, anthropic::ErrorType::RateLimitError);
+    }
+
+    #[test]
+    fn fixture_openai_500_translates_to_anthropic_api_error() {
+        let json = include_str!("../../../../fixtures/openai/error_500.json");
+        let openai_err: openai::errors::ErrorResponse = serde_json::from_str(json).unwrap();
+        let anthropic_err = openai_to_anthropic_error(&openai_err, 500, None);
+        assert_eq!(anthropic_err.error.error_type, anthropic::ErrorType::ApiError);
+    }
+
+    #[test]
+    fn fixture_gemini_400_translates_to_anthropic_invalid_request() {
+        let json = include_str!("../../../../fixtures/gemini/error_400.json");
+        let gemini_err: gemini::errors::ErrorResponse = serde_json::from_str(json).unwrap();
+        let anthropic_err = gemini_to_anthropic_error(&gemini_err, 400, None);
+        assert_eq!(anthropic_err.error.error_type, anthropic::ErrorType::InvalidRequestError);
+    }
+
+    #[test]
+    fn fixture_gemini_429_translates_to_anthropic_rate_limit() {
+        let json = include_str!("../../../../fixtures/gemini/error_429.json");
+        let gemini_err: gemini::errors::ErrorResponse = serde_json::from_str(json).unwrap();
+        let anthropic_err = gemini_to_anthropic_error(&gemini_err, 429, None);
+        assert_eq!(anthropic_err.error.error_type, anthropic::ErrorType::RateLimitError);
+    }
 }

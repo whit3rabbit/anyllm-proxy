@@ -1,0 +1,7 @@
+{
+    "error": {
+        "code": 400,
+        "message": "Invalid value at 'contents[0].parts[0]': Must have exactly one field set",
+        "status": "INVALID_ARGUMENT"
+    }
+}
