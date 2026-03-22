@@ -7,7 +7,11 @@ use crate::anthropic::{MessageCreateRequest, MessageResponse};
 use crate::config::TranslationConfig;
 use crate::error::TranslateError;
 use crate::gemini::generate_content::{GenerateContentRequest, GenerateContentResponse};
-use crate::mapping::{gemini_message_map, gemini_streaming_map, message_map, streaming_map};
+use crate::mapping::{
+    gemini_message_map, gemini_streaming_map, message_map, responses_message_map,
+    responses_streaming_map, streaming_map,
+};
+use crate::openai::responses::{ResponsesRequest, ResponsesResponse};
 use crate::openai::{ChatCompletionRequest, ChatCompletionResponse};
 
 /// Translate an Anthropic request to an OpenAI Chat Completions request.
@@ -67,6 +71,37 @@ pub fn new_gemini_stream_translator(
     model: String,
 ) -> gemini_streaming_map::GeminiStreamingTranslator {
     gemini_streaming_map::GeminiStreamingTranslator::new(model)
+}
+
+/// Translate an Anthropic request to an OpenAI Responses API request.
+///
+/// Applies model mapping from config to the resulting request's `model` field.
+pub fn translate_request_responses(
+    req: &MessageCreateRequest,
+    config: &TranslationConfig,
+) -> Result<ResponsesRequest, TranslateError> {
+    let mut responses_req = responses_message_map::anthropic_to_responses_request(req);
+    responses_req.model = config.map_model(&responses_req.model)?;
+    Ok(responses_req)
+}
+
+/// Translate an OpenAI Responses API response back to an Anthropic response.
+///
+/// `original_model` is the Anthropic model name from the original request.
+pub fn translate_response_responses(
+    resp: &ResponsesResponse,
+    original_model: &str,
+) -> MessageResponse {
+    responses_message_map::responses_to_anthropic_response(resp, original_model)
+}
+
+/// Create a new streaming translator for OpenAI Responses API events.
+///
+/// Same stateful pattern as `new_stream_translator`.
+pub fn new_responses_stream_translator(
+    model: String,
+) -> responses_streaming_map::ResponsesStreamingTranslator {
+    responses_streaming_map::ResponsesStreamingTranslator::new(model)
 }
 
 #[cfg(test)]

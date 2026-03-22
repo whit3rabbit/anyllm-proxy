@@ -1,7 +1,9 @@
+pub mod anthropic_client;
 pub mod gemini_client;
 pub mod openai_client;
 
-use crate::config::{BackendAuth, BackendKind, Config, TlsConfig};
+use crate::config::{BackendAuth, BackendConfig, BackendKind, Config, OpenAIApiFormat, TlsConfig};
+use anthropic_client::{AnthropicClient, AnthropicClientError};
 use axum::http::{HeaderMap, HeaderName};
 use gemini_client::{GeminiClient, GeminiClientError};
 use openai_client::{OpenAIClient, OpenAIClientError};
@@ -95,9 +97,7 @@ pub(crate) fn is_retryable(status: u16) -> bool {
 
 /// Parse retry-after header value in seconds.
 pub(crate) fn parse_retry_after(headers: &reqwest::header::HeaderMap) -> Option<Duration> {
-    headers
-        .get("retry-after")
-        .and_then(|v| v.to_str().ok())
+    header_str(headers, "retry-after")
         .and_then(|s| s.parse::<u64>().ok())
         .map(Duration::from_secs)
 }
@@ -113,13 +113,17 @@ pub(crate) fn backoff_delay(attempt: u32, retry_after: Option<Duration>) -> Dura
     base + Duration::from_millis(jitter_ms)
 }
 
-/// Backend-agnostic client for dispatching requests to OpenAI, Vertex, or Gemini.
+/// Backend-agnostic client for dispatching requests to OpenAI, Vertex, Gemini, or Anthropic.
 /// Callers pattern-match on the enum variants to access the typed inner clients directly.
 #[derive(Clone)]
 pub enum BackendClient {
     OpenAI(OpenAIClient),
+    /// OpenAI Responses API format (same client, different endpoint + request/response shape).
+    OpenAIResponses(OpenAIClient),
     Vertex(OpenAIClient),
     Gemini(GeminiClient),
+    /// Passthrough to real Anthropic API (no translation).
+    Anthropic(AnthropicClient),
 }
 
 /// Unified error type for all backend clients.
@@ -127,6 +131,7 @@ pub enum BackendClient {
 pub enum BackendError {
     OpenAI(OpenAIClientError),
     Gemini(GeminiClientError),
+    Anthropic(AnthropicClientError),
 }
 
 impl BackendError {
@@ -144,6 +149,7 @@ impl BackendError {
         match self {
             Self::OpenAI(e) => e.to_string(),
             Self::Gemini(e) => e.to_string(),
+            Self::Anthropic(e) => e.to_string(),
         }
     }
 
@@ -167,6 +173,7 @@ impl std::fmt::Display for BackendError {
         match self {
             Self::OpenAI(e) => write!(f, "{e}"),
             Self::Gemini(e) => write!(f, "{e}"),
+            Self::Anthropic(e) => write!(f, "{e}"),
         }
     }
 }
@@ -183,12 +190,53 @@ impl From<GeminiClientError> for BackendError {
     }
 }
 
+impl From<AnthropicClientError> for BackendError {
+    fn from(e: AnthropicClientError) -> Self {
+        Self::Anthropic(e)
+    }
+}
+
 impl BackendClient {
     pub fn new(config: &Config) -> Self {
         match config.backend {
-            BackendKind::OpenAI => Self::OpenAI(OpenAIClient::new(config)),
+            BackendKind::OpenAI => match config.openai_api_format {
+                OpenAIApiFormat::Chat => Self::OpenAI(OpenAIClient::new(config)),
+                OpenAIApiFormat::Responses => Self::OpenAIResponses(OpenAIClient::new(config)),
+            },
             BackendKind::Vertex => Self::Vertex(OpenAIClient::new(config)),
             BackendKind::Gemini => Self::Gemini(GeminiClient::new(config)),
+            BackendKind::Anthropic => Self::Anthropic(AnthropicClient::new(
+                &config.openai_base_url,
+                &config.openai_api_key,
+                &config.tls,
+            )),
+        }
+    }
+
+    /// Construct from a per-backend config (multi-backend mode).
+    pub fn from_backend_config(bc: &BackendConfig) -> Self {
+        // Build a legacy Config to reuse existing OpenAI/Gemini constructors.
+        // This avoids duplicating URL construction logic.
+        let legacy = Config {
+            backend: bc.kind.clone(),
+            openai_api_key: bc.api_key.clone(),
+            openai_base_url: bc.base_url.clone(),
+            listen_port: 0, // unused by client constructors
+            model_mapping: bc.model_mapping.clone(),
+            tls: bc.tls.clone(),
+            backend_auth: bc.backend_auth.clone(),
+            log_bodies: bc.log_bodies,
+            openai_api_format: bc.api_format.clone(),
+        };
+
+        match bc.kind {
+            BackendKind::OpenAI => match bc.api_format {
+                OpenAIApiFormat::Chat => Self::OpenAI(OpenAIClient::new(&legacy)),
+                OpenAIApiFormat::Responses => Self::OpenAIResponses(OpenAIClient::new(&legacy)),
+            },
+            BackendKind::Vertex => Self::Vertex(OpenAIClient::new(&legacy)),
+            BackendKind::Gemini => Self::Gemini(GeminiClient::new(&legacy)),
+            BackendKind::Anthropic => Self::Anthropic(AnthropicClient::from_backend_config(bc)),
         }
     }
 }

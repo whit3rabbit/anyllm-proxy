@@ -179,6 +179,7 @@ mod tests {
             tls: TlsConfig::default(),
             backend_auth: BackendAuth::GoogleApiKey("test-key".into()),
             log_bodies: false,
+            openai_api_format: crate::config::OpenAIApiFormat::Chat,
         };
         // Should not panic
         let _client = GeminiClient::new(&config);

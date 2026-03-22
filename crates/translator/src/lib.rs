@@ -52,6 +52,7 @@ pub mod util;
 pub use config::{LossyBehavior, TranslationConfig, TranslationConfigBuilder};
 pub use error::TranslateError;
 pub use translate::{
-    new_gemini_stream_translator, new_stream_translator, translate_request,
-    translate_request_gemini, translate_response, translate_response_gemini,
+    new_gemini_stream_translator, new_responses_stream_translator, new_stream_translator,
+    translate_request, translate_request_gemini, translate_request_responses, translate_response,
+    translate_response_gemini, translate_response_responses,
 };

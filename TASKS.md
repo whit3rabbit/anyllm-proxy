@@ -395,6 +395,6 @@ The `anthropic_openai_translate` crate is already pure (no IO, no async, no netw
 - [x] Rate limit header passthrough (OpenAI `x-ratelimit-*` headers mapped to Anthropic `anthropic-ratelimit-*` equivalents)
 - [x] Error/edge case fixtures (9 fixture files: OpenAI 401/429/500/malformed, Gemini 400/429, Anthropic errors; 13 tests)
 - [x] Request/response logging toggle (`LOG_BODIES=true` env var, debug-level body logging)
-- [ ] OpenAI Responses API backend: wire up `ResponsesRequest`/`ResponsesResponse` types with runtime backend selection
-- [ ] Live API integration tests (requires OPENAI_API_KEY, currently golden fixtures only)
-- [ ] Publish `anthropic_openai_translate` crate to crates.io
+- [x] OpenAI Responses API backend: `OPENAI_API_FORMAT=responses` env var, mapping layer, streaming state machine, client methods, route dispatch
+- [x] Live API integration tests (`crates/proxy/tests/live_api.rs`, `#[ignore]` by default, requires OPENAI_API_KEY)
+- [ ] Publish `anthropic_openai_translate` crate to crates.io (dry-run passes, needs crates.io token)

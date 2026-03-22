@@ -1,8 +1,9 @@
 use crate::backend::{BackendClient, BackendError, RateLimitHeaders};
-use crate::config::{Config, ModelMapping};
+use crate::config::{BackendKind, Config, ModelMapping, MultiConfig};
 use crate::metrics::Metrics;
 use anthropic_openai_translate::{anthropic, gemini, mapping, openai};
 use axum::{
+    body::Bytes,
     extract::{DefaultBodyLimit, State},
     http::StatusCode,
     response::{
@@ -13,7 +14,8 @@ use axum::{
     Router,
 };
 use futures::stream::Stream;
-use std::sync::LazyLock;
+use std::collections::HashMap;
+use std::sync::{Arc, LazyLock};
 use tiktoken_rs::CoreBPE;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
@@ -22,7 +24,7 @@ use tokio_stream::wrappers::ReceiverStream;
 static TOKENIZER: LazyLock<CoreBPE> =
     LazyLock::new(|| tiktoken_rs::o200k_base().expect("failed to load o200k_base tokenizer"));
 
-/// Shared application state for all request handlers.
+/// Per-backend state shared across request handlers for one backend.
 #[derive(Clone)]
 pub struct AppState {
     pub backend: BackendClient,
@@ -31,24 +33,117 @@ pub struct AppState {
     pub log_bodies: bool,
 }
 
-/// Build the axum router emulating Anthropic's POST /v1/messages endpoint.
-///
-/// Anthropic: <https://docs.anthropic.com/en/api/messages>
+/// Global state for the multi-backend metrics endpoint.
+#[derive(Clone)]
+struct GlobalState {
+    backend_metrics: Arc<HashMap<String, Metrics>>,
+}
+
+/// Build the axum router from a legacy single-backend Config.
 pub fn app(config: Config) -> Router {
-    let state = AppState {
-        backend: BackendClient::new(&config),
-        metrics: Metrics::new(),
-        model_mapping: config.model_mapping.clone(),
-        log_bodies: config.log_bodies,
+    let multi = MultiConfig::from_single_config(&config);
+    app_multi(multi)
+}
+
+/// Build the axum router from multi-backend configuration.
+/// Creates nested sub-routers for each configured backend.
+pub fn app_multi(config: MultiConfig) -> Router {
+    let mut backend_metrics: HashMap<String, Metrics> = HashMap::new();
+    let mut router = Router::new();
+
+    // Build per-backend sub-routers
+    for (name, bc) in &config.backends {
+        let metrics = Metrics::new();
+        backend_metrics.insert(name.clone(), metrics.clone());
+
+        let state = AppState {
+            backend: BackendClient::from_backend_config(bc),
+            metrics,
+            model_mapping: bc.model_mapping.clone(),
+            log_bodies: bc.log_bodies,
+        };
+
+        let is_anthropic = bc.kind == BackendKind::Anthropic;
+        let sub = backend_router(state, is_anthropic);
+
+        // Nest under /{name}/
+        router = router.nest(&format!("/{name}"), sub);
+    }
+
+    // Default backend: also serve at un-prefixed /v1/messages for backward compat
+    if let Some(bc) = config.backends.get(&config.default_backend) {
+        let default_metrics = backend_metrics
+            .get(&config.default_backend)
+            .cloned()
+            .unwrap_or_else(Metrics::new);
+
+        let default_state = AppState {
+            backend: BackendClient::from_backend_config(bc),
+            metrics: default_metrics,
+            model_mapping: bc.model_mapping.clone(),
+            log_bodies: bc.log_bodies,
+        };
+
+        let is_anthropic = bc.kind == BackendKind::Anthropic;
+        let default_sub = backend_router(default_state, is_anthropic);
+        router = router.merge(default_sub);
+    }
+
+    let global_state = GlobalState {
+        backend_metrics: Arc::new(backend_metrics),
     };
 
-    // Auth-protected API routes with concurrency limit.
-    // ConcurrencyLimit prevents self-DOS under upstream 429 incidents.
-    let api_routes = Router::new()
-        .route("/v1/messages", post(messages))
-        .route("/v1/models", get(models))
-        .route("/v1/messages/count_tokens", post(count_tokens))
-        .route("/v1/messages/batches", post(batches))
+    // Health and metrics are public, bypass auth and concurrency limits.
+    Router::new()
+        .route("/health", get(health))
+        .route(
+            "/metrics",
+            get(|State(gs): State<GlobalState>| async move {
+                let mut backends = serde_json::Map::new();
+                let mut total_requests: u64 = 0;
+                let mut total_success: u64 = 0;
+                let mut total_error: u64 = 0;
+                for (name, m) in gs.backend_metrics.iter() {
+                    let snap = m.snapshot();
+                    total_requests += snap.requests_total;
+                    total_success += snap.requests_success;
+                    total_error += snap.requests_error;
+                    backends.insert(
+                        name.clone(),
+                        serde_json::to_value(&snap).unwrap_or_default(),
+                    );
+                }
+                Json(serde_json::json!({
+                    "backends": backends,
+                    "total": {
+                        "requests_total": total_requests,
+                        "requests_success": total_success,
+                        "requests_error": total_error,
+                    }
+                }))
+            }),
+        )
+        .merge(router)
+        .layer(axum::middleware::from_fn(super::middleware::add_request_id))
+        .with_state(global_state)
+}
+
+/// Build the sub-router for a single backend.
+/// If `is_anthropic` is true, uses the passthrough handler instead of the translation handler.
+fn backend_router(state: AppState, is_anthropic: bool) -> Router<GlobalState> {
+    let api_routes = if is_anthropic {
+        Router::new()
+            .route("/v1/messages", post(anthropic_passthrough))
+            .route("/v1/models", get(models))
+    } else {
+        Router::new()
+            .route("/v1/messages", post(messages))
+            .route("/v1/models", get(models))
+            .route("/v1/messages/count_tokens", post(count_tokens))
+            .route("/v1/messages/batches", post(batches))
+    };
+
+    api_routes
         .layer(axum::middleware::from_fn(super::middleware::validate_auth))
         .layer(axum::middleware::from_fn(
             super::middleware::log_anthropic_headers,
@@ -56,14 +151,7 @@ pub fn app(config: Config) -> Router {
         .layer(DefaultBodyLimit::max(super::middleware::MAX_BODY_SIZE))
         .layer(tower::limit::ConcurrencyLimitLayer::new(
             super::middleware::MAX_CONCURRENT_REQUESTS,
-        ));
-
-    // Health and metrics are public, bypass auth and concurrency limits.
-    Router::new()
-        .route("/health", get(health))
-        .route("/metrics", get(metrics_endpoint))
-        .merge(api_routes)
-        .layer(axum::middleware::from_fn(super::middleware::add_request_id))
+        ))
         .with_state(state)
 }
 
@@ -185,9 +273,92 @@ async fn health() -> impl IntoResponse {
     ([("content-type", "application/json")], r#"{"status":"ok"}"#)
 }
 
-async fn metrics_endpoint(State(state): State<AppState>) -> Json<serde_json::Value> {
-    let snap = state.metrics.snapshot();
-    Json(serde_json::json!(snap))
+/// Anthropic passthrough: forward raw request bytes to the real Anthropic API.
+/// No translation: the proxy receives Anthropic format and returns Anthropic format.
+async fn anthropic_passthrough(State(state): State<AppState>, body: Bytes) -> Response {
+    state.metrics.record_request();
+
+    let client = match &state.backend {
+        BackendClient::Anthropic(c) => c,
+        _ => {
+            let err = mapping::errors_map::create_anthropic_error(
+                anthropic::ErrorType::ApiError,
+                "Backend is not configured as anthropic passthrough".to_string(),
+                None,
+            );
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(err)).into_response();
+        }
+    };
+
+    // Check if the request is a streaming request by peeking at the JSON.
+    // We parse minimally to avoid rejecting valid requests.
+    let is_stream = serde_json::from_slice::<serde_json::Value>(&body)
+        .ok()
+        .and_then(|v| v.get("stream")?.as_bool())
+        .unwrap_or(false);
+
+    if is_stream {
+        match client.forward_stream(body).await {
+            Ok((response, rate_limits)) => {
+                state.metrics.record_success();
+                // Pipe the raw SSE stream through to the client
+                let stream = response.bytes_stream();
+                let mut resp = axum::body::Body::from_stream(stream).into_response();
+                resp.headers_mut()
+                    .insert("content-type", "text/event-stream".parse().unwrap());
+                resp.headers_mut()
+                    .insert("cache-control", "no-cache".parse().unwrap());
+                rate_limits.inject_anthropic_headers(resp.headers_mut());
+                resp
+            }
+            Err(e) => {
+                state.metrics.record_error();
+                passthrough_error_to_response(e)
+            }
+        }
+    } else {
+        match client.forward(body).await {
+            Ok((resp_body, rate_limits)) => {
+                state.metrics.record_success();
+                let mut resp = (
+                    StatusCode::OK,
+                    [("content-type", "application/json")],
+                    resp_body,
+                )
+                    .into_response();
+                rate_limits.inject_anthropic_headers(resp.headers_mut());
+                resp
+            }
+            Err(e) => {
+                state.metrics.record_error();
+                passthrough_error_to_response(e)
+            }
+        }
+    }
+}
+
+/// Convert an AnthropicClientError into a Response.
+/// For API errors, return the upstream error body directly (it's already Anthropic format).
+fn passthrough_error_to_response(
+    error: crate::backend::anthropic_client::AnthropicClientError,
+) -> Response {
+    use crate::backend::anthropic_client::AnthropicClientError;
+    match error {
+        AnthropicClientError::ApiError { status, body } => {
+            let http_status =
+                StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+            (http_status, [("content-type", "application/json")], body).into_response()
+        }
+        AnthropicClientError::Transport(msg) => {
+            tracing::error!("Anthropic passthrough transport error: {msg}");
+            let err = mapping::errors_map::create_anthropic_error(
+                anthropic::ErrorType::ApiError,
+                format!("Upstream transport error: {msg}"),
+                None,
+            );
+            (StatusCode::BAD_GATEWAY, Json(err)).into_response()
+        }
+    }
 }
 
 /// Send translated stream events over the SSE channel. Returns false if client disconnected.
@@ -345,6 +516,53 @@ async fn messages_stream(
                 }
             });
         }
+        BackendClient::OpenAIResponses(client) => {
+            let client = client.clone();
+            let mut responses_req =
+                mapping::responses_message_map::anthropic_to_responses_request(&body);
+            responses_req.model = state.model_mapping.map_model(&responses_req.model);
+            responses_req.stream = Some(true);
+            let model = body.model.clone();
+
+            tokio::spawn(async move {
+                match client.responses_stream(&responses_req).await {
+                    Ok((response, rate_limits)) => {
+                        rl_tx.send(rate_limits).ok();
+                        let mut translator =
+                            mapping::responses_streaming_map::ResponsesStreamingTranslator::new(
+                                model,
+                            );
+
+                        let completed = read_sse_frames(response, &tx, &metrics, |json_str| {
+                            // Responses API has no [DONE] sentinel; ends with response.completed
+                            match serde_json::from_str::<
+                                mapping::responses_streaming_map::ResponsesStreamEvent,
+                            >(json_str)
+                            {
+                                Ok(event) => Some(translator.process_event(&event)),
+                                Err(e) => {
+                                    tracing::debug!(
+                                        "failed to parse Responses API streaming event: {e}"
+                                    );
+                                    None
+                                }
+                            }
+                        })
+                        .await;
+
+                        if completed {
+                            let events = translator.finish();
+                            send_events(&tx, &events).await;
+                            metrics.record_success();
+                        }
+                    }
+                    Err(e) => {
+                        drop(rl_tx);
+                        send_stream_error(&tx, &metrics, e).await;
+                    }
+                }
+            });
+        }
         BackendClient::Gemini(client) => {
             let client = client.clone();
             let mapped_model = state.model_mapping.map_model(&body.model);
@@ -387,6 +605,16 @@ async fn messages_stream(
                     }
                 }
             });
+        }
+        BackendClient::Anthropic(_) => {
+            // Anthropic passthrough is handled separately in the passthrough handler.
+            // This branch should never be reached via the normal messages() handler.
+            drop(rl_tx);
+            let _ = tx
+                .send(Ok(Event::default().data(
+                    r#"{"error":"anthropic passthrough does not use this handler"}"#,
+                )))
+                .await;
         }
     }
 
@@ -473,6 +701,36 @@ async fn messages(
                 }
             }
         }
+        BackendClient::OpenAIResponses(client) => {
+            let mut responses_req =
+                mapping::responses_message_map::anthropic_to_responses_request(&body);
+            responses_req.model = state.model_mapping.map_model(&responses_req.model);
+            let original_model = body.model.clone();
+
+            match client.responses(&responses_req).await {
+                Ok((resp, _status, rate_limits)) => {
+                    state.metrics.record_success();
+                    let anthropic_resp =
+                        mapping::responses_message_map::responses_to_anthropic_response(
+                            &resp,
+                            &original_model,
+                        );
+                    if state.log_bodies {
+                        tracing::debug!(
+                            body = %serde_json::to_string(&anthropic_resp).unwrap_or_else(|_| "[serialization failed]".into()),
+                            "response body"
+                        );
+                    }
+                    let mut response = (StatusCode::OK, Json(anthropic_resp)).into_response();
+                    rate_limits.inject_anthropic_headers(response.headers_mut());
+                    response
+                }
+                Err(e) => {
+                    state.metrics.record_error();
+                    backend_error_to_response(BackendError::from(e))
+                }
+            }
+        }
         BackendClient::Gemini(client) => {
             let mapped_model = state.model_mapping.map_model(&body.model);
             let gemini_req = mapping::gemini_message_map::anthropic_to_gemini_request(&body);
@@ -500,6 +758,16 @@ async fn messages(
                     backend_error_to_response(BackendError::from(e))
                 }
             }
+        }
+        BackendClient::Anthropic(_) => {
+            // Anthropic passthrough is handled by a separate handler that works with raw bytes.
+            // If we reach here, something is misconfigured.
+            let err = mapping::errors_map::create_anthropic_error(
+                anthropic::ErrorType::ApiError,
+                "Anthropic passthrough does not use the translation handler".to_string(),
+                None,
+            );
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(err)).into_response()
         }
     }
 }

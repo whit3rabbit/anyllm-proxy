@@ -18,6 +18,7 @@ fn test_config() -> Config {
         tls: config::TlsConfig::default(),
         backend_auth: config::BackendAuth::BearerToken("test-key".into()),
         log_bodies: false,
+        openai_api_format: config::OpenAIApiFormat::Chat,
     }
 }
 
@@ -163,9 +164,11 @@ async fn metrics_endpoint_returns_counters() {
     let resp = client.get(format!("{base}/metrics")).send().await.unwrap();
     assert_eq!(resp.status(), 200);
     let body: serde_json::Value = resp.json().await.unwrap();
-    assert_eq!(body["requests_total"], 0);
-    assert_eq!(body["requests_success"], 0);
-    assert_eq!(body["requests_error"], 0);
+    // Multi-backend metrics format: { "backends": {...}, "total": {...} }
+    assert_eq!(body["total"]["requests_total"], 0);
+    assert_eq!(body["total"]["requests_success"], 0);
+    assert_eq!(body["total"]["requests_error"], 0);
+    assert!(body["backends"].is_object());
 }
 
 // SSRF protection: validate_base_url rejects private/loopback targets

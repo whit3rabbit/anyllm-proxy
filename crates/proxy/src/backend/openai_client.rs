@@ -14,6 +14,7 @@ use reqwest::Client;
 pub struct OpenAIClient {
     client: Client,
     chat_completions_url: String,
+    responses_url: String,
     auth: BackendAuth,
 }
 
@@ -24,21 +25,28 @@ impl OpenAIClient {
         let client = build_http_client(&config.tls);
 
         // OpenAI base URL does not include /v1, Vertex base URL ends at /openapi
-        let chat_completions_url = match config.backend {
-            BackendKind::OpenAI => {
-                format!("{}/v1/chat/completions", config.openai_base_url)
-            }
-            BackendKind::Vertex => {
-                format!("{}/chat/completions", config.openai_base_url)
-            }
-            BackendKind::Gemini => {
-                unreachable!("OpenAIClient should not be constructed for Gemini backend")
+        let (chat_completions_url, responses_url) = match config.backend {
+            BackendKind::OpenAI => (
+                format!("{}/v1/chat/completions", config.openai_base_url),
+                format!("{}/v1/responses", config.openai_base_url),
+            ),
+            BackendKind::Vertex => (
+                format!("{}/chat/completions", config.openai_base_url),
+                // Vertex does not support Responses API; URL included for completeness
+                format!("{}/responses", config.openai_base_url),
+            ),
+            BackendKind::Gemini | BackendKind::Anthropic => {
+                unreachable!(
+                    "OpenAIClient should not be constructed for {kind:?} backend",
+                    kind = config.backend
+                )
             }
         };
 
         Self {
             client,
             chat_completions_url,
+            responses_url,
             auth: config.backend_auth.clone(),
         }
     }
@@ -96,6 +104,51 @@ impl OpenAIClient {
         req: &openai::ChatCompletionRequest,
     ) -> Result<(reqwest::Response, RateLimitHeaders), OpenAIClientError> {
         let response = self.send_with_retry(req).await?;
+        let rate_limits = RateLimitHeaders::from_openai_headers(response.headers());
+        Ok((response, rate_limits))
+    }
+
+    /// Send a non-streaming Responses API request with retry.
+    ///
+    /// OpenAI Responses: <https://platform.openai.com/docs/api-reference/responses/create>
+    pub async fn responses(
+        &self,
+        req: &openai::responses::ResponsesRequest,
+    ) -> Result<(openai::responses::ResponsesResponse, u16, RateLimitHeaders), OpenAIClientError>
+    {
+        let response = super::send_with_retry(
+            &self.client,
+            &self.responses_url,
+            &self.auth,
+            req,
+            "OpenAI Responses",
+        )
+        .await?;
+        let status = response.status().as_u16();
+        let rate_limits = RateLimitHeaders::from_openai_headers(response.headers());
+        let body = response
+            .json::<openai::responses::ResponsesResponse>()
+            .await
+            .map_err(OpenAIClientError::Deserialization)?;
+        Ok((body, status, rate_limits))
+    }
+
+    /// Send a streaming Responses API request with retry.
+    /// Returns the raw response for SSE parsing.
+    ///
+    /// OpenAI Responses streaming: <https://platform.openai.com/docs/api-reference/responses-streaming>
+    pub async fn responses_stream(
+        &self,
+        req: &openai::responses::ResponsesRequest,
+    ) -> Result<(reqwest::Response, RateLimitHeaders), OpenAIClientError> {
+        let response = super::send_with_retry(
+            &self.client,
+            &self.responses_url,
+            &self.auth,
+            req,
+            "OpenAI Responses",
+        )
+        .await?;
         let rate_limits = RateLimitHeaders::from_openai_headers(response.headers());
         Ok((response, rate_limits))
     }
@@ -206,7 +259,7 @@ mod tests {
 
     #[test]
     fn client_builds_without_tls() {
-        use crate::config::{BackendKind, ModelMapping, TlsConfig};
+        use crate::config::{BackendKind, ModelMapping, OpenAIApiFormat, TlsConfig};
         let config = Config {
             backend: BackendKind::OpenAI,
             openai_api_key: "test".into(),
@@ -219,6 +272,7 @@ mod tests {
             tls: TlsConfig::default(),
             backend_auth: BackendAuth::BearerToken("test".into()),
             log_bodies: false,
+            openai_api_format: OpenAIApiFormat::Chat,
         };
         // Should not panic
         let _client = OpenAIClient::new(&config);
@@ -226,7 +280,7 @@ mod tests {
 
     #[test]
     fn client_builds_vertex_config() {
-        use crate::config::{BackendKind, ModelMapping, TlsConfig};
+        use crate::config::{BackendKind, ModelMapping, OpenAIApiFormat, TlsConfig};
         let config = Config {
             backend: BackendKind::Vertex,
             openai_api_key: String::new(),
@@ -239,6 +293,7 @@ mod tests {
             tls: TlsConfig::default(),
             backend_auth: BackendAuth::GoogleApiKey("test-key".into()),
             log_bodies: false,
+            openai_api_format: OpenAIApiFormat::Chat,
         };
         let client = OpenAIClient::new(&config);
         // Verify URL construction for Vertex (no /v1 prefix)

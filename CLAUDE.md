@@ -18,16 +18,16 @@ See PLAN.md for the full specification and TASKS.md for phased implementation st
 - Compatibility endpoints: /v1/models, count_tokens (approximate via tiktoken), batches (stub)
 - Model mapping and lossy-translation warnings
 
-**Not implemented (types exist but not wired up):**
-- OpenAI Responses API backend: `ResponsesRequest`/`ResponsesResponse` types are defined in `crates/translator/src/openai/responses.rs` but the proxy only calls Chat Completions. PLAN.md envisions runtime selection between the two.
-- No live API integration tests (golden fixture tests only; live test requires OPENAI_API_KEY at runtime)
+**Not fully validated:**
+- OpenAI Responses API backend: wired up via `OPENAI_API_FORMAT=responses` but not tested against live API
+- Live API integration tests exist (`crates/proxy/tests/live_api.rs`) but are `#[ignore]` by default; run with `OPENAI_API_KEY=sk-... cargo test --test live_api -- --ignored --test-threads=1`
 - Metrics endpoint exists (GET /metrics returns JSON counters) but streaming requests only track total count, not success/error
 
 ## Build and Test
 
 ```bash
 cargo build                          # build everything
-cargo test                           # run all tests (~371 tests)
+cargo test                           # run all tests (~395 tests)
 cargo test -p anthropic_openai_translate  # translator crate only
 cargo test -p anthropic_openai_proxy      # proxy crate only
 cargo test health_endpoint            # single test by name
@@ -46,6 +46,7 @@ OPENAI_API_KEY=sk-... cargo run -p anthropic_openai_proxy
 - `BACKEND`: Backend provider: `openai` (default), `vertex`, or `gemini`
 - `OPENAI_API_KEY`: OpenAI API key (required when BACKEND=openai, empty default)
 - `OPENAI_BASE_URL`: OpenAI base URL (default: `https://api.openai.com`)
+- `OPENAI_API_FORMAT`: OpenAI API format: `chat` (default, Chat Completions) or `responses` (Responses API). Only relevant when BACKEND=openai.
 - `LISTEN_PORT`: Server port (default: `3000`)
 - `BIG_MODEL`: Backend model for sonnet/opus requests (default: `gpt-4o` for OpenAI, `gemini-2.5-pro` for Vertex/Gemini)
 - `SMALL_MODEL`: Backend model for haiku requests (default: `gpt-4o-mini` for OpenAI, `gemini-2.5-flash` for Vertex/Gemini)
@@ -75,6 +76,8 @@ Pure translation logic, no IO. Four modules:
   - `usage_map`: Token usage field mapping
   - `errors_map`: HTTP status and error shape translation
   - `streaming_map`: SSE event stream translation state machine
+  - `responses_message_map`: Anthropic to/from OpenAI Responses API mapping
+  - `responses_streaming_map`: Responses API SSE event stream translation state machine
 - **`util/`**: JSON helpers, ID generation (uuid v4), secret redaction
 
 ### `crates/proxy` (bin: `anthropic_openai_proxy`)
@@ -83,7 +86,7 @@ HTTP proxy built on axum + reqwest:
 - **`server/routes.rs`**: Axum router (POST /v1/messages, GET /health, GET /metrics, GET /v1/models, stubs for count_tokens and batches)
 - **`server/middleware.rs`**: Auth validation (x-api-key), request ID injection, 32MB size limit, concurrency limit, logging
 - **`server/sse.rs`**: SSE response helpers for Anthropic-format streaming
-- **`backend/mod.rs`**: `BackendClient` enum (OpenAI/Vertex/Gemini), `BackendError`, shared retry helpers
+- **`backend/mod.rs`**: `BackendClient` enum (OpenAI/OpenAIResponses/Vertex/Gemini), `BackendError`, shared retry helpers
 - **`backend/openai_client.rs`**: reqwest client calling OpenAI Chat Completions with retry/backoff on 429/5xx
 - **`backend/gemini_client.rs`**: reqwest client calling Gemini native `generateContent`/`streamGenerateContent` with retry/backoff
 - **`metrics/`**: Request count, success/error tracking, exposed via GET /metrics

@@ -3,6 +3,8 @@ pub mod gemini_message_map;
 pub mod gemini_schema_map;
 pub mod gemini_streaming_map;
 pub mod message_map;
+pub mod responses_message_map;
+pub mod responses_streaming_map;
 pub mod streaming_map;
 pub mod tools_map;
 pub mod usage_map;
