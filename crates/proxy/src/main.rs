@@ -1,11 +1,15 @@
 use anthropic_openai_proxy::{admin, config, server::routes};
 use std::sync::Arc;
+use tracing_subscriber::prelude::*;
 
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-        .json()
+    // Use a reload layer so the admin API can change log_level at runtime.
+    let env_filter = tracing_subscriber::EnvFilter::from_default_env();
+    let (filter, reload_handle) = tracing_subscriber::reload::Layer::new(env_filter);
+    tracing_subscriber::registry()
+        .with(filter)
+        .with(tracing_subscriber::fmt::layer().json())
         .init();
 
     let multi_config = config::MultiConfig::load();
@@ -75,7 +79,21 @@ async fn main() {
             );
         }
     }
-    let runtime_config = Arc::new(tokio::sync::RwLock::new(runtime_config));
+    let runtime_config = Arc::new(std::sync::RwLock::new(runtime_config));
+
+    // Build the log_reload closure that captures the reload handle.
+    let log_reload: Arc<dyn Fn(&str) -> bool + Send + Sync> = {
+        let handle = reload_handle;
+        Arc::new(
+            move |new_filter: &str| match tracing_subscriber::EnvFilter::try_new(new_filter) {
+                Ok(f) => handle.reload(f).is_ok(),
+                Err(e) => {
+                    tracing::error!(filter = new_filter, error = %e, "invalid log filter string");
+                    false
+                }
+            },
+        )
+    };
 
     // Now wrap conn in Arc<Mutex> and start the write buffer.
     let db = Arc::new(tokio::sync::Mutex::new(conn));
@@ -93,6 +111,7 @@ async fn main() {
         runtime_config: runtime_config.clone(),
         backend_metrics: Arc::new(backend_metrics),
         log_tx,
+        log_reload: Some(log_reload),
     };
 
     // Admin token: use env var or generate random UUID.
@@ -116,11 +135,16 @@ async fn main() {
         loop {
             interval.tick().await;
             let conn = retention_db.lock().await;
-            match admin::db::purge_old_logs(&conn, retention_days) {
-                Ok(n) if n > 0 => tracing::info!(purged = n, "purged old request log entries"),
-                Err(e) => tracing::error!(error = %e, "failed to purge old logs"),
-                _ => {}
-            }
+            // Run SQLite IO on the blocking threadpool.
+            tokio::task::block_in_place(|| {
+                match admin::db::purge_old_logs(&conn, retention_days) {
+                    Ok(n) if n > 0 => {
+                        tracing::info!(purged = n, "purged old request log entries")
+                    }
+                    Err(e) => tracing::error!(error = %e, "failed to purge old logs"),
+                    _ => {}
+                }
+            });
         }
     });
 

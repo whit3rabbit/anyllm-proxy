@@ -10,6 +10,8 @@ use crate::gemini::generate_content::{FinishReason, GenerateContentResponse, Par
 use crate::mapping::gemini_message_map;
 use crate::util;
 
+const MAX_PART_INDEX: usize = 128;
+
 /// State machine that converts Gemini streaming chunks into Anthropic SSE events.
 ///
 /// Feed chunks via `process_chunk`, then call `finish` after the stream ends.
@@ -106,6 +108,13 @@ impl GeminiStreamingTranslator {
 
     fn process_parts(&mut self, parts: &[Part], events: &mut Vec<anthropic::StreamEvent>) {
         for (i, part) in parts.iter().enumerate() {
+            if i > MAX_PART_INDEX {
+                tracing::warn!(
+                    index = i,
+                    "part index exceeds maximum ({MAX_PART_INDEX}); skipping"
+                );
+                continue;
+            }
             // Grow tracking vecs as needed
             while self.emitted_text_len.len() <= i {
                 self.emitted_text_len.push(0);

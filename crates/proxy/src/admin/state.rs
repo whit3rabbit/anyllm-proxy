@@ -5,8 +5,12 @@ use crate::config::ModelMapping;
 use crate::metrics::Metrics;
 use indexmap::IndexMap;
 use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::sync::{broadcast, Mutex, RwLock};
+use std::sync::{Arc, RwLock};
+use tokio::sync::{broadcast, Mutex};
+
+/// Type-erased closure that reloads the tracing filter at runtime.
+/// Returns true on success, false if the filter string is invalid.
+pub type LogReloadFn = Arc<dyn Fn(&str) -> bool + Send + Sync>;
 
 /// Shared between proxy handlers and the admin server.
 #[derive(Clone)]
@@ -16,11 +20,15 @@ pub struct SharedState {
     /// Broadcast channel sender for live dashboard updates.
     pub events_tx: broadcast::Sender<AdminEvent>,
     /// Runtime-mutable config. The proxy reads this on each request.
+    /// Uses std::sync::RwLock (not tokio) so proxy handlers can read
+    /// without awaiting. Write contention is negligible (admin-only).
     pub runtime_config: Arc<RwLock<RuntimeConfig>>,
     /// Per-backend metrics (same Arc the proxy already uses).
     pub backend_metrics: Arc<HashMap<String, Metrics>>,
     /// Write buffer sender for batched SQLite inserts.
     pub log_tx: tokio::sync::mpsc::Sender<RequestLogEntry>,
+    /// Closure to reload tracing filter at runtime. None in tests.
+    pub log_reload: Option<LogReloadFn>,
 }
 
 /// Runtime-mutable configuration. Changes via admin UI take effect immediately.

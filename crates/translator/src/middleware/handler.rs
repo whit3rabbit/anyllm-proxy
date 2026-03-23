@@ -8,6 +8,7 @@ use axum::extract::Json;
 use axum::http::StatusCode;
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
+use bytes::BytesMut;
 use futures::StreamExt;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
@@ -132,6 +133,26 @@ fn error_to_sse_event(message: &str) -> Event {
     })
 }
 
+/// Maximum SSE buffer size (10 MB). Protects against unbounded memory growth.
+const MAX_SSE_BUFFER_SIZE: usize = 10 * 1024 * 1024;
+
+/// Find the first SSE frame boundary (`\n\n` or `\r\n\r\n`) in a byte slice.
+/// Returns `(position, delimiter_length)` so the caller can skip the full delimiter.
+fn find_double_newline(buf: &[u8]) -> Option<(usize, usize)> {
+    let len = buf.len();
+    let mut i = 0;
+    while i < len.saturating_sub(1) {
+        if buf[i] == b'\n' && buf[i + 1] == b'\n' {
+            return Some((i, 2));
+        }
+        if buf[i] == b'\r' && i + 3 < len && buf[i + 1] == b'\n' && buf[i + 2] == b'\r' && buf[i + 3] == b'\n' {
+            return Some((i, 4));
+        }
+        i += 1;
+    }
+    None
+}
+
 /// Read SSE frames from a response, parse data lines, call `on_data` for each.
 /// Returns true if stream completed normally.
 async fn read_sse_frames<F>(
@@ -143,7 +164,9 @@ where
     F: FnMut(&str) -> Option<Vec<StreamEvent>>,
 {
     let mut stream = response.bytes_stream();
-    let mut buffer = String::new();
+    // Use a byte buffer to avoid corrupting multi-byte UTF-8 characters
+    // split across TCP chunk boundaries.
+    let mut buffer = BytesMut::new();
     let mut frame_events: Vec<StreamEvent> = Vec::new();
 
     while let Some(chunk_result) = stream.next().await {
@@ -154,22 +177,34 @@ where
                 return false;
             }
         };
-        match std::str::from_utf8(&bytes) {
-            Ok(s) => buffer.push_str(s),
-            Err(_) => buffer.push_str(&String::from_utf8_lossy(&bytes)),
+        buffer.extend_from_slice(&bytes);
+
+        if buffer.len() > MAX_SSE_BUFFER_SIZE {
+            tracing::error!(
+                buffer_len = buffer.len(),
+                "SSE buffer exceeded maximum size, aborting stream"
+            );
+            return false;
         }
 
-        while let Some(pos) = buffer.find("\n\n") {
+        while let Some((pos, delim_len)) = find_double_newline(&buffer) {
             frame_events.clear();
-            for line in buffer[..pos].lines() {
-                let line = line.trim();
-                if let Some(json_str) = line.strip_prefix("data: ") {
-                    if let Some(mut events) = on_data(json_str) {
-                        frame_events.append(&mut events);
+            match std::str::from_utf8(&buffer[..pos]) {
+                Ok(frame_str) => {
+                    for line in frame_str.lines() {
+                        let line = line.trim();
+                        if let Some(json_str) = line.strip_prefix("data: ") {
+                            if let Some(mut events) = on_data(json_str) {
+                                frame_events.append(&mut events);
+                            }
+                        }
                     }
                 }
+                Err(e) => {
+                    tracing::warn!("skipping non-UTF-8 SSE frame: {e}");
+                }
             }
-            buffer.drain(..pos + 2);
+            let _ = buffer.split_to(pos + delim_len);
 
             if !send_events(tx, &frame_events).await {
                 return false;

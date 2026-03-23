@@ -123,6 +123,10 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
 
   var TOKEN = new URLSearchParams(window.location.search).get('token') || prompt('Enter admin token:');
   if (!TOKEN) { document.body.textContent = 'No token provided'; return; }
+  // Strip token from URL to avoid leaking in browser history/server logs.
+  if (window.location.search.indexOf('token=') !== -1) {
+    window.history.replaceState({}, '', window.location.pathname);
+  }
 
   var API = '/admin/api';
   var authHeaders = {'Authorization': 'Bearer ' + TOKEN, 'Content-Type': 'application/json'};

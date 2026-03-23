@@ -381,7 +381,9 @@ pub fn validate_base_url(raw: &str) -> Result<(), String> {
             // This catches domains that currently resolve to private/metadata IPs.
             // Note: does not prevent post-startup DNS rebinding; for full protection,
             // restrict outbound traffic at the network level.
-            let port = parsed.port().unwrap_or(if parsed.scheme() == "https" { 443 } else { 80 });
+            let port = parsed
+                .port()
+                .unwrap_or(if parsed.scheme() == "https" { 443 } else { 80 });
             let lookup = format!("{domain}:{port}");
             if let Ok(addrs) = std::net::ToSocketAddrs::to_socket_addrs(&lookup) {
                 for addr in addrs {

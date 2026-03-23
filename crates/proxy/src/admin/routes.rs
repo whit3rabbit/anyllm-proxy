@@ -15,13 +15,31 @@ use axum::{
 };
 use std::sync::Arc;
 
+/// Reject cross-origin requests to the admin API.
+/// Checks the Origin header and only allows localhost origins.
+async fn reject_cross_origin(
+    req: axum::extract::Request,
+    next: middleware::Next,
+) -> Result<axum::response::Response, StatusCode> {
+    if let Some(origin) = req.headers().get("origin") {
+        let origin_str = origin.to_str().map_err(|_| StatusCode::BAD_REQUEST)?;
+        let is_localhost = origin_str.starts_with("http://127.0.0.1")
+            || origin_str.starts_with("http://localhost")
+            || origin_str.starts_with("http://[::1]");
+        if !is_localhost {
+            return Err(StatusCode::FORBIDDEN);
+        }
+    }
+    Ok(next.run(req).await)
+}
+
 /// Build the admin router.
 /// Token is used for auth middleware on all routes except /admin/health.
 pub fn admin_router(shared: SharedState, token: Arc<String>) -> Router {
     // Public routes (no auth).
     let public = Router::new().route("/admin/health", get(health));
 
-    // Protected routes (require admin token).
+    // Protected routes (require admin token + localhost origin check).
     let protected = Router::new()
         .route("/admin/api/config", get(get_config).put(put_config))
         .route("/admin/api/config/overrides", get(get_config_overrides))
@@ -37,7 +55,8 @@ pub fn admin_router(shared: SharedState, token: Arc<String>) -> Router {
         .layer(middleware::from_fn_with_state(
             token.clone(),
             validate_admin_token,
-        ));
+        ))
+        .layer(middleware::from_fn(reject_cross_origin));
 
     // WebSocket: auth via query param since browsers can't set headers on WS.
     let ws_state = (shared.clone(), token.clone());
@@ -73,18 +92,22 @@ async fn serve_spa() -> impl IntoResponse {
 
 /// GET /admin/api/config -- effective config (env defaults + overrides).
 async fn get_config(State(shared): State<SharedState>) -> Json<serde_json::Value> {
-    let config = shared.runtime_config.read().await;
-
-    let mut backends = serde_json::Map::new();
-    for (name, mapping) in &config.model_mappings {
-        backends.insert(
-            name.clone(),
-            serde_json::json!({
-                "big_model": mapping.big_model,
-                "small_model": mapping.small_model,
-            }),
-        );
-    }
+    // Clone config snapshot and drop the read guard before any .await points.
+    // std::sync::RwLockReadGuard is !Send, cannot be held across awaits.
+    let (log_level, log_bodies, backends) = {
+        let config = shared.runtime_config.read().unwrap();
+        let mut backends = serde_json::Map::new();
+        for (name, mapping) in &config.model_mappings {
+            backends.insert(
+                name.clone(),
+                serde_json::json!({
+                    "big_model": mapping.big_model,
+                    "small_model": mapping.small_model,
+                }),
+            );
+        }
+        (config.log_level.clone(), config.log_bodies, backends)
+    };
 
     // Get overrides to mark which fields are overridden.
     let overrides = {
@@ -94,8 +117,8 @@ async fn get_config(State(shared): State<SharedState>) -> Json<serde_json::Value
     let override_keys: Vec<String> = overrides.iter().map(|(k, _, _)| k.clone()).collect();
 
     Json(serde_json::json!({
-        "log_level": config.log_level,
-        "log_bodies": config.log_bodies,
+        "log_level": log_level,
+        "log_bodies": log_bodies,
         "backends": backends,
         "overridden_keys": override_keys,
     }))
@@ -107,14 +130,20 @@ async fn put_config(
     Json(body): Json<serde_json::Value>,
 ) -> impl IntoResponse {
     let db = shared.db.lock().await;
-    let mut config = shared.runtime_config.write().await;
+    let mut config = shared.runtime_config.write().unwrap();
     let mut changed_keys = Vec::new();
 
-    // Update log_level if present.
+    // Update log_level if present, and apply via tracing reload handle.
     if let Some(level) = body.get("log_level").and_then(|v| v.as_str()) {
         crate::admin::db::set_config_override(&db, "log_level", level).ok();
         config.log_level = level.to_string();
         changed_keys.push(("log_level".to_string(), level.to_string()));
+        // Apply the new filter to the running tracing subscriber.
+        if let Some(ref reload) = shared.log_reload {
+            if !reload(level) {
+                tracing::warn!(filter = level, "failed to apply log level change");
+            }
+        }
     }
 
     // Update log_bodies if present.
@@ -345,7 +374,7 @@ async fn get_request_by_id(
 
 /// GET /admin/api/backends -- list configured backends with status.
 async fn get_backends(State(shared): State<SharedState>) -> Json<serde_json::Value> {
-    let config = shared.runtime_config.read().await;
+    let config = shared.runtime_config.read().unwrap();
 
     let mut backends = Vec::new();
     for (name, mapping) in &config.model_mappings {
@@ -386,8 +415,8 @@ async fn ws_handler(
 /// Authenticate via the first WebSocket message, then stream events.
 async fn handle_ws(mut socket: WebSocket, shared: SharedState, expected_token: Arc<String>) {
     // Wait for the first message containing the auth token.
-    let authenticated = tokio::time::timeout(std::time::Duration::from_secs(5), socket.recv())
-        .await;
+    let authenticated =
+        tokio::time::timeout(std::time::Duration::from_secs(5), socket.recv()).await;
 
     let is_valid = match authenticated {
         Ok(Some(Ok(Message::Text(text)))) => {

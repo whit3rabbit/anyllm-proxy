@@ -5,6 +5,8 @@ use crate::anthropic;
 use crate::openai;
 use crate::util;
 
+const MAX_TOOL_CALL_INDEX: usize = 128;
+
 /// State machine that converts OpenAI ChatCompletion chunks into Anthropic SSE events.
 ///
 /// Feed chunks via `process_chunk`, then call `finish` after the OpenAI `[DONE]` sentinel.
@@ -141,6 +143,15 @@ impl StreamingTranslator {
         events
     }
 
+    /// Return accumulated usage if any tokens were counted, None otherwise.
+    pub fn usage(&self) -> Option<&anthropic::Usage> {
+        if self.usage.input_tokens > 0 || self.usage.output_tokens > 0 {
+            Some(&self.usage)
+        } else {
+            None
+        }
+    }
+
     fn make_message_start(&self) -> anthropic::StreamEvent {
         anthropic::StreamEvent::MessageStart {
             message: anthropic::streaming::MessageStartData {
@@ -163,6 +174,13 @@ impl StreamingTranslator {
         events: &mut Vec<anthropic::StreamEvent>,
     ) {
         let idx = tc.index as usize;
+        if idx > MAX_TOOL_CALL_INDEX {
+            tracing::warn!(
+                index = idx,
+                "tool call index exceeds maximum ({MAX_TOOL_CALL_INDEX}); skipping"
+            );
+            return;
+        }
 
         // New tool call (has id): emit content_block_start for tool_use
         if let Some(ref id) = tc.id {
@@ -180,13 +198,11 @@ impl StreamingTranslator {
                 .as_ref()
                 .and_then(|f| f.name.clone())
                 .unwrap_or_default();
-            // Local LLMs may send empty name on first chunk
-            let name = if name.is_empty() {
-                tracing::warn!("streaming tool call has empty function name; using \"unknown\"");
-                "unknown".to_string()
-            } else {
-                name
-            };
+            // Skip tool calls with empty name (matches non-streaming behavior).
+            if name.is_empty() {
+                tracing::warn!(id = %id, "streaming tool call has empty function name; skipping");
+                return;
+            }
 
             // Local LLMs may send empty tool call ID
             let tool_id = if id.is_empty() {
@@ -750,11 +766,11 @@ mod tests {
     }
 
     #[test]
-    fn streaming_tool_call_empty_name_gets_unknown() {
+    fn streaming_tool_call_empty_name_skipped() {
         let mut translator = StreamingTranslator::new("llama".into());
         translator.process_chunk(&role_chunk("c1", "llama"));
 
-        // First tool call chunk with no name
+        // Tool call chunk with no name should be skipped (consistent with non-streaming).
         let events = translator.process_chunk(&tool_call_chunk(
             "c1",
             "llama",
@@ -764,15 +780,17 @@ mod tests {
             Some("{}"),
         ));
 
-        assert_eq!(events.len(), 2);
-        match &events[0] {
-            anthropic::StreamEvent::ContentBlockStart {
-                content_block: anthropic::ContentBlock::ToolUse { name, .. },
-                ..
-            } => {
-                assert_eq!(name, "unknown");
-            }
-            other => panic!("expected ContentBlockStart with ToolUse, got {:?}", other),
-        }
+        // Empty name causes early return -- no ContentBlockStart emitted.
+        assert!(
+            events.iter().all(|e| !matches!(
+                e,
+                anthropic::StreamEvent::ContentBlockStart {
+                    content_block: anthropic::ContentBlock::ToolUse { .. },
+                    ..
+                }
+            )),
+            "tool call with empty name should be skipped, got: {:?}",
+            events
+        );
     }
 }

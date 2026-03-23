@@ -192,7 +192,7 @@ pub fn purge_old_logs(conn: &Connection, retention_days: u32) -> rusqlite::Resul
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs()
-            - (retention_days as u64 * 86400)
+            .saturating_sub(retention_days as u64 * 86400)
     );
     // Convert epoch to ISO 8601 for comparison
     let cutoff_iso = epoch_to_iso8601(cutoff.parse::<u64>().unwrap_or(0));
@@ -244,18 +244,34 @@ pub fn spawn_write_buffer(db: Arc<Mutex<Connection>>) -> mpsc::Sender<RequestLog
 }
 
 async fn flush_buffer(db: &Arc<Mutex<Connection>>, buf: &mut Vec<RequestLogEntry>) {
-    let entries = std::mem::take(buf);
+    let mut entries = std::mem::take(buf);
     let conn = db.lock().await;
-    // Use a transaction for batch efficiency.
-    if let Err(e) = (|| -> rusqlite::Result<()> {
-        let tx = conn.unchecked_transaction()?;
-        for entry in &entries {
-            insert_request_log(&tx, entry)?;
+    // Run SQLite IO on the blocking threadpool to avoid stalling the tokio executor.
+    let failed = tokio::task::block_in_place(|| -> bool {
+        if let Err(e) = (|| -> rusqlite::Result<()> {
+            let tx = conn.unchecked_transaction()?;
+            for entry in &entries {
+                insert_request_log(&tx, entry)?;
+            }
+            tx.commit()?;
+            Ok(())
+        })() {
+            tracing::error!(error = %e, count = entries.len(), "failed to flush request log buffer");
+            true
+        } else {
+            false
         }
-        tx.commit()?;
-        Ok(())
-    })() {
-        tracing::error!(error = %e, count = entries.len(), "failed to flush request log buffer");
+    });
+    // On failure, re-queue entries so they can be retried on the next flush.
+    if failed {
+        buf.append(&mut entries);
+        // Cap retry buffer to prevent unbounded growth on persistent DB failure.
+        const MAX_RETRY_BUFFER: usize = 1000;
+        if buf.len() > MAX_RETRY_BUFFER {
+            let dropped = buf.len() - MAX_RETRY_BUFFER;
+            buf.drain(..dropped);
+            tracing::warn!(dropped, "dropped oldest log entries to cap retry buffer");
+        }
     }
 }
 
