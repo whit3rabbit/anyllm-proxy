@@ -2,7 +2,6 @@
 // PLAN.md lines 916-920
 
 use crate::anthropic;
-use crate::gemini;
 use crate::openai;
 
 /// Map an HTTP status code from OpenAI to the corresponding Anthropic error type.
@@ -65,15 +64,6 @@ pub fn openai_to_anthropic_error(
     request_id: Option<String>,
 ) -> anthropic::errors::ErrorResponse {
     status_to_anthropic_error(status, &openai_err.error.message, request_id)
-}
-
-/// Convert a Gemini error response to an Anthropic error response.
-pub fn gemini_to_anthropic_error(
-    gemini_err: &gemini::errors::ErrorResponse,
-    status: u16,
-    request_id: Option<String>,
-) -> anthropic::errors::ErrorResponse {
-    status_to_anthropic_error(status, &gemini_err.error.message, request_id)
 }
 
 /// Create an Anthropic error response from scratch.
@@ -247,46 +237,6 @@ mod tests {
         assert!(err.request_id.is_none());
     }
 
-    #[test]
-    fn gemini_error_to_anthropic() {
-        let gemini_err = gemini::errors::ErrorResponse {
-            error: gemini::errors::ErrorDetail {
-                code: 400,
-                message: "Invalid value at 'contents'".into(),
-                status: "INVALID_ARGUMENT".into(),
-            },
-        };
-
-        let result = gemini_to_anthropic_error(&gemini_err, 400, Some("req_456".into()));
-
-        assert_eq!(result.response_type, "error");
-        assert_eq!(
-            result.error.error_type,
-            anthropic::ErrorType::InvalidRequestError
-        );
-        assert_eq!(result.error.message, "Invalid value at 'contents'");
-        assert_eq!(result.request_id.as_deref(), Some("req_456"));
-    }
-
-    #[test]
-    fn gemini_rate_limit_error_to_anthropic() {
-        let gemini_err = gemini::errors::ErrorResponse {
-            error: gemini::errors::ErrorDetail {
-                code: 429,
-                message: "Resource exhausted".into(),
-                status: "RESOURCE_EXHAUSTED".into(),
-            },
-        };
-
-        let result = gemini_to_anthropic_error(&gemini_err, 429, None);
-
-        assert_eq!(
-            result.error.error_type,
-            anthropic::ErrorType::RateLimitError
-        );
-        assert!(result.request_id.is_none());
-    }
-
     // --- Fixture deserialization tests ---
 
     #[test]
@@ -308,21 +258,6 @@ mod tests {
         let json = include_str!("../../../../fixtures/openai/error_500.json");
         let err: openai::errors::ErrorResponse = serde_json::from_str(json).unwrap();
         assert_eq!(err.error.error_type, "server_error");
-    }
-
-    #[test]
-    fn fixture_gemini_error_400_deserializes() {
-        let json = include_str!("../../../../fixtures/gemini/error_400.json");
-        let err: gemini::errors::ErrorResponse = serde_json::from_str(json).unwrap();
-        assert_eq!(err.error.code, 400);
-        assert_eq!(err.error.status, "INVALID_ARGUMENT");
-    }
-
-    #[test]
-    fn fixture_gemini_error_429_deserializes() {
-        let json = include_str!("../../../../fixtures/gemini/error_429.json");
-        let err: gemini::errors::ErrorResponse = serde_json::from_str(json).unwrap();
-        assert_eq!(err.error.code, 429);
     }
 
     #[test]
@@ -375,28 +310,6 @@ mod tests {
         assert_eq!(
             anthropic_err.error.error_type,
             anthropic::ErrorType::ApiError
-        );
-    }
-
-    #[test]
-    fn fixture_gemini_400_translates_to_anthropic_invalid_request() {
-        let json = include_str!("../../../../fixtures/gemini/error_400.json");
-        let gemini_err: gemini::errors::ErrorResponse = serde_json::from_str(json).unwrap();
-        let anthropic_err = gemini_to_anthropic_error(&gemini_err, 400, None);
-        assert_eq!(
-            anthropic_err.error.error_type,
-            anthropic::ErrorType::InvalidRequestError
-        );
-    }
-
-    #[test]
-    fn fixture_gemini_429_translates_to_anthropic_rate_limit() {
-        let json = include_str!("../../../../fixtures/gemini/error_429.json");
-        let gemini_err: gemini::errors::ErrorResponse = serde_json::from_str(json).unwrap();
-        let anthropic_err = gemini_to_anthropic_error(&gemini_err, 429, None);
-        assert_eq!(
-            anthropic_err.error.error_type,
-            anthropic::ErrorType::RateLimitError
         );
     }
 }

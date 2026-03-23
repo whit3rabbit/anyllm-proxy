@@ -4,6 +4,9 @@ use std::fmt;
 use std::net::IpAddr;
 use url::Url;
 
+/// Path suffix appended to Gemini base URL to reach its OpenAI-compatible endpoint.
+const GEMINI_OPENAI_PATH: &str = "/openai";
+
 /// Which upstream backend the proxy targets.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BackendKind {
@@ -162,7 +165,7 @@ impl Config {
                 Self {
                     backend,
                     openai_api_key: String::new(),
-                    openai_base_url: base_url,
+                    openai_base_url: format!("{base_url}{GEMINI_OPENAI_PATH}"),
                     listen_port,
                     model_mapping: ModelMapping::from_env_with_defaults(
                         "gemini-2.5-pro",
@@ -697,7 +700,13 @@ impl MultiConfig {
                         .clone()
                         .unwrap_or_else(|| "gemini-2.5-flash".to_string()),
                 };
-                (base_url, auth, mm, OpenAIApiFormat::Chat)
+
+                (
+                    format!("{base_url}{GEMINI_OPENAI_PATH}"),
+                    auth,
+                    mm,
+                    OpenAIApiFormat::Chat,
+                )
             }
             BackendKind::Anthropic => {
                 if api_key.is_empty() {
@@ -1217,9 +1226,10 @@ mod tests {
         let bc = &mc.backends["gemini"];
         assert_eq!(bc.model_mapping.big_model, "gemini-2.5-pro");
         assert_eq!(bc.model_mapping.small_model, "gemini-2.5-flash");
+        // /openai is appended to route through Gemini's OpenAI-compatible endpoint
         assert_eq!(
             bc.base_url,
-            "https://generativelanguage.googleapis.com/v1beta"
+            "https://generativelanguage.googleapis.com/v1beta/openai"
         );
     }
 }

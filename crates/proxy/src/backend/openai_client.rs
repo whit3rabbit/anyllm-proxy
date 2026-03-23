@@ -35,11 +35,14 @@ impl OpenAIClient {
                 // Vertex does not support Responses API; URL included for completeness
                 format!("{}/responses", config.openai_base_url),
             ),
-            BackendKind::Gemini | BackendKind::Anthropic => {
-                unreachable!(
-                    "OpenAIClient should not be constructed for {kind:?} backend",
-                    kind = config.backend
-                )
+            BackendKind::Gemini => (
+                // openai_base_url already has /openai appended by config,
+                // producing .../v1beta/openai/chat/completions
+                format!("{}/chat/completions", config.openai_base_url),
+                format!("{}/responses", config.openai_base_url),
+            ),
+            BackendKind::Anthropic => {
+                unreachable!("OpenAIClient should not be constructed for Anthropic backend")
             }
         };
 

@@ -2,7 +2,7 @@ use crate::admin::state::{AdminEvent, RequestLogEntry, RuntimeConfig, SharedStat
 use crate::backend::{BackendClient, BackendError, RateLimitHeaders};
 use crate::config::{BackendKind, Config, MultiConfig};
 use crate::metrics::Metrics;
-use anthropic_openai_translate::{anthropic, gemini, mapping, openai};
+use anthropic_openai_translate::{anthropic, mapping, openai};
 use axum::{
     body::Bytes,
     extract::{DefaultBodyLimit, State},
@@ -474,7 +474,12 @@ fn find_double_newline(buf: &[u8]) -> Option<(usize, usize)> {
         if buf[i] == b'\n' && buf[i + 1] == b'\n' {
             return Some((i, 2));
         }
-        if buf[i] == b'\r' && i + 3 < len && buf[i + 1] == b'\n' && buf[i + 2] == b'\r' && buf[i + 3] == b'\n' {
+        if buf[i] == b'\r'
+            && i + 3 < len
+            && buf[i + 1] == b'\n'
+            && buf[i + 2] == b'\r'
+            && buf[i + 3] == b'\n'
+        {
             return Some((i, 4));
         }
         i += 1;
@@ -576,9 +581,12 @@ async fn messages_stream(
     let log_backend_name = state.backend_name.clone();
 
     match &state.backend {
-        BackendClient::OpenAI(client) | BackendClient::Vertex(client) => {
+        BackendClient::OpenAI(client)
+        | BackendClient::Vertex(client)
+        | BackendClient::GeminiOpenAI(client) => {
             let client = client.clone();
             let mut openai_req = mapping::message_map::anthropic_to_openai_request(&body);
+            inject_gemini_thinking(&body, &state.backend, &mut openai_req);
             openai_req.model = state.map_model(&openai_req.model);
             let model = body.model.clone();
 
@@ -620,18 +628,34 @@ async fn messages_stream(
                         } else {
                             (502, Some("stream interrupted".into()))
                         };
-                        log_request(&log_shared, ctx.log_entry(
-                            &log_backend_name, Some(mapped_model), status, tokens, true, err,
-                        ));
+                        log_request(
+                            &log_shared,
+                            ctx.log_entry(
+                                &log_backend_name,
+                                Some(mapped_model),
+                                status,
+                                tokens,
+                                true,
+                                err,
+                            ),
+                        );
                     }
                     Err(e) => {
                         let status = e.status_code();
                         let err_msg = e.to_string();
                         drop(rl_tx);
                         send_stream_error(&tx, &metrics, e).await;
-                        log_request(&log_shared, ctx.log_entry(
-                            &log_backend_name, Some(mapped_model), status, None, true, Some(err_msg),
-                        ));
+                        log_request(
+                            &log_shared,
+                            ctx.log_entry(
+                                &log_backend_name,
+                                Some(mapped_model),
+                                status,
+                                None,
+                                true,
+                                Some(err_msg),
+                            ),
+                        );
                     }
                 }
             });
@@ -680,74 +704,34 @@ async fn messages_stream(
                         } else {
                             (502, Some("stream interrupted".into()))
                         };
-                        log_request(&log_shared, ctx.log_entry(
-                            &log_backend_name, Some(mapped_model), status, None, true, err,
-                        ));
+                        log_request(
+                            &log_shared,
+                            ctx.log_entry(
+                                &log_backend_name,
+                                Some(mapped_model),
+                                status,
+                                None,
+                                true,
+                                err,
+                            ),
+                        );
                     }
                     Err(e) => {
                         let status = e.status_code();
                         let err_msg = e.to_string();
                         drop(rl_tx);
                         send_stream_error(&tx, &metrics, e).await;
-                        log_request(&log_shared, ctx.log_entry(
-                            &log_backend_name, Some(mapped_model), status, None, true, Some(err_msg),
-                        ));
-                    }
-                }
-            });
-        }
-        BackendClient::Gemini(client) => {
-            let client = client.clone();
-            let gemini_mapped = state.map_model(&body.model);
-            let gemini_req = mapping::gemini_message_map::anthropic_to_gemini_request(&body);
-            let original_model = body.model.clone();
-
-            tokio::spawn(async move {
-                match client
-                    .generate_content_stream(&gemini_req, &gemini_mapped)
-                    .await
-                {
-                    Ok((response, rate_limits)) => {
-                        rl_tx.send(rate_limits).ok();
-                        let mut translator =
-                            mapping::gemini_streaming_map::GeminiStreamingTranslator::new(
-                                original_model,
-                            );
-
-                        let completed = read_sse_frames(response, &tx, &metrics, |json_str| {
-                            match serde_json::from_str::<gemini::GenerateContentResponse>(json_str)
-                            {
-                                Ok(chunk) => Some(translator.process_chunk(&chunk)),
-                                Err(e) => {
-                                    tracing::debug!("failed to parse Gemini streaming chunk: {e}");
-                                    None
-                                }
-                            }
-                        })
-                        .await;
-
-                        if completed {
-                            let events = translator.finish();
-                            send_events(&tx, &events).await;
-                            metrics.record_success();
-                        }
-                        let (status, err) = if completed {
-                            (200, None)
-                        } else {
-                            (502, Some("stream interrupted".into()))
-                        };
-                        log_request(&log_shared, ctx.log_entry(
-                            &log_backend_name, Some(mapped_model), status, None, true, err,
-                        ));
-                    }
-                    Err(e) => {
-                        let status = e.status_code();
-                        let err_msg = e.to_string();
-                        drop(rl_tx);
-                        send_stream_error(&tx, &metrics, e).await;
-                        log_request(&log_shared, ctx.log_entry(
-                            &log_backend_name, Some(mapped_model), status, None, true, Some(err_msg),
-                        ));
+                        log_request(
+                            &log_shared,
+                            ctx.log_entry(
+                                &log_backend_name,
+                                Some(mapped_model),
+                                status,
+                                None,
+                                true,
+                                Some(err_msg),
+                            ),
+                        );
                     }
                 }
             });
@@ -830,8 +814,11 @@ async fn messages(
     }
 
     match &state.backend {
-        BackendClient::OpenAI(client) | BackendClient::Vertex(client) => {
+        BackendClient::OpenAI(client)
+        | BackendClient::Vertex(client)
+        | BackendClient::GeminiOpenAI(client) => {
             let mut openai_req = mapping::message_map::anthropic_to_openai_request(&body);
+            inject_gemini_thinking(&body, &state.backend, &mut openai_req);
             openai_req.model = state.map_model(&openai_req.model);
             let mapped_model = openai_req.model.clone();
             let original_model = body.model.clone();
@@ -942,60 +929,6 @@ async fn messages(
                 }
             }
         }
-        BackendClient::Gemini(client) => {
-            let mapped_model = state.map_model(&body.model);
-            let gemini_req = mapping::gemini_message_map::anthropic_to_gemini_request(&body);
-            let original_model = body.model.clone();
-
-            match client.generate_content(&gemini_req, &mapped_model).await {
-                Ok((gemini_resp, _status, rate_limits)) => {
-                    state.metrics.record_success();
-                    let anthropic_resp = mapping::gemini_message_map::gemini_to_anthropic_response(
-                        &gemini_resp,
-                        &original_model,
-                    );
-                    if state.log_bodies() {
-                        tracing::debug!(
-                            body = %serde_json::to_string(&anthropic_resp).unwrap_or_else(|_| "[serialization failed]".into()),
-                            "response body"
-                        );
-                    }
-                    log_request(
-                        &state.shared,
-                        ctx.log_entry(
-                            &state.backend_name,
-                            Some(mapped_model.clone()),
-                            200,
-                            Some((
-                                anthropic_resp.usage.input_tokens as u64,
-                                anthropic_resp.usage.output_tokens as u64,
-                            )),
-                            false,
-                            None,
-                        ),
-                    );
-                    let mut response = (StatusCode::OK, Json(anthropic_resp)).into_response();
-                    rate_limits.inject_anthropic_headers(response.headers_mut());
-                    response
-                }
-                Err(e) => {
-                    state.metrics.record_error();
-                    let status = e.status_code();
-                    log_request(
-                        &state.shared,
-                        ctx.log_entry(
-                            &state.backend_name,
-                            Some(mapped_model),
-                            status,
-                            None,
-                            false,
-                            Some(e.to_string()),
-                        ),
-                    );
-                    backend_error_to_response(BackendError::from(e))
-                }
-            }
-        }
         BackendClient::Anthropic(_) => {
             // Anthropic passthrough is handled by a separate handler that works with raw bytes.
             // If we reach here, something is misconfigured.
@@ -1040,6 +973,26 @@ impl RequestCtx {
             is_streaming,
             error_message,
         }
+    }
+}
+
+/// When routing through the Gemini OpenAI-compatible endpoint, inject Anthropic's
+/// thinking config into the `google` extension field that Gemini expects.
+fn inject_gemini_thinking(
+    body: &anthropic::MessageCreateRequest,
+    backend: &BackendClient,
+    req: &mut openai::ChatCompletionRequest,
+) {
+    if !matches!(backend, BackendClient::GeminiOpenAI(_)) {
+        return;
+    }
+    if let Some(anthropic::ThinkingConfig::Enabled { budget_tokens }) = &body.thinking {
+        req.extra.insert(
+            "google".to_string(),
+            serde_json::json!({
+                "thinking_config": { "thinking_budget": budget_tokens }
+            }),
+        );
     }
 }
 

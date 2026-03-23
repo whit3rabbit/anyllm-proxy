@@ -112,7 +112,9 @@ async fn get_config(State(shared): State<SharedState>) -> Json<serde_json::Value
     // Get overrides to mark which fields are overridden.
     let overrides = {
         let db = shared.db.lock().await;
-        crate::admin::db::get_config_overrides(&db).unwrap_or_default()
+        tokio::task::block_in_place(|| {
+            crate::admin::db::get_config_overrides(&db).unwrap_or_default()
+        })
     };
     let override_keys: Vec<String> = overrides.iter().map(|(k, _, _)| k.clone()).collect();
 
@@ -129,53 +131,75 @@ async fn put_config(
     State(shared): State<SharedState>,
     Json(body): Json<serde_json::Value>,
 ) -> impl IntoResponse {
-    let db = shared.db.lock().await;
-    let mut config = shared.runtime_config.write().unwrap();
-    let mut changed_keys = Vec::new();
+    // Collect the key-value pairs to persist, then do all SQLite I/O
+    // before touching in-memory state. This avoids holding the async
+    // MutexGuard across block_in_place.
+    let mut db_writes: Vec<(String, String)> = Vec::new();
 
-    // Update log_level if present, and apply via tracing reload handle.
     if let Some(level) = body.get("log_level").and_then(|v| v.as_str()) {
-        crate::admin::db::set_config_override(&db, "log_level", level).ok();
-        config.log_level = level.to_string();
-        changed_keys.push(("log_level".to_string(), level.to_string()));
-        // Apply the new filter to the running tracing subscriber.
-        if let Some(ref reload) = shared.log_reload {
-            if !reload(level) {
-                tracing::warn!(filter = level, "failed to apply log level change");
+        db_writes.push(("log_level".to_string(), level.to_string()));
+    }
+    if let Some(val) = body.get("log_bodies").and_then(|v| v.as_bool()) {
+        db_writes.push(("log_bodies".to_string(), val.to_string()));
+    }
+    if let Some(backends) = body.get("backends").and_then(|v| v.as_object()) {
+        // Read current config to validate backend names exist
+        let config = shared.runtime_config.read().unwrap();
+        for (name, settings) in backends {
+            if config.model_mappings.contains_key(name) {
+                if let Some(big) = settings.get("big_model").and_then(|v| v.as_str()) {
+                    db_writes.push((format!("{name}.big_model"), big.to_string()));
+                }
+                if let Some(small) = settings.get("small_model").and_then(|v| v.as_str()) {
+                    db_writes.push((format!("{name}.small_model"), small.to_string()));
+                }
             }
         }
     }
 
-    // Update log_bodies if present.
-    if let Some(val) = body.get("log_bodies").and_then(|v| v.as_bool()) {
-        let val_str = val.to_string();
-        crate::admin::db::set_config_override(&db, "log_bodies", &val_str).ok();
-        config.log_bodies = val;
-        changed_keys.push(("log_bodies".to_string(), val_str));
+    // Phase 1: Persist to SQLite (acquire and release db lock before touching config)
+    {
+        let db = shared.db.lock().await;
+        tokio::task::block_in_place(|| {
+            for (key, value) in &db_writes {
+                crate::admin::db::set_config_override(&db, key, value).ok();
+            }
+        });
     }
 
-    // Update per-backend model mappings.
-    if let Some(backends) = body.get("backends").and_then(|v| v.as_object()) {
-        for (name, settings) in backends {
-            if let Some(mapping) = config.model_mappings.get_mut(name) {
-                if let Some(big) = settings.get("big_model").and_then(|v| v.as_str()) {
-                    let key = format!("{name}.big_model");
-                    crate::admin::db::set_config_override(&db, &key, big).ok();
-                    mapping.big_model = big.to_string();
-                    changed_keys.push((key, big.to_string()));
+    // Phase 2: Apply to in-memory config (no async lock held)
+    {
+        let mut config = shared.runtime_config.write().unwrap();
+        for (key, value) in &db_writes {
+            match key.as_str() {
+                "log_level" => {
+                    config.log_level = value.clone();
+                    if let Some(ref reload) = shared.log_reload {
+                        if !reload(value) {
+                            tracing::warn!(filter = value, "failed to apply log level change");
+                        }
+                    }
                 }
-                if let Some(small) = settings.get("small_model").and_then(|v| v.as_str()) {
-                    let key = format!("{name}.small_model");
-                    crate::admin::db::set_config_override(&db, &key, small).ok();
-                    mapping.small_model = small.to_string();
-                    changed_keys.push((key, small.to_string()));
+                "log_bodies" => {
+                    config.log_bodies = value == "true";
+                }
+                _ => {
+                    if let Some((backend, field)) = key.split_once('.') {
+                        if let Some(mapping) = config.model_mappings.get_mut(backend) {
+                            match field {
+                                "big_model" => mapping.big_model = value.clone(),
+                                "small_model" => mapping.small_model = value.clone(),
+                                _ => {}
+                            }
+                        }
+                    }
                 }
             }
         }
     }
 
     // Broadcast config changes.
-    for (key, value) in &changed_keys {
+    for (key, value) in &db_writes {
         let _ = shared
             .events_tx
             .send(crate::admin::state::AdminEvent::ConfigChanged {
@@ -187,8 +211,8 @@ async fn put_config(
     (
         StatusCode::OK,
         Json(serde_json::json!({
-            "updated": changed_keys.len(),
-            "keys": changed_keys.iter().map(|(k, _)| k.as_str()).collect::<Vec<_>>(),
+            "updated": db_writes.len(),
+            "keys": db_writes.iter().map(|(k, _)| k.as_str()).collect::<Vec<_>>(),
         })),
     )
 }
@@ -196,7 +220,9 @@ async fn put_config(
 /// GET /admin/api/config/overrides -- only SQLite overrides.
 async fn get_config_overrides(State(shared): State<SharedState>) -> Json<serde_json::Value> {
     let db = shared.db.lock().await;
-    let overrides = crate::admin::db::get_config_overrides(&db).unwrap_or_default();
+    let overrides = tokio::task::block_in_place(|| {
+        crate::admin::db::get_config_overrides(&db).unwrap_or_default()
+    });
 
     let entries: Vec<serde_json::Value> = overrides
         .into_iter()
@@ -218,7 +244,7 @@ async fn delete_config_override(
     Path(key): Path<String>,
 ) -> impl IntoResponse {
     let db = shared.db.lock().await;
-    match crate::admin::db::delete_config_override(&db, &key) {
+    match tokio::task::block_in_place(|| crate::admin::db::delete_config_override(&db, &key)) {
         Ok(true) => (StatusCode::OK, Json(serde_json::json!({"deleted": key}))).into_response(),
         Ok(false) => (
             StatusCode::NOT_FOUND,
@@ -253,7 +279,7 @@ async fn get_metrics(State(shared): State<SharedState>) -> Json<serde_json::Valu
 
     let (p50, p95, p99) = {
         let db = shared.db.lock().await;
-        compute_latency_percentiles(&db)
+        tokio::task::block_in_place(|| compute_latency_percentiles(&db))
     };
 
     Json(serde_json::json!({
@@ -327,14 +353,16 @@ async fn get_requests(
     let offset = params.offset.unwrap_or(0);
 
     let db = shared.db.lock().await;
-    match crate::admin::db::query_request_log(
-        &db,
-        limit,
-        offset,
-        params.backend.as_deref(),
-        params.since.as_deref(),
-        params.status.as_deref(),
-    ) {
+    match tokio::task::block_in_place(|| {
+        crate::admin::db::query_request_log(
+            &db,
+            limit,
+            offset,
+            params.backend.as_deref(),
+            params.since.as_deref(),
+            params.status.as_deref(),
+        )
+    }) {
         Ok(entries) => Json(serde_json::json!({
             "requests": entries,
             "limit": limit,
@@ -353,7 +381,7 @@ async fn get_request_by_id(
     Path(id): Path<String>,
 ) -> impl IntoResponse {
     let db = shared.db.lock().await;
-    match crate::admin::db::get_request_by_id(&db, &id) {
+    match tokio::task::block_in_place(|| crate::admin::db::get_request_by_id(&db, &id)) {
         Ok(Some(entry)) => {
             (StatusCode::OK, Json(serde_json::to_value(entry).unwrap())).into_response()
         }

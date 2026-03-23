@@ -36,7 +36,7 @@ pub fn anthropic_to_openai_request(
     if let Some(ref system) = req.system {
         let text = extract_system_text(system);
         messages.push(openai::ChatMessage {
-            role: openai::ChatRole::Developer,
+            role: openai::ChatRole::System,
             content: Some(openai::ChatContent::Text(text)),
             name: None,
             tool_calls: None,
@@ -90,7 +90,7 @@ pub fn anthropic_to_openai_request(
     openai::ChatCompletionRequest {
         model: req.model.clone(),
         messages,
-        max_tokens: None,
+        max_tokens: Some(req.max_tokens),
         max_completion_tokens: Some(req.max_tokens),
         // Compat spec: "Between 0 and 1 (inclusive). Values greater than 1 are capped at 1."
         // See: https://docs.anthropic.com/en/api/openai-sdk#simple-fields
@@ -193,11 +193,36 @@ fn convert_assistant_blocks(
     });
 }
 
+/// Resolve an Anthropic ImageSource to a URL string (data URI or direct URL).
+fn image_source_to_url(source: &anthropic::messages::ImageSource) -> Option<String> {
+    if let Some(ref url) = source.url {
+        Some(url.clone())
+    } else if let Some(ref data) = source.data {
+        let mt = source.media_type.as_deref().unwrap_or("image/png");
+        Some(format!("data:{};base64,{}", mt, data))
+    } else {
+        None
+    }
+}
+
+/// Simplify a Vec of content parts: use plain Text when there's a single text part,
+/// multipart array otherwise. Moves data out of the Vec to avoid cloning.
+fn simplify_content_parts(mut parts: Vec<openai::ChatContentPart>) -> openai::ChatContent {
+    if parts.len() == 1 {
+        match parts.remove(0) {
+            openai::ChatContentPart::Text { text } => openai::ChatContent::Text(text),
+            other => openai::ChatContent::Parts(vec![other]),
+        }
+    } else {
+        openai::ChatContent::Parts(parts)
+    }
+}
+
 /// User blocks: text/image parts become content, tool_result blocks become
 /// separate OpenAI tool-role messages.
 fn convert_user_blocks(blocks: &[anthropic::ContentBlock], out: &mut Vec<openai::ChatMessage>) {
     let mut content_parts: Vec<openai::ChatContentPart> = Vec::new();
-    let mut tool_results: Vec<(String, String)> = Vec::new();
+    let mut tool_results: Vec<(String, Vec<openai::ChatContentPart>)> = Vec::new();
 
     for block in blocks {
         match block {
@@ -205,41 +230,68 @@ fn convert_user_blocks(blocks: &[anthropic::ContentBlock], out: &mut Vec<openai:
                 content_parts.push(openai::ChatContentPart::Text { text: text.clone() });
             }
             anthropic::ContentBlock::Image { source } => {
-                let url = if let Some(ref url) = source.url {
-                    url.clone()
-                } else if let Some(ref data) = source.data {
-                    let mt = source.media_type.as_deref().unwrap_or("image/png");
-                    format!("data:{};base64,{}", mt, data)
-                } else {
-                    continue;
-                };
-                content_parts.push(openai::ChatContentPart::ImageUrl {
-                    image_url: openai::chat_completions::ImageUrl { url, detail: None },
-                });
+                if let Some(url) = image_source_to_url(source) {
+                    content_parts.push(openai::ChatContentPart::ImageUrl {
+                        image_url: openai::chat_completions::ImageUrl { url, detail: None },
+                    });
+                }
             }
             anthropic::ContentBlock::ToolResult {
                 tool_use_id,
                 content,
                 is_error,
             } => {
-                let text = match content {
-                    Some(anthropic::messages::ToolResultContent::Text(s)) => s.clone(),
-                    Some(anthropic::messages::ToolResultContent::Blocks(inner)) => inner
-                        .iter()
-                        .filter_map(|b| match b {
-                            anthropic::ContentBlock::Text { text } => Some(text.as_str()),
-                            _ => None,
-                        })
-                        .collect::<Vec<_>>()
-                        .join(""),
-                    None => String::new(),
+                let mut parts: Vec<openai::ChatContentPart> = Vec::new();
+                match content {
+                    Some(anthropic::messages::ToolResultContent::Text(s)) => {
+                        parts.push(openai::ChatContentPart::Text { text: s.clone() });
+                    }
+                    Some(anthropic::messages::ToolResultContent::Blocks(inner)) => {
+                        for b in inner {
+                            match b {
+                                anthropic::ContentBlock::Text { text } => {
+                                    parts
+                                        .push(openai::ChatContentPart::Text { text: text.clone() });
+                                }
+                                anthropic::ContentBlock::Image { source } => {
+                                    if let Some(url) = image_source_to_url(source) {
+                                        parts.push(openai::ChatContentPart::ImageUrl {
+                                            image_url: openai::chat_completions::ImageUrl {
+                                                url,
+                                                detail: None,
+                                            },
+                                        });
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                    None => {}
                 };
-                let text = if *is_error == Some(true) {
-                    format!("Error: {}", text)
-                } else {
-                    text
-                };
-                tool_results.push((tool_use_id.clone(), text));
+                if *is_error == Some(true) {
+                    // Prefix the first text part (or add one) with "Error: "
+                    if let Some(openai::ChatContentPart::Text { ref mut text }) = parts
+                        .iter_mut()
+                        .find(|p| matches!(p, openai::ChatContentPart::Text { .. }))
+                    {
+                        *text = format!("Error: {}", text);
+                    } else {
+                        parts.insert(
+                            0,
+                            openai::ChatContentPart::Text {
+                                text: "Error".to_string(),
+                            },
+                        );
+                    }
+                }
+                // Use empty text if no content was provided
+                if parts.is_empty() {
+                    parts.push(openai::ChatContentPart::Text {
+                        text: String::new(),
+                    });
+                }
+                tool_results.push((tool_use_id.clone(), parts));
             }
             anthropic::ContentBlock::Document { source, title } => {
                 // OpenAI Chat Completions doesn't support inline documents.
@@ -263,35 +315,29 @@ fn convert_user_blocks(blocks: &[anthropic::ContentBlock], out: &mut Vec<openai:
         }
     }
 
-    // Emit user content message if there are text/image parts
+    // Emit tool result messages first: OpenAI requires Tool messages immediately
+    // after the Assistant message that generated the tool_calls.
+    for (tool_call_id, parts) in tool_results {
+        let content = Some(simplify_content_parts(parts));
+        out.push(openai::ChatMessage {
+            role: openai::ChatRole::Tool,
+            content,
+            name: None,
+            tool_calls: None,
+            tool_call_id: Some(tool_call_id),
+            refusal: None,
+        });
+    }
+
+    // Emit user content message after tool results
     if !content_parts.is_empty() {
-        let content = if content_parts.len() == 1 {
-            if let openai::ChatContentPart::Text { ref text } = content_parts[0] {
-                Some(openai::ChatContent::Text(text.clone()))
-            } else {
-                Some(openai::ChatContent::Parts(content_parts))
-            }
-        } else {
-            Some(openai::ChatContent::Parts(content_parts))
-        };
+        let content = Some(simplify_content_parts(content_parts));
         out.push(openai::ChatMessage {
             role: openai::ChatRole::User,
             content,
             name: None,
             tool_calls: None,
             tool_call_id: None,
-            refusal: None,
-        });
-    }
-
-    // Emit tool result messages
-    for (tool_call_id, text) in tool_results {
-        out.push(openai::ChatMessage {
-            role: openai::ChatRole::Tool,
-            content: Some(openai::ChatContent::Text(text)),
-            name: None,
-            tool_calls: None,
-            tool_call_id: Some(tool_call_id),
             refusal: None,
         });
     }
@@ -449,7 +495,7 @@ mod tests {
         let oai = anthropic_to_openai_request(&req);
 
         assert_eq!(oai.model, "claude-3-5-sonnet-20241022");
-        assert!(oai.max_tokens.is_none());
+        assert_eq!(oai.max_tokens, Some(1024));
         assert_eq!(oai.max_completion_tokens, Some(1024));
         assert_eq!(oai.messages.len(), 1);
         assert_eq!(oai.messages[0].role, openai::ChatRole::User);
@@ -472,7 +518,7 @@ mod tests {
         let oai = anthropic_to_openai_request(&req);
 
         assert_eq!(oai.messages.len(), 2);
-        assert_eq!(oai.messages[0].role, openai::ChatRole::Developer);
+        assert_eq!(oai.messages[0].role, openai::ChatRole::System);
         assert!(matches!(
             &oai.messages[0].content,
             Some(openai::ChatContent::Text(t)) if t == "You are a helpful assistant."
@@ -497,7 +543,7 @@ mod tests {
 
         let oai = anthropic_to_openai_request(&req);
 
-        assert_eq!(oai.messages[0].role, openai::ChatRole::Developer);
+        assert_eq!(oai.messages[0].role, openai::ChatRole::System);
         assert!(matches!(
             &oai.messages[0].content,
             Some(openai::ChatContent::Text(t)) if t == "Be concise.\nRespond in JSON."
@@ -1018,10 +1064,20 @@ mod tests {
         let oai = anthropic_to_openai_request(&req);
 
         assert_eq!(oai.messages[0].role, openai::ChatRole::Tool);
-        assert!(matches!(
-            &oai.messages[0].content,
-            Some(openai::ChatContent::Text(t)) if t == "part1part2"
-        ));
+        // Multiple text blocks are now preserved as separate parts (not concatenated)
+        // to support mixed text+image content in tool results.
+        match &oai.messages[0].content {
+            Some(openai::ChatContent::Parts(parts)) => {
+                assert_eq!(parts.len(), 2);
+                assert!(
+                    matches!(&parts[0], openai::ChatContentPart::Text { text } if text == "part1")
+                );
+                assert!(
+                    matches!(&parts[1], openai::ChatContentPart::Text { text } if text == "part2")
+                );
+            }
+            other => panic!("expected Parts with 2 text entries, got {:?}", other),
+        }
     }
 
     #[test]
@@ -1065,10 +1121,11 @@ mod tests {
 
         let oai = anthropic_to_openai_request(&req);
 
-        // Should produce two messages: one user text, one tool result
+        // Should produce two messages: tool result first (must follow assistant),
+        // then user text.
         assert_eq!(oai.messages.len(), 2);
-        assert_eq!(oai.messages[0].role, openai::ChatRole::User);
-        assert_eq!(oai.messages[1].role, openai::ChatRole::Tool);
+        assert_eq!(oai.messages[0].role, openai::ChatRole::Tool);
+        assert_eq!(oai.messages[1].role, openai::ChatRole::User);
     }
 
     #[test]

@@ -1,11 +1,9 @@
 pub mod anthropic_client;
-pub mod gemini_client;
 pub mod openai_client;
 
 use crate::config::{BackendAuth, BackendConfig, BackendKind, Config, OpenAIApiFormat, TlsConfig};
 use anthropic_client::{AnthropicClient, AnthropicClientError};
 use axum::http::{HeaderMap, HeaderName};
-use gemini_client::{GeminiClient, GeminiClientError};
 use openai_client::{OpenAIClient, OpenAIClientError};
 use reqwest::Client;
 use serde::Serialize;
@@ -87,7 +85,10 @@ pub(crate) fn build_http_client(tls: &TlsConfig) -> Client {
         builder = builder.add_root_certificate(cert);
     }
 
-    builder.build().expect("failed to build HTTP client")
+    builder
+        .connect_timeout(Duration::from_secs(10))
+        .build()
+        .expect("failed to build HTTP client")
 }
 
 /// Check if a status code is retryable (429 or 5xx).
@@ -121,7 +122,8 @@ pub enum BackendClient {
     /// OpenAI Responses API format (same client, different endpoint + request/response shape).
     OpenAIResponses(OpenAIClient),
     Vertex(OpenAIClient),
-    Gemini(GeminiClient),
+    /// Gemini via OpenAI-compatible endpoint (reuses OpenAI translation path).
+    GeminiOpenAI(OpenAIClient),
     /// Passthrough to real Anthropic API (no translation).
     Anthropic(AnthropicClient),
 }
@@ -130,7 +132,6 @@ pub enum BackendClient {
 #[derive(Debug)]
 pub enum BackendError {
     OpenAI(OpenAIClientError),
-    Gemini(GeminiClientError),
     Anthropic(AnthropicClientError),
 }
 
@@ -139,7 +140,6 @@ impl BackendError {
     pub fn api_error_status(&self) -> Option<u16> {
         match self {
             Self::OpenAI(OpenAIClientError::ApiError { status, .. }) => Some(*status),
-            Self::Gemini(GeminiClientError::ApiError { status, .. }) => Some(*status),
             _ => None,
         }
     }
@@ -153,7 +153,6 @@ impl BackendError {
     pub fn api_error_message(&self) -> String {
         match self {
             Self::OpenAI(e) => e.to_string(),
-            Self::Gemini(e) => e.to_string(),
             Self::Anthropic(e) => e.to_string(),
         }
     }
@@ -165,9 +164,6 @@ impl BackendError {
             Self::OpenAI(OpenAIClientError::ApiError { status, error }) => {
                 Some((&error.error.message, *status))
             }
-            Self::Gemini(GeminiClientError::ApiError { status, error }) => {
-                Some((&error.error.message, *status))
-            }
             _ => None,
         }
     }
@@ -177,7 +173,6 @@ impl std::fmt::Display for BackendError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::OpenAI(e) => write!(f, "{e}"),
-            Self::Gemini(e) => write!(f, "{e}"),
             Self::Anthropic(e) => write!(f, "{e}"),
         }
     }
@@ -186,12 +181,6 @@ impl std::fmt::Display for BackendError {
 impl From<OpenAIClientError> for BackendError {
     fn from(e: OpenAIClientError) -> Self {
         Self::OpenAI(e)
-    }
-}
-
-impl From<GeminiClientError> for BackendError {
-    fn from(e: GeminiClientError) -> Self {
-        Self::Gemini(e)
     }
 }
 
@@ -209,7 +198,7 @@ impl BackendClient {
                 OpenAIApiFormat::Responses => Self::OpenAIResponses(OpenAIClient::new(config)),
             },
             BackendKind::Vertex => Self::Vertex(OpenAIClient::new(config)),
-            BackendKind::Gemini => Self::Gemini(GeminiClient::new(config)),
+            BackendKind::Gemini => Self::GeminiOpenAI(OpenAIClient::new(config)),
             BackendKind::Anthropic => Self::Anthropic(AnthropicClient::new(
                 &config.openai_base_url,
                 &config.openai_api_key,
@@ -220,7 +209,7 @@ impl BackendClient {
 
     /// Construct from a per-backend config (multi-backend mode).
     pub fn from_backend_config(bc: &BackendConfig) -> Self {
-        // Build a legacy Config to reuse existing OpenAI/Gemini constructors.
+        // Build a legacy Config to reuse existing OpenAI constructors.
         // This avoids duplicating URL construction logic.
         let legacy = Config {
             backend: bc.kind.clone(),
@@ -240,14 +229,13 @@ impl BackendClient {
                 OpenAIApiFormat::Responses => Self::OpenAIResponses(OpenAIClient::new(&legacy)),
             },
             BackendKind::Vertex => Self::Vertex(OpenAIClient::new(&legacy)),
-            BackendKind::Gemini => Self::Gemini(GeminiClient::new(&legacy)),
+            BackendKind::Gemini => Self::GeminiOpenAI(OpenAIClient::new(&legacy)),
             BackendKind::Anthropic => Self::Anthropic(AnthropicClient::from_backend_config(bc)),
         }
     }
 }
 
 /// Rate limit headers extracted from backend responses.
-/// OpenAI sends `x-ratelimit-*` headers; Gemini does not send any.
 #[derive(Debug, Default, Clone)]
 pub struct RateLimitHeaders {
     pub requests_limit: Option<String>,

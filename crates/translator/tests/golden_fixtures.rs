@@ -95,8 +95,8 @@ fn translate_anthropic_fixture_to_openai_request() {
         serde_json::from_value(fixture["request"].clone()).unwrap();
     let openai_req = mapping::message_map::anthropic_to_openai_request(&req);
 
-    // System prompt should become a developer message
-    assert_eq!(openai_req.messages[0].role, openai::ChatRole::Developer);
+    // System prompt should become a system message
+    assert_eq!(openai_req.messages[0].role, openai::ChatRole::System);
     // User message should follow
     assert_eq!(openai_req.messages[1].role, openai::ChatRole::User);
     assert_eq!(openai_req.model, "claude-opus-4-6");

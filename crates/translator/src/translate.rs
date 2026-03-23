@@ -6,11 +6,7 @@
 use crate::anthropic::{MessageCreateRequest, MessageResponse};
 use crate::config::TranslationConfig;
 use crate::error::TranslateError;
-use crate::gemini::generate_content::{GenerateContentRequest, GenerateContentResponse};
-use crate::mapping::{
-    gemini_message_map, gemini_streaming_map, message_map, responses_message_map,
-    responses_streaming_map, streaming_map,
-};
+use crate::mapping::{message_map, responses_message_map, responses_streaming_map, streaming_map};
 use crate::openai::responses::{ResponsesRequest, ResponsesResponse};
 use crate::openai::{ChatCompletionRequest, ChatCompletionResponse};
 
@@ -34,43 +30,12 @@ pub fn translate_response(resp: &ChatCompletionResponse, original_model: &str) -
     message_map::openai_to_anthropic_response(resp, original_model)
 }
 
-/// Translate an Anthropic request to a Gemini `generateContent` request.
-///
-/// Returns the Gemini request and the mapped model name (needed for URL construction).
-pub fn translate_request_gemini(
-    req: &MessageCreateRequest,
-    config: &TranslationConfig,
-) -> Result<(GenerateContentRequest, String), TranslateError> {
-    let mapped_model = config.map_model(&req.model)?;
-    let gemini_req = gemini_message_map::anthropic_to_gemini_request(req);
-    Ok((gemini_req, mapped_model))
-}
-
-/// Translate a Gemini `generateContent` response back to an Anthropic response.
-///
-/// `original_model` is the Anthropic model name from the original request.
-pub fn translate_response_gemini(
-    resp: &GenerateContentResponse,
-    original_model: &str,
-) -> MessageResponse {
-    gemini_message_map::gemini_to_anthropic_response(resp, original_model)
-}
-
 /// Create a new streaming translator for OpenAI Chat Completions chunks.
 ///
 /// The returned translator is stateful: feed chunks via `process_chunk()`,
 /// then call `finish()` to get the final events.
 pub fn new_stream_translator(model: String) -> streaming_map::StreamingTranslator {
     streaming_map::StreamingTranslator::new(model)
-}
-
-/// Create a new streaming translator for Gemini `generateContent` chunks.
-///
-/// Same stateful pattern as `new_stream_translator`.
-pub fn new_gemini_stream_translator(
-    model: String,
-) -> gemini_streaming_map::GeminiStreamingTranslator {
-    gemini_streaming_map::GeminiStreamingTranslator::new(model)
 }
 
 /// Translate an Anthropic request to an OpenAI Responses API request.

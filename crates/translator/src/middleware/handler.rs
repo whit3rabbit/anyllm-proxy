@@ -145,7 +145,12 @@ fn find_double_newline(buf: &[u8]) -> Option<(usize, usize)> {
         if buf[i] == b'\n' && buf[i + 1] == b'\n' {
             return Some((i, 2));
         }
-        if buf[i] == b'\r' && i + 3 < len && buf[i + 1] == b'\n' && buf[i + 2] == b'\r' && buf[i + 3] == b'\n' {
+        if buf[i] == b'\r'
+            && i + 3 < len
+            && buf[i + 1] == b'\n'
+            && buf[i + 2] == b'\r'
+            && buf[i + 3] == b'\n'
+        {
             return Some((i, 4));
         }
         i += 1;

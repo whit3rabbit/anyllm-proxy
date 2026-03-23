@@ -29,6 +29,7 @@ pub struct StreamingTranslator {
 
 struct ToolCallAccumulator {
     block_index: u32,
+    closed: bool,
 }
 
 impl StreamingTranslator {
@@ -193,6 +194,17 @@ impl StreamingTranslator {
                 self.content_block_index += 1;
             }
 
+            // Close the previous tool call block before starting a new one.
+            // Anthropic streaming protocol requires sequential: Start -> Delta -> Stop per block.
+            if let Some(last_tc) = self.active_tool_calls.last_mut() {
+                if !last_tc.closed {
+                    events.push(anthropic::StreamEvent::ContentBlockStop {
+                        index: last_tc.block_index,
+                    });
+                    last_tc.closed = true;
+                }
+            }
+
             let name = tc
                 .function
                 .as_ref()
@@ -229,10 +241,15 @@ impl StreamingTranslator {
 
             // Grow the accumulator vec if needed
             while self.active_tool_calls.len() <= idx {
-                self.active_tool_calls
-                    .push(ToolCallAccumulator { block_index: 0 });
+                self.active_tool_calls.push(ToolCallAccumulator {
+                    block_index: 0,
+                    closed: false,
+                });
             }
-            self.active_tool_calls[idx] = ToolCallAccumulator { block_index };
+            self.active_tool_calls[idx] = ToolCallAccumulator {
+                block_index,
+                closed: false,
+            };
         }
 
         // Emit argument fragments as input_json_delta events
@@ -253,9 +270,11 @@ impl StreamingTranslator {
 
     fn flush_tool_calls(&mut self, events: &mut Vec<anthropic::StreamEvent>) {
         for tc in self.active_tool_calls.drain(..) {
-            events.push(anthropic::StreamEvent::ContentBlockStop {
-                index: tc.block_index,
-            });
+            if !tc.closed {
+                events.push(anthropic::StreamEvent::ContentBlockStop {
+                    index: tc.block_index,
+                });
+            }
         }
     }
 }

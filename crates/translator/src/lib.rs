@@ -1,7 +1,6 @@
 //! # anthropic_openai_translate
 //!
 //! Pure, IO-free translation between Anthropic Messages API and OpenAI Chat Completions API.
-//! Also supports Google Gemini native API translation.
 //!
 //! # Quick start
 //!
@@ -32,7 +31,6 @@
 //!
 //! - [`anthropic`] -- Anthropic Messages API types
 //! - [`openai`] -- OpenAI Chat Completions and Responses API types
-//! - [`gemini`] -- Google Gemini native API types
 //! - [`mapping`] -- Stateless conversion functions between APIs
 //! - [`config`] -- Translation configuration (model mapping, lossy behavior)
 //! - [`translate`] -- Convenience wrappers combining config with mapping functions
@@ -40,7 +38,6 @@
 pub mod anthropic;
 pub mod config;
 pub mod error;
-pub mod gemini;
 pub mod mapping;
 #[cfg(feature = "middleware")]
 pub mod middleware;
@@ -52,7 +49,6 @@ pub mod util;
 pub use config::{LossyBehavior, TranslationConfig, TranslationConfigBuilder};
 pub use error::TranslateError;
 pub use translate::{
-    new_gemini_stream_translator, new_responses_stream_translator, new_stream_translator,
-    translate_request, translate_request_gemini, translate_request_responses, translate_response,
-    translate_response_gemini, translate_response_responses,
+    new_responses_stream_translator, new_stream_translator, translate_request,
+    translate_request_responses, translate_response, translate_response_responses,
 };

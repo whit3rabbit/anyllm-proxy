@@ -12,7 +12,7 @@ See PLAN.md for the full specification and TASKS.md for phased implementation st
 
 **Working (verified):**
 - Build: `cargo build` clean, `cargo clippy -- -D warnings` clean
-- Tests: ~438 tests passing (297 translator, ~141 proxy/integration), 4 ignored (live API)
+- Tests: ~357 tests passing (~220 translator, ~137 proxy/integration), 4 ignored (live API)
 - Full Anthropic Messages API translation: non-streaming, streaming SSE, tool calling, file/document blocks
 - Proxy middleware: health, auth, request ID, size limits, concurrency limits, retry with backoff
 - Compatibility endpoints: /v1/models, count_tokens (approximate via tiktoken), batches (stub)
@@ -87,9 +87,8 @@ HTTP proxy built on axum + reqwest:
 - **`server/routes.rs`**: Axum router (POST /v1/messages, GET /health, GET /metrics, GET /v1/models, stubs for count_tokens and batches)
 - **`server/middleware.rs`**: Auth validation (x-api-key), request ID injection, 32MB size limit, concurrency limit, logging
 - **`server/sse.rs`**: SSE response helpers for Anthropic-format streaming
-- **`backend/mod.rs`**: `BackendClient` enum (OpenAI/OpenAIResponses/Vertex/Gemini/Anthropic), `BackendError`, shared retry helpers
-- **`backend/openai_client.rs`**: reqwest client calling OpenAI Chat Completions with retry/backoff on 429/5xx
-- **`backend/gemini_client.rs`**: reqwest client calling Gemini native `generateContent`/`streamGenerateContent` with retry/backoff
+- **`backend/mod.rs`**: `BackendClient` enum (OpenAI/OpenAIResponses/Vertex/GeminiOpenAI/Anthropic), `BackendError`, shared retry helpers
+- **`backend/openai_client.rs`**: reqwest client calling OpenAI-compatible Chat Completions with retry/backoff on 429/5xx (used for OpenAI, Vertex, and Gemini backends)
 - **`backend/anthropic_client.rs`**: Passthrough client forwarding Anthropic requests as-is to upstream Anthropic API (no translation)
 - **`admin/`**: Admin server (localhost-only) with config management, WebSocket live updates, token auth (`auth.rs`, `db.rs`, `routes.rs`, `state.rs`)
 - **`admin-ui/`**: Static admin UI served by the admin server (`index.html`)
