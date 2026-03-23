@@ -144,6 +144,11 @@ impl BackendError {
         }
     }
 
+    /// HTTP status code from an API error, or 500 for transport/deserialization errors.
+    pub fn status_code(&self) -> u16 {
+        self.api_error_status().unwrap_or(500)
+    }
+
     /// Human-readable error message.
     pub fn api_error_message(&self) -> String {
         match self {

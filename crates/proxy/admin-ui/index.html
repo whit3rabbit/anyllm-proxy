@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Proxy Admin</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0d1117;color:#c9d1d9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:14px}
+a{color:#4a9eff;text-decoration:none}
+.nav{display:flex;border-bottom:1px solid #30363d;background:#161b22;position:sticky;top:0;z-index:10}
+.nav-item{padding:10px 20px;cursor:pointer;color:#8b949e;border-bottom:2px solid transparent}
+.nav-item.active{color:#4a9eff;border-bottom-color:#4a9eff;font-weight:600}
+.nav-item:hover{color:#c9d1d9}
+.nav-right{margin-left:auto;padding:10px 20px;font-size:12px}
+.connected{color:#3fb950}.disconnected{color:#f85149}
+.tab{display:none;padding:16px;max-width:1200px;margin:0 auto}
+.tab.active{display:block}
+.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1px;background:#30363d;border-radius:6px;overflow:hidden;margin-bottom:16px}
+.stat{padding:12px;background:#161b22;text-align:center}
+.stat-label{color:#8b949e;font-size:10px;text-transform:uppercase;letter-spacing:0.5px}
+.stat-value{font-size:24px;margin-top:4px;font-weight:600}
+.backend-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:16px}
+.card{padding:12px;background:#161b22;border:1px solid #30363d;border-radius:6px}
+.card-header{display:flex;justify-content:space-between;align-items:center}
+.card-name{color:#4a9eff;font-weight:600}
+.card-body{margin-top:8px;color:#8b949e;font-size:12px}
+.section-label{color:#8b949e;font-size:11px;text-transform:uppercase;margin-bottom:8px;letter-spacing:0.5px}
+.feed{background:#161b22;border:1px solid #30363d;border-radius:6px;overflow:hidden;max-height:400px;overflow-y:auto}
+.feed-header,.feed-row{display:grid;grid-template-columns:150px 60px 90px 100px 70px 70px;padding:6px 12px;font-size:12px}
+.feed-header{background:#1c2128;color:#8b949e;border-bottom:1px solid #30363d;position:sticky;top:0}
+.feed-row{border-bottom:1px solid #21262d}
+.feed-row:last-child{border-bottom:none}
+.status-2xx{color:#3fb950}.status-4xx{color:#d29922}.status-5xx{color:#f85149}
+.form-group{margin-bottom:16px;padding:12px;background:#161b22;border:1px solid #30363d;border-radius:6px}
+.form-label{font-weight:600;margin-bottom:4px}
+.form-hint{color:#8b949e;font-size:11px;margin-bottom:8px}
+.form-row{display:flex;gap:8px;align-items:center;margin-top:8px}
+input,select{background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:6px 10px;border-radius:4px;font-size:13px}
+input:focus,select:focus{outline:none;border-color:#4a9eff}
+.btn{padding:8px 16px;border-radius:6px;cursor:pointer;font-size:13px;border:1px solid;font-weight:500}
+.btn-primary{background:#238636;border-color:#2ea043;color:white}
+.btn-secondary{background:#30363d;border-color:#484f58;color:#c9d1d9}
+.btn:hover{opacity:0.9}
+.badge{font-size:10px;padding:2px 6px;border-radius:3px}
+.badge-override{background:rgba(245,166,35,0.2);color:#d29922}
+.readonly-section{opacity:0.7;padding:12px;background:#161b22;border:1px solid #30363d;border-radius:6px}
+.model-grid{display:grid;grid-template-columns:120px 1fr;gap:8px;align-items:center;margin-top:8px}
+.model-grid .label{color:#8b949e}
+.section-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.warn{color:#d29922}
+.error{color:#f85149}
+.empty{text-align:center;padding:40px;color:#8b949e}
+.pagination{display:flex;gap:8px;margin-top:12px;align-items:center}
+</style>
+</head>
+<body>
+<div class="nav">
+  <div class="nav-item active" data-tab="dashboard">Dashboard</div>
+  <div class="nav-item" data-tab="requests">Request Log</div>
+  <div class="nav-item" data-tab="settings">Settings</div>
+  <div class="nav-item" data-tab="backends">Backends</div>
+  <div class="nav-right"><span id="ws-status" class="disconnected">Disconnected</span></div>
+</div>
+
+<div id="tab-dashboard" class="tab active">
+  <div class="stats-row">
+    <div class="stat"><div class="stat-label">Requests/min</div><div class="stat-value" id="stat-rpm">--</div></div>
+    <div class="stat"><div class="stat-label">Error Rate</div><div class="stat-value" id="stat-error-rate">--</div></div>
+    <div class="stat"><div class="stat-label">P50 Latency</div><div class="stat-value" id="stat-p50">--</div></div>
+    <div class="stat"><div class="stat-label">P95 Latency</div><div class="stat-value" id="stat-p95">--</div></div>
+    <div class="stat"><div class="stat-label">Total Requests</div><div class="stat-value" id="stat-total">0</div></div>
+  </div>
+  <div class="backend-cards" id="backend-cards"></div>
+  <div class="section-label">Live Request Feed</div>
+  <div class="feed" id="live-feed">
+    <div class="feed-header"><div>Time</div><div>Status</div><div>Backend</div><div>Model</div><div>Latency</div><div>Tokens</div></div>
+  </div>
+</div>
+
+<div id="tab-requests" class="tab">
+  <div class="section-header">
+    <div class="section-label">Request Log</div>
+    <div class="form-row">
+      <select id="filter-backend"><option value="">All backends</option></select>
+      <select id="filter-status"><option value="">All statuses</option><option value="2xx">2xx</option><option value="4xx">4xx</option><option value="5xx">5xx</option></select>
+      <button class="btn btn-secondary" id="btn-refresh">Refresh</button>
+    </div>
+  </div>
+  <div class="feed" id="request-log" style="max-height:600px">
+    <div class="feed-header"><div>Time</div><div>Status</div><div>Backend</div><div>Model</div><div>Latency</div><div>Tokens</div></div>
+  </div>
+  <div class="pagination">
+    <button class="btn btn-secondary" id="prev-page">Prev</button>
+    <span id="page-info">Page 1</span>
+    <button class="btn btn-secondary" id="next-page">Next</button>
+  </div>
+</div>
+
+<div id="tab-settings" class="tab">
+  <div class="section-header">
+    <div class="section-label">Mutable Settings <span class="warn">(changes take effect immediately)</span></div>
+  </div>
+  <div id="settings-form"></div>
+  <div style="display:flex;gap:8px;margin:16px 0">
+    <button class="btn btn-primary" id="btn-save-settings">Save Changes</button>
+    <button class="btn btn-secondary" id="btn-reload-config">Reload</button>
+  </div>
+  <div class="section-label" style="margin-top:24px">Read-Only <span class="error">(requires restart)</span></div>
+  <div class="readonly-section" id="readonly-config">
+    <div style="color:#8b949e;font-size:12px">Configuration loaded from environment variables.</div>
+  </div>
+</div>
+
+<div id="tab-backends" class="tab">
+  <div class="section-label">Configured Backends</div>
+  <div id="backends-detail"></div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  var TOKEN = new URLSearchParams(window.location.search).get('token') || prompt('Enter admin token:');
+  if (!TOKEN) { document.body.textContent = 'No token provided'; return; }
+
+  var API = '/admin/api';
+  var authHeaders = {'Authorization': 'Bearer ' + TOKEN, 'Content-Type': 'application/json'};
+
+  // -- Helpers: safe DOM construction --
+  function el(tag, attrs, children) {
+    var e = document.createElement(tag);
+    if (attrs) Object.keys(attrs).forEach(function(k) {
+      if (k === 'className') e.className = attrs[k];
+      else if (k === 'textContent') e.textContent = attrs[k];
+      else if (k === 'style') Object.assign(e.style, attrs[k]);
+      else e.setAttribute(k, attrs[k]);
+    });
+    if (children) children.forEach(function(c) { if (c) e.appendChild(c); });
+    return e;
+  }
+  function text(t) { return document.createTextNode(t); }
+
+  function clearChildren(parent, keepFirst) {
+    while (parent.children.length > (keepFirst ? 1 : 0)) parent.removeChild(parent.lastChild);
+  }
+
+  function statusClass(code) {
+    if (code >= 500) return 'status-5xx';
+    if (code >= 400) return 'status-4xx';
+    return 'status-2xx';
+  }
+
+  function formatTime(ts) {
+    if (!ts) return '--';
+    var d = new Date(ts);
+    return d.toLocaleTimeString('en-US', {hour12:false}) + '.' + String(d.getMilliseconds()).padStart(3,'0');
+  }
+
+  function formatLatency(ms) {
+    if (ms == null) return '--';
+    if (ms >= 1000) return (ms/1000).toFixed(1) + 's';
+    return ms + 'ms';
+  }
+
+  function makeFeedRow(r) {
+    var tokens = (r.input_tokens || 0) + (r.output_tokens || 0);
+    return el('div', {className: 'feed-row'}, [
+      el('div', {textContent: formatTime(r.timestamp)}),
+      el('div', {className: statusClass(r.status_code), textContent: String(r.status_code)}),
+      el('div', {textContent: r.backend || '--'}),
+      el('div', {textContent: r.model_mapped || r.model_requested || '--', style:{color:'#8b949e'}}),
+      el('div', {textContent: formatLatency(r.latency_ms)}),
+      el('div', {textContent: tokens ? String(tokens) : '--', style:{color:'#8b949e'}})
+    ]);
+  }
+
+  // -- Tab switching --
+  document.querySelectorAll('.nav-item').forEach(function(navEl) {
+    navEl.addEventListener('click', function() {
+      document.querySelectorAll('.nav-item').forEach(function(n) { n.classList.remove('active'); });
+      document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+      navEl.classList.add('active');
+      document.getElementById('tab-' + navEl.dataset.tab).classList.add('active');
+      if (navEl.dataset.tab === 'requests') loadRequests();
+      if (navEl.dataset.tab === 'settings') loadConfig();
+      if (navEl.dataset.tab === 'backends') loadBackends();
+    });
+  });
+
+  // -- WebSocket --
+  var ws;
+  var wsAuthenticated = false;
+  function connectWs() {
+    var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    wsAuthenticated = false;
+    ws = new WebSocket(proto + '//' + location.host + '/admin/ws');
+    ws.onopen = function() {
+      // Authenticate via first message instead of query parameter.
+      ws.send(JSON.stringify({token: TOKEN}));
+    };
+    ws.onclose = function() {
+      document.getElementById('ws-status').textContent = 'Disconnected';
+      document.getElementById('ws-status').className = 'disconnected';
+      wsAuthenticated = false;
+      setTimeout(connectWs, 3000);
+    };
+    ws.onmessage = function(e) {
+      try {
+        var data = JSON.parse(e.data);
+        if (!wsAuthenticated) {
+          if (data.status === 'authenticated') {
+            wsAuthenticated = true;
+            document.getElementById('ws-status').textContent = 'Connected';
+            document.getElementById('ws-status').className = 'connected';
+          }
+          return;
+        }
+        handleEvent(data);
+      } catch(err) {}
+    };
+  }
+  connectWs();
+
+  var feedRows = [];
+  var MAX_FEED = 100;
+  var totalRequests = 0;
+
+  function handleEvent(event) {
+    if (event.type === 'request_completed') {
+      feedRows.unshift(event.data);
+      if (feedRows.length > MAX_FEED) feedRows.pop();
+      renderFeed();
+      totalRequests++;
+      document.getElementById('stat-total').textContent = totalRequests.toLocaleString();
+    } else if (event.type === 'metrics_snapshot') {
+      updateDashboardMetrics(event.data);
+    }
+  }
+
+  function renderFeed() {
+    var feed = document.getElementById('live-feed');
+    clearChildren(feed, true);
+    feedRows.forEach(function(r) { feed.appendChild(makeFeedRow(r)); });
+  }
+
+  function updateDashboardMetrics(data) {
+    if (data.latency_p50_ms != null) document.getElementById('stat-p50').textContent = formatLatency(data.latency_p50_ms);
+    if (data.latency_p95_ms != null) document.getElementById('stat-p95').textContent = formatLatency(data.latency_p95_ms);
+    if (data.error_rate != null) {
+      var pct = (data.error_rate * 100).toFixed(1) + '%';
+      var errEl = document.getElementById('stat-error-rate');
+      errEl.textContent = pct;
+      errEl.style.color = data.error_rate > 0.05 ? '#f85149' : '#3fb950';
+    }
+    if (data.requests_per_second != null) {
+      document.getElementById('stat-rpm').textContent = (data.requests_per_second * 60).toFixed(0);
+    }
+  }
+
+  // -- API fetch --
+  function apiFetch(path) {
+    return fetch(API + path, {headers: authHeaders}).then(function(r) { return r.json(); });
+  }
+
+  // -- Dashboard --
+  function loadDashboard() {
+    apiFetch('/metrics').then(function(metrics) {
+      if (metrics.total) {
+        totalRequests = metrics.total.requests_total || 0;
+        document.getElementById('stat-total').textContent = totalRequests.toLocaleString();
+      }
+      if (metrics.latency_p50_ms != null) document.getElementById('stat-p50').textContent = formatLatency(metrics.latency_p50_ms);
+      if (metrics.latency_p95_ms != null) document.getElementById('stat-p95').textContent = formatLatency(metrics.latency_p95_ms);
+      if (metrics.error_rate != null) document.getElementById('stat-error-rate').textContent = (metrics.error_rate * 100).toFixed(1) + '%';
+    }).catch(function(e) { console.error('Dashboard load failed:', e); });
+
+    apiFetch('/backends').then(function(data) {
+      var container = document.getElementById('backend-cards');
+      clearChildren(container, false);
+      (data.backends || []).forEach(function(b) {
+        var card = el('div', {className: 'card'}, [
+          el('div', {className: 'card-header'}, [el('span', {className: 'card-name', textContent: b.name})]),
+          el('div', {className: 'card-body', textContent: b.big_model + ' / ' + b.small_model + ' | ' + (b.metrics.requests_total||0) + ' reqs'})
+        ]);
+        container.appendChild(card);
+      });
+    }).catch(function(e) { console.error('Backends load failed:', e); });
+  }
+
+  // -- Request Log --
+  var currentPage = 0;
+  var PAGE_SIZE = 50;
+
+  function loadRequests() {
+    var backend = document.getElementById('filter-backend').value;
+    var status = document.getElementById('filter-status').value;
+    var path = '/requests?limit=' + PAGE_SIZE + '&offset=' + (currentPage * PAGE_SIZE);
+    if (backend) path += '&backend=' + encodeURIComponent(backend);
+    if (status) path += '&status=' + encodeURIComponent(status);
+
+    apiFetch(path).then(function(data) {
+      var feed = document.getElementById('request-log');
+      clearChildren(feed, true);
+      var requests = data.requests || [];
+      if (requests.length === 0 && currentPage === 0) {
+        feed.appendChild(el('div', {className: 'empty', textContent: 'No requests yet'}));
+      } else {
+        requests.forEach(function(r) { feed.appendChild(makeFeedRow(r)); });
+      }
+      document.getElementById('page-info').textContent = 'Page ' + (currentPage + 1);
+    }).catch(function(e) { console.error('Requests load failed:', e); });
+  }
+
+  document.getElementById('btn-refresh').addEventListener('click', loadRequests);
+  document.getElementById('prev-page').addEventListener('click', function() { currentPage = Math.max(0, currentPage - 1); loadRequests(); });
+  document.getElementById('next-page').addEventListener('click', function() { currentPage++; loadRequests(); });
+
+  // -- Settings --
+  var currentConfig = {};
+
+  function loadConfig() {
+    apiFetch('/config').then(function(data) {
+      currentConfig = data;
+      var form = document.getElementById('settings-form');
+      clearChildren(form, false);
+
+      // Log level
+      var levels = ['error','warn','info','debug','trace'];
+      var logSelect = el('select', {id: 'cfg-log-level'});
+      levels.forEach(function(l) {
+        var opt = el('option', {value: l, textContent: l});
+        if (l === data.log_level) opt.selected = true;
+        logSelect.appendChild(opt);
+      });
+      var logGroup = el('div', {className: 'form-group'}, [
+        el('div', {className: 'form-label', textContent: 'Log Level'}),
+        el('div', {className: 'form-hint', textContent: 'RUST_LOG equivalent'}),
+        logSelect
+      ]);
+      form.appendChild(logGroup);
+
+      // Log bodies
+      var bodiesSelect = el('select', {id: 'cfg-log-bodies'});
+      var offOpt = el('option', {value: 'false', textContent: 'Off'});
+      var onOpt = el('option', {value: 'true', textContent: 'On'});
+      if (!data.log_bodies) offOpt.selected = true; else onOpt.selected = true;
+      bodiesSelect.appendChild(offOpt);
+      bodiesSelect.appendChild(onOpt);
+      var bodiesGroup = el('div', {className: 'form-group'}, [
+        el('div', {className: 'form-label', textContent: 'Log Bodies'}),
+        el('div', {className: 'form-hint', textContent: 'LOG_BODIES. Privacy-sensitive.'}),
+        bodiesSelect
+      ]);
+      form.appendChild(bodiesGroup);
+
+      // Per-backend model mappings
+      Object.keys(data.backends || {}).forEach(function(name) {
+        var mapping = data.backends[name];
+        var bigInput = el('input', {id: 'cfg-' + name + '-big', value: mapping.big_model || ''});
+        var smallInput = el('input', {id: 'cfg-' + name + '-small', value: mapping.small_model || ''});
+        var grid = el('div', {className: 'model-grid'}, [
+          el('div', {className: 'label', textContent: 'BIG_MODEL:'}), bigInput,
+          el('div', {className: 'label', textContent: 'SMALL_MODEL:'}), smallInput
+        ]);
+        var group = el('div', {className: 'form-group'}, [
+          el('div', {className: 'form-label', textContent: name, style:{color:'#4a9eff'}}),
+          grid
+        ]);
+        form.appendChild(group);
+      });
+    }).catch(function(e) { console.error('Config load failed:', e); });
+  }
+
+  function saveSettings() {
+    var body = {
+      log_level: (document.getElementById('cfg-log-level') || {}).value,
+      log_bodies: (document.getElementById('cfg-log-bodies') || {}).value === 'true',
+      backends: {}
+    };
+    Object.keys(currentConfig.backends || {}).forEach(function(name) {
+      var big = document.getElementById('cfg-' + name + '-big');
+      var small = document.getElementById('cfg-' + name + '-small');
+      if (big || small) {
+        body.backends[name] = {};
+        if (big) body.backends[name].big_model = big.value;
+        if (small) body.backends[name].small_model = small.value;
+      }
+    });
+
+    fetch(API + '/config', {method:'PUT', headers: authHeaders, body: JSON.stringify(body)})
+      .then(function(r) { return r.json(); })
+      .then(function(result) {
+        alert('Updated ' + (result.updated || 0) + ' settings');
+        loadConfig();
+      })
+      .catch(function(e) { alert('Failed to save: ' + e.message); });
+  }
+
+  document.getElementById('btn-save-settings').addEventListener('click', saveSettings);
+  document.getElementById('btn-reload-config').addEventListener('click', loadConfig);
+
+  // -- Backends detail --
+  function loadBackends() {
+    apiFetch('/backends').then(function(data) {
+      var container = document.getElementById('backends-detail');
+      clearChildren(container, false);
+      (data.backends || []).forEach(function(b) {
+        var grid = el('div', {className: 'model-grid', style:{marginTop:'0'}}, [
+          el('div', {className: 'label', textContent: 'BIG_MODEL:'}), el('div', {textContent: b.big_model}),
+          el('div', {className: 'label', textContent: 'SMALL_MODEL:'}), el('div', {textContent: b.small_model}),
+          el('div', {className: 'label', textContent: 'Total:'}), el('div', {textContent: String(b.metrics.requests_total || 0)}),
+          el('div', {className: 'label', textContent: 'Success:'}), el('div', {textContent: String(b.metrics.requests_success || 0)}),
+          el('div', {className: 'label', textContent: 'Errors:'}), el('div', {textContent: String(b.metrics.requests_error || 0)})
+        ]);
+        var card = el('div', {className: 'card', style:{marginBottom:'12px'}}, [
+          el('div', {className: 'card-header'}, [el('span', {className: 'card-name', textContent: b.name})]),
+          el('div', {className: 'card-body'}, [grid])
+        ]);
+        container.appendChild(card);
+      });
+    }).catch(function(e) { console.error('Backends load failed:', e); });
+  }
+
+  // Initial load
+  loadDashboard();
+})();
+</script>
+</body>
+</html>

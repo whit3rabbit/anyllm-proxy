@@ -44,11 +44,22 @@ impl Metrics {
     }
 }
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, Clone, Default, serde::Serialize)]
 pub struct MetricsSnapshot {
     pub requests_total: u64,
     pub requests_success: u64,
     pub requests_error: u64,
+}
+
+impl MetricsSnapshot {
+    /// Fraction of requests that resulted in errors (0.0 when no requests).
+    pub fn error_rate(&self) -> f64 {
+        if self.requests_total > 0 {
+            self.requests_error as f64 / self.requests_total as f64
+        } else {
+            0.0
+        }
+    }
 }
 
 #[cfg(test)]

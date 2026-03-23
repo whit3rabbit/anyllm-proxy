@@ -119,6 +119,16 @@ impl std::fmt::Display for GeminiClientError {
     }
 }
 
+impl GeminiClientError {
+    /// HTTP status code from an API error, or 500 for transport/deserialization errors.
+    pub fn status_code(&self) -> u16 {
+        match self {
+            Self::ApiError { status, .. } => *status,
+            _ => 500,
+        }
+    }
+}
+
 impl RetryableError for GeminiClientError {
     fn from_request(e: reqwest::Error) -> Self {
         Self::Request(e)

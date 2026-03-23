@@ -1,3 +1,4 @@
+use crate::admin::state::{AdminEvent, RequestLogEntry, SharedState};
 use crate::backend::{BackendClient, BackendError, RateLimitHeaders};
 use crate::config::{BackendKind, Config, ModelMapping, MultiConfig};
 use crate::metrics::Metrics;
@@ -31,6 +32,10 @@ pub struct AppState {
     pub metrics: Metrics,
     pub model_mapping: ModelMapping,
     pub log_bodies: bool,
+    /// Shared admin state for request logging and live updates. None in tests.
+    pub shared: Option<SharedState>,
+    /// Backend name for logging purposes.
+    pub backend_name: String,
 }
 
 /// Global state for the multi-backend metrics endpoint.
@@ -48,6 +53,11 @@ pub fn app(config: Config) -> Router {
 /// Build the axum router from multi-backend configuration.
 /// Creates nested sub-routers for each configured backend.
 pub fn app_multi(config: MultiConfig) -> Router {
+    app_multi_with_shared(config, None)
+}
+
+/// Build the axum router with optional shared admin state.
+pub fn app_multi_with_shared(config: MultiConfig, shared: Option<SharedState>) -> Router {
     let mut backend_metrics: HashMap<String, Metrics> = HashMap::new();
     let mut router = Router::new();
 
@@ -61,6 +71,8 @@ pub fn app_multi(config: MultiConfig) -> Router {
             metrics,
             model_mapping: bc.model_mapping.clone(),
             log_bodies: bc.log_bodies,
+            shared: shared.clone(),
+            backend_name: name.clone(),
         };
 
         let is_anthropic = bc.kind == BackendKind::Anthropic;
@@ -82,6 +94,8 @@ pub fn app_multi(config: MultiConfig) -> Router {
             metrics: default_metrics,
             model_mapping: bc.model_mapping.clone(),
             log_bodies: bc.log_bodies,
+            shared: shared.clone(),
+            backend_name: config.default_backend.clone(),
         };
 
         let is_anthropic = bc.kind == BackendKind::Anthropic;
@@ -353,7 +367,8 @@ fn passthrough_error_to_response(
             tracing::error!("Anthropic passthrough transport error: {msg}");
             let err = mapping::errors_map::create_anthropic_error(
                 anthropic::ErrorType::ApiError,
-                format!("Upstream transport error: {msg}"),
+                "An internal error occurred while communicating with the upstream service."
+                    .to_string(),
                 None,
             );
             (StatusCode::BAD_GATEWAY, Json(err)).into_response()
@@ -382,6 +397,7 @@ async fn send_events(
 }
 
 /// Send an SSE error event over the channel.
+/// Logs the detailed error server-side and sends a generic message to the client.
 async fn send_stream_error(
     tx: &mpsc::Sender<Result<Event, std::convert::Infallible>>,
     metrics: &Metrics,
@@ -392,13 +408,18 @@ async fn send_stream_error(
     let err_event = anthropic::StreamEvent::Error {
         error: anthropic::streaming::StreamError {
             error_type: "api_error".to_string(),
-            message: error.to_string(),
+            message: "An internal error occurred while communicating with the upstream service."
+                .to_string(),
         },
     };
     if let Ok(sse) = super::sse::stream_event_to_sse(&err_event) {
         let _ = tx.send(Ok(sse)).await;
     }
 }
+
+/// Maximum SSE buffer size (10 MB). Protects against unbounded memory growth
+/// if the backend sends data without frame delimiters.
+const MAX_SSE_BUFFER_SIZE: usize = 10 * 1024 * 1024;
 
 /// Read SSE bytes from a response, parse frames, and call `on_data` for each data line.
 /// Returns true if stream completed normally, false if client disconnected.
@@ -432,6 +453,16 @@ where
                 tracing::warn!("non-UTF-8 chunk from backend: {e}");
                 buffer.push_str(&String::from_utf8_lossy(&bytes));
             }
+        }
+
+        // Guard against unbounded buffer growth from a misbehaving backend.
+        if buffer.len() > MAX_SSE_BUFFER_SIZE {
+            tracing::error!(
+                buffer_len = buffer.len(),
+                "SSE buffer exceeded maximum size, aborting stream"
+            );
+            metrics.record_error();
+            return false;
         }
 
         while let Some(pos) = buffer.find("\n\n") {
@@ -636,11 +667,12 @@ fn backend_error_to_response(error: BackendError) -> Response {
         return (http_status, Json(anthropic_err)).into_response();
     }
 
-    // Transport or deserialization error
+    // Transport or deserialization error -- log details server-side only,
+    // return a generic message to avoid leaking infrastructure details.
     tracing::error!("backend client error: {error}");
     let err = mapping::errors_map::create_anthropic_error(
         anthropic::ErrorType::ApiError,
-        format!("Upstream error: {error}"),
+        "An internal error occurred while communicating with the upstream service.".to_string(),
         None,
     );
     (StatusCode::INTERNAL_SERVER_ERROR, Json(err)).into_response()
@@ -648,8 +680,18 @@ fn backend_error_to_response(error: BackendError) -> Response {
 
 async fn messages(
     State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
     Json(body): Json<anthropic::MessageCreateRequest>,
 ) -> Response {
+    let ctx = RequestCtx {
+        request_id: headers
+            .get("x-request-id")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("unknown")
+            .to_string(),
+        start: std::time::Instant::now(),
+        model_requested: body.model.clone(),
+    };
     state.metrics.record_request();
 
     if state.log_bodies {
@@ -666,6 +708,11 @@ async fn messages(
         if state.log_bodies {
             tracing::debug!(model = %body.model, "streaming request initiated");
         }
+        let mapped_model = state.model_mapping.map_model(&body.model);
+        log_request(
+            &state,
+            ctx.log_entry(&state, Some(mapped_model), 200, None, true, None),
+        );
         let (rate_limits, sse) = messages_stream(state, body).await;
         let mut response = sse.into_response();
         rate_limits.inject_anthropic_headers(response.headers_mut());
@@ -676,6 +723,7 @@ async fn messages(
         BackendClient::OpenAI(client) | BackendClient::Vertex(client) => {
             let mut openai_req = mapping::message_map::anthropic_to_openai_request(&body);
             openai_req.model = state.model_mapping.map_model(&openai_req.model);
+            let mapped_model = openai_req.model.clone();
             let original_model = body.model.clone();
 
             match client.chat_completion(&openai_req).await {
@@ -691,12 +739,29 @@ async fn messages(
                             "response body"
                         );
                     }
+                    log_request(
+                        &state,
+                        ctx.log_entry(
+                            &state, Some(mapped_model),
+                            200,
+                            Some((anthropic_resp.usage.input_tokens as u64, anthropic_resp.usage.output_tokens as u64)),
+                            false, None,
+                        ),
+                    );
                     let mut response = (StatusCode::OK, Json(anthropic_resp)).into_response();
                     rate_limits.inject_anthropic_headers(response.headers_mut());
                     response
                 }
                 Err(e) => {
                     state.metrics.record_error();
+                    let status = e.status_code();
+                    log_request(
+                        &state,
+                        ctx.log_entry(
+                            &state, Some(mapped_model),
+                            status, None, false, Some(e.to_string()),
+                        ),
+                    );
                     backend_error_to_response(BackendError::from(e))
                 }
             }
@@ -705,6 +770,7 @@ async fn messages(
             let mut responses_req =
                 mapping::responses_message_map::anthropic_to_responses_request(&body);
             responses_req.model = state.model_mapping.map_model(&responses_req.model);
+            let mapped_model = responses_req.model.clone();
             let original_model = body.model.clone();
 
             match client.responses(&responses_req).await {
@@ -721,12 +787,29 @@ async fn messages(
                             "response body"
                         );
                     }
+                    log_request(
+                        &state,
+                        ctx.log_entry(
+                            &state, Some(mapped_model),
+                            200,
+                            Some((anthropic_resp.usage.input_tokens as u64, anthropic_resp.usage.output_tokens as u64)),
+                            false, None,
+                        ),
+                    );
                     let mut response = (StatusCode::OK, Json(anthropic_resp)).into_response();
                     rate_limits.inject_anthropic_headers(response.headers_mut());
                     response
                 }
                 Err(e) => {
                     state.metrics.record_error();
+                    let status = e.status_code();
+                    log_request(
+                        &state,
+                        ctx.log_entry(
+                            &state, Some(mapped_model),
+                            status, None, false, Some(e.to_string()),
+                        ),
+                    );
                     backend_error_to_response(BackendError::from(e))
                 }
             }
@@ -749,12 +832,29 @@ async fn messages(
                             "response body"
                         );
                     }
+                    log_request(
+                        &state,
+                        ctx.log_entry(
+                            &state, Some(mapped_model.clone()),
+                            200,
+                            Some((anthropic_resp.usage.input_tokens as u64, anthropic_resp.usage.output_tokens as u64)),
+                            false, None,
+                        ),
+                    );
                     let mut response = (StatusCode::OK, Json(anthropic_resp)).into_response();
                     rate_limits.inject_anthropic_headers(response.headers_mut());
                     response
                 }
                 Err(e) => {
                     state.metrics.record_error();
+                    let status = e.status_code();
+                    log_request(
+                        &state,
+                        ctx.log_entry(
+                            &state, Some(mapped_model),
+                            status, None, false, Some(e.to_string()),
+                        ),
+                    );
                     backend_error_to_response(BackendError::from(e))
                 }
             }
@@ -769,5 +869,49 @@ async fn messages(
             );
             (StatusCode::INTERNAL_SERVER_ERROR, Json(err)).into_response()
         }
+    }
+}
+
+/// Captures per-request context shared across success/error log paths.
+struct RequestCtx {
+    request_id: String,
+    start: std::time::Instant,
+    model_requested: String,
+}
+
+impl RequestCtx {
+    /// Build a log entry, filling common fields from the context.
+    fn log_entry(
+        &self,
+        state: &AppState,
+        model_mapped: Option<String>,
+        status_code: u16,
+        tokens: Option<(u64, u64)>,
+        is_streaming: bool,
+        error_message: Option<String>,
+    ) -> RequestLogEntry {
+        RequestLogEntry {
+            request_id: self.request_id.clone(),
+            timestamp: crate::admin::db::now_iso8601(),
+            backend: state.backend_name.clone(),
+            model_requested: Some(self.model_requested.clone()),
+            model_mapped,
+            status_code,
+            latency_ms: self.start.elapsed().as_millis() as u64,
+            input_tokens: tokens.map(|(i, _)| i),
+            output_tokens: tokens.map(|(_, o)| o),
+            is_streaming,
+            error_message,
+        }
+    }
+}
+
+/// Log a completed request to the admin write buffer and broadcast to WebSocket clients.
+fn log_request(state: &AppState, entry: RequestLogEntry) {
+    if let Some(ref shared) = state.shared {
+        let _ = shared
+            .events_tx
+            .send(AdminEvent::RequestCompleted(entry.clone()));
+        let _ = shared.log_tx.try_send(entry);
     }
 }
