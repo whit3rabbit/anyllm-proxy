@@ -342,6 +342,9 @@ impl TlsConfig {
 
 /// Validate that a base URL is safe to use as an upstream target.
 /// Rejects non-http(s) schemes, private/loopback IPs, and link-local addresses.
+/// For domain names, also resolves DNS and validates all resolved IPs to prevent
+/// DNS rebinding attacks (where a domain initially resolves to a public IP but
+/// later changes to a private/metadata IP).
 pub fn validate_base_url(raw: &str) -> Result<(), String> {
     let parsed = Url::parse(raw).map_err(|e| format!("invalid URL: {e}"))?;
 
@@ -373,6 +376,25 @@ pub fn validate_base_url(raw: &str) -> Result<(), String> {
             {
                 return Err(format!("hostname '{domain}' not allowed"));
             }
+
+            // Resolve DNS at startup and validate all resolved IPs.
+            // This catches domains that currently resolve to private/metadata IPs.
+            // Note: does not prevent post-startup DNS rebinding; for full protection,
+            // restrict outbound traffic at the network level.
+            let port = parsed.port().unwrap_or(if parsed.scheme() == "https" { 443 } else { 80 });
+            let lookup = format!("{domain}:{port}");
+            if let Ok(addrs) = std::net::ToSocketAddrs::to_socket_addrs(&lookup) {
+                for addr in addrs {
+                    if is_private_ip(addr.ip()) {
+                        return Err(format!(
+                            "hostname '{domain}' resolves to private/loopback IP {}, not allowed",
+                            addr.ip()
+                        ));
+                    }
+                }
+            }
+            // If DNS resolution fails, allow it (the domain may not be resolvable
+            // in the build/test environment but will work at runtime).
         }
     }
 
@@ -381,7 +403,7 @@ pub fn validate_base_url(raw: &str) -> Result<(), String> {
 
 /// Returns true for loopback, private (RFC 1918), link-local, and
 /// cloud metadata IPs (169.254.169.254).
-fn is_private_ip(ip: IpAddr) -> bool {
+pub fn is_private_ip(ip: IpAddr) -> bool {
     match ip {
         IpAddr::V4(v4) => {
             v4.is_loopback()

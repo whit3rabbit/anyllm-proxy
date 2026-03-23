@@ -9,10 +9,23 @@ use axum::{
     middleware::Next,
     response::{IntoResponse, Json, Response},
 };
+use std::collections::HashSet;
+use std::sync::LazyLock;
 
-/// Validate that the request carries some form of authentication.
-/// The proxy does not verify the key itself; it just prevents accidental
-/// open proxying by requiring callers to present a credential.
+/// Allowed API keys loaded from `PROXY_API_KEYS` (comma-separated).
+/// When the set is empty, any non-empty key is accepted (open-relay mode).
+static ALLOWED_API_KEYS: LazyLock<HashSet<String>> = LazyLock::new(|| {
+    std::env::var("PROXY_API_KEYS")
+        .unwrap_or_default()
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect()
+});
+
+/// Validate that the request carries a valid API key.
+/// If `PROXY_API_KEYS` is set, the caller's key must be in the allowlist.
+/// Otherwise, any non-empty key is accepted (backward-compatible open mode).
 ///
 /// Anthropic: <https://docs.anthropic.com/en/api/messages>
 pub async fn validate_auth(
@@ -20,17 +33,35 @@ pub async fn validate_auth(
     request: Request<Body>,
     next: Next,
 ) -> Result<Response, Response> {
-    let has_api_key = headers.contains_key("x-api-key");
-    let has_bearer = headers
+    let api_key = headers
+        .get("x-api-key")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
+    let bearer_token = headers
         .get("authorization")
         .and_then(|v| v.to_str().ok())
-        .map(|v| v.starts_with("Bearer "))
-        .unwrap_or(false);
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .map(|s| s.to_string());
 
-    if !has_api_key && !has_bearer {
+    let credential = api_key.or(bearer_token);
+
+    let credential = match credential {
+        Some(c) if !c.is_empty() => c,
+        _ => {
+            let err = create_anthropic_error(
+                anthropic::ErrorType::AuthenticationError,
+                "Missing authentication. Provide x-api-key or Authorization header.".to_string(),
+                None,
+            );
+            return Err((StatusCode::UNAUTHORIZED, Json(err)).into_response());
+        }
+    };
+
+    // If PROXY_API_KEYS is configured, validate the key against the allowlist.
+    if !ALLOWED_API_KEYS.is_empty() && !ALLOWED_API_KEYS.contains(&credential) {
         let err = create_anthropic_error(
             anthropic::ErrorType::AuthenticationError,
-            "Missing authentication. Provide x-api-key or Authorization header.".to_string(),
+            "Invalid API key.".to_string(),
             None,
         );
         return Err((StatusCode::UNAUTHORIZED, Json(err)).into_response());
