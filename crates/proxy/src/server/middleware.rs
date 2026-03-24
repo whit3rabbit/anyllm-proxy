@@ -9,13 +9,13 @@ use axum::{
     middleware::Next,
     response::{IntoResponse, Json, Response},
 };
-use std::collections::HashSet;
 use std::sync::LazyLock;
+use subtle::ConstantTimeEq;
 
 /// Allowed API keys loaded from `PROXY_API_KEYS` (comma-separated).
-/// When the set is empty, any non-empty key is accepted (open-relay mode).
-static ALLOWED_API_KEYS: LazyLock<HashSet<String>> = LazyLock::new(|| {
-    let keys: HashSet<String> = std::env::var("PROXY_API_KEYS")
+/// When the list is empty, any non-empty key is accepted (open-relay mode).
+static ALLOWED_API_KEYS: LazyLock<Vec<String>> = LazyLock::new(|| {
+    let keys: Vec<String> = std::env::var("PROXY_API_KEYS")
         .unwrap_or_default()
         .split(',')
         .map(|s| s.trim().to_string())
@@ -64,8 +64,13 @@ pub async fn validate_auth(
         }
     };
 
-    // If PROXY_API_KEYS is configured, validate the key against the allowlist.
-    if !ALLOWED_API_KEYS.is_empty() && !ALLOWED_API_KEYS.contains(&credential) {
+    // If PROXY_API_KEYS is configured, validate the key against the allowlist
+    // using constant-time comparison to prevent timing side-channels.
+    let is_allowed = ALLOWED_API_KEYS.iter().any(|allowed| {
+        allowed.len() == credential.len()
+            && bool::from(allowed.as_bytes().ct_eq(credential.as_bytes()))
+    });
+    if !ALLOWED_API_KEYS.is_empty() && !is_allowed {
         let err = create_anthropic_error(
             anthropic::ErrorType::AuthenticationError,
             "Invalid API key.".to_string(),

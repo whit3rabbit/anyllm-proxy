@@ -22,6 +22,16 @@ Thumbs.db
 # Debug
 *.pdb
 
+# Admin server artifacts
+.admin_token
+*.db
+
+# TLS certificates and keys
+*.p12
+*.pfx
+*.pem
+*.key
+
 # Tool config
 .claude/
 .cook/

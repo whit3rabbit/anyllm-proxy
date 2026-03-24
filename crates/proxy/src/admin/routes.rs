@@ -155,13 +155,24 @@ async fn put_config(
     let mut db_writes: Vec<(String, String)> = Vec::new();
 
     if let Some(level) = body.get("log_level").and_then(|v| v.as_str()) {
-        if level == "trace" {
-            tracing::warn!(
-                "admin API: log_level set to 'trace' -- this may expose secrets in logs \
-                 (e.g., Authorization headers, request bodies)"
-            );
+        // Allowlist prevents trace-level logging (which leaks secrets via HTTP
+        // headers) and blocks arbitrary tracing filter directives.
+        const ALLOWED_LOG_LEVELS: &[&str] = &["error", "warn", "info", "debug"];
+        let normalized = level.trim().to_lowercase();
+        if !ALLOWED_LOG_LEVELS.contains(&normalized.as_str()) {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "error": format!(
+                        "invalid log_level '{}': allowed values are {:?}. \
+                         Set RUST_LOG at startup for advanced filter directives.",
+                        level, ALLOWED_LOG_LEVELS
+                    )
+                })),
+            )
+                .into_response();
         }
-        db_writes.push(("log_level".to_string(), level.to_string()));
+        db_writes.push(("log_level".to_string(), normalized));
     }
     if let Some(val) = body.get("log_bodies").and_then(|v| v.as_bool()) {
         if val {
@@ -252,6 +263,7 @@ async fn put_config(
             "keys": db_writes.iter().map(|(k, _)| k.as_str()).collect::<Vec<_>>(),
         })),
     )
+        .into_response()
 }
 
 /// GET /admin/api/config/overrides -- only SQLite overrides.

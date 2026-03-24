@@ -246,14 +246,25 @@ async fn main() {
 }
 
 /// Write the admin token to a file with mode 0600 (owner-only read/write).
+/// On Unix, sets permissions atomically at creation to avoid a TOCTOU race
+/// where the file is briefly world-readable before chmod.
 fn write_token_file(path: &str, token: &str) -> std::io::Result<()> {
     use std::io::Write;
-    let mut file = std::fs::File::create(path)?;
+
     #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
-    }
+    let mut file = {
+        use std::os::unix::fs::OpenOptionsExt;
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(path)?
+    };
+
+    #[cfg(not(unix))]
+    let mut file = std::fs::File::create(path)?;
+
     file.write_all(token.as_bytes())?;
     file.write_all(b"\n")?;
     Ok(())
