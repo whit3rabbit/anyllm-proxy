@@ -44,7 +44,9 @@ pub struct ChatCompletionRequest {
     /// See: https://docs.anthropic.com/en/api/openai-sdk#simple-fields
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parallel_tool_calls: Option<bool>,
-    /// Forward-compatible extension fields.
+    /// Captures OpenAI fields we don't need to translate (seed, logprobs,
+    /// logit_bias, n, reasoning_effort, etc.) and forwards them as-is.
+    /// Only fields requiring translation logic get explicit struct fields.
     #[serde(flatten)]
     pub extra: serde_json::Map<String, serde_json::Value>,
 }

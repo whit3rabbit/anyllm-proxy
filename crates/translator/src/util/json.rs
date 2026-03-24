@@ -51,6 +51,9 @@ pub fn parse_tool_arguments(s: &str) -> Value {
 }
 
 /// Serialize a JSON Value to a string. Returns "{}" if serialization fails.
+/// The fallback ensures tool call arguments always have a valid JSON string
+/// even if the Value contains types serde_json cannot serialize (shouldn't
+/// happen in practice, but defensive).
 pub fn value_to_json_string(v: &Value) -> String {
     serde_json::to_string(v).unwrap_or_else(|_| "{}".to_string())
 }

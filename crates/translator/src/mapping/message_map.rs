@@ -35,10 +35,11 @@ pub fn anthropic_to_openai_request(
 
     if let Some(ref system) = req.system {
         let text = extract_system_text(system);
-        // Backward compat: uses System role instead of Developer so older
+        // Uses System role instead of Developer for backward compat with
         // local LLMs (vLLM, Ollama, llama-server) that don't recognize
-        // "developer" continue to work. Trade-off: OpenAI o1/o3 models
-        // require "developer" and will reject "system".
+        // "developer". Trade-off: OpenAI o1/o3 require "developer" and
+        // reject "system". We chose broader compat over o-series support
+        // because most proxy users target GPT-4o or local models.
         messages.push(openai::ChatMessage {
             role: openai::ChatRole::System,
             content: Some(openai::ChatContent::Text(text)),
@@ -94,10 +95,10 @@ pub fn anthropic_to_openai_request(
     openai::ChatCompletionRequest {
         model: req.model.clone(),
         messages,
-        // Backward compat: sets both max_tokens (deprecated) and
-        // max_completion_tokens so older local LLMs that only understand
-        // max_tokens still work. Trade-off: OpenAI o-series models may
-        // reject requests with both fields set.
+        // Sets both max_tokens (deprecated) and max_completion_tokens
+        // because local LLMs (vLLM, ollama) may only recognize the old
+        // field, while OpenAI prefers the new one. Trade-off: o-series
+        // models may reject requests with both fields set.
         max_tokens: Some(req.max_tokens),
         max_completion_tokens: Some(req.max_tokens),
         // Compat spec: "Between 0 and 1 (inclusive). Values greater than 1 are capped at 1."
@@ -108,9 +109,10 @@ pub fn anthropic_to_openai_request(
         tools,
         tool_choice,
         stream: req.stream,
-        // Hardcoded: required for the streaming translator to capture final
-        // token usage from OpenAI's usage chunk. Older local LLMs that don't
-        // recognize stream_options may reject this with 400.
+        // Required for the streaming translator: without include_usage=true,
+        // OpenAI omits the final usage chunk and we cannot report token counts
+        // back to the Anthropic client. Local LLMs that don't support
+        // stream_options may reject this with 400.
         stream_options: if req.stream == Some(true) {
             Some(openai::StreamOptions {
                 include_usage: true,
@@ -123,7 +125,7 @@ pub fn anthropic_to_openai_request(
         response_format: None,
         user,
         parallel_tool_calls: None,
-        extra: serde_json::Map::new(),
+        extra: req.extra.clone(),
     }
 }
 
@@ -280,6 +282,9 @@ fn convert_user_blocks(blocks: &[anthropic::ContentBlock], out: &mut Vec<openai:
                     }
                     None => {}
                 };
+                // Anthropic's is_error flag has no direct OpenAI equivalent.
+                // We surface it as a text prefix so the backend model sees the
+                // error context in message history.
                 if *is_error == Some(true) {
                     // Prefix the first text part (or add one) with "Error: "
                     if let Some(openai::ChatContentPart::Text { ref mut text }) = parts
@@ -305,9 +310,10 @@ fn convert_user_blocks(blocks: &[anthropic::ContentBlock], out: &mut Vec<openai:
                 tool_results.push((tool_use_id.clone(), parts));
             }
             anthropic::ContentBlock::Document { source, title } => {
-                // OpenAI Chat Completions doesn't support inline documents.
-                // Convert to a text note describing the document.
-                // Full support would require OpenAI Responses API with input_file.file_data.
+                // OpenAI Chat Completions has no inline document support;
+                // the Responses API (input_file.file_data) would be needed
+                // for full fidelity. Degrade to a text note so the model
+                // still sees that a document was attached.
                 let label = title.as_deref().unwrap_or("document");
                 tracing::warn!(
                     label = label,
@@ -328,8 +334,9 @@ fn convert_user_blocks(blocks: &[anthropic::ContentBlock], out: &mut Vec<openai:
         }
     }
 
-    // Emit tool result messages first: OpenAI requires Tool messages immediately
-    // after the Assistant message that generated the tool_calls.
+    // Emit tool results before user content: OpenAI enforces strict turn
+    // ordering where Tool messages must immediately follow the Assistant
+    // message that produced the tool_calls. Violating this causes 400s.
     for (tool_call_id, parts) in tool_results {
         let content = Some(simplify_content_parts(parts));
         out.push(openai::ChatMessage {
@@ -1777,5 +1784,20 @@ mod tests {
             }
             other => panic!("expected Text with refusal, got {:?}", other),
         }
+    }
+
+    #[test]
+    fn extra_fields_forwarded_to_openai_request() {
+        let mut req = basic_request();
+        req.extra
+            .insert("seed".into(), serde_json::Value::Number(42.into()));
+        req.extra.insert(
+            "logprobs".into(),
+            serde_json::Value::Bool(true),
+        );
+
+        let oai = anthropic_to_openai_request(&req);
+        assert_eq!(oai.extra.get("seed"), Some(&json!(42)));
+        assert_eq!(oai.extra.get("logprobs"), Some(&json!(true)));
     }
 }

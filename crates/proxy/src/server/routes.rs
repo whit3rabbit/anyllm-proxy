@@ -1,30 +1,49 @@
 use crate::admin::state::{AdminEvent, RequestLogEntry, RuntimeConfig, SharedState};
-use crate::backend::{BackendClient, BackendError, RateLimitHeaders};
+use crate::backend::{BackendClient, BackendError};
 use crate::config::{BackendKind, Config, MultiConfig};
 use crate::metrics::Metrics;
 use anthropic_openai_translate::{anthropic, mapping, openai};
 use axum::{
-    body::Bytes,
-    extract::{DefaultBodyLimit, State},
+    extract::{rejection::JsonRejection, DefaultBodyLimit, FromRequest, State},
     http::StatusCode,
-    response::{
-        sse::{Event, KeepAlive, Sse},
-        IntoResponse, Json, Response,
-    },
+    response::{IntoResponse, Json, Response},
     routing::{get, post},
     Router,
 };
-use bytes::BytesMut;
-use futures::stream::Stream;
 use std::collections::HashMap;
-use std::sync::{Arc, LazyLock, RwLock};
-use tiktoken_rs::CoreBPE;
-use tokio::sync::{mpsc, Semaphore};
-use tokio_stream::wrappers::ReceiverStream;
+use std::sync::{Arc, RwLock};
+use tokio::sync::Semaphore;
 
-/// GPT-4o family tokenizer, initialized once. Used for approximate token counting.
-static TOKENIZER: LazyLock<CoreBPE> =
-    LazyLock::new(|| tiktoken_rs::o200k_base().expect("failed to load o200k_base tokenizer"));
+use super::passthrough::anthropic_passthrough;
+use super::streaming::messages_stream;
+use super::token_counting::count_tokens;
+
+/// Custom JSON extractor that returns Anthropic-shaped error responses on
+/// parse failure. Axum's built-in Json returns its own error format, which
+/// would break clients expecting Anthropic error shapes.
+pub(crate) struct AnthropicJson<T>(pub T);
+
+impl<S, T> FromRequest<S> for AnthropicJson<T>
+where
+    Json<T>: FromRequest<S, Rejection = JsonRejection>,
+    S: Send + Sync,
+{
+    type Rejection = Response;
+
+    async fn from_request(req: axum::extract::Request, state: &S) -> Result<Self, Self::Rejection> {
+        match Json::<T>::from_request(req, state).await {
+            Ok(Json(value)) => Ok(AnthropicJson(value)),
+            Err(rejection) => {
+                let err = mapping::errors_map::create_anthropic_error(
+                    anthropic::ErrorType::InvalidRequestError,
+                    rejection.body_text(),
+                    None,
+                );
+                Err((StatusCode::BAD_REQUEST, Json(err)).into_response())
+            }
+        }
+    }
+}
 
 /// Per-backend state shared across request handlers for one backend.
 #[derive(Clone)]
@@ -38,14 +57,15 @@ pub struct AppState {
     pub shared: Option<SharedState>,
     /// Backend name for logging purposes.
     pub backend_name: String,
-    /// Concurrency limiter. Requests exceeding the limit get 429 immediately
-    /// (not queued, unlike Tower's ConcurrencyLimitLayer).
+    /// Concurrency limiter. Uses try_acquire (fail-fast) instead of queueing
+    /// to prevent cascading latency under load. Requests exceeding the limit
+    /// get 429 immediately, matching Anthropic's rate limiting behavior.
     pub concurrency: Arc<Semaphore>,
 }
 
 impl AppState {
     /// Map a model name through the current runtime config for this backend.
-    fn map_model(&self, model: &str) -> String {
+    pub(crate) fn map_model(&self, model: &str) -> String {
         let config = self
             .runtime_config
             .read()
@@ -58,7 +78,7 @@ impl AppState {
     }
 
     /// Whether request/response body logging is enabled.
-    fn log_bodies(&self) -> bool {
+    pub(crate) fn log_bodies(&self) -> bool {
         self.runtime_config
             .read()
             .unwrap_or_else(|e| e.into_inner())
@@ -170,8 +190,19 @@ pub fn app_multi_with_shared(config: MultiConfig, shared: Option<SharedState>) -
             }),
         )
         .merge(router)
+        .fallback(fallback_not_found)
         .layer(axum::middleware::from_fn(super::middleware::add_request_id))
         .with_state(global_state)
+}
+
+/// Return Anthropic-shaped 404 for any unmatched route (PRD US-004).
+async fn fallback_not_found() -> Response {
+    let err = mapping::errors_map::create_anthropic_error(
+        anthropic::ErrorType::NotFoundError,
+        "Not found".to_string(),
+        None,
+    );
+    (StatusCode::NOT_FOUND, Json(err)).into_response()
 }
 
 /// Build the sub-router for a single backend.
@@ -220,7 +251,7 @@ async fn enforce_concurrency(
     next.run(request).await
 }
 
-static MODELS_RESPONSE: LazyLock<serde_json::Value> = LazyLock::new(|| {
+static MODELS_RESPONSE: std::sync::LazyLock<serde_json::Value> = std::sync::LazyLock::new(|| {
     serde_json::json!({
         "data": [
             {"id": "claude-opus-4-6", "display_name": "Claude Opus 4.6", "created_at": "2025-05-14T00:00:00Z", "type": "model"},
@@ -237,105 +268,6 @@ async fn models(State(_state): State<AppState>) -> Json<serde_json::Value> {
     Json(MODELS_RESPONSE.clone())
 }
 
-async fn count_tokens(Json(body): Json<anthropic::MessageCreateRequest>) -> Response {
-    // Tokenization is CPU-bound; offload to the blocking threadpool.
-    match tokio::task::spawn_blocking(move || count_request_tokens(&body)).await {
-        Ok(token_count) => (
-            StatusCode::OK,
-            Json(serde_json::json!({ "input_tokens": token_count })),
-        )
-            .into_response(),
-        Err(_) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({ "error": "token counting failed" })),
-        )
-            .into_response(),
-    }
-}
-
-/// Count tokens across all text segments of an Anthropic request.
-/// Counts each segment independently to avoid a single large concatenation.
-/// Per-segment counting may differ slightly from concatenated counting at BPE
-/// boundaries, but this endpoint is already approximate (tiktoken, not the real
-/// Anthropic tokenizer).
-fn count_request_tokens(req: &anthropic::MessageCreateRequest) -> usize {
-    let mut total = 0;
-
-    if let Some(system) = &req.system {
-        match system {
-            anthropic::System::Text(t) => total += count_segment(t),
-            anthropic::System::Blocks(blocks) => {
-                for b in blocks {
-                    total += count_segment(&b.text);
-                }
-            }
-        }
-    }
-
-    for msg in &req.messages {
-        total += count_content(&msg.content);
-    }
-
-    if let Some(tools) = &req.tools {
-        for tool in tools {
-            total += count_segment(&tool.name);
-            if let Some(desc) = &tool.description {
-                total += count_segment(desc);
-            }
-            if let Ok(schema) = serde_json::to_string(&tool.input_schema) {
-                total += count_segment(&schema);
-            }
-        }
-    }
-
-    total
-}
-
-/// Tokenize a single text segment and return its token count.
-fn count_segment(text: &str) -> usize {
-    TOKENIZER.encode_with_special_tokens(text).len()
-}
-
-fn count_content(content: &anthropic::Content) -> usize {
-    match content {
-        anthropic::Content::Text(t) => count_segment(t),
-        anthropic::Content::Blocks(blocks) => {
-            let mut total = 0;
-            for block in blocks {
-                match block {
-                    anthropic::ContentBlock::Text { text } => total += count_segment(text),
-                    anthropic::ContentBlock::ToolUse { name, input, .. } => {
-                        total += count_segment(name);
-                        if let Ok(s) = serde_json::to_string(input) {
-                            total += count_segment(&s);
-                        }
-                    }
-                    anthropic::ContentBlock::ToolResult {
-                        content: Some(c), ..
-                    } => match c {
-                        anthropic::messages::ToolResultContent::Text(t) => {
-                            total += count_segment(t);
-                        }
-                        anthropic::messages::ToolResultContent::Blocks(inner) => {
-                            for b in inner {
-                                if let anthropic::ContentBlock::Text { text } = b {
-                                    total += count_segment(text);
-                                }
-                            }
-                        }
-                    },
-                    anthropic::ContentBlock::Thinking { thinking, .. } => {
-                        total += count_segment(thinking);
-                    }
-                    // Image and Document blocks are not text-tokenizable
-                    _ => {}
-                }
-            }
-            total
-        }
-    }
-}
-
 async fn batches() -> impl IntoResponse {
     let err = mapping::errors_map::create_anthropic_error(
         anthropic::ErrorType::InvalidRequestError,
@@ -347,453 +279,6 @@ async fn batches() -> impl IntoResponse {
 
 async fn health() -> impl IntoResponse {
     ([("content-type", "application/json")], r#"{"status":"ok"}"#)
-}
-
-/// Anthropic passthrough: forward raw request bytes to the real Anthropic API.
-/// No translation: the proxy receives Anthropic format and returns Anthropic format.
-async fn anthropic_passthrough(State(state): State<AppState>, body: Bytes) -> Response {
-    state.metrics.record_request();
-
-    let client = match &state.backend {
-        BackendClient::Anthropic(c) => c,
-        _ => {
-            let err = mapping::errors_map::create_anthropic_error(
-                anthropic::ErrorType::ApiError,
-                "Backend is not configured as anthropic passthrough".to_string(),
-                None,
-            );
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(err)).into_response();
-        }
-    };
-
-    // Check if the request is a streaming request by peeking at the JSON.
-    // Deserialize only the `stream` field to avoid parsing the entire body
-    // (which can be up to 32MB for image-heavy requests).
-    #[derive(serde::Deserialize)]
-    struct StreamPeek {
-        #[serde(default)]
-        stream: bool,
-    }
-    let is_stream = serde_json::from_slice::<StreamPeek>(&body)
-        .map(|p| p.stream)
-        .unwrap_or(false);
-
-    if is_stream {
-        match client.forward_stream(body).await {
-            Ok((response, rate_limits)) => {
-                state.metrics.record_success();
-                // Pipe the raw SSE stream through to the client
-                let stream = response.bytes_stream();
-                let mut resp = axum::body::Body::from_stream(stream).into_response();
-                resp.headers_mut()
-                    .insert("content-type", "text/event-stream".parse().unwrap());
-                resp.headers_mut()
-                    .insert("cache-control", "no-cache".parse().unwrap());
-                rate_limits.inject_anthropic_headers(resp.headers_mut());
-                resp
-            }
-            Err(e) => {
-                state.metrics.record_error();
-                passthrough_error_to_response(e)
-            }
-        }
-    } else {
-        match client.forward(body).await {
-            Ok((resp_body, rate_limits)) => {
-                state.metrics.record_success();
-                let mut resp = (
-                    StatusCode::OK,
-                    [("content-type", "application/json")],
-                    resp_body,
-                )
-                    .into_response();
-                rate_limits.inject_anthropic_headers(resp.headers_mut());
-                resp
-            }
-            Err(e) => {
-                state.metrics.record_error();
-                passthrough_error_to_response(e)
-            }
-        }
-    }
-}
-
-/// Convert an AnthropicClientError into a Response.
-/// For API errors, return the upstream error body directly (it's already Anthropic format).
-fn passthrough_error_to_response(
-    error: crate::backend::anthropic_client::AnthropicClientError,
-) -> Response {
-    use crate::backend::anthropic_client::AnthropicClientError;
-    match error {
-        AnthropicClientError::ApiError { status, body } => {
-            let http_status =
-                StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
-            (http_status, [("content-type", "application/json")], body).into_response()
-        }
-        AnthropicClientError::Transport(msg) => {
-            tracing::error!("Anthropic passthrough transport error: {msg}");
-            let err = mapping::errors_map::create_anthropic_error(
-                anthropic::ErrorType::ApiError,
-                "An internal error occurred while communicating with the upstream service."
-                    .to_string(),
-                None,
-            );
-            (StatusCode::BAD_GATEWAY, Json(err)).into_response()
-        }
-    }
-}
-
-/// Send translated stream events over the SSE channel. Returns false if client disconnected.
-async fn send_events(
-    tx: &mpsc::Sender<Result<Event, std::convert::Infallible>>,
-    events: &[anthropic::StreamEvent],
-) -> bool {
-    for ev in events {
-        match super::sse::stream_event_to_sse(ev) {
-            Ok(sse) => {
-                if tx.send(Ok(sse)).await.is_err() {
-                    return false;
-                }
-            }
-            Err(e) => {
-                tracing::warn!("failed to serialize stream event: {e}");
-            }
-        }
-    }
-    true
-}
-
-/// Send an SSE error event over the channel.
-/// Logs the detailed error server-side and sends a generic message to the client.
-async fn send_stream_error(
-    tx: &mpsc::Sender<Result<Event, std::convert::Infallible>>,
-    metrics: &Metrics,
-    error: impl std::fmt::Display,
-) {
-    tracing::error!("streaming request failed: {error}");
-    metrics.record_error();
-    let err_event = anthropic::StreamEvent::Error {
-        error: anthropic::streaming::StreamError {
-            error_type: "api_error".to_string(),
-            message: "An internal error occurred while communicating with the upstream service."
-                .to_string(),
-        },
-    };
-    if let Ok(sse) = super::sse::stream_event_to_sse(&err_event) {
-        let _ = tx.send(Ok(sse)).await;
-    }
-}
-
-/// Maximum SSE buffer size (10 MB). Protects against unbounded memory growth
-/// if the backend sends data without frame delimiters.
-const MAX_SSE_BUFFER_SIZE: usize = 10 * 1024 * 1024;
-
-/// Find the first SSE frame boundary (`\n\n` or `\r\n\r\n`) in a byte slice,
-/// starting the search at `start`. Returns `(position, delimiter_length)` so
-/// the caller can skip the full delimiter.
-fn find_double_newline(buf: &[u8], start: usize) -> Option<(usize, usize)> {
-    let len = buf.len();
-    let mut i = start;
-    while i < len.saturating_sub(1) {
-        if buf[i] == b'\n' && buf[i + 1] == b'\n' {
-            return Some((i, 2));
-        }
-        if buf[i] == b'\r'
-            && i + 3 < len
-            && buf[i + 1] == b'\n'
-            && buf[i + 2] == b'\r'
-            && buf[i + 3] == b'\n'
-        {
-            return Some((i, 4));
-        }
-        i += 1;
-    }
-    None
-}
-
-/// Why the SSE stream ended.
-enum StreamOutcome {
-    /// Backend stream completed normally.
-    Completed,
-    /// Downstream client disconnected before the stream finished.
-    ClientDisconnected,
-    /// Backend stream failed (error already recorded in metrics).
-    UpstreamError,
-}
-
-impl StreamOutcome {
-    /// Record metrics and return (HTTP status, error message) for logging.
-    fn record(&self, metrics: &Metrics) -> (u16, Option<String>) {
-        match self {
-            Self::Completed => {
-                metrics.record_success();
-                (200, None)
-            }
-            Self::ClientDisconnected => (499, Some("client disconnected".into())),
-            Self::UpstreamError => (502, Some("stream interrupted".into())),
-        }
-    }
-}
-
-/// Read SSE bytes from a response, parse frames, and call `on_data` for each data line.
-async fn read_sse_frames<F>(
-    response: reqwest::Response,
-    tx: &mpsc::Sender<Result<Event, std::convert::Infallible>>,
-    metrics: &Metrics,
-    mut on_data: F,
-) -> StreamOutcome
-where
-    F: FnMut(&str) -> Option<Vec<anthropic::StreamEvent>>,
-{
-    use futures::StreamExt;
-    let mut stream = response.bytes_stream();
-    // Use a byte buffer to avoid corrupting multi-byte UTF-8 characters
-    // split across TCP chunk boundaries. String::from_utf8_lossy would
-    // permanently replace partial trailing bytes with U+FFFD.
-    let mut buffer = BytesMut::new();
-    // Reuse a single events buffer across all frames to avoid per-frame allocation
-    let mut frame_events: Vec<anthropic::StreamEvent> = Vec::new();
-    // Track where to start the next delimiter search so we don't rescan
-    // already-inspected bytes when a large SSE event spans many TCP chunks.
-    let mut search_from: usize = 0;
-
-    while let Some(chunk_result) = stream.next().await {
-        let bytes = match chunk_result {
-            Ok(b) => b,
-            Err(e) => {
-                tracing::error!("stream read error: {e}");
-                metrics.record_error();
-                return StreamOutcome::UpstreamError;
-            }
-        };
-        buffer.extend_from_slice(&bytes);
-
-        // Guard against unbounded buffer growth from a misbehaving backend.
-        if buffer.len() > MAX_SSE_BUFFER_SIZE {
-            tracing::error!(
-                buffer_len = buffer.len(),
-                "SSE buffer exceeded maximum size, aborting stream"
-            );
-            metrics.record_error();
-            return StreamOutcome::UpstreamError;
-        }
-
-        while let Some((pos, delim_len)) = find_double_newline(&buffer, search_from) {
-            frame_events.clear();
-            // Convert the complete frame bytes to UTF-8. A frame ending at
-            // a double-newline boundary should always be valid UTF-8; if not,
-            // skip the malformed frame rather than injecting replacement chars.
-            match std::str::from_utf8(&buffer[..pos]) {
-                Ok(frame_str) => {
-                    for line in frame_str.lines() {
-                        let line = line.trim();
-                        if let Some(json_str) = line.strip_prefix("data: ") {
-                            if let Some(mut events) = on_data(json_str) {
-                                frame_events.append(&mut events);
-                            }
-                        }
-                    }
-                }
-                Err(e) => {
-                    tracing::warn!("skipping non-UTF-8 SSE frame: {e}");
-                }
-            }
-            let _ = buffer.split_to(pos + delim_len);
-            // split_to shifted the buffer; restart search at the beginning
-            search_from = 0;
-
-            if !send_events(tx, &frame_events).await {
-                tracing::debug!("client disconnected during stream");
-                return StreamOutcome::ClientDisconnected;
-            }
-        }
-        // No more complete frames. Next chunk only needs to scan from where
-        // we left off, minus 3 bytes to catch \r\n\r\n straddling the boundary.
-        search_from = buffer.len().saturating_sub(3);
-    }
-
-    StreamOutcome::Completed
-}
-
-/// Build an SSE response that streams Anthropic events translated from backend chunks.
-/// Returns rate limit headers alongside the SSE stream so the caller can inject them.
-/// Logging is deferred: each spawned task logs after the stream completes with actual
-/// latency, status, and token counts.
-async fn messages_stream(
-    state: AppState,
-    body: anthropic::MessageCreateRequest,
-    ctx: RequestCtx,
-    mapped_model: String,
-) -> (
-    RateLimitHeaders,
-    Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>>,
-) {
-    let (tx, rx) = mpsc::channel::<Result<Event, std::convert::Infallible>>(32);
-    let (rl_tx, rl_rx) = tokio::sync::oneshot::channel::<RateLimitHeaders>();
-
-    let metrics = state.metrics.clone();
-    let log_shared = state.shared.clone();
-    let log_backend_name = state.backend_name.clone();
-
-    match &state.backend {
-        BackendClient::OpenAI(client)
-        | BackendClient::Vertex(client)
-        | BackendClient::GeminiOpenAI(client) => {
-            let client = client.clone();
-            let mut openai_req = mapping::message_map::anthropic_to_openai_request(&body);
-            inject_gemini_thinking(&body, &state.backend, &mut openai_req);
-            openai_req.model = state.map_model(&openai_req.model);
-            let model = body.model.clone();
-
-            tokio::spawn(async move {
-                match client.chat_completion_stream(&openai_req).await {
-                    Ok((response, rate_limits)) => {
-                        rl_tx.send(rate_limits).ok();
-                        let mut translator =
-                            mapping::streaming_map::StreamingTranslator::new(model);
-                        let mut done = false;
-
-                        let outcome = read_sse_frames(response, &tx, &metrics, |json_str| {
-                            if json_str == "[DONE]" {
-                                done = true;
-                                let events = translator.finish();
-                                return Some(events);
-                            }
-                            match serde_json::from_str::<openai::ChatCompletionChunk>(json_str) {
-                                Ok(chunk) => Some(translator.process_chunk(&chunk)),
-                                Err(e) => {
-                                    tracing::debug!("failed to parse OpenAI streaming chunk: {e}");
-                                    None
-                                }
-                            }
-                        })
-                        .await;
-
-                        if matches!(outcome, StreamOutcome::Completed) && !done {
-                            let events = translator.finish();
-                            send_events(&tx, &events).await;
-                        }
-                        let usage = translator.usage();
-                        let tokens = usage.map(|u| (u.input_tokens as u64, u.output_tokens as u64));
-                        let (status, err) = outcome.record(&metrics);
-                        log_request(
-                            &log_shared,
-                            ctx.log_entry(
-                                &log_backend_name,
-                                Some(mapped_model),
-                                status,
-                                tokens,
-                                true,
-                                err,
-                            ),
-                        );
-                    }
-                    Err(e) => {
-                        let status = e.status_code();
-                        let err_msg = e.to_string();
-                        drop(rl_tx);
-                        send_stream_error(&tx, &metrics, e).await;
-                        log_request(
-                            &log_shared,
-                            ctx.log_entry(
-                                &log_backend_name,
-                                Some(mapped_model),
-                                status,
-                                None,
-                                true,
-                                Some(err_msg),
-                            ),
-                        );
-                    }
-                }
-            });
-        }
-        BackendClient::OpenAIResponses(client) => {
-            let client = client.clone();
-            let mut responses_req =
-                mapping::responses_message_map::anthropic_to_responses_request(&body);
-            responses_req.model = state.map_model(&responses_req.model);
-            responses_req.stream = Some(true);
-            let model = body.model.clone();
-
-            tokio::spawn(async move {
-                match client.responses_stream(&responses_req).await {
-                    Ok((response, rate_limits)) => {
-                        rl_tx.send(rate_limits).ok();
-                        let mut translator =
-                            mapping::responses_streaming_map::ResponsesStreamingTranslator::new(
-                                model,
-                            );
-
-                        let outcome = read_sse_frames(response, &tx, &metrics, |json_str| {
-                            match serde_json::from_str::<
-                                mapping::responses_streaming_map::ResponsesStreamEvent,
-                            >(json_str)
-                            {
-                                Ok(event) => Some(translator.process_event(&event)),
-                                Err(e) => {
-                                    tracing::debug!(
-                                        "failed to parse Responses API streaming event: {e}"
-                                    );
-                                    None
-                                }
-                            }
-                        })
-                        .await;
-
-                        if matches!(outcome, StreamOutcome::Completed) {
-                            let events = translator.finish();
-                            send_events(&tx, &events).await;
-                        }
-                        // Responses API translator does not expose usage yet.
-                        let (status, err) = outcome.record(&metrics);
-                        log_request(
-                            &log_shared,
-                            ctx.log_entry(
-                                &log_backend_name,
-                                Some(mapped_model),
-                                status,
-                                None,
-                                true,
-                                err,
-                            ),
-                        );
-                    }
-                    Err(e) => {
-                        let status = e.status_code();
-                        let err_msg = e.to_string();
-                        drop(rl_tx);
-                        send_stream_error(&tx, &metrics, e).await;
-                        log_request(
-                            &log_shared,
-                            ctx.log_entry(
-                                &log_backend_name,
-                                Some(mapped_model),
-                                status,
-                                None,
-                                true,
-                                Some(err_msg),
-                            ),
-                        );
-                    }
-                }
-            });
-        }
-        BackendClient::Anthropic(_) => {
-            drop(rl_tx);
-            let _ = tx
-                .send(Ok(Event::default().data(
-                    r#"{"error":"anthropic passthrough does not use this handler"}"#,
-                )))
-                .await;
-        }
-    }
-
-    let rate_limits = rl_rx.await.unwrap_or_default();
-    (
-        rate_limits,
-        Sse::new(ReceiverStream::new(rx)).keep_alive(KeepAlive::default()),
-    )
 }
 
 /// Convert a BackendError into an Anthropic error Response.
@@ -821,7 +306,7 @@ fn backend_error_to_response(error: BackendError) -> Response {
 async fn messages(
     State(state): State<AppState>,
     headers: axum::http::HeaderMap,
-    Json(body): Json<anthropic::MessageCreateRequest>,
+    AnthropicJson(body): AnthropicJson<anthropic::MessageCreateRequest>,
 ) -> Response {
     let ctx = RequestCtx {
         request_id: headers
@@ -986,15 +471,15 @@ async fn messages(
 }
 
 /// Captures per-request context shared across success/error log paths.
-struct RequestCtx {
-    request_id: String,
-    start: std::time::Instant,
-    model_requested: String,
+pub(crate) struct RequestCtx {
+    pub(crate) request_id: String,
+    pub(crate) start: std::time::Instant,
+    pub(crate) model_requested: String,
 }
 
 impl RequestCtx {
     /// Build a log entry, filling common fields from the context.
-    fn log_entry(
+    pub(crate) fn log_entry(
         &self,
         backend_name: &str,
         model_mapped: Option<String>,
@@ -1021,7 +506,7 @@ impl RequestCtx {
 
 /// When routing through the Gemini OpenAI-compatible endpoint, inject Anthropic's
 /// thinking config into the `google` extension field that Gemini expects.
-fn inject_gemini_thinking(
+pub(crate) fn inject_gemini_thinking(
     body: &anthropic::MessageCreateRequest,
     backend: &BackendClient,
     req: &mut openai::ChatCompletionRequest,
@@ -1043,7 +528,7 @@ fn inject_gemini_thinking(
 }
 
 /// Log a completed request to the admin write buffer and broadcast to WebSocket clients.
-fn log_request(shared: &Option<SharedState>, entry: RequestLogEntry) {
+pub(crate) fn log_request(shared: &Option<SharedState>, entry: RequestLogEntry) {
     if let Some(ref shared) = shared {
         let _ = shared
             .events_tx

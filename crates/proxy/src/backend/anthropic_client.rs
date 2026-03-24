@@ -55,7 +55,9 @@ impl AnthropicClient {
         }
     }
 
-    /// Apply Anthropic authentication headers to a request.
+    /// Apply required Anthropic authentication headers.
+    /// x-api-key and anthropic-version are mandatory per the Anthropic API spec;
+    /// without the version header, the API rejects requests.
     fn auth_request(&self, rb: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
         rb.header("x-api-key", &self.api_key)
             .header("anthropic-version", "2023-06-01")
@@ -99,7 +101,8 @@ impl AnthropicClient {
                 .header("content-type", content_type)
                 .body(body.clone());
             let rb = self.auth_request(rb);
-            // If streaming, tell upstream we accept SSE
+            // Tell upstream we expect SSE format; the Anthropic routing layer
+            // may use this hint to optimize response handling.
             let rb = if stream {
                 rb.header("accept", "text/event-stream")
             } else {

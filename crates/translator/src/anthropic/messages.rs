@@ -34,7 +34,8 @@ pub struct MessageCreateRequest {
     pub thinking: Option<ThinkingConfig>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stream: Option<bool>,
-    /// Forward-compatible extension fields.
+    /// Forward-compatible extension: captures unknown Anthropic fields via
+    /// serde flatten so newer API versions work without code changes.
     #[serde(flatten)]
     pub extra: serde_json::Map<String, serde_json::Value>,
 }

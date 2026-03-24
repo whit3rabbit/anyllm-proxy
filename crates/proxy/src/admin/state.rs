@@ -16,14 +16,16 @@ pub type LogReloadFn = Arc<dyn Fn(&str) -> bool + Send + Sync>;
 #[derive(Clone)]
 pub struct SharedState {
     /// SQLite connection for request logging and config persistence.
-    /// Uses std::sync::Mutex (not tokio) because rusqlite is synchronous.
-    /// All access should go through spawn_blocking.
+    /// Uses std::sync::Mutex (not tokio::sync::Mutex) because rusqlite
+    /// is synchronous; holding a tokio Mutex guard across .await would
+    /// require the guard to be Send, which std::sync satisfies.
     pub db: Arc<Mutex<rusqlite::Connection>>,
     /// Broadcast channel sender for live dashboard updates.
     pub events_tx: broadcast::Sender<AdminEvent>,
-    /// Runtime-mutable config. The proxy reads this on each request.
-    /// Uses std::sync::RwLock (not tokio) so proxy handlers can read
-    /// without awaiting. Write contention is negligible (admin-only).
+    /// Runtime-mutable config read on every proxy request.
+    /// std::sync::RwLock (not tokio): proxy reads are synchronous and
+    /// frequent; async locking would add unnecessary overhead. Write
+    /// contention is negligible since only the admin API writes.
     pub runtime_config: Arc<RwLock<RuntimeConfig>>,
     /// Per-backend metrics (same Arc the proxy already uses).
     pub backend_metrics: Arc<HashMap<String, Metrics>>,
@@ -34,8 +36,9 @@ pub struct SharedState {
 }
 
 /// Run a synchronous closure against the SQLite connection on the blocking
-/// threadpool. Handles locking and poison recovery. Returns `None` if the
-/// spawn_blocking task panicked (should not happen in practice).
+/// threadpool. Recovers from mutex poisoning (unwrap_or_else on into_inner)
+/// because a panic in one request should not permanently lock out the DB.
+/// Returns None if spawn_blocking itself panicked (should not happen).
 pub async fn with_db<F, T>(db: &Arc<Mutex<rusqlite::Connection>>, f: F) -> Option<T>
 where
     F: FnOnce(&rusqlite::Connection) -> T + Send + 'static,
@@ -91,6 +94,29 @@ pub struct RequestLogEntry {
     pub output_tokens: Option<u64>,
     pub is_streaming: bool,
     pub error_message: Option<String>,
+}
+
+impl SharedState {
+    /// Construct a minimal SharedState for unit tests (in-memory DB, dummy channel).
+    #[cfg(test)]
+    pub fn new_for_test() -> Self {
+        let conn = rusqlite::Connection::open_in_memory().expect("in-memory sqlite");
+        crate::admin::db::init_db(&conn).expect("init_db");
+        let (events_tx, _) = broadcast::channel(4);
+        let (log_tx, _) = tokio::sync::mpsc::channel(4);
+        Self {
+            db: Arc::new(Mutex::new(conn)),
+            events_tx,
+            runtime_config: Arc::new(RwLock::new(RuntimeConfig {
+                model_mappings: IndexMap::new(),
+                log_level: "info".to_string(),
+                log_bodies: false,
+            })),
+            backend_metrics: Arc::new(HashMap::new()),
+            log_tx,
+            log_reload: None,
+        }
+    }
 }
 
 /// Aggregated metrics for the periodic WebSocket snapshot.

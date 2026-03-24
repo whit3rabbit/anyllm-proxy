@@ -15,10 +15,14 @@ pub fn openai_status_to_anthropic_error_type(status: u16) -> anthropic::ErrorTyp
         402 => anthropic::ErrorType::BillingError,
         403 => anthropic::ErrorType::PermissionError,
         404 => anthropic::ErrorType::NotFoundError,
+        // 408 has no direct Anthropic equivalent; OverloadedError tells
+        // clients to retry with backoff, which is correct for timeouts.
         408 => anthropic::ErrorType::OverloadedError,
         413 => anthropic::ErrorType::RequestTooLarge,
         429 => anthropic::ErrorType::RateLimitError,
         500..=502 => anthropic::ErrorType::ApiError,
+        // 529 (Cloudflare overloaded) and 503 both indicate transient
+        // capacity issues; OverloadedError triggers client-side backoff.
         529 | 503 => anthropic::ErrorType::OverloadedError,
         _ => anthropic::ErrorType::ApiError,
     }

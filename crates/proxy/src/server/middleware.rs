@@ -64,8 +64,9 @@ pub async fn validate_auth(
         }
     };
 
-    // If PROXY_API_KEYS is configured, validate the key against the allowlist
-    // using constant-time comparison to prevent timing side-channels.
+    // Validate against the allowlist with constant-time comparison. Without
+    // this, an attacker could infer the correct key byte-by-byte by measuring
+    // response times (timing side-channel attack).
     let is_allowed = ALLOWED_API_KEYS.iter().any(|allowed| {
         allowed.len() == credential.len()
             && bool::from(allowed.as_bytes().ct_eq(credential.as_bytes()))
@@ -94,8 +95,9 @@ pub async fn add_request_id(mut request: Request<Body>, next: Next) -> Response 
         .map(|s| s.to_string())
         .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
+    // Replace invalid request IDs with UUIDs to prevent header injection.
+    // Client-provided IDs may contain characters illegal in HTTP headers.
     let header_value: axum::http::HeaderValue = request_id.parse().unwrap_or_else(|_| {
-        // Client-provided x-request-id contained invalid header characters; replace it.
         uuid::Uuid::new_v4()
             .to_string()
             .parse()

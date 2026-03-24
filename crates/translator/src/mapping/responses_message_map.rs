@@ -90,8 +90,11 @@ pub fn anthropic_to_responses_request(req: &anthropic::MessageCreateRequest) -> 
 
 /// Build Responses API input items from Anthropic messages.
 ///
-/// Each Anthropic message becomes a `{"type":"message","role":"...","content":[...]}` item.
-/// Tool results become `{"type":"function_call_output","call_id":"...","output":"..."}` items.
+/// The Responses API models tool calls as first-class items in the input
+/// array, not as message content blocks. Anthropic tool_use blocks become
+/// function_call items at the root level; tool_result blocks become
+/// function_call_output items. This flattened structure is required by the
+/// Responses API schema.
 fn build_input_items(messages: &[anthropic::InputMessage]) -> ResponsesInput {
     let mut items: Vec<Value> = Vec::new();
 

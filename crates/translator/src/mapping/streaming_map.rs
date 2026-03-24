@@ -5,6 +5,8 @@ use crate::anthropic;
 use crate::openai;
 use crate::util;
 
+// Safety cap: prevents unbounded Vec growth if a backend sends a
+// malformed chunk with an absurdly large tool_call index.
 const MAX_TOOL_CALL_INDEX: usize = 128;
 
 /// State machine that converts OpenAI ChatCompletion chunks into Anthropic SSE events.
@@ -20,7 +22,10 @@ pub struct StreamingTranslator {
     started: bool,
     content_block_index: u32,
     content_block_open: bool,
-    /// Tool calls arrive incrementally; accumulate until finish_reason arrives.
+    /// Tool calls arrive incrementally across multiple chunks, indexed by
+    /// position in the OpenAI tool_calls array. We accumulate them here
+    /// so we can emit Anthropic's strict Start -> Delta* -> Stop sequence
+    /// per tool when finish_reason arrives.
     active_tool_calls: Vec<ToolCallAccumulator>,
     usage: anthropic::Usage,
     finished: bool,
@@ -248,6 +253,9 @@ impl StreamingTranslator {
                 id.clone()
             };
 
+            // OpenAI indexes tool calls within a single chunk (0, 1, 2...);
+            // Anthropic uses sequential content block indices across the
+            // entire message. Merge the two index spaces by offsetting.
             let block_index = self.content_block_index + idx as u32;
 
             events.push(anthropic::StreamEvent::ContentBlockStart {
@@ -259,7 +267,9 @@ impl StreamingTranslator {
                 },
             });
 
-            // Grow the accumulator vec if needed
+            // Grow the accumulator vec to fit this index. OpenAI chunks may
+            // report tool calls out of order, so we pre-fill with defaults
+            // to avoid index-out-of-bounds, then overwrite at [idx].
             while self.active_tool_calls.len() <= idx {
                 self.active_tool_calls.push(ToolCallAccumulator {
                     block_index: 0,
@@ -308,6 +318,9 @@ pub fn map_finish_reason(reason: &openai::FinishReason) -> anthropic::StopReason
         openai::FinishReason::Stop => anthropic::StopReason::EndTurn,
         openai::FinishReason::Length => anthropic::StopReason::MaxTokens,
         openai::FinishReason::ToolCalls => anthropic::StopReason::ToolUse,
+        // Anthropic has no content_filter stop reason; EndTurn is the
+        // closest approximation. Refusal text is already surfaced via
+        // the refusal handling path above.
         openai::FinishReason::ContentFilter => anthropic::StopReason::EndTurn,
         openai::FinishReason::FunctionCall => anthropic::StopReason::ToolUse,
     }

@@ -1,8 +1,12 @@
+mod tls;
+mod url_validation;
+
+pub use tls::TlsConfig;
+pub use url_validation::{is_private_ip, validate_base_url};
+
 use indexmap::IndexMap;
 use serde::Deserialize;
 use std::fmt;
-use std::net::IpAddr;
-use url::Url;
 
 /// Path suffix appended to Gemini base URL to reach its OpenAI-compatible endpoint.
 const GEMINI_OPENAI_PATH: &str = "/openai";
@@ -251,188 +255,13 @@ fn contains_ignore_ascii_case(haystack: &[u8], needle: &[u8]) -> bool {
         .any(|w| w.eq_ignore_ascii_case(needle))
 }
 
-/// Optional mTLS configuration for the backend connection.
-/// Stores raw certificate bytes so Config remains Clone.
-/// Validated at construction time: bad certs cause startup panic.
-#[derive(Clone, Default)]
-pub struct TlsConfig {
-    /// Raw PKCS#12 bytes and password for client certificate authentication.
-    pub p12_identity: Option<(Vec<u8>, String)>,
-    /// Raw PEM bytes for additional CA certificate to trust.
-    pub ca_cert_pem: Option<Vec<u8>>,
-}
-
-impl fmt::Debug for TlsConfig {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("TlsConfig")
-            .field(
-                "p12_identity",
-                &self.p12_identity.as_ref().map(|_| "[REDACTED]"),
-            )
-            .field(
-                "ca_cert_pem",
-                &self
-                    .ca_cert_pem
-                    .as_ref()
-                    .map(|b| format!("{} bytes", b.len())),
-            )
-            .finish()
-    }
-}
-
-impl TlsConfig {
-    /// Load and validate TLS config from file paths.
-    /// Panics on invalid/missing files or wrong password.
-    pub fn load(p12_path: Option<&str>, p12_password: Option<&str>, ca_path: Option<&str>) -> Self {
-        let p12_identity = match (p12_path, p12_password) {
-            (Some(path), Some(password)) => {
-                let bytes = std::fs::read(path)
-                    .unwrap_or_else(|e| panic!("failed to read P12 file '{}': {}", path, e));
-
-                // Validate the P12 parses correctly with the given password
-                reqwest::Identity::from_pkcs12_der(&bytes, password).unwrap_or_else(|e| {
-                    panic!(
-                        "invalid P12 file '{}' (wrong password or corrupt file): {}",
-                        path, e
-                    )
-                });
-
-                tracing::info!(path = %path, "loaded client certificate (P12)");
-                Some((bytes, password.to_string()))
-            }
-            (Some(_), None) => {
-                panic!("TLS_CLIENT_CERT_P12 is set but TLS_CLIENT_CERT_PASSWORD is missing");
-            }
-            (None, Some(_)) => {
-                tracing::warn!(
-                    "TLS_CLIENT_CERT_PASSWORD is set but TLS_CLIENT_CERT_P12 is not, ignoring"
-                );
-                None
-            }
-            (None, None) => None,
-        };
-
-        let ca_cert_pem = ca_path.map(|path| {
-            let bytes = std::fs::read(path)
-                .unwrap_or_else(|e| panic!("failed to read CA cert file '{}': {}", path, e));
-
-            // Validate the PEM parses as a certificate
-            reqwest::Certificate::from_pem(&bytes)
-                .unwrap_or_else(|e| panic!("invalid CA certificate '{}': {}", path, e));
-
-            tracing::info!(path = %path, "loaded custom CA certificate");
-            bytes
-        });
-
-        Self {
-            p12_identity,
-            ca_cert_pem,
-        }
-    }
-
-    /// Load from environment variables.
-    pub fn from_env() -> Self {
-        let p12_path = std::env::var("TLS_CLIENT_CERT_P12").ok();
-        let p12_password = std::env::var("TLS_CLIENT_CERT_PASSWORD").ok();
-        let ca_path = std::env::var("TLS_CA_CERT").ok();
-        Self::load(
-            p12_path.as_deref(),
-            p12_password.as_deref(),
-            ca_path.as_deref(),
-        )
-    }
-}
-
-/// Validate that a base URL is safe to use as an upstream target.
-/// Rejects non-http(s) schemes, private/loopback IPs, and link-local addresses.
-/// For domain names, also resolves DNS and validates all resolved IPs to prevent
-/// DNS rebinding attacks (where a domain initially resolves to a public IP but
-/// later changes to a private/metadata IP).
-pub fn validate_base_url(raw: &str) -> Result<(), String> {
-    let parsed = Url::parse(raw).map_err(|e| format!("invalid URL: {e}"))?;
-
-    match parsed.scheme() {
-        "http" | "https" => {}
-        other => return Err(format!("scheme '{other}' not allowed, use http or https")),
-    }
-
-    match parsed.host() {
-        None => return Err("URL has no host".to_string()),
-        Some(url::Host::Ipv4(v4)) => {
-            let ip = IpAddr::V4(v4);
-            if is_private_ip(ip) {
-                return Err(format!("private/loopback IP {ip} not allowed"));
-            }
-        }
-        Some(url::Host::Ipv6(v6)) => {
-            let ip = IpAddr::V6(v6);
-            if is_private_ip(ip) {
-                return Err(format!("private/loopback IP {ip} not allowed"));
-            }
-        }
-        Some(url::Host::Domain(domain)) => {
-            let lower = domain.to_ascii_lowercase();
-            if lower == "localhost"
-                || lower.ends_with(".localhost")
-                || lower == "metadata.google.internal"
-                || lower.ends_with(".internal")
-            {
-                return Err(format!("hostname '{domain}' not allowed"));
-            }
-
-            // Resolve DNS at startup and validate all resolved IPs.
-            // This catches domains that currently resolve to private/metadata IPs.
-            // Note: does not prevent post-startup DNS rebinding; for full protection,
-            // restrict outbound traffic at the network level.
-            let port = parsed
-                .port()
-                .unwrap_or(if parsed.scheme() == "https" { 443 } else { 80 });
-            let lookup = format!("{domain}:{port}");
-            if let Ok(addrs) = std::net::ToSocketAddrs::to_socket_addrs(&lookup) {
-                for addr in addrs {
-                    if is_private_ip(addr.ip()) {
-                        return Err(format!(
-                            "hostname '{domain}' resolves to private/loopback IP {}, not allowed",
-                            addr.ip()
-                        ));
-                    }
-                }
-            }
-            // If DNS resolution fails, allow it (the domain may not be resolvable
-            // in the build/test environment but will work at runtime).
-        }
-    }
-
-    Ok(())
-}
-
-/// Returns true for loopback, private (RFC 1918), link-local, and
-/// cloud metadata IPs (169.254.169.254).
-pub fn is_private_ip(ip: IpAddr) -> bool {
-    match ip {
-        IpAddr::V4(v4) => {
-            v4.is_loopback()
-                || v4.is_private()
-                || v4.is_link_local()
-                || v4.is_broadcast()
-                || v4.is_unspecified()
-                // Cloud metadata endpoint
-                || v4 == std::net::Ipv4Addr::new(169, 254, 169, 254)
-        }
-        IpAddr::V6(v6) => {
-            v6.is_loopback() || v6.is_unspecified()
-            // ::1, ::, and IPv4-mapped private addresses
-            || matches!(v6.to_ipv4_mapped(), Some(v4) if is_private_ip(IpAddr::V4(v4)))
-        }
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Multi-backend configuration
 // ---------------------------------------------------------------------------
 
 /// Resolve a config value that may reference an env var via `env:VAR_NAME` prefix.
-/// Returns the raw value if no prefix, or the env var contents if prefixed.
+/// This allows TOML config files to reference secrets from the environment
+/// without hardcoding them, keeping credentials out of version control.
 pub fn resolve_env_value(value: &str) -> Result<String, String> {
     if let Some(var_name) = value.strip_prefix("env:") {
         std::env::var(var_name)
@@ -749,82 +578,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn valid_https_url() {
-        assert!(validate_base_url("https://api.openai.com").is_ok());
-    }
-
-    #[test]
-    fn valid_http_url() {
-        assert!(validate_base_url("http://my-proxy.example.com").is_ok());
-    }
-
-    #[test]
-    fn rejects_ftp_scheme() {
-        let err = validate_base_url("ftp://evil.com").unwrap_err();
-        assert!(err.contains("scheme"));
-    }
-
-    #[test]
-    fn rejects_localhost() {
-        let err = validate_base_url("http://localhost:8080").unwrap_err();
-        assert!(err.contains("not allowed"));
-    }
-
-    #[test]
-    fn rejects_loopback_ip() {
-        let err = validate_base_url("http://127.0.0.1:8080").unwrap_err();
-        assert!(err.contains("private/loopback"));
-    }
-
-    #[test]
-    fn rejects_private_10_range() {
-        let err = validate_base_url("http://10.0.0.1").unwrap_err();
-        assert!(err.contains("private/loopback"));
-    }
-
-    #[test]
-    fn rejects_private_172_range() {
-        let err = validate_base_url("http://172.16.0.1").unwrap_err();
-        assert!(err.contains("private/loopback"));
-    }
-
-    #[test]
-    fn rejects_private_192_range() {
-        let err = validate_base_url("http://192.168.1.1").unwrap_err();
-        assert!(err.contains("private/loopback"));
-    }
-
-    #[test]
-    fn rejects_cloud_metadata() {
-        let err = validate_base_url("http://169.254.169.254").unwrap_err();
-        assert!(err.contains("private/loopback"));
-    }
-
-    #[test]
-    fn rejects_metadata_hostname() {
-        let err = validate_base_url("http://metadata.google.internal").unwrap_err();
-        assert!(err.contains("not allowed"));
-    }
-
-    #[test]
-    fn rejects_ipv6_loopback() {
-        let err = validate_base_url("http://[::1]:8080").unwrap_err();
-        assert!(err.contains("private/loopback"));
-    }
-
-    #[test]
-    fn rejects_unspecified() {
-        let err = validate_base_url("http://0.0.0.0").unwrap_err();
-        assert!(err.contains("private/loopback"));
-    }
-
-    #[test]
-    fn rejects_invalid_url() {
-        let err = validate_base_url("not a url").unwrap_err();
-        assert!(err.contains("invalid URL"));
-    }
-
-    #[test]
     fn model_mapping_haiku() {
         let m = ModelMapping {
             big_model: "gpt-4o".into(),
@@ -882,74 +635,6 @@ mod tests {
         };
         assert_eq!(m.map_model("claude-sonnet-4-6"), "o1-preview");
         assert_eq!(m.map_model("claude-haiku-4-5-20251001"), "o1-mini");
-    }
-
-    // --- TlsConfig tests ---
-
-    /// Path to test fixtures relative to the workspace root.
-    fn fixture_path(name: &str) -> String {
-        let manifest = env!("CARGO_MANIFEST_DIR");
-        format!("{manifest}/tests/fixtures/tls/{name}")
-    }
-
-    #[test]
-    fn tls_config_none_when_no_paths() {
-        let tls = TlsConfig::load(None, None, None);
-        assert!(tls.p12_identity.is_none());
-        assert!(tls.ca_cert_pem.is_none());
-    }
-
-    #[test]
-    #[should_panic(expected = "TLS_CLIENT_CERT_PASSWORD is missing")]
-    fn tls_config_panics_missing_password() {
-        TlsConfig::load(Some("/any/path.p12"), None, None);
-    }
-
-    #[test]
-    #[should_panic(expected = "failed to read P12 file")]
-    fn tls_config_panics_missing_p12_file() {
-        TlsConfig::load(Some("/nonexistent/file.p12"), Some("pass"), None);
-    }
-
-    #[test]
-    fn tls_config_loads_valid_p12() {
-        let path = fixture_path("test-client.p12");
-        let tls = TlsConfig::load(Some(&path), Some("test"), None);
-        assert!(tls.p12_identity.is_some());
-        assert!(tls.ca_cert_pem.is_none());
-    }
-
-    #[test]
-    fn tls_config_loads_valid_ca() {
-        let path = fixture_path("test-ca.pem");
-        let tls = TlsConfig::load(None, None, Some(&path));
-        assert!(tls.p12_identity.is_none());
-        assert!(tls.ca_cert_pem.is_some());
-    }
-
-    #[test]
-    fn tls_config_loads_both() {
-        let p12 = fixture_path("test-client.p12");
-        let ca = fixture_path("test-ca.pem");
-        let tls = TlsConfig::load(Some(&p12), Some("test"), Some(&ca));
-        assert!(tls.p12_identity.is_some());
-        assert!(tls.ca_cert_pem.is_some());
-    }
-
-    #[test]
-    fn tls_config_debug_redacts_password() {
-        let p12 = fixture_path("test-client.p12");
-        let tls = TlsConfig::load(Some(&p12), Some("test"), None);
-        let debug = format!("{:?}", tls);
-        assert!(debug.contains("REDACTED"));
-        assert!(!debug.contains("test"));
-    }
-
-    #[test]
-    #[should_panic(expected = "invalid P12 file")]
-    fn tls_config_panics_wrong_password() {
-        let path = fixture_path("test-client.p12");
-        TlsConfig::load(Some(&path), Some("wrong-password"), None);
     }
 
     // --- Vertex / BackendKind tests ---

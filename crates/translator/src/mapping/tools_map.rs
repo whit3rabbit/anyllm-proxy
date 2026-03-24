@@ -53,6 +53,8 @@ pub fn openai_tools_to_anthropic(tools: &[openai::ChatTool]) -> Vec<anthropic::T
 pub fn anthropic_tool_choice_to_openai(tc: &anthropic::ToolChoice) -> openai::ChatToolChoice {
     match tc {
         anthropic::ToolChoice::Auto => openai::ChatToolChoice::Simple("auto".to_string()),
+        // Any = "model must call at least one tool". OpenAI's "required"
+        // is the closest: it forces a tool call when tools are defined.
         anthropic::ToolChoice::Any => openai::ChatToolChoice::Simple("required".to_string()),
         anthropic::ToolChoice::None => openai::ChatToolChoice::Simple("none".to_string()),
         anthropic::ToolChoice::Tool { name } => {
@@ -73,7 +75,9 @@ pub fn openai_tool_choice_to_anthropic(tc: &openai::ChatToolChoice) -> anthropic
         openai::ChatToolChoice::Simple(s) => match s.as_str() {
             "none" => anthropic::ToolChoice::None,
             "required" => anthropic::ToolChoice::Any,
-            _ => anthropic::ToolChoice::Auto, // "auto" and anything else
+            // Default unknown values to Auto for forward compatibility;
+            // rejecting would break when OpenAI adds new tool_choice variants.
+            _ => anthropic::ToolChoice::Auto,
         },
         openai::ChatToolChoice::Named(named) => anthropic::ToolChoice::Tool {
             name: named.function.name.clone(),

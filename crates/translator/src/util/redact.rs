@@ -2,8 +2,9 @@
 // into log output while keeping enough to identify the key.
 
 /// Redact a secret string for logging, showing only the first 4 and last 4 characters.
-/// Returns "****" for strings shorter than 12 characters.
-/// Uses char-aware slicing to avoid panics on multi-byte UTF-8 input.
+/// Returns "****" for strings shorter than 12 characters (too short to redact safely).
+/// Uses char_indices() instead of byte offsets because API keys may contain
+/// multi-byte UTF-8 characters; byte slicing would panic at non-char boundaries.
 pub fn redact_secret(s: &str) -> String {
     let char_count = s.chars().count();
     if char_count < 12 {
@@ -58,7 +59,10 @@ mod tests {
         let key = "\u{00e9}\u{00e9}\u{00e9}\u{00e9}\u{00e9}\u{00e9}\u{00e9}\u{00e9}\u{00e9}\u{00e9}\u{00e9}\u{00e9}";
         assert_eq!(key.chars().count(), 12);
         let redacted = redact_secret(key);
-        assert_eq!(redacted, "\u{00e9}\u{00e9}\u{00e9}\u{00e9}...\u{00e9}\u{00e9}\u{00e9}\u{00e9}");
+        assert_eq!(
+            redacted,
+            "\u{00e9}\u{00e9}\u{00e9}\u{00e9}...\u{00e9}\u{00e9}\u{00e9}\u{00e9}"
+        );
     }
 
     #[test]

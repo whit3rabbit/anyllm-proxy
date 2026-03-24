@@ -2,11 +2,9 @@
 
 use crate::admin::auth::validate_admin_token;
 use crate::admin::state::SharedState;
+use crate::admin::ws::ws_handler;
 use axum::{
-    extract::{
-        ws::{Message, WebSocket},
-        Path, Query, State, WebSocketUpgrade,
-    },
+    extract::{Path, Query, State},
     http::StatusCode,
     middleware,
     response::IntoResponse,
@@ -14,23 +12,60 @@ use axum::{
     Json, Router,
 };
 use std::sync::Arc;
+/// Check whether a host string (without port) is a localhost address.
+fn is_localhost_host(host: &str) -> bool {
+    matches!(host, "127.0.0.1" | "localhost" | "[::1]" | "::1")
+}
+
 /// Reject cross-origin requests to the admin API.
 /// Parses the Origin URL and checks the host component exactly
 /// to prevent bypass via e.g. `http://127.0.0.1.attacker.com`.
+///
+/// When no Origin header is present, validates the Host header instead
+/// to guard against DNS rebinding attacks.
 async fn reject_cross_origin(
     req: axum::extract::Request,
     next: middleware::Next,
 ) -> Result<axum::response::Response, StatusCode> {
     if let Some(origin) = req.headers().get("origin") {
         let origin_str = origin.to_str().map_err(|_| StatusCode::BAD_REQUEST)?;
-        let is_localhost = match url::Url::parse(origin_str) {
-            Ok(url) => matches!(
-                url.host_str(),
-                Some("127.0.0.1") | Some("localhost") | Some("[::1]") | Some("::1")
-            ),
+        let is_local = match url::Url::parse(origin_str) {
+            Ok(url) => url.host_str().is_some_and(is_localhost_host),
             Err(_) => false,
         };
-        if !is_localhost {
+        if !is_local {
+            return Err(StatusCode::FORBIDDEN);
+        }
+    } else {
+        // No Origin header: validate Host to prevent DNS rebinding attacks,
+        // where an attacker's domain resolves to localhost, causing the
+        // browser to send requests to our admin API.
+        let host_valid = req
+            .headers()
+            .get("host")
+            .and_then(|h| h.to_str().ok())
+            .map(|h| {
+                // Strip optional port. Bracketed IPv6 like "[::1]:9090"
+                // must not be split naively on ':'.
+                let host_part = if h.starts_with('[') {
+                    // "[::1]:9090" -> "[::1]", or "[::1]" if no port
+                    h.split_once(']').map_or(h, |(bracket, _)| {
+                        // Include the closing bracket for is_localhost_host
+                        &h[..bracket.len() + 1]
+                    })
+                } else {
+                    // "localhost:9090" -> "localhost", but bare "::1" must
+                    // not be split (contains colons but no port suffix).
+                    // Only split if the part after the last colon is numeric.
+                    match h.rsplit_once(':') {
+                        Some((host, port)) if port.bytes().all(|b| b.is_ascii_digit()) => host,
+                        _ => h,
+                    }
+                };
+                is_localhost_host(host_part)
+            })
+            .unwrap_or(false);
+        if !host_valid {
             return Err(StatusCode::FORBIDDEN);
         }
     }
@@ -155,8 +190,9 @@ async fn put_config(
     let mut db_writes: Vec<(String, String)> = Vec::new();
 
     if let Some(level) = body.get("log_level").and_then(|v| v.as_str()) {
-        // Allowlist prevents trace-level logging (which leaks secrets via HTTP
-        // headers) and blocks arbitrary tracing filter directives.
+        // Allowlist: trace-level logging exposes HTTP headers (including API
+        // keys) in log output. Arbitrary filter directives could also be used
+        // to selectively leak data. Restrict to safe levels only.
         const ALLOWED_LOG_LEVELS: &[&str] = &["error", "warn", "info", "debug"];
         let normalized = level.trim().to_lowercase();
         if !ALLOWED_LOG_LEVELS.contains(&normalized.as_str()) {
@@ -201,7 +237,9 @@ async fn put_config(
         }
     }
 
-    // Phase 1: Persist to SQLite before touching in-memory config.
+    // Phase 1: Persist to SQLite first. If the process crashes between
+    // phases, the database is the source of truth and config is restored
+    // on restart. Reversing the order would lose updates on crash.
     {
         let writes = db_writes.clone();
         crate::admin::state::with_db(&shared.db, move |conn| {
@@ -506,93 +544,88 @@ async fn get_backends(State(shared): State<SharedState>) -> Json<serde_json::Val
     Json(serde_json::json!({ "backends": backends }))
 }
 
-// -- WebSocket endpoint --
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::body::Body;
+    use axum::http::Request;
+    use tower::ServiceExt;
 
-/// GET /admin/ws -- WebSocket for live dashboard updates.
-/// Auth via the first WebSocket message to avoid leaking the token in URLs/logs.
-/// The client must send `{"token": "<admin_token>"}` as its first message.
-async fn ws_handler(
-    State((shared, expected_token)): State<(SharedState, Arc<String>)>,
-    ws: WebSocketUpgrade,
-) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_ws(socket, shared, expected_token))
-        .into_response()
-}
-
-/// Authenticate via the first WebSocket message, then stream events.
-async fn handle_ws(mut socket: WebSocket, shared: SharedState, expected_token: Arc<String>) {
-    // Wait for the first message containing the auth token.
-    let authenticated =
-        tokio::time::timeout(std::time::Duration::from_secs(5), socket.recv()).await;
-
-    let is_valid = match authenticated {
-        Ok(Some(Ok(Message::Text(text)))) => {
-            // Accept either raw token string or {"token": "..."} JSON.
-            let token_str = text.to_string();
-            let trimmed = token_str.trim();
-            let expected = expected_token.as_str();
-            if super::auth::constant_time_eq(trimmed, expected) {
-                true
-            } else {
-                serde_json::from_str::<serde_json::Value>(&token_str)
-                    .ok()
-                    .and_then(|v| v.get("token")?.as_str().map(String::from))
-                    .map(|t| super::auth::constant_time_eq(&t, expected))
-                    .unwrap_or(false)
-            }
-        }
-        _ => false,
-    };
-
-    if !is_valid {
-        let _ = socket
-            .send(Message::Text(
-                r#"{"error":"authentication required: send token as first message"}"#.into(),
-            ))
-            .await;
-        let _ = socket.send(Message::Close(None)).await;
-        return;
+    /// Build a minimal admin router for origin/host tests.
+    fn test_router() -> Router {
+        let shared = crate::admin::state::SharedState::new_for_test();
+        let token = Arc::new("test-token".to_string());
+        admin_router(shared, token)
     }
 
-    // Send auth success confirmation.
-    let _ = socket
-        .send(Message::Text(r#"{"status":"authenticated"}"#.into()))
-        .await;
+    #[tokio::test]
+    async fn origin_localhost_allowed() {
+        let app = test_router();
+        let req = Request::get("/admin/api/config")
+            .header("origin", "http://localhost:9090")
+            .header("authorization", "Bearer test-token")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_ne!(resp.status(), StatusCode::FORBIDDEN);
+    }
 
-    let mut rx = shared.events_tx.subscribe();
+    #[tokio::test]
+    async fn origin_evil_rejected() {
+        let app = test_router();
+        let req = Request::get("/admin/api/config")
+            .header("origin", "http://evil.com")
+            .header("authorization", "Bearer test-token")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+    }
 
-    loop {
-        tokio::select! {
-            result = rx.recv() => {
-                match result {
-                    Ok(event) => {
-                        let json = match serde_json::to_string(&event) {
-                            Ok(j) => j,
-                            Err(_) => continue,
-                        };
-                        if socket.send(Message::Text(json.into())).await.is_err() {
-                            break; // Client disconnected.
-                        }
-                    }
-                    Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
-                        tracing::debug!(skipped = n, "WebSocket client lagged, skipping events");
-                    }
-                    Err(tokio::sync::broadcast::error::RecvError::Closed) => {
-                        break; // Channel closed, server shutting down.
-                    }
-                }
-            }
-            msg = socket.recv() => {
-                match msg {
-                    Some(Ok(Message::Close(_))) | None => break,
-                    Some(Ok(Message::Ping(data))) => {
-                        if socket.send(Message::Pong(data)).await.is_err() {
-                            break;
-                        }
-                    }
-                    _ => {} // Ignore other messages from client.
-                }
-            }
-        }
+    #[tokio::test]
+    async fn no_origin_localhost_host_allowed() {
+        let app = test_router();
+        let req = Request::get("/admin/api/config")
+            .header("host", "localhost:9090")
+            .header("authorization", "Bearer test-token")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_ne!(resp.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn no_origin_127_host_allowed() {
+        let app = test_router();
+        let req = Request::get("/admin/api/config")
+            .header("host", "127.0.0.1:9090")
+            .header("authorization", "Bearer test-token")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_ne!(resp.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn no_origin_evil_host_rejected() {
+        let app = test_router();
+        let req = Request::get("/admin/api/config")
+            .header("host", "evil.com")
+            .header("authorization", "Bearer test-token")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn no_origin_no_host_rejected() {
+        let app = test_router();
+        let req = Request::get("/admin/api/config")
+            .header("authorization", "Bearer test-token")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::FORBIDDEN);
     }
 }

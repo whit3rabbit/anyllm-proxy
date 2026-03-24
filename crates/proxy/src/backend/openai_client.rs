@@ -24,7 +24,10 @@ impl OpenAIClient {
     pub fn new(config: &Config) -> Self {
         let client = build_http_client(&config.tls);
 
-        // OpenAI base URL does not include /v1, Vertex base URL ends at /openapi
+        // Each provider uses a different URL structure for the same API:
+        // - OpenAI: {base}/v1/chat/completions (base has no path)
+        // - Vertex: {base}/chat/completions (base ends at .../openapi)
+        // - Gemini: {base}/chat/completions (config appends /openai to base)
         let (chat_completions_url, responses_url) = match config.backend {
             BackendKind::OpenAI => (
                 format!("{}/v1/chat/completions", config.openai_base_url),
@@ -54,7 +57,8 @@ impl OpenAIClient {
         }
     }
 
-    /// Build a fallback error response when the body cannot be parsed.
+    /// Fallback error for unparseable error responses. The backend may return
+    /// HTML error pages (e.g., Cloudflare 502) that don't match ErrorResponse.
     fn fallback_error(status: u16) -> openai::errors::ErrorResponse {
         openai::errors::ErrorResponse {
             error: openai::errors::ErrorDetail {

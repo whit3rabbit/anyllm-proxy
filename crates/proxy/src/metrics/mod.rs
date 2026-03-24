@@ -23,6 +23,8 @@ impl Metrics {
         Self::default()
     }
 
+    // Relaxed ordering: these are independent counters with no cross-counter
+    // invariants, so no synchronization is needed. Relaxed is fastest.
     pub fn record_request(&self) {
         self.inner.requests_total.fetch_add(1, Ordering::Relaxed);
     }

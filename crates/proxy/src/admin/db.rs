@@ -7,6 +7,8 @@ use tokio::sync::mpsc;
 
 /// Initialize the SQLite database: create tables and indexes.
 pub fn init_db(conn: &Connection) -> rusqlite::Result<()> {
+    // WAL mode: better read concurrency (proxy reads while admin writes)
+    // and crash recovery compared to the default rollback journal.
     conn.execute_batch("PRAGMA journal_mode=WAL;")?;
     conn.execute_batch(
         "

@@ -19,6 +19,8 @@ pub(crate) fn extract_cached_tokens(details: Option<&serde_json::Value>) -> Opti
 }
 
 pub fn openai_to_anthropic_usage(usage: &openai::ChatUsage) -> anthropic::Usage {
+    // OpenAI reports cached tokens in prompt_tokens_details.cached_tokens;
+    // Anthropic calls the same concept cache_read_input_tokens.
     let cache_read_input_tokens = extract_cached_tokens(usage.prompt_tokens_details.as_ref());
 
     anthropic::Usage {

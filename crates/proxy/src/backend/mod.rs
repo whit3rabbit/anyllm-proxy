@@ -19,7 +19,9 @@ impl reqwest::dns::Resolve for SsrfSafeDnsResolver {
     fn resolve(&self, name: reqwest::dns::Name) -> reqwest::dns::Resolving {
         Box::pin(async move {
             let name_str = name.as_str().to_string();
-            // Resolve in a blocking task to avoid blocking the tokio runtime.
+            // DNS resolution (ToSocketAddrs) blocks the calling thread.
+            // Must run on the blocking threadpool to avoid stalling the
+            // async runtime and all other in-flight requests.
             let addrs: Vec<std::net::SocketAddr> =
                 tokio::task::spawn_blocking(move || -> Result<Vec<std::net::SocketAddr>, _> {
                     use std::net::ToSocketAddrs;
@@ -29,11 +31,13 @@ impl reqwest::dns::Resolve for SsrfSafeDnsResolver {
                 })
                 .await
                 .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?
-                .map_err(|e: std::io::Error| -> Box<dyn std::error::Error + Send + Sync> {
-                    Box::new(e)
-                })?;
+                .map_err(
+                    |e: std::io::Error| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) },
+                )?;
 
-            // Filter out private IPs. If all resolved IPs are private, error.
+            // Filter out private/loopback IPs to prevent SSRF attacks where
+            // an attacker-controlled DNS record resolves to internal endpoints
+            // (e.g., cloud metadata at 169.254.169.254).
             let safe: Vec<std::net::SocketAddr> = addrs
                 .into_iter()
                 .filter(|addr| !crate::config::is_private_ip(addr.ip()))
@@ -95,7 +99,8 @@ pub(crate) async fn send_with_retry<E: RetryableError>(
                 delay_ms = delay.as_millis() as u64,
                 "retryable error from {label}, backing off"
             );
-            // Drain body so the connection can be returned to the pool
+            // Drain the response body before retrying so the HTTP connection
+            // returns to the pool. Leaving it unread causes connection leaks.
             drop(response.bytes().await);
             sleep(delay).await;
             continue;
@@ -161,7 +166,8 @@ pub(crate) fn backoff_delay(attempt: u32, retry_after: Option<Duration>) -> Dura
         return ra;
     }
     let base = Duration::from_millis(BASE_DELAY_MS * 2u64.pow(attempt));
-    // Add up to 25% jitter (deterministic upper bound; true randomness not needed here)
+    // Deterministic 25% jitter (upper bound, not random) to keep tests
+    // predictable while still spreading retry storms across backends.
     let jitter_ms = (base.as_millis() as u64) / 4;
     base + Duration::from_millis(jitter_ms)
 }
@@ -171,7 +177,9 @@ pub(crate) fn backoff_delay(attempt: u32, retry_after: Option<Duration>) -> Dura
 #[derive(Clone)]
 pub enum BackendClient {
     OpenAI(OpenAIClient),
-    /// OpenAI Responses API format (same client, different endpoint + request/response shape).
+    /// Same HTTP client as OpenAI, but targets the Responses API endpoint
+    /// with a different request/response shape. Separate variant so callers
+    /// can pattern-match on the API format.
     OpenAIResponses(OpenAIClient),
     Vertex(OpenAIClient),
     /// Gemini via OpenAI-compatible endpoint (reuses OpenAI translation path).

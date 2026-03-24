@@ -115,8 +115,11 @@ async fn count_tokens_invalid_body() {
         .send()
         .await
         .unwrap();
-    // Missing required fields -> 422 (axum Json extractor rejection)
-    assert_eq!(resp.status(), 422);
+    // Missing required fields -> 400 invalid_request_error (Anthropic error shape)
+    assert_eq!(resp.status(), 400);
+    let body: serde_json::Value = resp.json().await.unwrap();
+    assert_eq!(body["type"], "error");
+    assert_eq!(body["error"]["type"], "invalid_request_error");
 }
 
 #[tokio::test]
@@ -169,6 +172,40 @@ async fn metrics_endpoint_returns_counters() {
     assert_eq!(body["total"]["requests_success"], 0);
     assert_eq!(body["total"]["requests_error"], 0);
     assert!(body["backends"].is_object());
+}
+
+#[tokio::test]
+async fn unknown_route_returns_anthropic_not_found() {
+    let base = spawn_test_server().await;
+    let client = Client::new();
+    let resp = client
+        .get(format!("{base}/v1/nonexistent"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 404);
+    let body: serde_json::Value = resp.json().await.unwrap();
+    assert_eq!(body["type"], "error");
+    assert_eq!(body["error"]["type"], "not_found_error");
+    assert_eq!(body["error"]["message"], "Not found");
+}
+
+#[tokio::test]
+async fn malformed_json_returns_anthropic_error() {
+    let base = spawn_test_server().await;
+    let client = Client::new();
+    let resp = client
+        .post(format!("{base}/v1/messages"))
+        .header("x-api-key", "test")
+        .header("content-type", "application/json")
+        .body("not valid json")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 400);
+    let body: serde_json::Value = resp.json().await.unwrap();
+    assert_eq!(body["type"], "error");
+    assert_eq!(body["error"]["type"], "invalid_request_error");
 }
 
 // SSRF protection: validate_base_url rejects private/loopback targets
