@@ -335,10 +335,17 @@ async fn messages(
         }
         let mapped_model = state.map_model(&body.model);
         // Logging deferred until stream completes (inside messages_stream tasks).
-        let (rate_limits, sse) = messages_stream(state, body, ctx, mapped_model).await;
-        let mut response = sse.into_response();
-        rate_limits.inject_anthropic_headers(response.headers_mut());
-        return response;
+        match messages_stream(state, body, ctx, mapped_model).await {
+            Ok((rate_limits, sse)) => {
+                let mut response = sse.into_response();
+                rate_limits.inject_anthropic_headers(response.headers_mut());
+                return response;
+            }
+            Err(e) => {
+                // Pre-stream backend error: return proper HTTP status instead of 200 OK
+                return backend_error_to_response(e);
+            }
+        }
     }
 
     match &state.backend {

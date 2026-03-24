@@ -31,27 +31,6 @@ async fn send_events(
     true
 }
 
-/// Send an SSE error event over the channel.
-/// Logs the detailed error server-side and sends a generic message to the client.
-async fn send_stream_error(
-    tx: &mpsc::Sender<Result<Event, std::convert::Infallible>>,
-    metrics: &Metrics,
-    error: impl std::fmt::Display,
-) {
-    tracing::error!("streaming request failed: {error}");
-    metrics.record_error();
-    let err_event = anthropic::StreamEvent::Error {
-        error: anthropic::streaming::StreamError {
-            error_type: "api_error".to_string(),
-            message: "An internal error occurred while communicating with the upstream service."
-                .to_string(),
-        },
-    };
-    if let Ok(sse) = super::sse::stream_event_to_sse(&err_event) {
-        let _ = tx.send(Ok(sse)).await;
-    }
-}
-
 /// Maximum SSE buffer size (10 MB). Protects against unbounded memory growth
 /// if the backend sends data without frame delimiters.
 const MAX_SSE_BUFFER_SIZE: usize = 10 * 1024 * 1024;
@@ -186,6 +165,8 @@ where
 
 /// Build an SSE response that streams Anthropic events translated from backend chunks.
 /// Returns rate limit headers alongside the SSE stream so the caller can inject them.
+/// Pre-stream backend errors (e.g., 401, 429, 500 before any data) are returned as
+/// `Err(BackendError)` so the caller can respond with a proper HTTP status code.
 /// Logging is deferred: each spawned task logs after the stream completes with actual
 /// latency, status, and token counts.
 pub(crate) async fn messages_stream(
@@ -193,12 +174,16 @@ pub(crate) async fn messages_stream(
     body: anthropic::MessageCreateRequest,
     ctx: RequestCtx,
     mapped_model: String,
-) -> (
-    RateLimitHeaders,
-    Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>>,
-) {
+) -> Result<
+    (
+        RateLimitHeaders,
+        Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>>,
+    ),
+    crate::backend::BackendError,
+> {
     let (tx, rx) = mpsc::channel::<Result<Event, std::convert::Infallible>>(32);
-    let (rl_tx, rl_rx) = tokio::sync::oneshot::channel::<RateLimitHeaders>();
+    let (rl_tx, rl_rx) =
+        tokio::sync::oneshot::channel::<Result<RateLimitHeaders, crate::backend::BackendError>>();
 
     let metrics = state.metrics.clone();
     let log_shared = state.shared.clone();
@@ -217,7 +202,7 @@ pub(crate) async fn messages_stream(
             tokio::spawn(async move {
                 match client.chat_completion_stream(&openai_req).await {
                     Ok((response, rate_limits)) => {
-                        rl_tx.send(rate_limits).ok();
+                        rl_tx.send(Ok(rate_limits)).ok();
                         let mut translator =
                             mapping::streaming_map::StreamingTranslator::new(model);
                         let mut done = false;
@@ -260,8 +245,7 @@ pub(crate) async fn messages_stream(
                     Err(e) => {
                         let status = e.status_code();
                         let err_msg = e.to_string();
-                        drop(rl_tx);
-                        send_stream_error(&tx, &metrics, e).await;
+                        metrics.record_error();
                         log_request(
                             &log_shared,
                             ctx.log_entry(
@@ -273,6 +257,9 @@ pub(crate) async fn messages_stream(
                                 Some(err_msg),
                             ),
                         );
+                        // Send the error through the oneshot so the caller can
+                        // return a proper HTTP error response instead of 200 OK.
+                        let _ = rl_tx.send(Err(crate::backend::BackendError::from(e)));
                     }
                 }
             });
@@ -288,7 +275,7 @@ pub(crate) async fn messages_stream(
             tokio::spawn(async move {
                 match client.responses_stream(&responses_req).await {
                     Ok((response, rate_limits)) => {
-                        rl_tx.send(rate_limits).ok();
+                        rl_tx.send(Ok(rate_limits)).ok();
                         let mut translator =
                             mapping::responses_streaming_map::ResponsesStreamingTranslator::new(
                                 model,
@@ -331,8 +318,7 @@ pub(crate) async fn messages_stream(
                     Err(e) => {
                         let status = e.status_code();
                         let err_msg = e.to_string();
-                        drop(rl_tx);
-                        send_stream_error(&tx, &metrics, e).await;
+                        metrics.record_error();
                         log_request(
                             &log_shared,
                             ctx.log_entry(
@@ -344,6 +330,7 @@ pub(crate) async fn messages_stream(
                                 Some(err_msg),
                             ),
                         );
+                        let _ = rl_tx.send(Err(crate::backend::BackendError::from(e)));
                     }
                 }
             });
@@ -358,9 +345,17 @@ pub(crate) async fn messages_stream(
         }
     }
 
-    let rate_limits = rl_rx.await.unwrap_or_default();
-    (
-        rate_limits,
-        Sse::new(ReceiverStream::new(rx)).keep_alive(KeepAlive::default()),
-    )
+    match rl_rx.await {
+        Ok(Ok(rate_limits)) => Ok((
+            rate_limits,
+            Sse::new(ReceiverStream::new(rx)).keep_alive(KeepAlive::default()),
+        )),
+        Ok(Err(backend_err)) => Err(backend_err),
+        // Sender dropped without sending (e.g., Anthropic passthrough branch or task panic).
+        // Default to empty rate limits and let the stream deliver whatever it has.
+        Err(_) => Ok((
+            RateLimitHeaders::default(),
+            Sse::new(ReceiverStream::new(rx)).keep_alive(KeepAlive::default()),
+        )),
+    }
 }
