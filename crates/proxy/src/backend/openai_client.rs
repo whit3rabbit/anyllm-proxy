@@ -224,10 +224,16 @@ mod tests {
     }
 
     #[test]
+    fn is_retryable_408() {
+        assert!(crate::backend::is_retryable(408));
+    }
+
+    #[test]
     fn is_not_retryable_400() {
         assert!(!crate::backend::is_retryable(400));
         assert!(!crate::backend::is_retryable(401));
         assert!(!crate::backend::is_retryable(404));
+        assert!(!crate::backend::is_retryable(409));
     }
 
     #[test]
@@ -260,13 +266,33 @@ mod tests {
     }
 
     #[test]
-    fn parse_retry_after_non_numeric() {
+    fn parse_retry_after_http_date_future() {
+        // Use a date far in the future so it's always ahead of now
         let mut headers = reqwest::header::HeaderMap::new();
         headers.insert(
             "retry-after",
-            "Wed, 21 Oct 2026 07:28:00 GMT".parse().unwrap(),
+            "Wed, 21 Oct 2037 07:28:00 GMT".parse().unwrap(),
         );
-        // Date format is not parsed; should return None
+        let dur = crate::backend::parse_retry_after(&headers);
+        assert!(dur.is_some(), "future HTTP date should parse to Some");
+        assert!(dur.unwrap().as_secs() > 0);
+    }
+
+    #[test]
+    fn parse_retry_after_http_date_past() {
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert(
+            "retry-after",
+            "Mon, 01 Jan 2024 00:00:00 GMT".parse().unwrap(),
+        );
+        // Past date: no wait needed
+        assert_eq!(crate::backend::parse_retry_after(&headers), None);
+    }
+
+    #[test]
+    fn parse_retry_after_garbage() {
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert("retry-after", "not-a-date-or-number".parse().unwrap());
         assert_eq!(crate::backend::parse_retry_after(&headers), None);
     }
 

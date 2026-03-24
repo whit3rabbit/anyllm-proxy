@@ -10,6 +10,48 @@ use serde::Serialize;
 use std::time::Duration;
 use tokio::time::sleep;
 
+/// DNS resolver that rejects private/loopback IPs at connection time,
+/// preventing DNS rebinding attacks where a domain resolves to a public IP
+/// at startup validation but later resolves to a private/metadata IP.
+struct SsrfSafeDnsResolver;
+
+impl reqwest::dns::Resolve for SsrfSafeDnsResolver {
+    fn resolve(&self, name: reqwest::dns::Name) -> reqwest::dns::Resolving {
+        Box::pin(async move {
+            let name_str = name.as_str().to_string();
+            // Resolve in a blocking task to avoid blocking the tokio runtime.
+            let addrs: Vec<std::net::SocketAddr> =
+                tokio::task::spawn_blocking(move || -> Result<Vec<std::net::SocketAddr>, _> {
+                    use std::net::ToSocketAddrs;
+                    // Port 0 is a placeholder; reqwest replaces it with the actual port.
+                    let lookup = format!("{name_str}:0");
+                    Ok(lookup.to_socket_addrs()?.collect())
+                })
+                .await
+                .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?
+                .map_err(|e: std::io::Error| -> Box<dyn std::error::Error + Send + Sync> {
+                    Box::new(e)
+                })?;
+
+            // Filter out private IPs. If all resolved IPs are private, error.
+            let safe: Vec<std::net::SocketAddr> = addrs
+                .into_iter()
+                .filter(|addr| !crate::config::is_private_ip(addr.ip()))
+                .collect();
+
+            if safe.is_empty() {
+                return Err(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::PermissionDenied,
+                    "DNS resolved only to private/loopback IPs (SSRF blocked)".to_string(),
+                ))
+                    as Box<dyn std::error::Error + Send + Sync>);
+            }
+
+            Ok(Box::new(safe.into_iter()) as Box<dyn Iterator<Item = std::net::SocketAddr> + Send>)
+        })
+    }
+}
+
 pub(crate) const MAX_RETRIES: u32 = 3;
 pub(crate) const BASE_DELAY_MS: u64 = 500;
 
@@ -87,20 +129,30 @@ pub(crate) fn build_http_client(tls: &TlsConfig) -> Client {
 
     builder
         .connect_timeout(Duration::from_secs(10))
+        // Prevent indefinite hangs if a backend accepts the connection but
+        // stops sending data. 5 minutes is generous for long LLM generations.
+        .read_timeout(Duration::from_secs(300))
+        // Validate resolved IPs at connection time to prevent DNS rebinding SSRF.
+        .dns_resolver(std::sync::Arc::new(SsrfSafeDnsResolver))
         .build()
         .expect("failed to build HTTP client")
 }
 
-/// Check if a status code is retryable (429 or 5xx).
+/// Check if a status code is retryable (408, 429, or 5xx).
 pub(crate) fn is_retryable(status: u16) -> bool {
-    status == 429 || (500..=599).contains(&status)
+    status == 408 || status == 429 || (500..=599).contains(&status)
 }
 
-/// Parse retry-after header value in seconds.
+/// Parse retry-after header as integer seconds or HTTP date (RFC 7231).
 pub(crate) fn parse_retry_after(headers: &reqwest::header::HeaderMap) -> Option<Duration> {
-    header_str(headers, "retry-after")
-        .and_then(|s| s.parse::<u64>().ok())
-        .map(Duration::from_secs)
+    let value = header_str(headers, "retry-after")?;
+    // Fast path: integer seconds
+    if let Ok(secs) = value.parse::<u64>() {
+        return Some(Duration::from_secs(secs));
+    }
+    // HTTP date (RFC 7231). Past dates return None (no wait needed).
+    let date = httpdate::parse_http_date(&value).ok()?;
+    date.duration_since(std::time::SystemTime::now()).ok()
 }
 
 /// Compute backoff delay with jitter.

@@ -2,8 +2,8 @@
 
 use crate::admin::state::RequestLogEntry;
 use rusqlite::{params, Connection};
-use std::sync::Arc;
-use tokio::sync::{mpsc, Mutex};
+use std::sync::{Arc, Mutex};
+use tokio::sync::mpsc;
 
 /// Initialize the SQLite database: create tables and indexes.
 pub fn init_db(conn: &Connection) -> rusqlite::Result<()> {
@@ -244,10 +244,12 @@ pub fn spawn_write_buffer(db: Arc<Mutex<Connection>>) -> mpsc::Sender<RequestLog
 }
 
 async fn flush_buffer(db: &Arc<Mutex<Connection>>, buf: &mut Vec<RequestLogEntry>) {
-    let mut entries = std::mem::take(buf);
-    let conn = db.lock().await;
+    let entries = std::mem::take(buf);
+    let db = db.clone();
     // Run SQLite IO on the blocking threadpool to avoid stalling the tokio executor.
-    let failed = tokio::task::block_in_place(|| -> bool {
+    // On failure, return the entries so they can be re-queued for retry.
+    let result = tokio::task::spawn_blocking(move || {
+        let conn = db.lock().unwrap_or_else(|e| e.into_inner());
         if let Err(e) = (|| -> rusqlite::Result<()> {
             let tx = conn.unchecked_transaction()?;
             for entry in &entries {
@@ -257,13 +259,15 @@ async fn flush_buffer(db: &Arc<Mutex<Connection>>, buf: &mut Vec<RequestLogEntry
             Ok(())
         })() {
             tracing::error!(error = %e, count = entries.len(), "failed to flush request log buffer");
-            true
+            Some(entries)
         } else {
-            false
+            None
         }
-    });
+    })
+    .await;
+
     // On failure, re-queue entries so they can be retried on the next flush.
-    if failed {
+    if let Ok(Some(mut entries)) = result {
         buf.append(&mut entries);
         // Cap retry buffer to prevent unbounded growth on persistent DB failure.
         const MAX_RETRY_BUFFER: usize = 1000;
@@ -338,7 +342,7 @@ mod tests {
     fn sample_entry() -> RequestLogEntry {
         RequestLogEntry {
             request_id: "test-123".into(),
-            timestamp: "2026-03-22T10:00:00Z".into(),
+            timestamp: "2099-01-01T00:00:00Z".into(),
             backend: "openai".into(),
             model_requested: Some("claude-sonnet-4-6".into()),
             model_mapped: Some("gpt-4o".into()),

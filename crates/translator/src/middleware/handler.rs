@@ -125,11 +125,16 @@ fn error_to_sse_event(message: &str) -> Event {
             message: message.to_string(),
         },
     };
-    // Best-effort; if serialization fails, send a plain text error
+    // Best-effort; if serialization fails, build JSON safely to avoid injection
     stream_event_to_sse(&event).unwrap_or_else(|_| {
-        Event::default().event("error").data(format!(
-            r#"{{"type":"error","error":{{"type":"api_error","message":"{message}"}}}}"#
-        ))
+        let fallback = serde_json::json!({
+            "type": "error",
+            "error": {
+                "type": "api_error",
+                "message": message
+            }
+        });
+        Event::default().event("error").data(fallback.to_string())
     })
 }
 

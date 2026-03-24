@@ -15,12 +15,19 @@ use std::sync::LazyLock;
 /// Allowed API keys loaded from `PROXY_API_KEYS` (comma-separated).
 /// When the set is empty, any non-empty key is accepted (open-relay mode).
 static ALLOWED_API_KEYS: LazyLock<HashSet<String>> = LazyLock::new(|| {
-    std::env::var("PROXY_API_KEYS")
+    let keys: HashSet<String> = std::env::var("PROXY_API_KEYS")
         .unwrap_or_default()
         .split(',')
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
-        .collect()
+        .collect();
+    if keys.is_empty() {
+        tracing::warn!(
+            "PROXY_API_KEYS is not set: proxy accepts ANY non-empty key (open-relay mode). \
+             Set PROXY_API_KEYS to restrict access."
+        );
+    }
+    keys
 });
 
 /// Validate that the request carries a valid API key.

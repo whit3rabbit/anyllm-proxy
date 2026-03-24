@@ -92,6 +92,26 @@ impl StreamingTranslator {
                 });
             }
 
+            // Handle refusals (safety filter triggered during streaming).
+            // Anthropic has no refusal type; surface as text so the client sees it.
+            if let Some(ref refusal) = choice.delta.refusal {
+                if !self.content_block_open {
+                    events.push(anthropic::StreamEvent::ContentBlockStart {
+                        index: self.content_block_index,
+                        content_block: anthropic::ContentBlock::Text {
+                            text: String::new(),
+                        },
+                    });
+                    self.content_block_open = true;
+                }
+                events.push(anthropic::StreamEvent::ContentBlockDelta {
+                    index: self.content_block_index,
+                    delta: anthropic::Delta::TextDelta {
+                        text: super::format_refusal(refusal),
+                    },
+                });
+            }
+
             // Handle tool call deltas
             if let Some(ref tool_calls) = choice.delta.tool_calls {
                 for tc in tool_calls {
@@ -811,5 +831,50 @@ mod tests {
             "tool call with empty name should be skipped, got: {:?}",
             events
         );
+    }
+
+    #[test]
+    fn streaming_refusal_emits_text_delta() {
+        let mut translator = StreamingTranslator::new("gpt-4o".into());
+        let chunk = ChatCompletionChunk {
+            id: "chatcmpl-1".into(),
+            object: "chat.completion.chunk".into(),
+            model: "gpt-4o".into(),
+            choices: vec![ChunkChoice {
+                index: 0,
+                delta: ChunkDelta {
+                    role: None,
+                    content: None,
+                    refusal: Some("content policy violation".into()),
+                    tool_calls: None,
+                },
+                finish_reason: None,
+                logprobs: None,
+            }],
+            usage: None,
+            created: None,
+            system_fingerprint: None,
+        };
+        let events = translator.process_chunk(&chunk);
+        // message_start + content_block_start + content_block_delta
+        assert!(
+            events.len() >= 3,
+            "expected at least 3 events, got {}",
+            events.len()
+        );
+        match &events[events.len() - 1] {
+            anthropic::StreamEvent::ContentBlockDelta {
+                delta: anthropic::Delta::TextDelta { text },
+                ..
+            } => {
+                assert!(
+                    text.contains("Refusal"),
+                    "expected refusal text, got: {}",
+                    text
+                );
+                assert!(text.contains("content policy violation"));
+            }
+            other => panic!("expected TextDelta with refusal, got {:?}", other),
+        }
     }
 }

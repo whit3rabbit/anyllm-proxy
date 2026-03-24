@@ -8,6 +8,14 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use std::sync::Arc;
+use subtle::ConstantTimeEq;
+
+/// Constant-time string comparison to prevent timing side-channels.
+pub(super) fn constant_time_eq(a: &str, b: &str) -> bool {
+    // Length comparison leaks length info, but the Bearer prefix is fixed-length
+    // and the token format (UUID) is fixed-length, so this is acceptable.
+    a.len() == b.len() && a.as_bytes().ct_eq(b.as_bytes()).into()
+}
 
 /// Axum middleware that validates the admin bearer token.
 pub async fn validate_admin_token(
@@ -23,7 +31,7 @@ pub async fn validate_admin_token(
     let expected = format!("Bearer {}", token.as_str());
 
     match auth_header {
-        Some(h) if h == expected => next.run(req).await,
+        Some(h) if constant_time_eq(h, &expected) => next.run(req).await,
         _ => (
             StatusCode::UNAUTHORIZED,
             axum::Json(serde_json::json!({

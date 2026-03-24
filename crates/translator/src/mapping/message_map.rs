@@ -35,6 +35,10 @@ pub fn anthropic_to_openai_request(
 
     if let Some(ref system) = req.system {
         let text = extract_system_text(system);
+        // Backward compat: uses System role instead of Developer so older
+        // local LLMs (vLLM, Ollama, llama-server) that don't recognize
+        // "developer" continue to work. Trade-off: OpenAI o1/o3 models
+        // require "developer" and will reject "system".
         messages.push(openai::ChatMessage {
             role: openai::ChatRole::System,
             content: Some(openai::ChatContent::Text(text)),
@@ -90,6 +94,10 @@ pub fn anthropic_to_openai_request(
     openai::ChatCompletionRequest {
         model: req.model.clone(),
         messages,
+        // Backward compat: sets both max_tokens (deprecated) and
+        // max_completion_tokens so older local LLMs that only understand
+        // max_tokens still work. Trade-off: OpenAI o-series models may
+        // reject requests with both fields set.
         max_tokens: Some(req.max_tokens),
         max_completion_tokens: Some(req.max_tokens),
         // Compat spec: "Between 0 and 1 (inclusive). Values greater than 1 are capped at 1."
@@ -100,6 +108,9 @@ pub fn anthropic_to_openai_request(
         tools,
         tool_choice,
         stream: req.stream,
+        // Hardcoded: required for the streaming translator to capture final
+        // token usage from OpenAI's usage chunk. Older local LLMs that don't
+        // recognize stream_options may reject this with 400.
         stream_options: if req.stream == Some(true) {
             Some(openai::StreamOptions {
                 include_usage: true,
@@ -311,7 +322,9 @@ fn convert_user_blocks(blocks: &[anthropic::ContentBlock], out: &mut Vec<openai:
                 content_parts.push(openai::ChatContentPart::Text { text: note });
             }
             // ToolUse and Thinking blocks don't appear in user messages; ignore if present
-            anthropic::ContentBlock::ToolUse { .. } | anthropic::ContentBlock::Thinking { .. } => {}
+            anthropic::ContentBlock::ToolUse { .. }
+            | anthropic::ContentBlock::Thinking { .. }
+            | anthropic::ContentBlock::RedactedThinking { .. } => {}
         }
     }
 
@@ -377,6 +390,15 @@ pub fn openai_to_anthropic_response(
                         }
                     }
                 }
+            }
+        }
+
+        // Map refusal to text block (same pattern as Responses API path)
+        if let Some(ref refusal) = choice.message.refusal {
+            if !refusal.is_empty() {
+                content.push(anthropic::ContentBlock::Text {
+                    text: super::format_refusal(refusal),
+                });
             }
         }
 
@@ -1365,6 +1387,31 @@ mod tests {
     }
 
     #[test]
+    fn redacted_thinking_block_dropped_in_assistant_translation() {
+        let mut req = basic_request();
+        req.messages = vec![anthropic::InputMessage {
+            role: anthropic::Role::Assistant,
+            content: anthropic::Content::Blocks(vec![
+                anthropic::ContentBlock::RedactedThinking {
+                    data: "encrypted_data".into(),
+                },
+                anthropic::ContentBlock::Text {
+                    text: "My answer.".into(),
+                },
+            ]),
+        }];
+
+        let oai = anthropic_to_openai_request(&req);
+
+        // RedactedThinking block dropped, text block preserved
+        assert_eq!(oai.messages.len(), 1);
+        assert!(matches!(
+            &oai.messages[0].content,
+            Some(openai::ChatContent::Text(t)) if t == "My answer."
+        ));
+    }
+
+    #[test]
     fn temperature_clamped_to_zero_one() {
         let mut req = basic_request();
         req.temperature = Some(1.5);
@@ -1693,6 +1740,42 @@ mod tests {
         match &anth.content[1] {
             anthropic::ContentBlock::ToolUse { name, .. } => assert_eq!(name, "Read"),
             other => panic!("expected ToolUse, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn refusal_mapped_to_text_block() {
+        let resp = openai::ChatCompletionResponse {
+            id: "chatcmpl-1".into(),
+            object: "chat.completion".into(),
+            model: "gpt-4o".into(),
+            choices: vec![openai::Choice {
+                index: 0,
+                message: openai::ChatMessage {
+                    role: openai::ChatRole::Assistant,
+                    content: None,
+                    name: None,
+                    tool_calls: None,
+                    tool_call_id: None,
+                    refusal: Some("I cannot help with that request.".into()),
+                },
+                finish_reason: Some(openai::FinishReason::ContentFilter),
+                logprobs: None,
+            }],
+            usage: None,
+            created: None,
+            system_fingerprint: None,
+            service_tier: None,
+        };
+
+        let anth = openai_to_anthropic_response(&resp, "m");
+        assert_eq!(anth.content.len(), 1);
+        match &anth.content[0] {
+            anthropic::ContentBlock::Text { text } => {
+                assert!(text.contains("Refusal"));
+                assert!(text.contains("I cannot help with that request."));
+            }
+            other => panic!("expected Text with refusal, got {:?}", other),
         }
     }
 }

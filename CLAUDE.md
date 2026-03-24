@@ -12,7 +12,7 @@ See PLAN.md for the full specification and TASKS.md for phased implementation st
 
 **Working (verified):**
 - Build: `cargo build` clean, `cargo clippy -- -D warnings` clean
-- Tests: ~357 tests passing (~220 translator, ~137 proxy/integration), 4 ignored (live API)
+- Tests: ~367 tests passing, 4 ignored (live API)
 - Full Anthropic Messages API translation: non-streaming, streaming SSE, tool calling, file/document blocks
 - Proxy middleware: health, auth, request ID, size limits, concurrency limits, retry with backoff
 - Compatibility endpoints: /v1/models, count_tokens (approximate via tiktoken), batches (stub)
@@ -27,7 +27,7 @@ See PLAN.md for the full specification and TASKS.md for phased implementation st
 
 ```bash
 cargo build                          # build everything
-cargo test                           # run all tests (~438 tests)
+cargo test                           # run all tests (~367 tests, 4 ignored)
 cargo test -p anthropic_openai_translate  # translator crate only
 cargo test -p anthropic_openai_proxy      # proxy crate only
 cargo test health_endpoint            # single test by name
@@ -68,7 +68,7 @@ OPENAI_API_KEY=sk-... cargo run -p anthropic_openai_proxy
 Cargo workspace with two crates:
 
 ### `crates/translator` (lib: `anthropic_openai_translate`)
-Pure translation logic, no IO. Four modules:
+Pure translation logic, no IO. Key modules:
 - **`anthropic/`**: Anthropic Messages API types (request, response, streaming events, errors)
 - **`openai/`**: OpenAI types for both Chat Completions and Responses APIs
 - **`mapping/`**: Stateless conversion functions between the two APIs
@@ -79,7 +79,9 @@ Pure translation logic, no IO. Four modules:
   - `streaming_map`: SSE event stream translation state machine
   - `responses_message_map`: Anthropic to/from OpenAI Responses API mapping
   - `responses_streaming_map`: Responses API SSE event stream translation state machine
+- **`middleware/`**: Request/response handler orchestrating translation and backend calls
 - **`util/`**: JSON helpers, ID generation (uuid v4), secret redaction
+- **`config.rs`**: Translator-level configuration, **`error.rs`**: Error types, **`translate.rs`**: Top-level translation entry points
 
 ### `crates/proxy` (bin: `anthropic_openai_proxy`)
 HTTP proxy built on axum + reqwest:
@@ -90,7 +92,7 @@ HTTP proxy built on axum + reqwest:
 - **`backend/mod.rs`**: `BackendClient` enum (OpenAI/OpenAIResponses/Vertex/GeminiOpenAI/Anthropic), `BackendError`, shared retry helpers
 - **`backend/openai_client.rs`**: reqwest client calling OpenAI-compatible Chat Completions with retry/backoff on 429/5xx (used for OpenAI, Vertex, and Gemini backends)
 - **`backend/anthropic_client.rs`**: Passthrough client forwarding Anthropic requests as-is to upstream Anthropic API (no translation)
-- **`admin/`**: Admin server (localhost-only) with config management, WebSocket live updates, token auth (`auth.rs`, `db.rs`, `routes.rs`, `state.rs`)
+- **`admin/`**: Admin server (localhost-only) with config management, WebSocket live updates, token auth (`auth.rs`, `db.rs`, `mod.rs`, `routes.rs`, `state.rs`)
 - **`admin-ui/`**: Static admin UI served by the admin server (`index.html`)
 - **`metrics/`**: Request count, success/error tracking, exposed via GET /metrics
 
@@ -109,7 +111,7 @@ Client (Anthropic format) -> proxy (axum)
 - Tool call IDs pass through directly (Anthropic tool_use.id = OpenAI tool_call.id).
 - OpenAI `arguments` is a JSON string; Anthropic `input` is a JSON object. The mapping layer handles serialization.
 - Streaming uses a state machine in `streaming_map.rs` that transforms OpenAI chunk events into Anthropic SSE events, with bounded channel (32) for backpressure.
-- JSON fixtures in `fixtures/anthropic/` and `fixtures/openai/` are used for golden-file testing (4 fixture files).
+- JSON fixtures in `fixtures/anthropic/` and `fixtures/openai/` are used for golden-file testing (14 fixture files).
 - Retry logic: 3 retries with exponential backoff + 25% jitter, respects retry-after header.
 - Backoff jitter is deterministic (upper bound, not random) to keep tests predictable.
 - `ChatCompletionRequest` uses `#[serde(flatten)] pub extra: serde_json::Map` to capture unknown OpenAI fields (e.g., `seed`, `logprobs`, `logit_bias`, `n`, `reasoning_effort`). These pass through to OpenAI without typed handling. Only fields that require translation logic (not just forwarding) need explicit struct fields.
@@ -119,7 +121,7 @@ Client (Anthropic format) -> proxy (axum)
 - Most source files reference their PLAN.md line ranges in a comment at the top.
 - Test files live alongside source (`#[cfg(test)]` modules) and in `crates/proxy/tests/` for integration tests.
 - Error types use `thiserror` derive macros.
-- Test distribution: translator (~297 tests), proxy (~141 tests including integration/compatibility).
+- Test distribution: translator (~242 tests), proxy (~125 tests including integration/compatibility).
 
 ## References
 

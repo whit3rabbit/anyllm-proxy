@@ -60,6 +60,9 @@ pub struct ResponsesUsage {
     pub output_tokens: u32,
     #[serde(default)]
     pub total_tokens: u32,
+    /// OpenAI returns cached_tokens here; mapped to Anthropic cache_read_input_tokens.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_token_details: Option<serde_json::Value>,
 }
 
 #[cfg(test)]

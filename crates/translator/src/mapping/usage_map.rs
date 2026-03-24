@@ -8,12 +8,24 @@ use crate::openai;
 ///
 /// OpenAI: <https://platform.openai.com/docs/api-reference/chat/object>
 /// Anthropic: <https://docs.anthropic.com/en/api/messages>
+/// Extract `cached_tokens` from an OpenAI token details JSON object.
+/// Used by both Chat Completions (`prompt_tokens_details`) and Responses API
+/// (`input_token_details`) paths to map to Anthropic's `cache_read_input_tokens`.
+pub(crate) fn extract_cached_tokens(details: Option<&serde_json::Value>) -> Option<u32> {
+    details
+        .and_then(|d| d.get("cached_tokens"))
+        .and_then(|v| v.as_u64())
+        .map(|n| n as u32)
+}
+
 pub fn openai_to_anthropic_usage(usage: &openai::ChatUsage) -> anthropic::Usage {
+    let cache_read_input_tokens = extract_cached_tokens(usage.prompt_tokens_details.as_ref());
+
     anthropic::Usage {
         input_tokens: usage.prompt_tokens,
         output_tokens: usage.completion_tokens,
         cache_creation_input_tokens: None,
-        cache_read_input_tokens: None,
+        cache_read_input_tokens,
     }
 }
 
@@ -116,5 +128,34 @@ mod tests {
         assert_eq!(back.output_tokens, 5);
         assert!(back.cache_creation_input_tokens.is_none());
         assert!(back.cache_read_input_tokens.is_none());
+    }
+
+    #[test]
+    fn openai_to_anthropic_with_cached_tokens() {
+        let oai = openai::ChatUsage {
+            prompt_tokens: 100,
+            completion_tokens: 50,
+            total_tokens: 150,
+            completion_tokens_details: None,
+            prompt_tokens_details: Some(
+                serde_json::json!({"cached_tokens": 42, "audio_tokens": 0}),
+            ),
+        };
+        let anth = openai_to_anthropic_usage(&oai);
+        assert_eq!(anth.cache_read_input_tokens, Some(42));
+        assert!(anth.cache_creation_input_tokens.is_none());
+    }
+
+    #[test]
+    fn openai_to_anthropic_zero_cached_tokens() {
+        let oai = openai::ChatUsage {
+            prompt_tokens: 100,
+            completion_tokens: 50,
+            total_tokens: 150,
+            completion_tokens_details: None,
+            prompt_tokens_details: Some(serde_json::json!({"cached_tokens": 0})),
+        };
+        let anth = openai_to_anthropic_usage(&oai);
+        assert_eq!(anth.cache_read_input_tokens, Some(0));
     }
 }

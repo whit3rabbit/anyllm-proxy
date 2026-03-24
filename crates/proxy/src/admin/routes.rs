@@ -14,18 +14,22 @@ use axum::{
     Json, Router,
 };
 use std::sync::Arc;
-
 /// Reject cross-origin requests to the admin API.
-/// Checks the Origin header and only allows localhost origins.
+/// Parses the Origin URL and checks the host component exactly
+/// to prevent bypass via e.g. `http://127.0.0.1.attacker.com`.
 async fn reject_cross_origin(
     req: axum::extract::Request,
     next: middleware::Next,
 ) -> Result<axum::response::Response, StatusCode> {
     if let Some(origin) = req.headers().get("origin") {
         let origin_str = origin.to_str().map_err(|_| StatusCode::BAD_REQUEST)?;
-        let is_localhost = origin_str.starts_with("http://127.0.0.1")
-            || origin_str.starts_with("http://localhost")
-            || origin_str.starts_with("http://[::1]");
+        let is_localhost = match url::Url::parse(origin_str) {
+            Ok(url) => matches!(
+                url.host_str(),
+                Some("127.0.0.1") | Some("localhost") | Some("[::1]") | Some("::1")
+            ),
+            Err(_) => false,
+        };
         if !is_localhost {
             return Err(StatusCode::FORBIDDEN);
         }
@@ -58,11 +62,13 @@ pub fn admin_router(shared: SharedState, token: Arc<String>) -> Router {
         ))
         .layer(middleware::from_fn(reject_cross_origin));
 
-    // WebSocket: auth via query param since browsers can't set headers on WS.
+    // WebSocket: auth via first message since browsers can't set headers on WS.
+    // Origin check applied here too to prevent cross-site WebSocket hijacking.
     let ws_state = (shared.clone(), token.clone());
     let ws_route = Router::new()
         .route("/admin/ws", get(ws_handler))
-        .with_state(ws_state);
+        .with_state(ws_state)
+        .layer(middleware::from_fn(reject_cross_origin));
 
     // SPA serving (no auth required, token passed via query param in browser).
     let spa_route = Router::new()
@@ -83,7 +89,17 @@ static SPA_HTML: &str = include_str!("../../admin-ui/index.html");
 async fn serve_spa() -> impl IntoResponse {
     (
         StatusCode::OK,
-        [("content-type", "text/html; charset=utf-8")],
+        [
+            ("content-type", "text/html; charset=utf-8"),
+            // Restrictive CSP: inline script/style needed because SPA is a single HTML file.
+            // frame-ancestors 'none' prevents clickjacking.
+            (
+                "content-security-policy",
+                "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; \
+                 connect-src 'self'; frame-ancestors 'none'",
+            ),
+            ("x-frame-options", "DENY"),
+        ],
         SPA_HTML,
     )
 }
@@ -95,7 +111,10 @@ async fn get_config(State(shared): State<SharedState>) -> Json<serde_json::Value
     // Clone config snapshot and drop the read guard before any .await points.
     // std::sync::RwLockReadGuard is !Send, cannot be held across awaits.
     let (log_level, log_bodies, backends) = {
-        let config = shared.runtime_config.read().unwrap();
+        let config = shared
+            .runtime_config
+            .read()
+            .unwrap_or_else(|e| e.into_inner());
         let mut backends = serde_json::Map::new();
         for (name, mapping) in &config.model_mappings {
             backends.insert(
@@ -110,12 +129,11 @@ async fn get_config(State(shared): State<SharedState>) -> Json<serde_json::Value
     };
 
     // Get overrides to mark which fields are overridden.
-    let overrides = {
-        let db = shared.db.lock().await;
-        tokio::task::block_in_place(|| {
-            crate::admin::db::get_config_overrides(&db).unwrap_or_default()
-        })
-    };
+    let overrides = crate::admin::state::with_db(&shared.db, |conn| {
+        crate::admin::db::get_config_overrides(conn).unwrap_or_default()
+    })
+    .await
+    .unwrap_or_default();
     let override_keys: Vec<String> = overrides.iter().map(|(k, _, _)| k.clone()).collect();
 
     Json(serde_json::json!({
@@ -137,14 +155,29 @@ async fn put_config(
     let mut db_writes: Vec<(String, String)> = Vec::new();
 
     if let Some(level) = body.get("log_level").and_then(|v| v.as_str()) {
+        if level == "trace" {
+            tracing::warn!(
+                "admin API: log_level set to 'trace' -- this may expose secrets in logs \
+                 (e.g., Authorization headers, request bodies)"
+            );
+        }
         db_writes.push(("log_level".to_string(), level.to_string()));
     }
     if let Some(val) = body.get("log_bodies").and_then(|v| v.as_bool()) {
+        if val {
+            tracing::warn!(
+                "admin API: log_bodies enabled -- request/response bodies will be logged, \
+                 which may include sensitive data (PII, API keys in forwarded requests)"
+            );
+        }
         db_writes.push(("log_bodies".to_string(), val.to_string()));
     }
     if let Some(backends) = body.get("backends").and_then(|v| v.as_object()) {
         // Read current config to validate backend names exist
-        let config = shared.runtime_config.read().unwrap();
+        let config = shared
+            .runtime_config
+            .read()
+            .unwrap_or_else(|e| e.into_inner());
         for (name, settings) in backends {
             if config.model_mappings.contains_key(name) {
                 if let Some(big) = settings.get("big_model").and_then(|v| v.as_str()) {
@@ -157,19 +190,23 @@ async fn put_config(
         }
     }
 
-    // Phase 1: Persist to SQLite (acquire and release db lock before touching config)
+    // Phase 1: Persist to SQLite before touching in-memory config.
     {
-        let db = shared.db.lock().await;
-        tokio::task::block_in_place(|| {
-            for (key, value) in &db_writes {
-                crate::admin::db::set_config_override(&db, key, value).ok();
+        let writes = db_writes.clone();
+        crate::admin::state::with_db(&shared.db, move |conn| {
+            for (key, value) in &writes {
+                crate::admin::db::set_config_override(conn, key, value).ok();
             }
-        });
+        })
+        .await;
     }
 
     // Phase 2: Apply to in-memory config (no async lock held)
     {
-        let mut config = shared.runtime_config.write().unwrap();
+        let mut config = shared
+            .runtime_config
+            .write()
+            .unwrap_or_else(|e| e.into_inner());
         for (key, value) in &db_writes {
             match key.as_str() {
                 "log_level" => {
@@ -219,10 +256,11 @@ async fn put_config(
 
 /// GET /admin/api/config/overrides -- only SQLite overrides.
 async fn get_config_overrides(State(shared): State<SharedState>) -> Json<serde_json::Value> {
-    let db = shared.db.lock().await;
-    let overrides = tokio::task::block_in_place(|| {
-        crate::admin::db::get_config_overrides(&db).unwrap_or_default()
-    });
+    let overrides = crate::admin::state::with_db(&shared.db, |conn| {
+        crate::admin::db::get_config_overrides(conn).unwrap_or_default()
+    })
+    .await
+    .unwrap_or_default();
 
     let entries: Vec<serde_json::Value> = overrides
         .into_iter()
@@ -243,17 +281,28 @@ async fn delete_config_override(
     State(shared): State<SharedState>,
     Path(key): Path<String>,
 ) -> impl IntoResponse {
-    let db = shared.db.lock().await;
-    match tokio::task::block_in_place(|| crate::admin::db::delete_config_override(&db, &key)) {
-        Ok(true) => (StatusCode::OK, Json(serde_json::json!({"deleted": key}))).into_response(),
-        Ok(false) => (
+    let key_clone = key.clone();
+    match crate::admin::state::with_db(&shared.db, move |conn| {
+        crate::admin::db::delete_config_override(conn, &key_clone)
+    })
+    .await
+    {
+        Some(Ok(true)) => {
+            (StatusCode::OK, Json(serde_json::json!({"deleted": key}))).into_response()
+        }
+        Some(Ok(false)) => (
             StatusCode::NOT_FOUND,
             Json(serde_json::json!({"error": "override not found"})),
         )
             .into_response(),
-        Err(e) => (
+        Some(Err(e)) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({"error": e.to_string()})),
+        )
+            .into_response(),
+        None => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": "task panicked"})),
         )
             .into_response(),
     }
@@ -277,10 +326,9 @@ async fn get_metrics(State(shared): State<SharedState>) -> Json<serde_json::Valu
         );
     }
 
-    let (p50, p95, p99) = {
-        let db = shared.db.lock().await;
-        tokio::task::block_in_place(|| compute_latency_percentiles(&db))
-    };
+    let (p50, p95, p99) = crate::admin::state::with_db(&shared.db, compute_latency_percentiles)
+        .await
+        .unwrap_or((None, None, None));
 
     Json(serde_json::json!({
         "backends": backends,
@@ -352,24 +400,32 @@ async fn get_requests(
     let limit = params.limit.unwrap_or(50).min(1000);
     let offset = params.offset.unwrap_or(0);
 
-    let db = shared.db.lock().await;
-    match tokio::task::block_in_place(|| {
+    let backend = params.backend;
+    let since = params.since;
+    let status = params.status;
+    match crate::admin::state::with_db(&shared.db, move |conn| {
         crate::admin::db::query_request_log(
-            &db,
+            conn,
             limit,
             offset,
-            params.backend.as_deref(),
-            params.since.as_deref(),
-            params.status.as_deref(),
+            backend.as_deref(),
+            since.as_deref(),
+            status.as_deref(),
         )
-    }) {
-        Ok(entries) => Json(serde_json::json!({
+    })
+    .await
+    {
+        Some(Ok(entries)) => Json(serde_json::json!({
             "requests": entries,
             "limit": limit,
             "offset": offset,
         })),
-        Err(e) => Json(serde_json::json!({
+        Some(Err(e)) => Json(serde_json::json!({
             "error": e.to_string(),
+            "requests": [],
+        })),
+        None => Json(serde_json::json!({
+            "error": "task panicked",
             "requests": [],
         })),
     }
@@ -380,19 +436,27 @@ async fn get_request_by_id(
     State(shared): State<SharedState>,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
-    let db = shared.db.lock().await;
-    match tokio::task::block_in_place(|| crate::admin::db::get_request_by_id(&db, &id)) {
-        Ok(Some(entry)) => {
+    match crate::admin::state::with_db(&shared.db, move |conn| {
+        crate::admin::db::get_request_by_id(conn, &id)
+    })
+    .await
+    {
+        Some(Ok(Some(entry))) => {
             (StatusCode::OK, Json(serde_json::to_value(entry).unwrap())).into_response()
         }
-        Ok(None) => (
+        Some(Ok(None)) => (
             StatusCode::NOT_FOUND,
             Json(serde_json::json!({"error": "request not found"})),
         )
             .into_response(),
-        Err(e) => (
+        Some(Err(e)) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({"error": e.to_string()})),
+        )
+            .into_response(),
+        None => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": "task panicked"})),
         )
             .into_response(),
     }
@@ -402,7 +466,10 @@ async fn get_request_by_id(
 
 /// GET /admin/api/backends -- list configured backends with status.
 async fn get_backends(State(shared): State<SharedState>) -> Json<serde_json::Value> {
-    let config = shared.runtime_config.read().unwrap();
+    let config = shared
+        .runtime_config
+        .read()
+        .unwrap_or_else(|e| e.into_inner());
 
     let mut backends = Vec::new();
     for (name, mapping) in &config.model_mappings {
@@ -450,13 +517,15 @@ async fn handle_ws(mut socket: WebSocket, shared: SharedState, expected_token: A
         Ok(Some(Ok(Message::Text(text)))) => {
             // Accept either raw token string or {"token": "..."} JSON.
             let token_str = text.to_string();
-            if token_str.trim() == expected_token.as_str() {
+            let trimmed = token_str.trim();
+            let expected = expected_token.as_str();
+            if super::auth::constant_time_eq(trimmed, expected) {
                 true
             } else {
                 serde_json::from_str::<serde_json::Value>(&token_str)
                     .ok()
                     .and_then(|v| v.get("token")?.as_str().map(String::from))
-                    .map(|t| t == *expected_token)
+                    .map(|t| super::auth::constant_time_eq(&t, expected))
                     .unwrap_or(false)
             }
         }

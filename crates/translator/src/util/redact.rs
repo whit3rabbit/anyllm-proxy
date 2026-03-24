@@ -3,11 +3,21 @@
 
 /// Redact a secret string for logging, showing only the first 4 and last 4 characters.
 /// Returns "****" for strings shorter than 12 characters.
+/// Uses char-aware slicing to avoid panics on multi-byte UTF-8 input.
 pub fn redact_secret(s: &str) -> String {
-    if s.len() < 12 {
+    let char_count = s.chars().count();
+    if char_count < 12 {
         "****".to_string()
     } else {
-        format!("{}...{}", &s[..4], &s[s.len() - 4..])
+        // Find byte offset of the 4th char boundary for prefix.
+        let prefix_end = s.char_indices().nth(4).map(|(i, _)| i).unwrap_or(s.len());
+        // Find byte offset of the (len-4)th char boundary for suffix.
+        let suffix_start = s
+            .char_indices()
+            .nth(char_count - 4)
+            .map(|(i, _)| i)
+            .unwrap_or(0);
+        format!("{}...{}", &s[..prefix_end], &s[suffix_start..])
     }
 }
 
@@ -40,5 +50,22 @@ mod tests {
         let key = "sk-proj-abcdefghijklmnop";
         let redacted = redact_secret(key);
         assert_eq!(redacted, "sk-p...mnop");
+    }
+
+    #[test]
+    fn multibyte_utf8_does_not_panic() {
+        // 12 chars, but 24 bytes (each char is 2 bytes in UTF-8).
+        let key = "\u{00e9}\u{00e9}\u{00e9}\u{00e9}\u{00e9}\u{00e9}\u{00e9}\u{00e9}\u{00e9}\u{00e9}\u{00e9}\u{00e9}";
+        assert_eq!(key.chars().count(), 12);
+        let redacted = redact_secret(key);
+        assert_eq!(redacted, "\u{00e9}\u{00e9}\u{00e9}\u{00e9}...\u{00e9}\u{00e9}\u{00e9}\u{00e9}");
+    }
+
+    #[test]
+    fn multibyte_short_string() {
+        // 6 chars but 12 bytes -- should still be "****" because char count < 12.
+        let key = "\u{00e9}\u{00e9}\u{00e9}\u{00e9}\u{00e9}\u{00e9}";
+        assert_eq!(key.chars().count(), 6);
+        assert_eq!(redact_secret(key), "****");
     }
 }

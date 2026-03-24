@@ -96,7 +96,9 @@ async fn main() {
     };
 
     // Now wrap conn in Arc<Mutex> and start the write buffer.
-    let db = Arc::new(tokio::sync::Mutex::new(conn));
+    // Uses std::sync::Mutex because rusqlite is synchronous; all access
+    // goes through spawn_blocking to avoid stalling the tokio executor.
+    let db = Arc::new(std::sync::Mutex::new(conn));
     let (events_tx, _) = tokio::sync::broadcast::channel(1024);
     let log_tx = admin::db::spawn_write_buffer(db.clone());
 
@@ -114,11 +116,21 @@ async fn main() {
         log_reload: Some(log_reload),
     };
 
-    // Admin token: use env var or generate random UUID.
+    // Admin token: use env var or generate random UUID written to a file.
     let admin_token = std::env::var("ADMIN_TOKEN").unwrap_or_else(|_| {
         let token = uuid::Uuid::new_v4().to_string();
-        // Print to stderr, not to structured logs (token is a secret).
-        eprintln!("Admin token: {token}");
+        let token_path = std::env::var("ADMIN_TOKEN_FILE")
+            .unwrap_or_else(|_| ".admin_token".into());
+        // Write token to file with restrictive permissions instead of stderr,
+        // because stderr is captured by container log drivers in production.
+        if let Err(e) = write_token_file(&token_path, &token) {
+            // Fall back to stderr if file write fails (e.g., read-only filesystem).
+            eprintln!("WARNING: could not write admin token to {token_path}: {e}");
+            eprintln!("Admin token: {token}");
+        } else {
+            // Log the path, not the token itself.
+            tracing::info!(path = %token_path, "generated admin token written to file (set ADMIN_TOKEN env var to avoid this)");
+        }
         token
     });
     let admin_token = Arc::new(admin_token);
@@ -134,17 +146,16 @@ async fn main() {
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(3600));
         loop {
             interval.tick().await;
-            let conn = retention_db.lock().await;
-            // Run SQLite IO on the blocking threadpool.
-            tokio::task::block_in_place(|| {
-                match admin::db::purge_old_logs(&conn, retention_days) {
+            admin::state::with_db(&retention_db, move |conn| {
+                match admin::db::purge_old_logs(conn, retention_days) {
                     Ok(n) if n > 0 => {
                         tracing::info!(purged = n, "purged old request log entries")
                     }
                     Err(e) => tracing::error!(error = %e, "failed to purge old logs"),
                     _ => {}
                 }
-            });
+            })
+            .await;
         }
     });
 
@@ -232,6 +243,20 @@ async fn main() {
     // Wait for both servers to finish.
     let _ = tokio::join!(proxy_handle, admin_handle);
     tracing::info!("server shut down gracefully");
+}
+
+/// Write the admin token to a file with mode 0600 (owner-only read/write).
+fn write_token_file(path: &str, token: &str) -> std::io::Result<()> {
+    use std::io::Write;
+    let mut file = std::fs::File::create(path)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+    }
+    file.write_all(token.as_bytes())?;
+    file.write_all(b"\n")?;
+    Ok(())
 }
 
 async fn shutdown_signal() {

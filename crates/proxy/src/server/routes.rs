@@ -19,7 +19,7 @@ use futures::stream::Stream;
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock, RwLock};
 use tiktoken_rs::CoreBPE;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Semaphore};
 use tokio_stream::wrappers::ReceiverStream;
 
 /// GPT-4o family tokenizer, initialized once. Used for approximate token counting.
@@ -38,12 +38,18 @@ pub struct AppState {
     pub shared: Option<SharedState>,
     /// Backend name for logging purposes.
     pub backend_name: String,
+    /// Concurrency limiter. Requests exceeding the limit get 429 immediately
+    /// (not queued, unlike Tower's ConcurrencyLimitLayer).
+    pub concurrency: Arc<Semaphore>,
 }
 
 impl AppState {
     /// Map a model name through the current runtime config for this backend.
     fn map_model(&self, model: &str) -> String {
-        let config = self.runtime_config.read().unwrap();
+        let config = self
+            .runtime_config
+            .read()
+            .unwrap_or_else(|e| e.into_inner());
         if let Some(mapping) = config.model_mappings.get(&self.backend_name) {
             mapping.map_model(model)
         } else {
@@ -53,7 +59,10 @@ impl AppState {
 
     /// Whether request/response body logging is enabled.
     fn log_bodies(&self) -> bool {
-        self.runtime_config.read().unwrap().log_bodies
+        self.runtime_config
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .log_bodies
     }
 }
 
@@ -95,7 +104,9 @@ pub fn app_multi_with_shared(config: MultiConfig, shared: Option<SharedState>) -
         }))
     };
 
-    // Build per-backend sub-routers
+    // Build per-backend sub-routers. Keep a map of AppState so the default
+    // backend can reuse the same state (same semaphore, same reqwest client).
+    let mut backend_states: HashMap<String, (AppState, bool)> = HashMap::new();
     for (name, bc) in &config.backends {
         let metrics = Metrics::new();
         backend_metrics.insert(name.clone(), metrics.clone());
@@ -106,32 +117,21 @@ pub fn app_multi_with_shared(config: MultiConfig, shared: Option<SharedState>) -
             runtime_config: runtime_config.clone(),
             shared: shared.clone(),
             backend_name: name.clone(),
+            concurrency: Arc::new(Semaphore::new(super::middleware::MAX_CONCURRENT_REQUESTS)),
         };
 
         let is_anthropic = bc.kind == BackendKind::Anthropic;
-        let sub = backend_router(state, is_anthropic);
+        let sub = backend_router(state.clone(), is_anthropic);
+        backend_states.insert(name.clone(), (state, is_anthropic));
 
         // Nest under /{name}/
         router = router.nest(&format!("/{name}"), sub);
     }
 
-    // Default backend: also serve at un-prefixed /v1/messages for backward compat
-    if let Some(bc) = config.backends.get(&config.default_backend) {
-        let default_metrics = backend_metrics
-            .get(&config.default_backend)
-            .cloned()
-            .unwrap_or_else(Metrics::new);
-
-        let default_state = AppState {
-            backend: BackendClient::from_backend_config(bc),
-            metrics: default_metrics,
-            runtime_config: runtime_config.clone(),
-            shared: shared.clone(),
-            backend_name: config.default_backend.clone(),
-        };
-
-        let is_anthropic = bc.kind == BackendKind::Anthropic;
-        let default_sub = backend_router(default_state, is_anthropic);
+    // Default backend: also serve at un-prefixed /v1/messages for backward compat.
+    // Reuses the same AppState (shared semaphore, connection pool) as the named route.
+    if let Some((default_state, is_anthropic)) = backend_states.get(&config.default_backend) {
+        let default_sub = backend_router(default_state.clone(), *is_anthropic);
         router = router.merge(default_sub);
     }
 
@@ -195,10 +195,29 @@ fn backend_router(state: AppState, is_anthropic: bool) -> Router<GlobalState> {
             super::middleware::log_anthropic_headers,
         ))
         .layer(DefaultBodyLimit::max(super::middleware::MAX_BODY_SIZE))
-        .layer(tower::limit::ConcurrencyLimitLayer::new(
-            super::middleware::MAX_CONCURRENT_REQUESTS,
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            enforce_concurrency,
         ))
         .with_state(state)
+}
+
+/// Reject requests when the concurrency limit is reached (429), rather than
+/// queueing them like Tower's ConcurrencyLimitLayer would.
+async fn enforce_concurrency(
+    State(state): State<AppState>,
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> Response {
+    let Ok(_permit) = state.concurrency.try_acquire() else {
+        let err = mapping::errors_map::create_anthropic_error(
+            anthropic::ErrorType::RateLimitError,
+            "Proxy concurrency limit reached".to_string(),
+            None,
+        );
+        return (StatusCode::TOO_MANY_REQUESTS, Json(err)).into_response();
+    };
+    next.run(request).await
 }
 
 static MODELS_RESPONSE: LazyLock<serde_json::Value> = LazyLock::new(|| {
@@ -220,12 +239,7 @@ async fn models(State(_state): State<AppState>) -> Json<serde_json::Value> {
 
 async fn count_tokens(Json(body): Json<anthropic::MessageCreateRequest>) -> Response {
     // Tokenization is CPU-bound; offload to the blocking threadpool.
-    match tokio::task::spawn_blocking(move || {
-        let text = extract_text_for_counting(&body);
-        TOKENIZER.encode_with_special_tokens(&text).len()
-    })
-    .await
-    {
+    match tokio::task::spawn_blocking(move || count_request_tokens(&body)).await {
         Ok(token_count) => (
             StatusCode::OK,
             Json(serde_json::json!({ "input_tokens": token_count })),
@@ -239,81 +253,85 @@ async fn count_tokens(Json(body): Json<anthropic::MessageCreateRequest>) -> Resp
     }
 }
 
-/// Flatten an Anthropic request into a single string for token counting.
-/// Covers system prompt, messages (text, tool_use, tool_result, thinking), and tool definitions.
-fn extract_text_for_counting(req: &anthropic::MessageCreateRequest) -> String {
-    let mut buf = String::new();
+/// Count tokens across all text segments of an Anthropic request.
+/// Counts each segment independently to avoid a single large concatenation.
+/// Per-segment counting may differ slightly from concatenated counting at BPE
+/// boundaries, but this endpoint is already approximate (tiktoken, not the real
+/// Anthropic tokenizer).
+fn count_request_tokens(req: &anthropic::MessageCreateRequest) -> usize {
+    let mut total = 0;
 
     if let Some(system) = &req.system {
         match system {
-            anthropic::System::Text(t) => append(&mut buf, t),
+            anthropic::System::Text(t) => total += count_segment(t),
             anthropic::System::Blocks(blocks) => {
                 for b in blocks {
-                    append(&mut buf, &b.text);
+                    total += count_segment(&b.text);
                 }
             }
         }
     }
 
     for msg in &req.messages {
-        append_content(&msg.content, &mut buf);
+        total += count_content(&msg.content);
     }
 
     if let Some(tools) = &req.tools {
         for tool in tools {
-            append(&mut buf, &tool.name);
+            total += count_segment(&tool.name);
             if let Some(desc) = &tool.description {
-                append(&mut buf, desc);
+                total += count_segment(desc);
             }
             if let Ok(schema) = serde_json::to_string(&tool.input_schema) {
-                append(&mut buf, &schema);
+                total += count_segment(&schema);
             }
         }
     }
 
-    buf
+    total
 }
 
-/// Append a text segment to the buffer, separated by newline from prior content.
-fn append(buf: &mut String, text: &str) {
-    if !buf.is_empty() {
-        buf.push('\n');
-    }
-    buf.push_str(text);
+/// Tokenize a single text segment and return its token count.
+fn count_segment(text: &str) -> usize {
+    TOKENIZER.encode_with_special_tokens(text).len()
 }
 
-fn append_content(content: &anthropic::Content, buf: &mut String) {
+fn count_content(content: &anthropic::Content) -> usize {
     match content {
-        anthropic::Content::Text(t) => append(buf, t),
+        anthropic::Content::Text(t) => count_segment(t),
         anthropic::Content::Blocks(blocks) => {
+            let mut total = 0;
             for block in blocks {
                 match block {
-                    anthropic::ContentBlock::Text { text } => append(buf, text),
+                    anthropic::ContentBlock::Text { text } => total += count_segment(text),
                     anthropic::ContentBlock::ToolUse { name, input, .. } => {
-                        append(buf, name);
+                        total += count_segment(name);
                         if let Ok(s) = serde_json::to_string(input) {
-                            append(buf, &s);
+                            total += count_segment(&s);
                         }
                     }
                     anthropic::ContentBlock::ToolResult {
                         content: Some(c), ..
                     } => match c {
-                        anthropic::messages::ToolResultContent::Text(t) => append(buf, t),
+                        anthropic::messages::ToolResultContent::Text(t) => {
+                            total += count_segment(t);
+                        }
                         anthropic::messages::ToolResultContent::Blocks(inner) => {
                             for b in inner {
                                 if let anthropic::ContentBlock::Text { text } = b {
-                                    append(buf, text);
+                                    total += count_segment(text);
                                 }
                             }
                         }
                     },
                     anthropic::ContentBlock::Thinking { thinking, .. } => {
-                        append(buf, thinking);
+                        total += count_segment(thinking);
                     }
                     // Image and Document blocks are not text-tokenizable
                     _ => {}
                 }
             }
+            total
         }
     }
 }
@@ -349,10 +367,15 @@ async fn anthropic_passthrough(State(state): State<AppState>, body: Bytes) -> Re
     };
 
     // Check if the request is a streaming request by peeking at the JSON.
-    // We parse minimally to avoid rejecting valid requests.
-    let is_stream = serde_json::from_slice::<serde_json::Value>(&body)
-        .ok()
-        .and_then(|v| v.get("stream")?.as_bool())
+    // Deserialize only the `stream` field to avoid parsing the entire body
+    // (which can be up to 32MB for image-heavy requests).
+    #[derive(serde::Deserialize)]
+    struct StreamPeek {
+        #[serde(default)]
+        stream: bool,
+    }
+    let is_stream = serde_json::from_slice::<StreamPeek>(&body)
+        .map(|p| p.stream)
         .unwrap_or(false);
 
     if is_stream {
@@ -465,11 +488,12 @@ async fn send_stream_error(
 /// if the backend sends data without frame delimiters.
 const MAX_SSE_BUFFER_SIZE: usize = 10 * 1024 * 1024;
 
-/// Find the first SSE frame boundary (`\n\n` or `\r\n\r\n`) in a byte slice.
-/// Returns `(position, delimiter_length)` so the caller can skip the full delimiter.
-fn find_double_newline(buf: &[u8]) -> Option<(usize, usize)> {
+/// Find the first SSE frame boundary (`\n\n` or `\r\n\r\n`) in a byte slice,
+/// starting the search at `start`. Returns `(position, delimiter_length)` so
+/// the caller can skip the full delimiter.
+fn find_double_newline(buf: &[u8], start: usize) -> Option<(usize, usize)> {
     let len = buf.len();
-    let mut i = 0;
+    let mut i = start;
     while i < len.saturating_sub(1) {
         if buf[i] == b'\n' && buf[i + 1] == b'\n' {
             return Some((i, 2));
@@ -487,14 +511,37 @@ fn find_double_newline(buf: &[u8]) -> Option<(usize, usize)> {
     None
 }
 
+/// Why the SSE stream ended.
+enum StreamOutcome {
+    /// Backend stream completed normally.
+    Completed,
+    /// Downstream client disconnected before the stream finished.
+    ClientDisconnected,
+    /// Backend stream failed (error already recorded in metrics).
+    UpstreamError,
+}
+
+impl StreamOutcome {
+    /// Record metrics and return (HTTP status, error message) for logging.
+    fn record(&self, metrics: &Metrics) -> (u16, Option<String>) {
+        match self {
+            Self::Completed => {
+                metrics.record_success();
+                (200, None)
+            }
+            Self::ClientDisconnected => (499, Some("client disconnected".into())),
+            Self::UpstreamError => (502, Some("stream interrupted".into())),
+        }
+    }
+}
+
 /// Read SSE bytes from a response, parse frames, and call `on_data` for each data line.
-/// Returns true if stream completed normally, false if client disconnected.
 async fn read_sse_frames<F>(
     response: reqwest::Response,
     tx: &mpsc::Sender<Result<Event, std::convert::Infallible>>,
     metrics: &Metrics,
     mut on_data: F,
-) -> bool
+) -> StreamOutcome
 where
     F: FnMut(&str) -> Option<Vec<anthropic::StreamEvent>>,
 {
@@ -506,6 +553,9 @@ where
     let mut buffer = BytesMut::new();
     // Reuse a single events buffer across all frames to avoid per-frame allocation
     let mut frame_events: Vec<anthropic::StreamEvent> = Vec::new();
+    // Track where to start the next delimiter search so we don't rescan
+    // already-inspected bytes when a large SSE event spans many TCP chunks.
+    let mut search_from: usize = 0;
 
     while let Some(chunk_result) = stream.next().await {
         let bytes = match chunk_result {
@@ -513,7 +563,7 @@ where
             Err(e) => {
                 tracing::error!("stream read error: {e}");
                 metrics.record_error();
-                return false;
+                return StreamOutcome::UpstreamError;
             }
         };
         buffer.extend_from_slice(&bytes);
@@ -525,10 +575,10 @@ where
                 "SSE buffer exceeded maximum size, aborting stream"
             );
             metrics.record_error();
-            return false;
+            return StreamOutcome::UpstreamError;
         }
 
-        while let Some((pos, delim_len)) = find_double_newline(&buffer) {
+        while let Some((pos, delim_len)) = find_double_newline(&buffer, search_from) {
             frame_events.clear();
             // Convert the complete frame bytes to UTF-8. A frame ending at
             // a double-newline boundary should always be valid UTF-8; if not,
@@ -549,15 +599,20 @@ where
                 }
             }
             let _ = buffer.split_to(pos + delim_len);
+            // split_to shifted the buffer; restart search at the beginning
+            search_from = 0;
 
             if !send_events(tx, &frame_events).await {
                 tracing::debug!("client disconnected during stream");
-                return false;
+                return StreamOutcome::ClientDisconnected;
             }
         }
+        // No more complete frames. Next chunk only needs to scan from where
+        // we left off, minus 3 bytes to catch \r\n\r\n straddling the boundary.
+        search_from = buffer.len().saturating_sub(3);
     }
 
-    true
+    StreamOutcome::Completed
 }
 
 /// Build an SSE response that streams Anthropic events translated from backend chunks.
@@ -598,7 +653,7 @@ async fn messages_stream(
                             mapping::streaming_map::StreamingTranslator::new(model);
                         let mut done = false;
 
-                        let completed = read_sse_frames(response, &tx, &metrics, |json_str| {
+                        let outcome = read_sse_frames(response, &tx, &metrics, |json_str| {
                             if json_str == "[DONE]" {
                                 done = true;
                                 let events = translator.finish();
@@ -614,20 +669,13 @@ async fn messages_stream(
                         })
                         .await;
 
-                        if completed && !done {
+                        if matches!(outcome, StreamOutcome::Completed) && !done {
                             let events = translator.finish();
                             send_events(&tx, &events).await;
                         }
                         let usage = translator.usage();
                         let tokens = usage.map(|u| (u.input_tokens as u64, u.output_tokens as u64));
-                        if completed {
-                            metrics.record_success();
-                        }
-                        let (status, err) = if completed {
-                            (200, None)
-                        } else {
-                            (502, Some("stream interrupted".into()))
-                        };
+                        let (status, err) = outcome.record(&metrics);
                         log_request(
                             &log_shared,
                             ctx.log_entry(
@@ -677,7 +725,7 @@ async fn messages_stream(
                                 model,
                             );
 
-                        let completed = read_sse_frames(response, &tx, &metrics, |json_str| {
+                        let outcome = read_sse_frames(response, &tx, &metrics, |json_str| {
                             match serde_json::from_str::<
                                 mapping::responses_streaming_map::ResponsesStreamEvent,
                             >(json_str)
@@ -693,17 +741,12 @@ async fn messages_stream(
                         })
                         .await;
 
-                        if completed {
+                        if matches!(outcome, StreamOutcome::Completed) {
                             let events = translator.finish();
                             send_events(&tx, &events).await;
-                            metrics.record_success();
                         }
                         // Responses API translator does not expose usage yet.
-                        let (status, err) = if completed {
-                            (200, None)
-                        } else {
-                            (502, Some("stream interrupted".into()))
-                        };
+                        let (status, err) = outcome.record(&metrics);
                         log_request(
                             &log_shared,
                             ctx.log_entry(
@@ -983,7 +1026,10 @@ fn inject_gemini_thinking(
     backend: &BackendClient,
     req: &mut openai::ChatCompletionRequest,
 ) {
-    if !matches!(backend, BackendClient::GeminiOpenAI(_)) {
+    if !matches!(
+        backend,
+        BackendClient::GeminiOpenAI(_) | BackendClient::Vertex(_)
+    ) {
         return;
     }
     if let Some(anthropic::ThinkingConfig::Enabled { budget_tokens }) = &body.thinking {

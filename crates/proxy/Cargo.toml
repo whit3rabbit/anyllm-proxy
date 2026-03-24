@@ -15,7 +15,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 futures = "0.3"
 tokio-stream = "0.1"
-tower = { version = "0.5", features = ["limit"] }
+tower = "0.5"
 url = "2"
 tracing = "0.1"
 tiktoken-rs = "0.9"
@@ -24,7 +24,9 @@ uuid = { version = "1", features = ["v4"] }
 toml = "1.0.7"
 indexmap = { version = "2.13.0", features = ["serde"] }
 bytes = "1.11.1"
+subtle = "2"
 rusqlite = { version = "0.32", features = ["bundled"] }
+httpdate = "1"
 
 [dev-dependencies]
 pretty_assertions = "1"

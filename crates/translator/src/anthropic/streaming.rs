@@ -68,6 +68,10 @@ pub enum Delta {
     InputJsonDelta { partial_json: String },
     #[serde(rename = "thinking_delta")]
     ThinkingDelta { thinking: String },
+    /// Signature delta: sent just before content_block_stop for thinking blocks.
+    /// Used to verify integrity of the thinking block.
+    #[serde(rename = "signature_delta")]
+    SignatureDelta { signature: String },
 }
 
 /// Top-level message changes (stop_reason, stop_sequence).
@@ -323,6 +327,25 @@ mod tests {
                     assert_eq!(thinking, "Let me think...");
                 }
                 _ => panic!("expected Delta::ThinkingDelta"),
+            },
+            other => panic!("expected ContentBlockDelta, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn deserialize_signature_delta() {
+        let j = json!({
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {"type": "signature_delta", "signature": "EqQBCgIYAhIM1gbcDa9GJwZA2b3h"}
+        });
+        let event: StreamEvent = serde_json::from_value(j).unwrap();
+        match event {
+            StreamEvent::ContentBlockDelta { delta, .. } => match delta {
+                Delta::SignatureDelta { signature } => {
+                    assert_eq!(signature, "EqQBCgIYAhIM1gbcDa9GJwZA2b3h");
+                }
+                _ => panic!("expected Delta::SignatureDelta"),
             },
             other => panic!("expected ContentBlockDelta, got {:?}", other),
         }

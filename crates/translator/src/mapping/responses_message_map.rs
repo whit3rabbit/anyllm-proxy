@@ -174,7 +174,8 @@ fn convert_blocks_to_items(blocks: &[anthropic::ContentBlock], role: &str, items
                     "text": "[Document content not supported in translation]",
                 }));
             }
-            anthropic::ContentBlock::Thinking { .. } => {
+            anthropic::ContentBlock::Thinking { .. }
+            | anthropic::ContentBlock::RedactedThinking { .. } => {
                 // Silently dropped, same as Chat Completions path
             }
         }
@@ -245,11 +246,15 @@ pub fn responses_to_anthropic_response(
     let usage = resp
         .usage
         .as_ref()
-        .map_or_else(anthropic::Usage::default, |u| anthropic::Usage {
-            input_tokens: u.input_tokens,
-            output_tokens: u.output_tokens,
-            cache_creation_input_tokens: None,
-            cache_read_input_tokens: None,
+        .map_or_else(anthropic::Usage::default, |u| {
+            let cache_read_input_tokens =
+                super::usage_map::extract_cached_tokens(u.input_token_details.as_ref());
+            anthropic::Usage {
+                input_tokens: u.input_tokens,
+                output_tokens: u.output_tokens,
+                cache_creation_input_tokens: None,
+                cache_read_input_tokens,
+            }
         });
 
     anthropic::MessageResponse {
@@ -286,7 +291,7 @@ fn extract_output_item(item: &Value, content: &mut Vec<anthropic::ContentBlock>)
                         "refusal" => {
                             if let Some(refusal) = part.get("refusal").and_then(|v| v.as_str()) {
                                 content.push(anthropic::ContentBlock::Text {
-                                    text: format!("[Refusal: {}]", refusal),
+                                    text: super::format_refusal(refusal),
                                 });
                             }
                         }

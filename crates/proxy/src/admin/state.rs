@@ -5,8 +5,8 @@ use crate::config::ModelMapping;
 use crate::metrics::Metrics;
 use indexmap::IndexMap;
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
-use tokio::sync::{broadcast, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
+use tokio::sync::broadcast;
 
 /// Type-erased closure that reloads the tracing filter at runtime.
 /// Returns true on success, false if the filter string is invalid.
@@ -16,6 +16,8 @@ pub type LogReloadFn = Arc<dyn Fn(&str) -> bool + Send + Sync>;
 #[derive(Clone)]
 pub struct SharedState {
     /// SQLite connection for request logging and config persistence.
+    /// Uses std::sync::Mutex (not tokio) because rusqlite is synchronous.
+    /// All access should go through spawn_blocking.
     pub db: Arc<Mutex<rusqlite::Connection>>,
     /// Broadcast channel sender for live dashboard updates.
     pub events_tx: broadcast::Sender<AdminEvent>,
@@ -29,6 +31,23 @@ pub struct SharedState {
     pub log_tx: tokio::sync::mpsc::Sender<RequestLogEntry>,
     /// Closure to reload tracing filter at runtime. None in tests.
     pub log_reload: Option<LogReloadFn>,
+}
+
+/// Run a synchronous closure against the SQLite connection on the blocking
+/// threadpool. Handles locking and poison recovery. Returns `None` if the
+/// spawn_blocking task panicked (should not happen in practice).
+pub async fn with_db<F, T>(db: &Arc<Mutex<rusqlite::Connection>>, f: F) -> Option<T>
+where
+    F: FnOnce(&rusqlite::Connection) -> T + Send + 'static,
+    T: Send + 'static,
+{
+    let db = db.clone();
+    tokio::task::spawn_blocking(move || {
+        let conn = db.lock().unwrap_or_else(|e| e.into_inner());
+        f(&conn)
+    })
+    .await
+    .ok()
 }
 
 /// Runtime-mutable configuration. Changes via admin UI take effect immediately.

@@ -135,6 +135,10 @@ pub enum ContentBlock {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         signature: Option<String>,
     },
+    /// Redacted thinking block: encrypted content returned when safety systems
+    /// flag extended thinking. Must be passed back to the API for continuity.
+    #[serde(rename = "redacted_thinking")]
+    RedactedThinking { data: String },
 }
 
 /// Tool result content: plain string or array of content blocks.
@@ -608,5 +612,36 @@ mod tests {
                 budget_tokens: 4096
             })
         ));
+    }
+
+    #[test]
+    fn deserialize_redacted_thinking_block() {
+        let j = json!({
+            "type": "redacted_thinking",
+            "data": "EqQBCgIYAhIM1gbcDa9GJwZA2b3h"
+        });
+        let block: ContentBlock = serde_json::from_value(j).unwrap();
+        match block {
+            ContentBlock::RedactedThinking { data } => {
+                assert_eq!(data, "EqQBCgIYAhIM1gbcDa9GJwZA2b3h");
+            }
+            _ => panic!("expected ContentBlock::RedactedThinking"),
+        }
+    }
+
+    #[test]
+    fn redacted_thinking_round_trip() {
+        let block = ContentBlock::RedactedThinking {
+            data: "encrypted_data_here".into(),
+        };
+        let serialized = serde_json::to_string(&block).unwrap();
+        assert!(serialized.contains("\"redacted_thinking\""));
+        let deserialized: ContentBlock = serde_json::from_str(&serialized).unwrap();
+        match deserialized {
+            ContentBlock::RedactedThinking { data } => {
+                assert_eq!(data, "encrypted_data_here");
+            }
+            _ => panic!("expected ContentBlock::RedactedThinking"),
+        }
     }
 }
