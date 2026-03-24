@@ -47,6 +47,7 @@ pub fn anthropic_to_openai_request(
             tool_calls: None,
             tool_call_id: None,
             refusal: None,
+            reasoning_content: None,
         });
     }
 
@@ -72,11 +73,16 @@ pub fn anthropic_to_openai_request(
         tracing::warn!("top_k parameter dropped: no OpenAI equivalent");
     }
     if req.thinking.is_some() {
-        tracing::warn!("thinking config stripped: no OpenAI equivalent");
+        // Thinking config (budget_tokens) has no standard OpenAI equivalent.
+        // Thinking content blocks in messages ARE mapped to reasoning_content.
+        tracing::warn!("thinking config stripped: no standard OpenAI equivalent (thinking blocks in messages are preserved as reasoning_content)");
     }
 
-    // OpenAI caps stop sequences at 4
-    let stop = req.stop_sequences.as_ref().map(|seqs| {
+    // OpenAI caps stop sequences at 4; empty array is invalid (requires 1-4 elements)
+    let stop = req.stop_sequences.as_ref().and_then(|seqs| {
+        if seqs.is_empty() {
+            return None;
+        }
         if seqs.len() > 4 {
             tracing::warn!(
                 count = seqs.len(),
@@ -85,11 +91,11 @@ pub fn anthropic_to_openai_request(
             );
         }
         let capped: Vec<String> = seqs.iter().take(4).cloned().collect();
-        if capped.len() == 1 {
+        Some(if capped.len() == 1 {
             openai::Stop::Single(capped.into_iter().next().unwrap())
         } else {
             openai::Stop::Multiple(capped)
-        }
+        })
     });
 
     openai::ChatCompletionRequest {
@@ -147,6 +153,7 @@ fn convert_anthropic_message(msg: &anthropic::InputMessage, out: &mut Vec<openai
                 tool_calls: None,
                 tool_call_id: None,
                 refusal: None,
+                reasoning_content: None,
             });
         }
         anthropic::Content::Blocks(blocks) => {
@@ -166,6 +173,7 @@ fn convert_assistant_blocks(
 ) {
     let mut text_parts = Vec::new();
     let mut tool_calls = Vec::new();
+    let mut thinking_parts = Vec::new();
 
     for block in blocks {
         match block {
@@ -182,7 +190,11 @@ fn convert_assistant_blocks(
                     },
                 });
             }
-            _ => {} // Other block types not expected in assistant messages
+            anthropic::ContentBlock::Thinking { thinking, .. } => {
+                thinking_parts.push(thinking.clone());
+            }
+            // RedactedThinking has no meaningful content to forward
+            _ => {}
         }
     }
 
@@ -190,6 +202,12 @@ fn convert_assistant_blocks(
         None
     } else {
         Some(openai::ChatContent::Text(text_parts.join("")))
+    };
+
+    let reasoning_content = if thinking_parts.is_empty() {
+        None
+    } else {
+        Some(thinking_parts.join(""))
     };
 
     out.push(openai::ChatMessage {
@@ -203,6 +221,7 @@ fn convert_assistant_blocks(
         },
         tool_call_id: None,
         refusal: None,
+        reasoning_content,
     });
 }
 
@@ -346,6 +365,7 @@ fn convert_user_blocks(blocks: &[anthropic::ContentBlock], out: &mut Vec<openai:
             tool_calls: None,
             tool_call_id: Some(tool_call_id),
             refusal: None,
+            reasoning_content: None,
         });
     }
 
@@ -359,6 +379,7 @@ fn convert_user_blocks(blocks: &[anthropic::ContentBlock], out: &mut Vec<openai:
             tool_calls: None,
             tool_call_id: None,
             refusal: None,
+            reasoning_content: None,
         });
     }
 }
@@ -381,6 +402,17 @@ pub fn openai_to_anthropic_response(
             .finish_reason
             .as_ref()
             .map(streaming_map::map_finish_reason);
+
+        // Map reasoning_content (DeepSeek/Qwen thinking) to Anthropic thinking block.
+        // Thinking blocks precede text content in Anthropic responses.
+        if let Some(ref reasoning) = choice.message.reasoning_content {
+            if !reasoning.is_empty() {
+                content.push(anthropic::ContentBlock::Thinking {
+                    thinking: reasoning.clone(),
+                    signature: None,
+                });
+            }
+        }
 
         // Map content
         if let Some(ref chat_content) = choice.message.content {
@@ -499,6 +531,7 @@ mod tests {
                     tool_calls: None,
                     tool_call_id: None,
                     refusal: None,
+                    reasoning_content: None,
                 },
                 finish_reason: Some(openai::FinishReason::Stop),
                 logprobs: None,
@@ -686,6 +719,19 @@ mod tests {
             oai.stop,
             Some(openai::Stop::Single(ref s)) if s == "END"
         ));
+    }
+
+    #[test]
+    fn empty_stop_sequences_becomes_none() {
+        let mut req = basic_request();
+        req.stop_sequences = Some(vec![]);
+
+        let oai = anthropic_to_openai_request(&req);
+
+        assert!(
+            oai.stop.is_none(),
+            "empty stop_sequences should map to None, not Stop::Multiple([])"
+        );
     }
 
     #[test]
@@ -924,6 +970,7 @@ mod tests {
                     }]),
                     tool_call_id: None,
                     refusal: None,
+                    reasoning_content: None,
                 },
                 finish_reason: Some(openai::FinishReason::ToolCalls),
                 logprobs: None,
@@ -990,6 +1037,7 @@ mod tests {
                         tool_calls: None,
                         tool_call_id: None,
                         refusal: None,
+                        reasoning_content: None,
                     },
                     finish_reason: Some(oai_reason),
                     logprobs: None,
@@ -1019,6 +1067,7 @@ mod tests {
                     tool_calls: None,
                     tool_call_id: None,
                     refusal: None,
+                    reasoning_content: None,
                 },
                 finish_reason: Some(openai::FinishReason::Stop),
                 logprobs: None,
@@ -1212,6 +1261,7 @@ mod tests {
                     }]),
                     tool_call_id: None,
                     refusal: None,
+                    reasoning_content: None,
                 },
                 finish_reason: Some(openai::FinishReason::ToolCalls),
                 logprobs: None,
@@ -1264,6 +1314,7 @@ mod tests {
                     }]),
                     tool_call_id: None,
                     refusal: None,
+                    reasoning_content: None,
                 },
                 finish_reason: Some(openai::FinishReason::ToolCalls),
                 logprobs: None,
@@ -1368,7 +1419,7 @@ mod tests {
     }
 
     #[test]
-    fn thinking_block_dropped_in_assistant_translation() {
+    fn thinking_block_mapped_to_reasoning_content_in_assistant_translation() {
         let mut req = basic_request();
         req.messages = vec![anthropic::InputMessage {
             role: anthropic::Role::Assistant,
@@ -1385,8 +1436,12 @@ mod tests {
 
         let oai = anthropic_to_openai_request(&req);
 
-        // Thinking block dropped, text block preserved
+        // Thinking block mapped to reasoning_content, text block preserved
         assert_eq!(oai.messages.len(), 1);
+        assert_eq!(
+            oai.messages[0].reasoning_content.as_deref(),
+            Some("Let me reason...")
+        );
         assert!(matches!(
             &oai.messages[0].content,
             Some(openai::ChatContent::Text(t)) if t == "Here is my answer."
@@ -1564,6 +1619,7 @@ mod tests {
                     ]),
                     tool_call_id: None,
                     refusal: None,
+                    reasoning_content: None,
                 },
                 finish_reason: Some(openai::FinishReason::ToolCalls),
                 logprobs: None,
@@ -1630,6 +1686,7 @@ mod tests {
                     }]),
                     tool_call_id: None,
                     refusal: None,
+                    reasoning_content: None,
                 },
                 finish_reason: Some(openai::FinishReason::ToolCalls),
                 logprobs: None,
@@ -1676,6 +1733,7 @@ mod tests {
                     }]),
                     tool_call_id: None,
                     refusal: None,
+                    reasoning_content: None,
                 },
                 finish_reason: Some(openai::FinishReason::ToolCalls),
                 logprobs: None,
@@ -1727,6 +1785,7 @@ mod tests {
                     ]),
                     tool_call_id: None,
                     refusal: None,
+                    reasoning_content: None,
                 },
                 finish_reason: Some(openai::FinishReason::ToolCalls),
                 logprobs: None,
@@ -1765,6 +1824,7 @@ mod tests {
                     tool_calls: None,
                     tool_call_id: None,
                     refusal: Some("I cannot help with that request.".into()),
+                    reasoning_content: None,
                 },
                 finish_reason: Some(openai::FinishReason::ContentFilter),
                 logprobs: None,
@@ -1791,13 +1851,120 @@ mod tests {
         let mut req = basic_request();
         req.extra
             .insert("seed".into(), serde_json::Value::Number(42.into()));
-        req.extra.insert(
-            "logprobs".into(),
-            serde_json::Value::Bool(true),
-        );
+        req.extra
+            .insert("logprobs".into(), serde_json::Value::Bool(true));
 
         let oai = anthropic_to_openai_request(&req);
         assert_eq!(oai.extra.get("seed"), Some(&json!(42)));
         assert_eq!(oai.extra.get("logprobs"), Some(&json!(true)));
+    }
+
+    #[test]
+    fn reasoning_content_mapped_to_thinking_block_in_response() {
+        let oai_resp = openai::ChatCompletionResponse {
+            id: "chatcmpl-1".into(),
+            object: "chat.completion".into(),
+            model: "deepseek-reasoner".into(),
+            choices: vec![openai::Choice {
+                index: 0,
+                message: openai::ChatMessage {
+                    role: openai::ChatRole::Assistant,
+                    content: Some(openai::ChatContent::Text("The answer is 4.".into())),
+                    name: None,
+                    tool_calls: None,
+                    tool_call_id: None,
+                    refusal: None,
+                    reasoning_content: Some("Let me think... 2+2=4".into()),
+                },
+                finish_reason: Some(openai::FinishReason::Stop),
+                logprobs: None,
+            }],
+            usage: Some(openai::ChatUsage {
+                prompt_tokens: 10,
+                completion_tokens: 20,
+                total_tokens: 30,
+                completion_tokens_details: None,
+                prompt_tokens_details: None,
+            }),
+            created: None,
+            system_fingerprint: None,
+            service_tier: None,
+        };
+        let resp = openai_to_anthropic_response(&oai_resp, "deepseek-reasoner");
+        // First block should be thinking, second should be text
+        assert_eq!(resp.content.len(), 2);
+        match &resp.content[0] {
+            anthropic::ContentBlock::Thinking {
+                thinking,
+                signature,
+            } => {
+                assert_eq!(thinking, "Let me think... 2+2=4");
+                assert!(signature.is_none());
+            }
+            other => panic!("expected Thinking block, got {:?}", other),
+        }
+        match &resp.content[1] {
+            anthropic::ContentBlock::Text { text } => {
+                assert_eq!(text, "The answer is 4.");
+            }
+            other => panic!("expected Text block, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn thinking_block_mapped_to_reasoning_content_in_request() {
+        let mut req = basic_request();
+        req.messages = vec![anthropic::InputMessage {
+            role: anthropic::Role::Assistant,
+            content: anthropic::Content::Blocks(vec![
+                anthropic::ContentBlock::Thinking {
+                    thinking: "Let me reason...".into(),
+                    signature: Some("sig_abc".into()),
+                },
+                anthropic::ContentBlock::Text {
+                    text: "Here is my answer.".into(),
+                },
+            ]),
+        }];
+
+        let oai = anthropic_to_openai_request(&req);
+        assert_eq!(oai.messages.len(), 1);
+        assert_eq!(
+            oai.messages[0].reasoning_content.as_deref(),
+            Some("Let me reason...")
+        );
+        assert!(matches!(
+            &oai.messages[0].content,
+            Some(openai::ChatContent::Text(t)) if t == "Here is my answer."
+        ));
+    }
+
+    #[test]
+    fn unknown_finish_reason_maps_to_end_turn() {
+        let oai_resp = openai::ChatCompletionResponse {
+            id: "chatcmpl-1".into(),
+            object: "chat.completion".into(),
+            model: "deepseek-chat".into(),
+            choices: vec![openai::Choice {
+                index: 0,
+                message: openai::ChatMessage {
+                    role: openai::ChatRole::Assistant,
+                    content: Some(openai::ChatContent::Text("Sorry".into())),
+                    name: None,
+                    tool_calls: None,
+                    tool_call_id: None,
+                    refusal: None,
+                    reasoning_content: None,
+                },
+                finish_reason: Some(openai::FinishReason::Unknown),
+                logprobs: None,
+            }],
+            usage: None,
+            created: None,
+            system_fingerprint: None,
+            service_tier: None,
+        };
+        let resp = openai_to_anthropic_response(&oai_resp, "deepseek-chat");
+        assert_eq!(resp.stop_reason, Some(anthropic::StopReason::EndTurn));
     }
 }

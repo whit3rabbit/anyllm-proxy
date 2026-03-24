@@ -88,6 +88,9 @@ pub struct ChatMessage {
     /// See: https://docs.anthropic.com/en/api/openai-sdk#response-fields
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub refusal: Option<String>,
+    /// DeepSeek/Qwen thinking model output. Maps to/from Anthropic thinking blocks.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning_content: Option<String>,
 }
 
 /// Message role: system, developer, user, assistant, or tool.
@@ -302,6 +305,10 @@ pub enum FinishReason {
     ToolCalls,
     ContentFilter,
     FunctionCall,
+    /// Catch-all for provider-specific finish reasons (e.g. DeepSeek's
+    /// "insufficient_system_resource"). Serializes as "unknown".
+    #[serde(other)]
+    Unknown,
 }
 
 /// Token usage: prompt, completion, and total.
@@ -486,6 +493,7 @@ mod tests {
                 tool_calls: None,
                 tool_call_id: None,
                 refusal: None,
+                reasoning_content: None,
             }],
             max_tokens: Some(100),
             max_completion_tokens: None,
@@ -650,5 +658,49 @@ mod tests {
         });
         let tool: ChatTool = serde_json::from_value(raw).unwrap();
         assert_eq!(tool.function.strict, Some(true));
+    }
+
+    #[test]
+    fn finish_reason_unknown_variant_deserializes() {
+        // DeepSeek returns "insufficient_system_resource" as a finish_reason
+        let raw = json!("insufficient_system_resource");
+        let reason: FinishReason = serde_json::from_value(raw).unwrap();
+        assert_eq!(reason, FinishReason::Unknown);
+    }
+
+    #[test]
+    fn finish_reason_known_variants_unaffected() {
+        assert_eq!(
+            serde_json::from_value::<FinishReason>(json!("stop")).unwrap(),
+            FinishReason::Stop
+        );
+        assert_eq!(
+            serde_json::from_value::<FinishReason>(json!("tool_calls")).unwrap(),
+            FinishReason::ToolCalls
+        );
+    }
+
+    #[test]
+    fn reasoning_content_deserialized_from_response() {
+        let raw = json!({
+            "role": "assistant",
+            "content": "The answer is 4.",
+            "reasoning_content": "Let me think... 2+2=4"
+        });
+        let msg: ChatMessage = serde_json::from_value(raw).unwrap();
+        assert_eq!(
+            msg.reasoning_content.as_deref(),
+            Some("Let me think... 2+2=4")
+        );
+    }
+
+    #[test]
+    fn reasoning_content_absent_is_none() {
+        let raw = json!({
+            "role": "assistant",
+            "content": "Hello"
+        });
+        let msg: ChatMessage = serde_json::from_value(raw).unwrap();
+        assert!(msg.reasoning_content.is_none());
     }
 }

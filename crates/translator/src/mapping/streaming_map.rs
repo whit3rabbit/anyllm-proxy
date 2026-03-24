@@ -22,6 +22,9 @@ pub struct StreamingTranslator {
     started: bool,
     content_block_index: u32,
     content_block_open: bool,
+    /// Tracks whether a thinking content block is open (for reasoning_content
+    /// from DeepSeek/Qwen thinking models).
+    thinking_block_open: bool,
     /// Tool calls arrive incrementally across multiple chunks, indexed by
     /// position in the OpenAI tool_calls array. We accumulate them here
     /// so we can emit Anthropic's strict Start -> Delta* -> Stop sequence
@@ -49,6 +52,7 @@ impl StreamingTranslator {
             started: false,
             content_block_index: 0,
             content_block_open: false,
+            thinking_block_open: false,
             active_tool_calls: Vec::new(),
             usage: anthropic::Usage::default(),
             finished: false,
@@ -80,8 +84,37 @@ impl StreamingTranslator {
         }
 
         for choice in &chunk.choices {
+            // Handle reasoning_content (DeepSeek/Qwen thinking models).
+            // Emitted as a separate Anthropic thinking content block before text.
+            if let Some(ref reasoning) = choice.delta.reasoning_content {
+                if !self.thinking_block_open {
+                    events.push(anthropic::StreamEvent::ContentBlockStart {
+                        index: self.content_block_index,
+                        content_block: anthropic::ContentBlock::Thinking {
+                            thinking: String::new(),
+                            signature: None,
+                        },
+                    });
+                    self.thinking_block_open = true;
+                }
+                events.push(anthropic::StreamEvent::ContentBlockDelta {
+                    index: self.content_block_index,
+                    delta: anthropic::Delta::ThinkingDelta {
+                        thinking: reasoning.clone(),
+                    },
+                });
+            }
+
             // Handle text content deltas
             if let Some(ref text) = choice.delta.content {
+                // Close thinking block if transitioning from reasoning to content
+                if self.thinking_block_open {
+                    events.push(anthropic::StreamEvent::ContentBlockStop {
+                        index: self.content_block_index,
+                    });
+                    self.thinking_block_open = false;
+                    self.content_block_index += 1;
+                }
                 if !self.content_block_open {
                     events.push(anthropic::StreamEvent::ContentBlockStart {
                         index: self.content_block_index,
@@ -126,6 +159,14 @@ impl StreamingTranslator {
 
             // Handle finish_reason
             if let Some(ref finish_reason) = choice.finish_reason {
+                // Close any open thinking block
+                if self.thinking_block_open {
+                    events.push(anthropic::StreamEvent::ContentBlockStop {
+                        index: self.content_block_index,
+                    });
+                    self.thinking_block_open = false;
+                    self.content_block_index += 1;
+                }
                 // Close any open text content block
                 if self.content_block_open {
                     events.push(anthropic::StreamEvent::ContentBlockStop {
@@ -208,8 +249,18 @@ impl StreamingTranslator {
             return;
         }
 
-        // New tool call (has id): emit content_block_start for tool_use
-        if let Some(ref id) = tc.id {
+        // Determine if this chunk starts a new tool call. OpenAI-compliant backends
+        // send `id` on the first chunk; local LLMs may omit `id` but include `name`.
+        let has_id = tc.id.is_some();
+        let has_name = tc.function.as_ref().and_then(|f| f.name.as_ref()).is_some();
+        let is_new_tool = has_id || has_name;
+
+        // Bug 4 guard: if the accumulator at this index is already open (not closed),
+        // this is a continuation chunk (e.g., local LLM sending id:"" on every chunk),
+        // not a genuinely new tool call.
+        let already_active = self.active_tool_calls.get(idx).is_some_and(|tc| !tc.closed);
+
+        if is_new_tool && !already_active {
             // Close any open text content block first
             if self.content_block_open {
                 events.push(anthropic::StreamEvent::ContentBlockStop {
@@ -237,20 +288,22 @@ impl StreamingTranslator {
                 .unwrap_or_default();
             // Skip tool calls with empty name (matches non-streaming behavior).
             if name.is_empty() {
-                tracing::warn!(id = %id, "streaming tool call has empty function name; skipping");
+                let id_str = tc.id.as_deref().unwrap_or("<none>");
+                tracing::warn!(id = %id_str, "streaming tool call has empty function name; skipping");
                 return;
             }
 
-            // Local LLMs may send empty tool call ID
-            let tool_id = if id.is_empty() {
-                let synthetic = crate::util::ids::generate_tool_use_id();
-                tracing::warn!(
-                    synthetic_id = synthetic,
-                    "streaming tool call had empty ID; generated synthetic toolu_ ID"
-                );
-                synthetic
-            } else {
-                id.clone()
+            // Local LLMs may send empty or missing tool call ID
+            let tool_id = match tc.id.as_deref() {
+                Some(id) if !id.is_empty() => id.to_string(),
+                _ => {
+                    let synthetic = crate::util::ids::generate_tool_use_id();
+                    tracing::warn!(
+                        synthetic_id = synthetic,
+                        "streaming tool call had empty/missing ID; generated synthetic toolu_ ID"
+                    );
+                    synthetic
+                }
             };
 
             // OpenAI indexes tool calls within a single chunk (0, 1, 2...);
@@ -323,6 +376,8 @@ pub fn map_finish_reason(reason: &openai::FinishReason) -> anthropic::StopReason
         // the refusal handling path above.
         openai::FinishReason::ContentFilter => anthropic::StopReason::EndTurn,
         openai::FinishReason::FunctionCall => anthropic::StopReason::ToolUse,
+        // Provider-specific reasons (e.g. DeepSeek "insufficient_system_resource")
+        openai::FinishReason::Unknown => anthropic::StopReason::EndTurn,
     }
 }
 
@@ -344,6 +399,7 @@ mod tests {
                     content: Some(text.into()),
                     refusal: None,
                     tool_calls: None,
+                    reasoning_content: None,
                 },
                 finish_reason: None,
                 logprobs: None,
@@ -367,6 +423,7 @@ mod tests {
                     content: None,
                     refusal: None,
                     tool_calls: None,
+                    reasoning_content: None,
                 },
                 finish_reason: None,
                 logprobs: None,
@@ -446,6 +503,7 @@ mod tests {
                             arguments: args.map(Into::into),
                         }),
                     }]),
+                    reasoning_content: None,
                 },
                 finish_reason: None,
                 logprobs: None,
@@ -847,6 +905,136 @@ mod tests {
     }
 
     #[test]
+    fn streaming_tool_call_none_id_with_name_gets_synthetic() {
+        // Bug 3: local LLMs may omit id entirely but provide name
+        let mut translator = StreamingTranslator::new("llama".into());
+        translator.process_chunk(&role_chunk("c1", "llama"));
+
+        // First chunk: id is None, but name is present
+        let events = translator.process_chunk(&tool_call_chunk(
+            "c1",
+            "llama",
+            0,
+            None, // no ID at all
+            Some("get_weather"),
+            Some("{\"loc"),
+        ));
+
+        assert_eq!(
+            events.len(),
+            2,
+            "expected ContentBlockStart + ContentBlockDelta"
+        );
+        match &events[0] {
+            anthropic::StreamEvent::ContentBlockStart {
+                content_block: anthropic::ContentBlock::ToolUse { id, name, .. },
+                ..
+            } => {
+                assert!(
+                    id.starts_with("toolu_"),
+                    "expected synthetic toolu_ ID, got: {}",
+                    id
+                );
+                assert_eq!(name, "get_weather");
+            }
+            other => panic!("expected ContentBlockStart with ToolUse, got {:?}", other),
+        }
+
+        // Second chunk: continuation with more arguments (no id, no name)
+        let events2 = translator.process_chunk(&tool_call_chunk(
+            "c1",
+            "llama",
+            0,
+            None,
+            None,
+            Some("ation\"}"),
+        ));
+
+        assert_eq!(
+            events2.len(),
+            1,
+            "expected only ContentBlockDelta for continuation"
+        );
+        assert!(matches!(
+            &events2[0],
+            anthropic::StreamEvent::ContentBlockDelta {
+                delta: anthropic::Delta::InputJsonDelta { partial_json },
+                ..
+            } if partial_json == "ation\"}"
+        ));
+    }
+
+    #[test]
+    fn streaming_tool_call_repeated_empty_id_not_corrupted() {
+        // Bug 4: backend sends id:"" on every chunk of the same tool call;
+        // only the first chunk should open a new block.
+        let mut translator = StreamingTranslator::new("llama".into());
+        translator.process_chunk(&role_chunk("c1", "llama"));
+
+        // First chunk with empty id + name: opens a new tool block
+        let events1 = translator.process_chunk(&tool_call_chunk(
+            "c1",
+            "llama",
+            0,
+            Some(""),
+            Some("Read"),
+            Some("{\"f"),
+        ));
+        assert_eq!(
+            events1.len(),
+            2,
+            "expected ContentBlockStart + ContentBlockDelta"
+        );
+        let first_id = match &events1[0] {
+            anthropic::StreamEvent::ContentBlockStart {
+                content_block: anthropic::ContentBlock::ToolUse { id, .. },
+                ..
+            } => id.clone(),
+            other => panic!("expected ContentBlockStart, got {:?}", other),
+        };
+
+        // Second chunk with empty id again: should NOT open a new block
+        let events2 = translator.process_chunk(&tool_call_chunk(
+            "c1",
+            "llama",
+            0,
+            Some(""),
+            None,
+            Some("ile\"}"),
+        ));
+
+        // Should only have the argument delta, no new ContentBlockStart
+        assert_eq!(
+            events2.len(),
+            1,
+            "repeated empty id should not re-open block"
+        );
+        assert!(
+            matches!(
+                &events2[0],
+                anthropic::StreamEvent::ContentBlockDelta { .. }
+            ),
+            "expected ContentBlockDelta, got {:?}",
+            events2[0]
+        );
+
+        // Verify no second synthetic ID was generated (only one ContentBlockStart total)
+        let all_starts: Vec<_> = events1
+            .iter()
+            .chain(events2.iter())
+            .filter(|e| matches!(e, anthropic::StreamEvent::ContentBlockStart { .. }))
+            .collect();
+        assert_eq!(
+            all_starts.len(),
+            1,
+            "should have exactly one ContentBlockStart, got {}",
+            all_starts.len()
+        );
+        // The synthetic ID from the first chunk should be used
+        assert!(first_id.starts_with("toolu_"));
+    }
+
+    #[test]
     fn streaming_refusal_emits_text_delta() {
         let mut translator = StreamingTranslator::new("gpt-4o".into());
         let chunk = ChatCompletionChunk {
@@ -860,6 +1048,7 @@ mod tests {
                     content: None,
                     refusal: Some("content policy violation".into()),
                     tool_calls: None,
+                    reasoning_content: None,
                 },
                 finish_reason: None,
                 logprobs: None,
@@ -889,5 +1078,126 @@ mod tests {
             }
             other => panic!("expected TextDelta with refusal, got {:?}", other),
         }
+    }
+
+    /// Helper: build a chunk with reasoning_content (DeepSeek/Qwen thinking).
+    fn reasoning_chunk(id: &str, model: &str, reasoning: &str) -> ChatCompletionChunk {
+        ChatCompletionChunk {
+            id: id.into(),
+            object: "chat.completion.chunk".into(),
+            model: model.into(),
+            choices: vec![ChunkChoice {
+                index: 0,
+                delta: ChunkDelta {
+                    role: None,
+                    content: None,
+                    refusal: None,
+                    tool_calls: None,
+                    reasoning_content: Some(reasoning.into()),
+                },
+                finish_reason: None,
+                logprobs: None,
+            }],
+            usage: None,
+            created: None,
+            system_fingerprint: None,
+        }
+    }
+
+    #[test]
+    fn reasoning_content_emits_thinking_block() {
+        let mut translator = StreamingTranslator::new("deepseek-reasoner".into());
+
+        // First reasoning chunk should open a thinking block
+        let events =
+            translator.process_chunk(&reasoning_chunk("c1", "deepseek-reasoner", "Let me"));
+        assert_eq!(events.len(), 3); // message_start + content_block_start + thinking_delta
+
+        match &events[1] {
+            anthropic::StreamEvent::ContentBlockStart {
+                index,
+                content_block,
+            } => {
+                assert_eq!(*index, 0);
+                assert!(matches!(
+                    content_block,
+                    anthropic::ContentBlock::Thinking { .. }
+                ));
+            }
+            other => panic!("expected ContentBlockStart, got {:?}", other),
+        }
+        match &events[2] {
+            anthropic::StreamEvent::ContentBlockDelta { index, delta } => {
+                assert_eq!(*index, 0);
+                match delta {
+                    anthropic::Delta::ThinkingDelta { thinking } => {
+                        assert_eq!(thinking, "Let me");
+                    }
+                    other => panic!("expected ThinkingDelta, got {:?}", other),
+                }
+            }
+            other => panic!("expected ContentBlockDelta, got {:?}", other),
+        }
+
+        // Second reasoning chunk continues the thinking block
+        let events =
+            translator.process_chunk(&reasoning_chunk("c1", "deepseek-reasoner", " think..."));
+        assert_eq!(events.len(), 1); // just a thinking delta
+        match &events[0] {
+            anthropic::StreamEvent::ContentBlockDelta { delta, .. } => {
+                assert!(
+                    matches!(delta, anthropic::Delta::ThinkingDelta { thinking } if thinking == " think...")
+                );
+            }
+            other => panic!("expected ThinkingDelta, got {:?}", other),
+        }
+
+        // Text chunk should close thinking block and open text block
+        let events = translator.process_chunk(&text_chunk("c1", "deepseek-reasoner", "Answer: 4"));
+        assert_eq!(events.len(), 3); // content_block_stop (thinking) + content_block_start (text) + text_delta
+
+        assert!(
+            matches!(&events[0], anthropic::StreamEvent::ContentBlockStop { index } if *index == 0)
+        );
+        assert!(matches!(
+            &events[1],
+            anthropic::StreamEvent::ContentBlockStart { index: 1, .. }
+        ));
+        match &events[2] {
+            anthropic::StreamEvent::ContentBlockDelta { index, delta } => {
+                assert_eq!(*index, 1);
+                assert!(
+                    matches!(delta, anthropic::Delta::TextDelta { text } if text == "Answer: 4")
+                );
+            }
+            other => panic!("expected TextDelta, got {:?}", other),
+        }
+
+        // Finish
+        let events = translator.process_chunk(&finish_chunk(
+            "c1",
+            "deepseek-reasoner",
+            openai::FinishReason::Stop,
+        ));
+        // content_block_stop (text) + message_delta
+        assert_eq!(events.len(), 2);
+    }
+
+    #[test]
+    fn reasoning_only_without_text_content() {
+        // Some thinking models may return only reasoning_content with no text content
+        let mut translator = StreamingTranslator::new("deepseek-reasoner".into());
+        translator.process_chunk(&reasoning_chunk("c1", "deepseek-reasoner", "Thinking..."));
+
+        let events = translator.process_chunk(&finish_chunk(
+            "c1",
+            "deepseek-reasoner",
+            openai::FinishReason::Stop,
+        ));
+        // Should close thinking block + message_delta
+        assert_eq!(events.len(), 2);
+        assert!(
+            matches!(&events[0], anthropic::StreamEvent::ContentBlockStop { index } if *index == 0)
+        );
     }
 }

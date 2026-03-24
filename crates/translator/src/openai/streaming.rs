@@ -52,6 +52,9 @@ pub struct ChunkDelta {
     pub refusal: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tool_calls: Option<Vec<ChunkToolCall>>,
+    /// DeepSeek/Qwen thinking model output. Maps to Anthropic thinking block deltas.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning_content: Option<String>,
 }
 
 /// Streaming tool calls arrive incrementally, with partial function arguments.
@@ -220,6 +223,7 @@ mod tests {
                     content: Some("world".into()),
                     refusal: None,
                     tool_calls: None,
+                    reasoning_content: None,
                 },
                 finish_reason: None,
                 logprobs: None,
