@@ -197,6 +197,9 @@ pub(crate) async fn messages_stream(
             let client = client.clone();
             let mut openai_req = mapping::message_map::anthropic_to_openai_request(&body);
             super::routes::inject_gemini_thinking(&body, &state.backend, &mut openai_req);
+            if state.omit_stream_options {
+                openai_req.stream_options = None;
+            }
             openai_req.model = state.map_model(&openai_req.model);
             let model = body.model.clone();
             let permit = concurrency_permit.clone();

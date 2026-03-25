@@ -50,7 +50,7 @@ pub(crate) async fn anthropic_passthrough(State(state): State<AppState>, body: B
                     .insert("content-type", "text/event-stream".parse().unwrap());
                 resp.headers_mut()
                     .insert("cache-control", "no-cache".parse().unwrap());
-                rate_limits.inject_anthropic_headers(resp.headers_mut());
+                rate_limits.inject_anthropic_response_headers(resp.headers_mut());
                 resp
             }
             Err(e) => {
@@ -68,7 +68,7 @@ pub(crate) async fn anthropic_passthrough(State(state): State<AppState>, body: B
                     resp_body,
                 )
                     .into_response();
-                rate_limits.inject_anthropic_headers(resp.headers_mut());
+                rate_limits.inject_anthropic_response_headers(resp.headers_mut());
                 resp
             }
             Err(e) => {

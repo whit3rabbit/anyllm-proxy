@@ -6,13 +6,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 An Anthropic-to-OpenAI API translation proxy in Rust. Accepts Anthropic Messages API requests, translates them to OpenAI Chat Completions format, forwards to OpenAI, and translates back. Supports streaming SSE, tool calling, file/document blocks.
 
-See PLAN.md for the full specification and TASKS.md for phased implementation status (all 11 phases complete).
+All 11 implementation phases are complete.
 
 ## Current Status
 
 **Working (verified):**
 - Build: `cargo build` clean, `cargo clippy -- -D warnings` clean
-- Tests: ~390 tests passing, 4 ignored (live API)
+- Tests: ~417 tests passing, 4 ignored (live API)
 - Full Anthropic Messages API translation: non-streaming, streaming SSE, tool calling, file/document blocks
 - Proxy middleware: health, auth, request ID, size limits, concurrency limits, retry with backoff
 - Compatibility endpoints: /v1/models, count_tokens (approximate via tiktoken), batches (stub)
@@ -27,7 +27,7 @@ See PLAN.md for the full specification and TASKS.md for phased implementation st
 
 ```bash
 cargo build                          # build everything
-cargo test                           # run all tests (~390 tests, 4 ignored)
+cargo test                           # run all tests (~417 tests, 4 ignored)
 cargo test -p anthropic_openai_translate  # translator crate only
 cargo test -p anthropic_openai_proxy      # proxy crate only
 cargo test health_endpoint            # single test by name
@@ -123,10 +123,10 @@ Client (Anthropic format) -> proxy (axum)
 
 ## Conventions
 
-- Most source files reference their PLAN.md line ranges in a comment at the top.
+- Some source files reference PLAN.md line ranges in a comment at the top (historical; PLAN.md has been removed).
 - Test files live alongside source (`#[cfg(test)]` modules) and in `crates/proxy/tests/` for integration tests.
 - Error types use `thiserror` derive macros.
-- Test distribution: translator (~240 tests), proxy (~150 tests including integration/compatibility). Counts shift as features are added.
+- Test distribution: translator (~263 tests), proxy (~154 tests including integration/compatibility). Counts shift as features are added.
 
 ## References
 

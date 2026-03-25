@@ -298,6 +298,10 @@ pub struct BackendConfig {
     pub tls: TlsConfig,
     pub backend_auth: BackendAuth,
     pub log_bodies: bool,
+    /// Strip `stream_options` from streaming requests. Needed for local LLMs
+    /// (older Ollama, text-generation-webui, LM Studio) that reject unknown
+    /// fields with HTTP 400.
+    pub omit_stream_options: bool,
 }
 
 /// Top-level multi-backend configuration.
@@ -334,6 +338,8 @@ struct TomlBackendConfig {
     region: Option<String>,
     // Optional env var name for Google access token (Vertex)
     access_token: Option<String>,
+    // Strip stream_options from streaming requests (local LLM compat)
+    omit_stream_options: Option<bool>,
 }
 
 impl MultiConfig {
@@ -367,6 +373,10 @@ impl MultiConfig {
             BackendKind::Anthropic => "anthropic",
         };
 
+        let omit_stream_options = std::env::var("OMIT_STREAM_OPTIONS")
+            .map(|v| v == "true" || v == "1")
+            .unwrap_or(false);
+
         let bc = BackendConfig {
             kind: config.backend.clone(),
             api_key: config.openai_api_key.clone(),
@@ -376,6 +386,7 @@ impl MultiConfig {
             tls: config.tls.clone(),
             backend_auth: config.backend_auth.clone(),
             log_bodies: config.log_bodies,
+            omit_stream_options,
         };
 
         let mut backends = IndexMap::new();
@@ -587,6 +598,7 @@ impl MultiConfig {
             tls: tls.clone(),
             backend_auth,
             log_bodies,
+            omit_stream_options: tb.omit_stream_options.unwrap_or(false),
         }
     }
 }

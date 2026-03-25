@@ -132,11 +132,22 @@ pub fn anthropic_to_openai_request(
         extra: req.extra.clone(),
     };
 
+    // Anthropic API returns single completions only; strip n to avoid
+    // wasting tokens on choices that get discarded (only choices[0] is used).
+    if let Some(n_val) = oai_req.extra.remove("n") {
+        if n_val != serde_json::Value::Number(1.into()) {
+            tracing::warn!(n = %n_val, "n parameter stripped: Anthropic API returns single completions only");
+        }
+    }
+
     // o-series reasoning models (o1, o3, o4-mini, etc.) reject requests
-    // with both max_tokens and max_completion_tokens, and require the
-    // "developer" role instead of "system".
+    // with both max_tokens and max_completion_tokens, require the
+    // "developer" role instead of "system", and reject non-default
+    // temperature/top_p values.
     if is_o_series_model(&oai_req.model) {
         oai_req.max_tokens = None;
+        oai_req.temperature = None;
+        oai_req.top_p = None;
         for msg in &mut oai_req.messages {
             if msg.role == openai::ChatRole::System {
                 msg.role = openai::ChatRole::Developer;
@@ -1885,6 +1896,24 @@ mod tests {
     }
 
     #[test]
+    fn n_parameter_stripped_from_extra() {
+        let mut req = basic_request();
+        req.extra.insert("n".into(), json!(4));
+        req.extra.insert("seed".into(), json!(42));
+        let oai = anthropic_to_openai_request(&req);
+        assert!(oai.extra.get("n").is_none());
+        assert_eq!(oai.extra.get("seed"), Some(&json!(42)));
+    }
+
+    #[test]
+    fn n_parameter_one_stripped_silently() {
+        let mut req = basic_request();
+        req.extra.insert("n".into(), json!(1));
+        let oai = anthropic_to_openai_request(&req);
+        assert!(oai.extra.get("n").is_none());
+    }
+
+    #[test]
     fn reasoning_content_mapped_to_thinking_block_in_response() {
         let oai_resp = openai::ChatCompletionResponse {
             id: "chatcmpl-1".into(),
@@ -2051,5 +2080,29 @@ mod tests {
         assert_eq!(oai.max_completion_tokens, Some(1024));
         // System role should remain System for non-o-series.
         assert_eq!(oai.messages[0].role, openai::ChatRole::System);
+    }
+
+    #[test]
+    fn o_series_strips_temperature() {
+        let mut req = make_request("o3-mini", None);
+        req.temperature = Some(0.7);
+        let oai = anthropic_to_openai_request(&req);
+        assert!(oai.temperature.is_none(), "o-series should strip temperature");
+    }
+
+    #[test]
+    fn o_series_strips_top_p() {
+        let mut req = make_request("o1-preview", None);
+        req.top_p = Some(0.9);
+        let oai = anthropic_to_openai_request(&req);
+        assert!(oai.top_p.is_none(), "o-series should strip top_p");
+    }
+
+    #[test]
+    fn non_o_series_preserves_temperature() {
+        let mut req = make_request("gpt-4o", None);
+        req.temperature = Some(0.7);
+        let oai = anthropic_to_openai_request(&req);
+        assert_eq!(oai.temperature, Some(0.7));
     }
 }

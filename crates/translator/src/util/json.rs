@@ -11,6 +11,30 @@ pub fn parse_json_lenient(s: &str) -> Value {
     serde_json::from_str(s).unwrap_or_else(|_| Value::String(s.to_string()))
 }
 
+/// Strip markdown code fences that local LLMs (DeepSeek, Qwen) sometimes wrap
+/// around tool call argument JSON. Handles ```json, ```JSON, and bare ```.
+fn strip_markdown_code_fence(s: &str) -> &str {
+    let s = s.trim();
+    if let Some(rest) = s.strip_prefix("```") {
+        // Skip optional language tag on the opening fence line
+        let rest = rest
+            .strip_prefix("json")
+            .or_else(|| rest.strip_prefix("JSON"))
+            .unwrap_or(rest);
+        // Strip the newline after the opening fence line
+        let rest = rest
+            .strip_prefix('\n')
+            .or_else(|| rest.strip_prefix("\r\n"))
+            .unwrap_or(rest);
+        // Strip trailing closing fence
+        let rest = rest.trim_end();
+        let rest = rest.strip_suffix("```").unwrap_or(rest);
+        rest.trim()
+    } else {
+        s
+    }
+}
+
 /// Parse an OpenAI tool call `arguments` string into a JSON object suitable
 /// for Anthropic's `input` field. Unlike `parse_json_lenient`, this guarantees
 /// the result is always a JSON object:
@@ -19,11 +43,11 @@ pub fn parse_json_lenient(s: &str) -> Value {
 /// - Valid JSON non-object (string, number, array, etc.) -> `{"_raw": <value>}`
 /// - Invalid JSON -> `{"_raw_error": "<original string>"}`
 ///
-/// Local LLMs (llama-server, ollama) may produce empty strings, bare values,
-/// or malformed JSON in tool call arguments. Anthropic's `input` field must
-/// always be a JSON object.
+/// Also strips markdown code fences (```json ... ```) that local LLMs
+/// (DeepSeek, Qwen, llama-server, ollama) sometimes wrap around arguments.
+/// Anthropic's `input` field must always be a JSON object.
 pub fn parse_tool_arguments(s: &str) -> Value {
-    let trimmed = s.trim();
+    let trimmed = strip_markdown_code_fence(s.trim());
     if trimmed.is_empty() {
         return Value::Object(serde_json::Map::new());
     }
@@ -106,6 +130,52 @@ mod tests {
         assert_eq!(s, "null");
     }
 
+    // --- strip_markdown_code_fence ---
+
+    #[test]
+    fn strip_fence_json_tag() {
+        let input = "```json\n{\"key\": \"val\"}\n```";
+        assert_eq!(strip_markdown_code_fence(input), r#"{"key": "val"}"#);
+    }
+
+    #[test]
+    fn strip_fence_bare() {
+        let input = "```\n{\"key\": \"val\"}\n```";
+        assert_eq!(strip_markdown_code_fence(input), r#"{"key": "val"}"#);
+    }
+
+    #[test]
+    fn strip_fence_json_uppercase() {
+        let input = "```JSON\n{\"a\": 1}\n```";
+        assert_eq!(strip_markdown_code_fence(input), r#"{"a": 1}"#);
+    }
+
+    #[test]
+    fn strip_fence_trailing_whitespace() {
+        let input = "```json\n{\"a\": 1}\n```\n  ";
+        assert_eq!(strip_markdown_code_fence(input), r#"{"a": 1}"#);
+    }
+
+    #[test]
+    fn strip_fence_no_closing() {
+        // Missing closing fence: return content after opening fence
+        let input = "```json\n{\"a\": 1}";
+        assert_eq!(strip_markdown_code_fence(input), r#"{"a": 1}"#);
+    }
+
+    #[test]
+    fn no_fence_passthrough() {
+        let input = r#"{"key": "val"}"#;
+        assert_eq!(strip_markdown_code_fence(input), input);
+    }
+
+    #[test]
+    fn backticks_inside_json_string_not_stripped() {
+        // Backticks inside a JSON string value should not trigger stripping
+        let input = r#"{"code": "use `foo`"}"#;
+        assert_eq!(strip_markdown_code_fence(input), input);
+    }
+
     // --- parse_tool_arguments ---
 
     #[test]
@@ -160,5 +230,30 @@ mod tests {
     fn parse_tool_arguments_null() {
         let v = parse_tool_arguments("null");
         assert_eq!(v, json!({"_raw": null}));
+    }
+
+    #[test]
+    fn parse_tool_arguments_markdown_json_fence() {
+        let v = parse_tool_arguments("```json\n{\"file_path\": \"test.rs\"}\n```");
+        assert_eq!(v, json!({"file_path": "test.rs"}));
+    }
+
+    #[test]
+    fn parse_tool_arguments_markdown_bare_fence() {
+        let v = parse_tool_arguments("```\n{\"file_path\": \"test.rs\"}\n```");
+        assert_eq!(v, json!({"file_path": "test.rs"}));
+    }
+
+    #[test]
+    fn parse_tool_arguments_markdown_fence_trailing_whitespace() {
+        let v = parse_tool_arguments("```json\n{\"a\": 1}\n```\n  ");
+        assert_eq!(v, json!({"a": 1}));
+    }
+
+    #[test]
+    fn parse_tool_arguments_backticks_in_json_value() {
+        // Backticks inside a JSON string value are not code fences
+        let v = parse_tool_arguments(r#"{"code": "use `foo`"}"#);
+        assert_eq!(v, json!({"code": "use `foo`"}));
     }
 }

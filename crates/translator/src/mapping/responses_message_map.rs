@@ -334,10 +334,7 @@ fn extract_output_item(item: &Value, content: &mut Vec<anthropic::ContentBlock>)
                 call_id.to_string()
             };
 
-            let input = serde_json::from_str::<Value>(arguments).unwrap_or_else(|e| {
-                tracing::warn!(name = name, error = %e, "failed to parse function_call arguments as JSON");
-                json!({})
-            });
+            let input = util::json::parse_tool_arguments(arguments);
 
             content.push(anthropic::ContentBlock::ToolUse {
                 id,

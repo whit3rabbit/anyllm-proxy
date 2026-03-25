@@ -3,7 +3,7 @@ pub mod openai_client;
 
 use crate::config::{BackendAuth, BackendConfig, BackendKind, Config, OpenAIApiFormat, TlsConfig};
 use anthropic_client::{AnthropicClient, AnthropicClientError};
-use axum::http::{HeaderMap, HeaderName};
+use axum::http::{HeaderMap, HeaderName, HeaderValue};
 use openai_client::{OpenAIClient, OpenAIClientError};
 use reqwest::Client;
 use serde::Serialize;
@@ -421,12 +421,12 @@ impl RateLimitHeaders {
         }
     }
 
-    /// Inject Anthropic-format rate limit headers into a response HeaderMap.
+    /// Inject Anthropic-format response headers (rate limits + version) into a HeaderMap.
     ///
     /// The `*_reset` fields are converted from OpenAI's relative duration
     /// format (e.g., "1s") to Anthropic's ISO 8601 UTC timestamp format.
     /// Falls back to the raw value with a warning if parsing fails.
-    pub fn inject_anthropic_headers(&self, map: &mut HeaderMap) {
+    pub fn inject_anthropic_response_headers(&self, map: &mut HeaderMap) {
         set_if_some(
             map,
             "anthropic-ratelimit-requests-limit",
@@ -448,6 +448,10 @@ impl RateLimitHeaders {
         let tok_reset = convert_reset_duration(&self.tokens_reset, "tokens_reset");
         set_if_some(map, "anthropic-ratelimit-tokens-reset", &tok_reset);
         set_if_some(map, "retry-after", &self.retry_after);
+        map.insert(
+            HeaderName::from_static("anthropic-version"),
+            HeaderValue::from_static("2023-06-01"),
+        );
     }
 }
 
@@ -490,7 +494,7 @@ mod rate_limit_tests {
     }
 
     #[test]
-    fn inject_anthropic_headers_sets_values() {
+    fn inject_anthropic_response_headers_sets_values() {
         let rl = RateLimitHeaders {
             requests_limit: Some("100".into()),
             tokens_remaining: Some("39500".into()),
@@ -498,7 +502,7 @@ mod rate_limit_tests {
             ..Default::default()
         };
         let mut map = HeaderMap::new();
-        rl.inject_anthropic_headers(&mut map);
+        rl.inject_anthropic_response_headers(&mut map);
 
         assert_eq!(
             map.get("anthropic-ratelimit-requests-limit").unwrap(),
@@ -509,28 +513,30 @@ mod rate_limit_tests {
             "39500"
         );
         assert_eq!(map.get("retry-after").unwrap(), "3");
+        assert_eq!(map.get("anthropic-version").unwrap(), "2023-06-01");
         // Fields that were None should not be present
         assert!(map.get("anthropic-ratelimit-requests-remaining").is_none());
         assert!(map.get("anthropic-ratelimit-tokens-limit").is_none());
     }
 
     #[test]
-    fn inject_anthropic_headers_empty_is_noop() {
+    fn inject_anthropic_response_headers_default_sets_version_only() {
         let rl = RateLimitHeaders::default();
         let mut map = HeaderMap::new();
-        rl.inject_anthropic_headers(&mut map);
-        assert!(map.is_empty());
+        rl.inject_anthropic_response_headers(&mut map);
+        assert_eq!(map.len(), 1);
+        assert_eq!(map.get("anthropic-version").unwrap(), "2023-06-01");
     }
 
     #[test]
-    fn inject_anthropic_headers_converts_reset_to_iso8601() {
+    fn inject_anthropic_response_headers_converts_reset_to_iso8601() {
         let rl = RateLimitHeaders {
             requests_reset: Some("1s".into()),
             tokens_reset: Some("500ms".into()),
             ..Default::default()
         };
         let mut map = HeaderMap::new();
-        rl.inject_anthropic_headers(&mut map);
+        rl.inject_anthropic_response_headers(&mut map);
 
         let req_reset = map
             .get("anthropic-ratelimit-requests-reset")

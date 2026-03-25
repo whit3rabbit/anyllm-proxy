@@ -61,6 +61,8 @@ pub struct AppState {
     /// to prevent cascading latency under load. Requests exceeding the limit
     /// get 429 immediately, matching Anthropic's rate limiting behavior.
     pub concurrency: Arc<Semaphore>,
+    /// Strip `stream_options` from streaming requests for local LLM compat.
+    pub omit_stream_options: bool,
 }
 
 impl AppState {
@@ -138,6 +140,7 @@ pub fn app_multi_with_shared(config: MultiConfig, shared: Option<SharedState>) -
             shared: shared.clone(),
             backend_name: name.clone(),
             concurrency: Arc::new(Semaphore::new(super::middleware::MAX_CONCURRENT_REQUESTS)),
+            omit_stream_options: bc.omit_stream_options,
         };
 
         let is_anthropic = bc.kind == BackendKind::Anthropic;
@@ -357,7 +360,7 @@ async fn messages(
         match messages_stream(state, body, ctx, mapped_model, permit).await {
             Ok((rate_limits, sse)) => {
                 let mut response = sse.into_response();
-                rate_limits.inject_anthropic_headers(response.headers_mut());
+                rate_limits.inject_anthropic_response_headers(response.headers_mut());
                 return response;
             }
             Err(e) => {
@@ -373,6 +376,9 @@ async fn messages(
         | BackendClient::GeminiOpenAI(client) => {
             let mut openai_req = mapping::message_map::anthropic_to_openai_request(&body);
             inject_gemini_thinking(&body, &state.backend, &mut openai_req);
+            if state.omit_stream_options {
+                openai_req.stream_options = None;
+            }
             openai_req.model = state.map_model(&openai_req.model);
             let mapped_model = openai_req.model.clone();
             let original_model = body.model.clone();
@@ -405,7 +411,7 @@ async fn messages(
                         ),
                     );
                     let mut response = (StatusCode::OK, Json(anthropic_resp)).into_response();
-                    rate_limits.inject_anthropic_headers(response.headers_mut());
+                    rate_limits.inject_anthropic_response_headers(response.headers_mut());
                     response
                 }
                 Err(e) => {
@@ -462,7 +468,7 @@ async fn messages(
                         ),
                     );
                     let mut response = (StatusCode::OK, Json(anthropic_resp)).into_response();
-                    rate_limits.inject_anthropic_headers(response.headers_mut());
+                    rate_limits.inject_anthropic_response_headers(response.headers_mut());
                     response
                 }
                 Err(e) => {

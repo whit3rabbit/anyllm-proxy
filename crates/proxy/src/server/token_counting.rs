@@ -19,11 +19,20 @@ pub(crate) async fn count_tokens(
     // Offload to blocking threadpool: tokenization is CPU-intensive and
     // would stall the async runtime, blocking other request handlers.
     match tokio::task::spawn_blocking(move || count_request_tokens(&body)).await {
-        Ok(token_count) => (
-            StatusCode::OK,
-            Json(serde_json::json!({ "input_tokens": token_count })),
-        )
-            .into_response(),
+        Ok(token_count) => {
+            let mut resp = (
+                StatusCode::OK,
+                Json(serde_json::json!({ "input_tokens": token_count })),
+            )
+                .into_response();
+            // Token counts use o200k_base (GPT-4o) which may differ significantly
+            // from the target model's tokenizer, especially for CJK text.
+            resp.headers_mut().insert(
+                "x-token-count-warning",
+                axum::http::HeaderValue::from_static("approximate; uses o200k_base tokenizer"),
+            );
+            resp
+        }
         Err(_) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({ "error": "token counting failed" })),
