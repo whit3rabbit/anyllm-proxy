@@ -1,12 +1,12 @@
 //! Axum middleware for adding Anthropic Messages API compatibility to existing services.
 //!
-//! Requires the `middleware` feature: `anthropic_openai_translate = { features = ["middleware"] }`
+//! Requires the `middleware` feature: `anyllm_translate = { features = ["middleware"] }`
 //!
 //! # Usage
 //!
 //! ```rust,no_run
-//! use anthropic_openai_translate::TranslationConfig;
-//! use anthropic_openai_translate::middleware::{
+//! use anyllm_translate::TranslationConfig;
+//! use anyllm_translate::middleware::{
 //!     AnthropicCompatConfig, AnthropicTranslationLayer, anthropic_compat_router,
 //! };
 //! use axum::Router;
@@ -66,6 +66,7 @@ pub struct AnthropicCompatConfig {
 }
 
 impl AnthropicCompatConfig {
+    /// Create a builder for configuring the middleware.
     pub fn builder() -> AnthropicCompatConfigBuilder {
         AnthropicCompatConfigBuilder {
             backend_url: String::new(),
@@ -83,21 +84,25 @@ pub struct AnthropicCompatConfigBuilder {
 }
 
 impl AnthropicCompatConfigBuilder {
+    /// Set the base URL of the OpenAI-compatible backend (e.g., `https://api.openai.com`).
     pub fn backend_url(mut self, url: impl Into<String>) -> Self {
         self.backend_url = url.into();
         self
     }
 
+    /// Set the API key sent as a Bearer token to the backend.
     pub fn api_key(mut self, key: impl Into<String>) -> Self {
         self.api_key = key.into();
         self
     }
 
+    /// Set translation settings (model mapping, lossy behavior).
     pub fn translation(mut self, config: TranslationConfig) -> Self {
         self.translation = config;
         self
     }
 
+    /// Build the configuration. Does not validate; invalid URLs will fail at request time.
     pub fn build(self) -> AnthropicCompatConfig {
         AnthropicCompatConfig {
             backend_url: self.backend_url,
@@ -152,6 +157,7 @@ pub struct AnthropicTranslationLayer {
 }
 
 impl AnthropicTranslationLayer {
+    /// Create a new layer that will intercept `POST /v1/messages` and translate.
     pub fn new(config: AnthropicCompatConfig) -> Self {
         Self {
             state: make_state(config),

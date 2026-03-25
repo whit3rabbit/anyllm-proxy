@@ -1,5 +1,4 @@
 // Streaming state machine: OpenAI chunks -> Anthropic SSE events
-// PLAN.md lines 123-151, 387-432, 796-807
 
 use crate::anthropic;
 use crate::openai;

@@ -1,5 +1,4 @@
 // Error and stop_reason mapping
-// PLAN.md lines 916-920
 
 use crate::anthropic;
 use crate::openai;

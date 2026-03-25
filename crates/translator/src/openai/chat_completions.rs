@@ -1,5 +1,4 @@
 // OpenAI Chat Completions request/response types
-// PLAN.md lines 78-87, 700-725
 
 use serde::{Deserialize, Serialize};
 

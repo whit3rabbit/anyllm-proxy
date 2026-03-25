@@ -78,6 +78,8 @@ fn validate_gcp_identifier(name: &str, value: &str) {
 }
 
 impl Config {
+    /// Build configuration from environment variables. Panics on invalid values
+    /// (unknown backend, bad GCP identifiers) to fail fast at startup.
     pub fn from_env() -> Self {
         let backend_str = std::env::var("BACKEND").unwrap_or_else(|_| "openai".into());
         let backend = match backend_str.to_ascii_lowercase().as_str() {
@@ -237,10 +239,13 @@ pub struct ModelMapping {
 }
 
 impl ModelMapping {
+    /// Load model mapping from `BIG_MODEL` / `SMALL_MODEL` env vars with OpenAI defaults.
     pub fn from_env() -> Self {
         Self::from_env_with_defaults("gpt-4o", "gpt-4o-mini")
     }
 
+    /// Load model mapping from env vars, falling back to the provided defaults.
+    /// Each backend calls this with its own defaults (e.g., Gemini uses `gemini-2.5-pro`).
     pub fn from_env_with_defaults(big_default: &str, small_default: &str) -> Self {
         Self {
             big_model: std::env::var("BIG_MODEL").unwrap_or_else(|_| big_default.into()),
@@ -290,13 +295,21 @@ pub fn resolve_env_value(value: &str) -> Result<String, String> {
 /// Per-backend configuration. Each entry in `[backends.*]` deserializes into this.
 #[derive(Debug, Clone)]
 pub struct BackendConfig {
+    /// Which provider type this backend uses (OpenAI, Vertex, Gemini, Anthropic).
     pub kind: BackendKind,
+    /// API key for authentication. Resolved from env vars via `env:VAR_NAME` syntax.
     pub api_key: String,
+    /// Base URL of the backend API (e.g., `https://api.openai.com`).
     pub base_url: String,
+    /// Which OpenAI API format to use (Chat Completions or Responses).
     pub api_format: OpenAIApiFormat,
+    /// Anthropic-to-backend model name mapping.
     pub model_mapping: ModelMapping,
+    /// Optional mTLS and custom CA configuration.
     pub tls: TlsConfig,
+    /// How to authenticate to this backend (Bearer token or Google API key).
     pub backend_auth: BackendAuth,
+    /// Whether to log request/response bodies at debug level.
     pub log_bodies: bool,
     /// Strip `stream_options` from streaming requests. Needed for local LLMs
     /// (older Ollama, text-generation-webui, LM Studio) that reject unknown
@@ -304,11 +317,15 @@ pub struct BackendConfig {
     pub omit_stream_options: bool,
 }
 
-/// Top-level multi-backend configuration.
+/// Top-level multi-backend configuration loaded from TOML.
+/// Enables routing requests to different backends by route prefix.
 #[derive(Debug, Clone)]
 pub struct MultiConfig {
+    /// Port the proxy listens on (default: 3000).
     pub listen_port: u16,
+    /// Whether to log request/response bodies at debug level (global default).
     pub log_bodies: bool,
+    /// Backend name used when no route prefix matches.
     pub default_backend: String,
     /// Ordered map: key = route prefix (e.g. "openai"), value = backend config.
     pub backends: IndexMap<String, BackendConfig>,

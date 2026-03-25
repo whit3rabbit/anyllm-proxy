@@ -39,6 +39,8 @@ pub struct ForwardingClient {
 }
 
 impl ForwardingClient {
+    /// Create a client targeting `{backend_url}/v1/chat/completions`.
+    /// No retry logic; callers can add their own Tower retry layer.
     pub fn new(backend_url: &str, api_key: &str) -> Self {
         let base = backend_url.trim_end_matches('/');
         Self {

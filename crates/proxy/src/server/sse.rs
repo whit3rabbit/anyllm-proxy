@@ -1,7 +1,6 @@
 // SSE responder helpers for Anthropic-format streaming
-// PLAN.md lines 127-131
 
-use anthropic_openai_translate::anthropic::streaming::StreamEvent;
+use anyllm_translate::anthropic::streaming::StreamEvent;
 use axum::response::sse::Event;
 
 /// Format a StreamEvent as an axum SSE Event with the correct Anthropic event type name.
@@ -28,8 +27,8 @@ pub fn stream_event_to_sse(event: &StreamEvent) -> Result<Event, serde_json::Err
 #[cfg(test)]
 mod tests {
     use super::*;
-    use anthropic_openai_translate::anthropic::messages::{ContentBlock, StopReason, Usage};
-    use anthropic_openai_translate::anthropic::streaming::{
+    use anyllm_translate::anthropic::messages::{ContentBlock, StopReason, Usage};
+    use anyllm_translate::anthropic::streaming::{
         Delta, DeltaUsage, MessageDeltaData, MessageStartData, StreamError,
     };
 

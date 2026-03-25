@@ -83,19 +83,25 @@ pub enum AdminEvent {
     ConfigChanged { key: String, value: String },
 }
 
-/// Data recorded for each proxied request.
+/// Data recorded for each proxied request. Stored in SQLite and broadcast
+/// to WebSocket clients for the live admin dashboard.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct RequestLogEntry {
     pub request_id: String,
     pub timestamp: String,
     pub backend: String,
+    /// Model name from the client's Anthropic request (before mapping).
     pub model_requested: Option<String>,
+    /// Model name actually sent to the backend (after mapping).
     pub model_mapped: Option<String>,
     pub status_code: u16,
     pub latency_ms: u64,
     pub input_tokens: Option<u64>,
     pub output_tokens: Option<u64>,
+    /// Whether the request used SSE streaming. Streaming requests only
+    /// track total count in metrics, not per-request success/error.
     pub is_streaming: bool,
+    /// Present only when the request failed; contains the error description.
     pub error_message: Option<String>,
 }
 

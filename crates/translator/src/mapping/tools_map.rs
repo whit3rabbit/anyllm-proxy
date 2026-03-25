@@ -1,5 +1,4 @@
 // Tool definition and tool_choice mapping
-// PLAN.md lines 770-776
 
 use crate::anthropic;
 use crate::openai;

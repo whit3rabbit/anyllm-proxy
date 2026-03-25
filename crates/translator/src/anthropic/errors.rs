@@ -1,5 +1,4 @@
 // Anthropic error types and status codes
-// PLAN.md lines 156-163
 
 use serde::{Deserialize, Serialize};
 

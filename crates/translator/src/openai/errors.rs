@@ -1,5 +1,4 @@
 // OpenAI error types and rate limit headers
-// PLAN.md lines 165-171
 
 use serde::{Deserialize, Serialize};
 

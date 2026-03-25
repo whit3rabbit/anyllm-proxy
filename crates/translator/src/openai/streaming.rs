@@ -1,5 +1,4 @@
 // OpenAI SSE streaming types (ChatCompletions chunks + Responses events)
-// PLAN.md lines 138-146
 
 use serde::{Deserialize, Serialize};
 

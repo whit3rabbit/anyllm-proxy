@@ -1,5 +1,4 @@
 // Anthropic SSE streaming event types
-// PLAN.md lines 125-136
 
 use serde::{Deserialize, Serialize};
 

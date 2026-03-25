@@ -1,8 +1,7 @@
 // Auth, logging, and request size limit middleware
-// PLAN.md lines 890-893
 
-use anthropic_openai_translate::anthropic;
-use anthropic_openai_translate::mapping::errors_map::create_anthropic_error;
+use anyllm_translate::anthropic;
+use anyllm_translate::mapping::errors_map::create_anthropic_error;
 use axum::{
     body::Body,
     http::{HeaderMap, Request, StatusCode},
@@ -39,7 +38,9 @@ static ALLOWED_KEY_HASHES: LazyLock<Vec<[u8; 32]>> = LazyLock::new(|| {
             );
         }
     }
-    keys.iter().map(|k| Sha256::digest(k.as_bytes()).into()).collect()
+    keys.iter()
+        .map(|k| Sha256::digest(k.as_bytes()).into())
+        .collect()
 });
 
 /// Whether open-relay mode is explicitly enabled via PROXY_OPEN_RELAY=true.

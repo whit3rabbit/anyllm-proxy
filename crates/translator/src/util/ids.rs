@@ -1,5 +1,7 @@
 // ID generation utilities for Anthropic-format identifiers.
-// Uses UUID v4 (simple/no-hyphen format) with a domain prefix.
+// Uses UUID v4 (simple/no-hyphen format) with a domain prefix to match the
+// {prefix}_{hex} pattern that Anthropic SDKs and clients expect when parsing
+// response IDs. See: https://docs.anthropic.com/en/api/messages
 
 /// Generate a message ID in Anthropic format (msg_ prefix + uuid v4 without hyphens).
 pub fn generate_message_id() -> String {

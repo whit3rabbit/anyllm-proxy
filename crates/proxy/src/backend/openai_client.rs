@@ -1,9 +1,8 @@
 // reqwest client for calling OpenAI endpoints
-// PLAN.md lines 649-650
 
 use super::{build_http_client, RateLimitHeaders, RetryableError};
 use crate::config::{BackendAuth, BackendKind, Config};
-use anthropic_openai_translate::openai;
+use anyllm_translate::openai;
 use reqwest::Client;
 
 /// HTTP client for OpenAI-compatible Chat Completions APIs with retry logic.
@@ -164,8 +163,11 @@ impl OpenAIClient {
 /// Errors from the OpenAI HTTP client.
 #[derive(Debug)]
 pub enum OpenAIClientError {
+    /// Transport-level failure (DNS, TLS, connection refused, timeout).
     Request(reqwest::Error),
+    /// Backend returned 2xx but the body was not valid ChatCompletionResponse JSON.
     Deserialization(reqwest::Error),
+    /// Backend returned a non-2xx status with a parseable OpenAI error body.
     ApiError {
         status: u16,
         error: openai::errors::ErrorResponse,

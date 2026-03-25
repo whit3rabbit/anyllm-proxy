@@ -369,21 +369,34 @@ fn openai_duration_to_iso8601(s: &str) -> Option<String> {
 fn convert_reset_duration(raw: &Option<String>, field: &str) -> Option<String> {
     raw.as_deref().map(|v| {
         openai_duration_to_iso8601(v).unwrap_or_else(|| {
-            tracing::warn!(value = v, field, "failed to parse reset duration, forwarding raw");
+            tracing::warn!(
+                value = v,
+                field,
+                "failed to parse reset duration, forwarding raw"
+            );
             v.to_string()
         })
     })
 }
 
 /// Rate limit headers extracted from backend responses.
+/// Forwarded to clients as Anthropic-style `anthropic-ratelimit-*` headers.
+/// See: <https://docs.anthropic.com/en/api/rate-limits#response-headers>
 #[derive(Debug, Default, Clone)]
 pub struct RateLimitHeaders {
+    /// Maximum requests allowed in the current window.
     pub requests_limit: Option<String>,
+    /// Requests remaining before rate limiting kicks in.
     pub requests_remaining: Option<String>,
+    /// ISO 8601 timestamp when the request limit resets.
     pub requests_reset: Option<String>,
+    /// Maximum tokens allowed in the current window.
     pub tokens_limit: Option<String>,
+    /// Tokens remaining before rate limiting kicks in.
     pub tokens_remaining: Option<String>,
+    /// ISO 8601 timestamp when the token limit resets.
     pub tokens_reset: Option<String>,
+    /// Seconds to wait before retrying (from `retry-after` header on 429s).
     pub retry_after: Option<String>,
 }
 
@@ -561,10 +574,7 @@ mod rate_limit_tests {
 
     #[test]
     fn parse_openai_duration_various_formats() {
-        assert_eq!(
-            parse_openai_duration("6ms"),
-            Some(Duration::from_millis(6))
-        );
+        assert_eq!(parse_openai_duration("6ms"), Some(Duration::from_millis(6)));
         assert_eq!(
             parse_openai_duration("1s"),
             Some(Duration::from_millis(1000))

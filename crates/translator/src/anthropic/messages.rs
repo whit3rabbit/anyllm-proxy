@@ -1,5 +1,4 @@
 // Anthropic Messages API request/response types
-// PLAN.md lines 64-76, 667-697
 
 use serde::{Deserialize, Serialize};
 

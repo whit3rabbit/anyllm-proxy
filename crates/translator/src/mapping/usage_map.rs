@@ -1,5 +1,4 @@
 // Usage field mapping between Anthropic and OpenAI
-// PLAN.md lines 786-792
 
 use crate::anthropic;
 use crate::openai;

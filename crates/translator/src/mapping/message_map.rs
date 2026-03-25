@@ -1,5 +1,4 @@
 // Anthropic <-> OpenAI message mapping
-// PLAN.md lines 765-793, 964-977
 
 use crate::anthropic;
 use crate::mapping::{streaming_map, tools_map, usage_map};
@@ -2066,7 +2065,10 @@ mod tests {
     fn o_series_model_gets_only_max_completion_tokens() {
         let req = make_request("o1-mini", Some("You are helpful."));
         let oai = anthropic_to_openai_request(&req);
-        assert!(oai.max_tokens.is_none(), "o-series should not set max_tokens");
+        assert!(
+            oai.max_tokens.is_none(),
+            "o-series should not set max_tokens"
+        );
         assert_eq!(oai.max_completion_tokens, Some(1024));
         // System role should be converted to Developer for o-series.
         assert_eq!(oai.messages[0].role, openai::ChatRole::Developer);
@@ -2087,7 +2089,10 @@ mod tests {
         let mut req = make_request("o3-mini", None);
         req.temperature = Some(0.7);
         let oai = anthropic_to_openai_request(&req);
-        assert!(oai.temperature.is_none(), "o-series should strip temperature");
+        assert!(
+            oai.temperature.is_none(),
+            "o-series should strip temperature"
+        );
     }
 
     #[test]

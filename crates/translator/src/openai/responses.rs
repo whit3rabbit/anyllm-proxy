@@ -1,5 +1,4 @@
 // OpenAI Responses API request/response types
-// PLAN.md lines 89-94
 
 use serde::{Deserialize, Serialize};
 

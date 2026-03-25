@@ -1,5 +1,4 @@
 // Request metrics: count, latency, error rates
-// PLAN.md lines 867-870
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -19,24 +18,30 @@ struct MetricsInner {
 }
 
 impl Metrics {
+    /// Create a new zero-valued metrics counter.
     pub fn new() -> Self {
         Self::default()
     }
 
     // Relaxed ordering: these are independent counters with no cross-counter
     // invariants, so no synchronization is needed. Relaxed is fastest.
+
+    /// Increment the total request counter. Called once per proxied request.
     pub fn record_request(&self) {
         self.inner.requests_total.fetch_add(1, Ordering::Relaxed);
     }
 
+    /// Increment the success counter (backend returned 2xx).
     pub fn record_success(&self) {
         self.inner.requests_success.fetch_add(1, Ordering::Relaxed);
     }
 
+    /// Increment the error counter (backend returned non-2xx or transport failure).
     pub fn record_error(&self) {
         self.inner.requests_error.fetch_add(1, Ordering::Relaxed);
     }
 
+    /// Take a point-in-time snapshot of all counters for the GET /metrics endpoint.
     pub fn snapshot(&self) -> MetricsSnapshot {
         MetricsSnapshot {
             requests_total: self.inner.requests_total.load(Ordering::Relaxed),
@@ -46,10 +51,14 @@ impl Metrics {
     }
 }
 
+/// Point-in-time snapshot of counters, serialized as JSON for GET /metrics.
 #[derive(Debug, Clone, Default, serde::Serialize)]
 pub struct MetricsSnapshot {
+    /// Total proxied requests (success + error + in-flight).
     pub requests_total: u64,
+    /// Requests where the backend returned a 2xx status.
     pub requests_success: u64,
+    /// Requests that failed (non-2xx status or transport error).
     pub requests_error: u64,
 }
 
