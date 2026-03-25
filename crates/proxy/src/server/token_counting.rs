@@ -1,6 +1,6 @@
 // Token counting endpoint and helpers.
 
-use anthropic_openai_translate::anthropic;
+use anyllm_translate::anthropic;
 use axum::{http::StatusCode, response::IntoResponse, Json};
 use std::sync::LazyLock;
 use tiktoken_rs::CoreBPE;

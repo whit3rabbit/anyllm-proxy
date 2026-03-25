@@ -1,5 +1,8 @@
+/// Anthropic error response types (`ErrorResponse`, `ErrorType`, `ErrorDetail`).
 pub mod errors;
+/// Anthropic Messages API request and response types.
 pub mod messages;
+/// Anthropic SSE streaming event types (`StreamEvent`, `Delta`).
 pub mod streaming;
 
 // Re-export primary types

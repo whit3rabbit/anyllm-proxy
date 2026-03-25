@@ -2,7 +2,7 @@ use crate::admin::state::{AdminEvent, RequestLogEntry, RuntimeConfig, SharedStat
 use crate::backend::{BackendClient, BackendError};
 use crate::config::{BackendKind, Config, MultiConfig};
 use crate::metrics::Metrics;
-use anthropic_openai_translate::{anthropic, mapping, openai};
+use anyllm_translate::{anthropic, mapping, openai};
 use axum::{
     extract::{rejection::JsonRejection, DefaultBodyLimit, FromRequest, State},
     http::StatusCode,
@@ -45,7 +45,10 @@ where
     }
 }
 
-/// Per-backend state shared across request handlers for one backend.
+/// Per-backend state shared across request handlers.
+///
+/// In single-backend mode, one `AppState` serves all routes. In multi-backend mode,
+/// each backend gets its own `AppState` mounted under a prefix path (e.g., `/openai/v1/messages`).
 #[derive(Clone)]
 pub struct AppState {
     pub backend: BackendClient,
@@ -259,7 +262,9 @@ async fn enforce_concurrency(
         );
         return (StatusCode::TOO_MANY_REQUESTS, Json(err)).into_response();
     };
-    request.extensions_mut().insert(ConcurrencyPermit(Arc::new(permit)));
+    request
+        .extensions_mut()
+        .insert(ConcurrencyPermit(Arc::new(permit)));
     next.run(request).await
 }
 
@@ -267,7 +272,9 @@ async fn enforce_concurrency(
 /// The field is never read directly; it exists as an RAII guard to hold
 /// the permit until the struct is dropped.
 #[derive(Clone)]
-pub(crate) struct ConcurrencyPermit(#[allow(dead_code)] pub(crate) Arc<tokio::sync::OwnedSemaphorePermit>);
+pub(crate) struct ConcurrencyPermit(
+    #[allow(dead_code)] pub(crate) Arc<tokio::sync::OwnedSemaphorePermit>,
+);
 
 static MODELS_RESPONSE: std::sync::LazyLock<serde_json::Value> = std::sync::LazyLock::new(|| {
     serde_json::json!({

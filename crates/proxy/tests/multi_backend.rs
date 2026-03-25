@@ -1,7 +1,7 @@
 // Integration tests for multi-backend path-prefix routing.
 
-use anthropic_openai_proxy::config::MultiConfig;
-use anthropic_openai_proxy::server::routes;
+use anyllm_proxy::config::MultiConfig;
+use anyllm_proxy::server::routes;
 use reqwest::Client;
 
 fn test_multi_config() -> MultiConfig {

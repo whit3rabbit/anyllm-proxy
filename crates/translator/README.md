@@ -1,4 +1,4 @@
-# anthropic_openai_translate
+# anyllm_translate
 
 Pure, IO-free translation between Anthropic Messages API and OpenAI Chat Completions / Responses API formats. Also supports Google Gemini native API translation.
 
@@ -7,8 +7,8 @@ No HTTP clients, no async runtime, no network calls. Just `fn(A) -> B` transform
 ## Quick Start
 
 ```rust
-use anthropic_openai_translate::{TranslationConfig, translate_request, translate_response};
-use anthropic_openai_translate::anthropic::MessageCreateRequest;
+use anyllm_translate::{TranslationConfig, translate_request, translate_response};
+use anyllm_translate::anthropic::MessageCreateRequest;
 
 let config = TranslationConfig::builder()
     .model_map("haiku", "gpt-4o-mini")
@@ -43,10 +43,10 @@ assert_eq!(openai_req.model, "gpt-4o");
 
 ```toml
 [dependencies]
-anthropic_openai_translate = "0.1"
+anyllm_translate = "0.1"
 
 # With middleware support:
-anthropic_openai_translate = { version = "0.1", features = ["middleware"] }
+anyllm_translate = { version = "0.1", features = ["middleware"] }
 ```
 
 ## Modules
@@ -74,4 +74,4 @@ anthropic_openai_translate = { version = "0.1", features = ["middleware"] }
 
 ## Related
 
-This crate is part of [llm-translate-api](https://github.com/whit3rabbit/llm-translate-api), which also includes a standalone HTTP proxy server.
+This crate is part of [anyllm-proxy](https://github.com/whit3rabbit/anyllm-proxy), which also includes a standalone HTTP proxy server.

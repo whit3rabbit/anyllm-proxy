@@ -25,8 +25,8 @@ Create `crates/proxy/tests/shutdown.rs`:
 ```rust
 // Test: server shuts down cleanly on signal, in-flight requests complete.
 
-use anthropic_openai_proxy::config::{self, Config};
-use anthropic_openai_proxy::server::routes;
+use anyllm_proxy::config::{self, Config};
+use anyllm_proxy::server::routes;
 use std::time::Duration;
 
 fn test_config() -> Config {
@@ -141,7 +141,7 @@ async fn new_connections_refused_after_shutdown() {
 
 - [ ] **Step 2: Run tests to verify they pass (validates the axum primitive)**
 
-Run: `cargo test -p anthropic_openai_proxy --test shutdown -- --nocapture 2>&1`
+Run: `cargo test -p anyllm_proxy --test shutdown -- --nocapture 2>&1`
 Expected: All 3 tests pass. These test the `axum::serve(...).with_graceful_shutdown()` API directly, not our `main.rs`. This validates the mechanism before we wire it into production code. The `main.rs` change (Step 3) applies the same pattern to the real server.
 
 - [ ] **Step 3: Update main.rs to use graceful shutdown**
@@ -149,7 +149,7 @@ Expected: All 3 tests pass. These test the `axum::serve(...).with_graceful_shutd
 Replace `crates/proxy/src/main.rs`:
 
 ```rust
-use anthropic_openai_proxy::{config, server::routes};
+use anyllm_proxy::{config, server::routes};
 
 #[tokio::main]
 async fn main() {
@@ -198,7 +198,7 @@ async fn shutdown_signal() {
 
 - [ ] **Step 4: Run all tests to verify nothing broke**
 
-Run: `cargo test -p anthropic_openai_proxy 2>&1`
+Run: `cargo test -p anyllm_proxy 2>&1`
 Expected: All tests pass (existing + new shutdown tests).
 
 - [ ] **Step 5: Run clippy**
@@ -355,7 +355,7 @@ mod rate_limit_tests {
 
 - [ ] **Step 3: Run tests to verify they fail (struct doesn't exist yet)**
 
-Run: `cargo test -p anthropic_openai_proxy rate_limit 2>&1`
+Run: `cargo test -p anyllm_proxy rate_limit 2>&1`
 Expected: Compilation error.
 
 - [ ] **Step 4: Implement `RateLimitHeaders` in mod.rs**
@@ -364,7 +364,7 @@ Add the struct, `from_openai_headers`, `inject_anthropic_headers`, and helper fu
 
 - [ ] **Step 5: Run unit tests**
 
-Run: `cargo test -p anthropic_openai_proxy rate_limit 2>&1`
+Run: `cargo test -p anyllm_proxy rate_limit 2>&1`
 Expected: All 4 rate_limit tests pass.
 
 - [ ] **Step 6: Modify OpenAI client to return rate limit headers**
@@ -552,7 +552,7 @@ Race condition analysis: `rl_rx.await` blocks until the spawned task sends rate 
 
 - [ ] **Step 9: Run all tests**
 
-Run: `cargo test -p anthropic_openai_proxy 2>&1`
+Run: `cargo test -p anyllm_proxy 2>&1`
 Expected: All pass. The integration tests don't hit a real backend, so rate limit headers will be absent (default). The unit tests verify the mapping logic.
 
 - [ ] **Step 10: Commit**
@@ -802,7 +802,7 @@ Create `crates/proxy/tests/error_fixtures.rs`:
 #[test]
 fn malformed_openai_response_fails_deserialization() {
     let json = include_str!("../../../fixtures/openai/chat_completion_malformed.json");
-    let result = serde_json::from_str::<anthropic_openai_translate::openai::ChatCompletionResponse>(json);
+    let result = serde_json::from_str::<anyllm_translate::openai::ChatCompletionResponse>(json);
     assert!(result.is_err(), "malformed response should fail deserialization");
 }
 ```
@@ -915,8 +915,8 @@ Add response logging at each success path in both non-streaming branches. For st
 Create `crates/proxy/tests/body_logging.rs`:
 
 ```rust
-use anthropic_openai_proxy::config::{self, Config};
-use anthropic_openai_proxy::server::routes;
+use anyllm_proxy::config::{self, Config};
+use anyllm_proxy::server::routes;
 
 fn test_config_with_logging() -> Config {
     Config {
@@ -994,7 +994,7 @@ Update TASKS.md Phase 22 section:
 - [x] Request/response logging toggle (opt-in body logging for debugging, redacted by default)
 - [ ] OpenAI Responses API backend: wire up `ResponsesRequest`/`ResponsesResponse` types with runtime backend selection
 - [ ] Live API integration tests (requires OPENAI_API_KEY, currently golden fixtures only)
-- [ ] Publish `anthropic_openai_translate` crate to crates.io
+- [ ] Publish `anyllm_translate` crate to crates.io
 ```
 
 - [ ] **Step 2: Run full test suite**

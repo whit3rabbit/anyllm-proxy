@@ -89,4 +89,4 @@ Implement the conversation history translation for tool calling: converting Anth
 
 - Golden fixture test: multi-turn tool conversation from PLAN.md lines 273-386 translates correctly in both directions
 - Round-trip: Anthropic tool conversation -> OpenAI -> back to Anthropic produces equivalent structure
-- `cargo test -p anthropic_openai_translate` passes with all new tests
+- `cargo test -p anyllm_translate` passes with all new tests

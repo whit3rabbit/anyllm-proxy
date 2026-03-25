@@ -1,5 +1,5 @@
 [package]
-name = "anthropic_openai_translate"
+name = "anyllm_translate"
 description = "Pure translation layer between Anthropic Messages API and OpenAI Chat Completions"
 version.workspace = true
 edition.workspace = true

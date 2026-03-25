@@ -1,5 +1,10 @@
+/// Token-based authentication for admin endpoints.
 pub mod auth;
+/// SQLite persistence for request logs and config overrides.
 pub mod db;
+/// Admin HTTP router: config management, request log queries, metrics.
 pub mod routes;
+/// Shared mutable state between proxy handlers and admin server.
 pub mod state;
+/// WebSocket handler for live admin event streaming.
 pub(crate) mod ws;

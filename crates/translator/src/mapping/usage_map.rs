@@ -1,13 +1,10 @@
-// Usage field mapping between Anthropic and OpenAI
+//! Token usage field mapping between Anthropic and OpenAI APIs.
 
 use crate::anthropic;
 use crate::openai;
 
-/// Convert OpenAI usage to Anthropic usage.
-///
-/// OpenAI: <https://platform.openai.com/docs/api-reference/chat/object>
-/// Anthropic: <https://docs.anthropic.com/en/api/messages>
 /// Extract `cached_tokens` from an OpenAI token details JSON object.
+///
 /// Used by both Chat Completions (`prompt_tokens_details`) and Responses API
 /// (`input_token_details`) paths to map to Anthropic's `cache_read_input_tokens`.
 pub(crate) fn extract_cached_tokens(details: Option<&serde_json::Value>) -> Option<u32> {
@@ -17,6 +14,13 @@ pub(crate) fn extract_cached_tokens(details: Option<&serde_json::Value>) -> Opti
         .map(|n| n as u32)
 }
 
+/// Convert OpenAI token usage to Anthropic usage format.
+///
+/// Maps `prompt_tokens` to `input_tokens`, `completion_tokens` to `output_tokens`,
+/// and extracts `cached_tokens` from `prompt_tokens_details` into `cache_read_input_tokens`.
+///
+/// OpenAI usage: <https://platform.openai.com/docs/api-reference/chat/object>
+/// Anthropic usage: <https://docs.anthropic.com/en/api/messages>
 pub fn openai_to_anthropic_usage(usage: &openai::ChatUsage) -> anthropic::Usage {
     // OpenAI reports cached tokens in prompt_tokens_details.cached_tokens;
     // Anthropic calls the same concept cache_read_input_tokens.

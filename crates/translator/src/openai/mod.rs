@@ -1,6 +1,10 @@
+/// OpenAI Chat Completions API request and response types.
 pub mod chat_completions;
+/// OpenAI error response types.
 pub mod errors;
+/// OpenAI Responses API types.
 pub mod responses;
+/// OpenAI Chat Completions SSE streaming chunk types.
 pub mod streaming;
 
 pub use chat_completions::{

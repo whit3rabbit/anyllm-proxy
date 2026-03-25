@@ -70,7 +70,7 @@ Define the Rust types that model the Anthropic Messages API surface: request, re
 - [ ] Golden fixture files in `fixtures/anthropic/`: `messages_basic.json`, `messages_tool_use.json`, `messages_image.json`, `messages_document.json`
 - [ ] Tests that deserialize each fixture into typed structs and re-serialize, comparing output
 - [ ] Test that malformed requests (missing `max_tokens`, invalid `role`) are rejected by serde
-- [ ] `cargo test -p anthropic_openai_translate` passes
+- [ ] `cargo test -p anyllm_translate` passes
 
 ## Functional Requirements
 
@@ -98,4 +98,4 @@ Define the Rust types that model the Anthropic Messages API surface: request, re
 
 - All fixture files deserialize without error
 - Round-trip (deserialize then serialize) produces semantically identical JSON
-- `cargo test -p anthropic_openai_translate` passes with zero failures
+- `cargo test -p anyllm_translate` passes with zero failures

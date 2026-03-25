@@ -1,5 +1,5 @@
-use anthropic_openai_proxy::config::{self, Config};
-use anthropic_openai_proxy::server::routes;
+use anyllm_proxy::config::{self, Config};
+use anyllm_proxy::server::routes;
 
 fn test_config_with_logging() -> Config {
     Config {

@@ -7,8 +7,8 @@
 //! OPENAI_API_KEY=sk-... cargo test --test live_api -- --ignored --test-threads=1
 //! ```
 
-use anthropic_openai_proxy::config::{self, Config};
-use anthropic_openai_proxy::server::routes;
+use anyllm_proxy::config::{self, Config};
+use anyllm_proxy::server::routes;
 use serde_json::{json, Value};
 use tokio::net::TcpListener;
 

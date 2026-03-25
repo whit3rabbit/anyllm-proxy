@@ -1,8 +1,8 @@
 // SSE streaming infrastructure and the messages_stream handler.
 
-use crate::backend::{BackendClient, RateLimitHeaders};
+use crate::backend::{BackendClient, RateLimitHeaders, find_double_newline, MAX_SSE_BUFFER_SIZE};
 use crate::metrics::Metrics;
-use anthropic_openai_translate::{anthropic, mapping, openai};
+use anyllm_translate::{anthropic, mapping, openai};
 use axum::response::sse::{Event, KeepAlive, Sse};
 use bytes::BytesMut;
 use futures::stream::Stream;
@@ -29,33 +29,6 @@ async fn send_events(
         }
     }
     true
-}
-
-/// Maximum SSE buffer size (10 MB). Protects against unbounded memory growth
-/// if the backend sends data without frame delimiters.
-const MAX_SSE_BUFFER_SIZE: usize = 10 * 1024 * 1024;
-
-/// Find the first SSE frame boundary (`\n\n` or `\r\n\r\n`) in a byte slice,
-/// starting the search at `start`. Returns `(position, delimiter_length)` so
-/// the caller can skip the full delimiter.
-fn find_double_newline(buf: &[u8], start: usize) -> Option<(usize, usize)> {
-    let len = buf.len();
-    let mut i = start;
-    while i < len.saturating_sub(1) {
-        if buf[i] == b'\n' && buf[i + 1] == b'\n' {
-            return Some((i, 2));
-        }
-        if buf[i] == b'\r'
-            && i + 3 < len
-            && buf[i + 1] == b'\n'
-            && buf[i + 2] == b'\r'
-            && buf[i + 3] == b'\n'
-        {
-            return Some((i, 4));
-        }
-        i += 1;
-    }
-    None
 }
 
 /// Why the SSE stream ended.

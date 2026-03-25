@@ -2,7 +2,7 @@
 // No translation: the proxy receives Anthropic format and returns Anthropic format.
 
 use crate::backend::BackendClient;
-use anthropic_openai_translate::{anthropic, mapping};
+use anyllm_translate::{anthropic, mapping};
 use axum::{
     body::Bytes,
     extract::State,

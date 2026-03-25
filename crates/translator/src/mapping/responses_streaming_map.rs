@@ -41,6 +41,8 @@ pub struct ResponsesStreamingTranslator {
 }
 
 impl ResponsesStreamingTranslator {
+    /// Create a new translator for the given model name.
+    /// Generates a fresh Anthropic message ID for the translated stream.
     pub fn new(model: String) -> Self {
         Self {
             model,

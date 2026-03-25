@@ -1,6 +1,6 @@
 # Dependency Versions
 
-## Translator Crate (`anthropic_openai_translate`)
+## Translator Crate (`anyllm_translate`)
 
 | Dependency | Version | Features | Purpose |
 |---|---|---|---|
@@ -14,11 +14,11 @@
 |---|---|---|
 | pretty_assertions | 1.x | Readable test diffs |
 
-## Proxy Crate (`anthropic_openai_proxy`)
+## Proxy Crate (`anyllm_proxy`)
 
 | Dependency | Version | Features | Purpose |
 |---|---|---|---|
-| anthropic_openai_translate | path | - | Translation logic |
+| anyllm_translate | path | - | Translation logic |
 | axum | 0.8 | - | HTTP server framework |
 | tokio | 1.x | full | Async runtime |
 | reqwest | 0.12 | json, stream | HTTP client |

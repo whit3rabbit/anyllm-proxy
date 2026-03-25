@@ -1,8 +1,8 @@
 // Phase 9-10: compatibility endpoint and hardening integration tests
 // Phase 19: token counting integration tests
 
-use anthropic_openai_proxy::config::{self, Config};
-use anthropic_openai_proxy::server::routes;
+use anyllm_proxy::config::{self, Config};
+use anyllm_proxy::server::routes;
 use reqwest::Client;
 
 fn test_config() -> Config {

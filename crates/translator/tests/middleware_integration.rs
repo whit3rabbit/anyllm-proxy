@@ -11,10 +11,10 @@ use axum::routing::post;
 use axum::Router;
 use tokio::net::TcpListener;
 
-use anthropic_openai_translate::middleware::{
+use anyllm_translate::middleware::{
     anthropic_compat_router, AnthropicCompatConfig, AnthropicTranslationLayer,
 };
-use anthropic_openai_translate::TranslationConfig;
+use anyllm_translate::TranslationConfig;
 
 // --- Mock OpenAI backend ---
 

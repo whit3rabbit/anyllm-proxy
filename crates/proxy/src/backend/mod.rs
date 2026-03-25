@@ -1,178 +1,49 @@
+/// Passthrough client forwarding Anthropic requests as-is to upstream Anthropic API.
 pub mod anthropic_client;
+/// reqwest client for OpenAI-compatible Chat Completions and Responses APIs with retry/backoff.
 pub mod openai_client;
 
 use crate::config::{BackendAuth, BackendConfig, BackendKind, Config, OpenAIApiFormat, TlsConfig};
 use anthropic_client::{AnthropicClient, AnthropicClientError};
-use axum::http::{HeaderMap, HeaderName, HeaderValue};
 use openai_client::{OpenAIClient, OpenAIClientError};
-use reqwest::Client;
-use serde::Serialize;
-use std::time::Duration;
-use tokio::time::sleep;
 
-/// DNS resolver that rejects private/loopback IPs at connection time,
-/// preventing DNS rebinding attacks where a domain resolves to a public IP
-/// at startup validation but later resolves to a private/metadata IP.
-struct SsrfSafeDnsResolver;
+// Re-export from the client crate so existing code paths (streaming, routes, etc.) keep working.
+pub use anyllm_client::rate_limit::RateLimitHeaders;
+pub use anyllm_client::retry::{
+    backoff_delay, is_retryable, parse_retry_after, RetryableError, MAX_RETRIES,
+};
+pub use anyllm_client::sse::{find_double_newline, MAX_SSE_BUFFER_SIZE};
 
-impl reqwest::dns::Resolve for SsrfSafeDnsResolver {
-    fn resolve(&self, name: reqwest::dns::Name) -> reqwest::dns::Resolving {
-        Box::pin(async move {
-            let name_str = name.as_str().to_string();
-            // DNS resolution (ToSocketAddrs) blocks the calling thread.
-            // Must run on the blocking threadpool to avoid stalling the
-            // async runtime and all other in-flight requests.
-            let addrs: Vec<std::net::SocketAddr> =
-                tokio::task::spawn_blocking(move || -> Result<Vec<std::net::SocketAddr>, _> {
-                    use std::net::ToSocketAddrs;
-                    // Port 0 is a placeholder; reqwest replaces it with the actual port.
-                    let lookup = format!("{name_str}:0");
-                    Ok(lookup.to_socket_addrs()?.collect())
-                })
-                .await
-                .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?
-                .map_err(
-                    |e: std::io::Error| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) },
-                )?;
+use anyllm_client::http::HttpClientConfig;
 
-            // Filter out private/loopback IPs to prevent SSRF attacks where
-            // an attacker-controlled DNS record resolves to internal endpoints
-            // (e.g., cloud metadata at 169.254.169.254).
-            let safe: Vec<std::net::SocketAddr> = addrs
-                .into_iter()
-                .filter(|addr| !crate::config::is_private_ip(addr.ip()))
-                .collect();
-
-            if safe.is_empty() {
-                return Err(Box::new(std::io::Error::new(
-                    std::io::ErrorKind::PermissionDenied,
-                    "DNS resolved only to private/loopback IPs (SSRF blocked)".to_string(),
-                ))
-                    as Box<dyn std::error::Error + Send + Sync>);
-            }
-
-            Ok(Box::new(safe.into_iter()) as Box<dyn Iterator<Item = std::net::SocketAddr> + Send>)
-        })
-    }
-}
-
-pub(crate) const MAX_RETRIES: u32 = 3;
-pub(crate) const BASE_DELAY_MS: u64 = 500;
-
-/// Backend error types implement this to enable the generic `send_with_retry`.
-pub(crate) trait RetryableError: Sized {
-    fn from_request(e: reqwest::Error) -> Self;
-    fn from_api_response(status: u16, body: &str) -> Self;
-}
-
-fn apply_auth(rb: reqwest::RequestBuilder, auth: &BackendAuth) -> reqwest::RequestBuilder {
-    match auth {
-        BackendAuth::BearerToken(token) => rb.bearer_auth(token),
-        BackendAuth::GoogleApiKey(key) => rb.header("x-goog-api-key", key),
-    }
+/// Build a reqwest HTTP client from proxy TlsConfig (adapter to client crate).
+pub(crate) fn build_http_client(tls: &TlsConfig) -> reqwest::Client {
+    let config = HttpClientConfig {
+        p12_identity: tls.p12_identity.clone(),
+        ca_cert_pem: tls.ca_cert_pem.clone(),
+        ssrf_protection: true,
+        ..Default::default()
+    };
+    anyllm_client::build_http_client(&config)
 }
 
 /// Send a POST request with retry on 429/5xx. Returns the raw successful response.
+/// Adapter that maps BackendAuth to the client crate's RequestAuth.
 pub(crate) async fn send_with_retry<E: RetryableError>(
-    client: &Client,
+    client: &reqwest::Client,
     url: &str,
     auth: &BackendAuth,
-    body: &impl Serialize,
+    body: &impl serde::Serialize,
     label: &str,
 ) -> Result<reqwest::Response, E> {
-    for attempt in 0..=MAX_RETRIES {
-        let rb = apply_auth(client.post(url).json(body), auth);
-        let response = rb.send().await.map_err(E::from_request)?;
-        let status = response.status().as_u16();
-
-        if (200..300).contains(&status) {
-            return Ok(response);
-        }
-
-        if attempt < MAX_RETRIES && is_retryable(status) {
-            let retry_after = parse_retry_after(response.headers());
-            let delay = backoff_delay(attempt, retry_after);
-            tracing::warn!(
-                status,
-                attempt = attempt + 1,
-                max_retries = MAX_RETRIES,
-                delay_ms = delay.as_millis() as u64,
-                "retryable error from {label}, backing off"
-            );
-            // Drain the response body before retrying so the HTTP connection
-            // returns to the pool. Leaving it unread causes connection leaks.
-            drop(response.bytes().await);
-            sleep(delay).await;
-            continue;
-        }
-
-        let text = response.text().await.unwrap_or_else(|e| {
-            tracing::warn!("failed to read error response body: {e}");
-            String::new()
-        });
-        return Err(E::from_api_response(status, &text));
-    }
-
-    unreachable!("loop runs MAX_RETRIES+1 times and always returns")
-}
-
-/// Build a reqwest HTTP client with optional mTLS identity and custom CA cert.
-pub(crate) fn build_http_client(tls: &TlsConfig) -> Client {
-    let mut builder = Client::builder();
-
-    if let Some((ref p12_bytes, ref password)) = tls.p12_identity {
-        let identity = reqwest::Identity::from_pkcs12_der(p12_bytes, password)
-            .expect("P12 identity was validated at startup");
-        builder = builder.identity(identity);
-    }
-
-    if let Some(ref ca_pem) = tls.ca_cert_pem {
-        let cert =
-            reqwest::Certificate::from_pem(ca_pem).expect("CA cert was validated at startup");
-        builder = builder.add_root_certificate(cert);
-    }
-
-    builder
-        .connect_timeout(Duration::from_secs(10))
-        // 15 min read timeout: generous for slow-starting reasoning models
-        // (o1/o3 can think >5 min before the first chunk) while still
-        // bounding hung connections that would otherwise pin resources.
-        .read_timeout(Duration::from_secs(900))
-        // Detect dead TCP connections (peer crash, network drop).
-        .tcp_keepalive(Duration::from_secs(60))
-        // Validate resolved IPs at connection time to prevent DNS rebinding SSRF.
-        .dns_resolver(std::sync::Arc::new(SsrfSafeDnsResolver))
-        .build()
-        .expect("failed to build HTTP client")
-}
-
-/// Check if a status code is retryable (408, 429, or 5xx).
-pub(crate) fn is_retryable(status: u16) -> bool {
-    status == 408 || status == 429 || (500..=599).contains(&status)
-}
-
-/// Parse retry-after header as integer seconds or HTTP date (RFC 7231).
-pub(crate) fn parse_retry_after(headers: &reqwest::header::HeaderMap) -> Option<Duration> {
-    let value = header_str(headers, "retry-after")?;
-    // Fast path: integer seconds
-    if let Ok(secs) = value.parse::<u64>() {
-        return Some(Duration::from_secs(secs));
-    }
-    // HTTP date (RFC 7231). Past dates return None (no wait needed).
-    let date = httpdate::parse_http_date(&value).ok()?;
-    date.duration_since(std::time::SystemTime::now()).ok()
-}
-
-/// Compute backoff delay with jitter.
-pub(crate) fn backoff_delay(attempt: u32, retry_after: Option<Duration>) -> Duration {
-    if let Some(ra) = retry_after {
-        return ra;
-    }
-    let base = Duration::from_millis(BASE_DELAY_MS * 2u64.pow(attempt));
-    // Deterministic 25% jitter (upper bound, not random) to keep tests
-    // predictable while still spreading retry storms across backends.
-    let jitter_ms = (base.as_millis() as u64) / 4;
-    base + Duration::from_millis(jitter_ms)
+    let request_auth = match auth {
+        BackendAuth::BearerToken(token) => anyllm_client::retry::RequestAuth::Bearer(token),
+        BackendAuth::GoogleApiKey(key) => anyllm_client::retry::RequestAuth::Header {
+            name: "x-goog-api-key",
+            value: key,
+        },
+    };
+    anyllm_client::retry::send_with_retry(client, url, &request_auth, body, label).await
 }
 
 /// Backend-agnostic client for dispatching requests to OpenAI, Vertex, Gemini, or Anthropic.
@@ -254,6 +125,10 @@ impl From<AnthropicClientError> for BackendError {
 }
 
 impl BackendClient {
+    /// Create a backend client from a single-backend [`Config`].
+    ///
+    /// Dispatches on [`Config::backend`] and [`Config::openai_api_format`] to construct
+    /// the appropriate variant (OpenAI, OpenAIResponses, Vertex, GeminiOpenAI, or Anthropic).
     pub fn new(config: &Config) -> Self {
         match config.backend {
             BackendKind::OpenAI => match config.openai_api_format {
@@ -295,337 +170,5 @@ impl BackendClient {
             BackendKind::Gemini => Self::GeminiOpenAI(OpenAIClient::new(&legacy)),
             BackendKind::Anthropic => Self::Anthropic(AnthropicClient::from_backend_config(bc)),
         }
-    }
-}
-
-/// Parse OpenAI's duration format (e.g., "6ms", "1s", "1m30s", "2m") into a
-/// [`Duration`]. Returns `None` for unrecognized formats.
-fn parse_openai_duration(s: &str) -> Option<Duration> {
-    let s = s.trim();
-    if s.is_empty() {
-        return None;
-    }
-    let mut total_ms: u64 = 0;
-    let mut num_start: Option<usize> = None;
-    let bytes = s.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        let c = bytes[i];
-        if c.is_ascii_digit() || c == b'.' {
-            if num_start.is_none() {
-                num_start = Some(i);
-            }
-            i += 1;
-        } else if c.is_ascii_alphabetic() {
-            let start = num_start?;
-            let num_str = &s[start..i];
-            let unit_start = i;
-            while i < bytes.len() && bytes[i].is_ascii_alphabetic() {
-                i += 1;
-            }
-            let unit = &s[unit_start..i];
-            let value: f64 = num_str.parse().ok()?;
-            let ms = match unit {
-                "ms" => value,
-                "s" => value * 1_000.0,
-                "m" => value * 60_000.0,
-                "h" => value * 3_600_000.0,
-                _ => return None,
-            };
-            total_ms += ms.round() as u64;
-            num_start = None;
-        } else {
-            return None;
-        }
-    }
-    // Trailing number with no unit is invalid
-    if num_start.is_some() {
-        return None;
-    }
-    Some(Duration::from_millis(total_ms))
-}
-
-/// Convert an OpenAI relative duration string to an ISO 8601 UTC timestamp
-/// by adding it to the current time. Returns `None` if parsing fails.
-///
-/// Accepts an `anchor` time so callers can pin the base for testability.
-fn openai_duration_to_iso8601_at(s: &str, anchor: std::time::SystemTime) -> Option<String> {
-    let dur = parse_openai_duration(s)?;
-    let reset_time = anchor + dur;
-    let secs = reset_time
-        .duration_since(std::time::UNIX_EPOCH)
-        .ok()?
-        .as_secs();
-    Some(crate::admin::db::epoch_to_iso8601(secs))
-}
-
-/// Convenience wrapper using the current time as anchor.
-fn openai_duration_to_iso8601(s: &str) -> Option<String> {
-    openai_duration_to_iso8601_at(s, std::time::SystemTime::now())
-}
-
-/// Convert an OpenAI relative duration to ISO 8601, falling back to the raw
-/// value with a warning if parsing fails.
-fn convert_reset_duration(raw: &Option<String>, field: &str) -> Option<String> {
-    raw.as_deref().map(|v| {
-        openai_duration_to_iso8601(v).unwrap_or_else(|| {
-            tracing::warn!(
-                value = v,
-                field,
-                "failed to parse reset duration, forwarding raw"
-            );
-            v.to_string()
-        })
-    })
-}
-
-/// Rate limit headers extracted from backend responses.
-/// Forwarded to clients as Anthropic-style `anthropic-ratelimit-*` headers.
-/// See: <https://docs.anthropic.com/en/api/rate-limits#response-headers>
-#[derive(Debug, Default, Clone)]
-pub struct RateLimitHeaders {
-    /// Maximum requests allowed in the current window.
-    pub requests_limit: Option<String>,
-    /// Requests remaining before rate limiting kicks in.
-    pub requests_remaining: Option<String>,
-    /// ISO 8601 timestamp when the request limit resets.
-    pub requests_reset: Option<String>,
-    /// Maximum tokens allowed in the current window.
-    pub tokens_limit: Option<String>,
-    /// Tokens remaining before rate limiting kicks in.
-    pub tokens_remaining: Option<String>,
-    /// ISO 8601 timestamp when the token limit resets.
-    pub tokens_reset: Option<String>,
-    /// Seconds to wait before retrying (from `retry-after` header on 429s).
-    pub retry_after: Option<String>,
-}
-
-/// Extract a header value as a trimmed string.
-fn header_str(headers: &reqwest::header::HeaderMap, name: &str) -> Option<String> {
-    headers
-        .get(name)
-        .and_then(|v| v.to_str().ok())
-        .map(|s| s.trim().to_string())
-}
-
-/// Set a header on an axum HeaderMap if the value is Some.
-fn set_if_some(map: &mut HeaderMap, name: &str, value: &Option<String>) {
-    if let Some(v) = value {
-        if let (Ok(header_name), Ok(header_value)) = (
-            HeaderName::from_bytes(name.as_bytes()),
-            axum::http::HeaderValue::from_str(v),
-        ) {
-            map.insert(header_name, header_value);
-        }
-    }
-}
-
-impl RateLimitHeaders {
-    /// Extract rate limit headers from an OpenAI (or Vertex) response.
-    pub fn from_openai_headers(headers: &reqwest::header::HeaderMap) -> Self {
-        Self {
-            requests_limit: header_str(headers, "x-ratelimit-limit-requests"),
-            requests_remaining: header_str(headers, "x-ratelimit-remaining-requests"),
-            requests_reset: header_str(headers, "x-ratelimit-reset-requests"),
-            tokens_limit: header_str(headers, "x-ratelimit-limit-tokens"),
-            tokens_remaining: header_str(headers, "x-ratelimit-remaining-tokens"),
-            tokens_reset: header_str(headers, "x-ratelimit-reset-tokens"),
-            retry_after: header_str(headers, "retry-after"),
-        }
-    }
-
-    /// Inject Anthropic-format response headers (rate limits + version) into a HeaderMap.
-    ///
-    /// The `*_reset` fields are converted from OpenAI's relative duration
-    /// format (e.g., "1s") to Anthropic's ISO 8601 UTC timestamp format.
-    /// Falls back to the raw value with a warning if parsing fails.
-    pub fn inject_anthropic_response_headers(&self, map: &mut HeaderMap) {
-        set_if_some(
-            map,
-            "anthropic-ratelimit-requests-limit",
-            &self.requests_limit,
-        );
-        set_if_some(
-            map,
-            "anthropic-ratelimit-requests-remaining",
-            &self.requests_remaining,
-        );
-        let req_reset = convert_reset_duration(&self.requests_reset, "requests_reset");
-        set_if_some(map, "anthropic-ratelimit-requests-reset", &req_reset);
-        set_if_some(map, "anthropic-ratelimit-tokens-limit", &self.tokens_limit);
-        set_if_some(
-            map,
-            "anthropic-ratelimit-tokens-remaining",
-            &self.tokens_remaining,
-        );
-        let tok_reset = convert_reset_duration(&self.tokens_reset, "tokens_reset");
-        set_if_some(map, "anthropic-ratelimit-tokens-reset", &tok_reset);
-        set_if_some(map, "retry-after", &self.retry_after);
-        map.insert(
-            HeaderName::from_static("anthropic-version"),
-            HeaderValue::from_static("2023-06-01"),
-        );
-    }
-}
-
-#[cfg(test)]
-mod rate_limit_tests {
-    use super::*;
-
-    #[test]
-    fn from_openai_headers_extracts_all() {
-        let mut headers = reqwest::header::HeaderMap::new();
-        headers.insert("x-ratelimit-limit-requests", "100".parse().unwrap());
-        headers.insert("x-ratelimit-remaining-requests", "99".parse().unwrap());
-        headers.insert("x-ratelimit-reset-requests", "1s".parse().unwrap());
-        headers.insert("x-ratelimit-limit-tokens", "40000".parse().unwrap());
-        headers.insert("x-ratelimit-remaining-tokens", "39500".parse().unwrap());
-        headers.insert("x-ratelimit-reset-tokens", "500ms".parse().unwrap());
-        headers.insert("retry-after", "2".parse().unwrap());
-
-        let rl = RateLimitHeaders::from_openai_headers(&headers);
-        assert_eq!(rl.requests_limit.as_deref(), Some("100"));
-        assert_eq!(rl.requests_remaining.as_deref(), Some("99"));
-        assert_eq!(rl.requests_reset.as_deref(), Some("1s"));
-        assert_eq!(rl.tokens_limit.as_deref(), Some("40000"));
-        assert_eq!(rl.tokens_remaining.as_deref(), Some("39500"));
-        assert_eq!(rl.tokens_reset.as_deref(), Some("500ms"));
-        assert_eq!(rl.retry_after.as_deref(), Some("2"));
-    }
-
-    #[test]
-    fn from_openai_headers_missing_are_none() {
-        let headers = reqwest::header::HeaderMap::new();
-        let rl = RateLimitHeaders::from_openai_headers(&headers);
-        assert!(rl.requests_limit.is_none());
-        assert!(rl.requests_remaining.is_none());
-        assert!(rl.requests_reset.is_none());
-        assert!(rl.tokens_limit.is_none());
-        assert!(rl.tokens_remaining.is_none());
-        assert!(rl.tokens_reset.is_none());
-        assert!(rl.retry_after.is_none());
-    }
-
-    #[test]
-    fn inject_anthropic_response_headers_sets_values() {
-        let rl = RateLimitHeaders {
-            requests_limit: Some("100".into()),
-            tokens_remaining: Some("39500".into()),
-            retry_after: Some("3".into()),
-            ..Default::default()
-        };
-        let mut map = HeaderMap::new();
-        rl.inject_anthropic_response_headers(&mut map);
-
-        assert_eq!(
-            map.get("anthropic-ratelimit-requests-limit").unwrap(),
-            "100"
-        );
-        assert_eq!(
-            map.get("anthropic-ratelimit-tokens-remaining").unwrap(),
-            "39500"
-        );
-        assert_eq!(map.get("retry-after").unwrap(), "3");
-        assert_eq!(map.get("anthropic-version").unwrap(), "2023-06-01");
-        // Fields that were None should not be present
-        assert!(map.get("anthropic-ratelimit-requests-remaining").is_none());
-        assert!(map.get("anthropic-ratelimit-tokens-limit").is_none());
-    }
-
-    #[test]
-    fn inject_anthropic_response_headers_default_sets_version_only() {
-        let rl = RateLimitHeaders::default();
-        let mut map = HeaderMap::new();
-        rl.inject_anthropic_response_headers(&mut map);
-        assert_eq!(map.len(), 1);
-        assert_eq!(map.get("anthropic-version").unwrap(), "2023-06-01");
-    }
-
-    #[test]
-    fn inject_anthropic_response_headers_converts_reset_to_iso8601() {
-        let rl = RateLimitHeaders {
-            requests_reset: Some("1s".into()),
-            tokens_reset: Some("500ms".into()),
-            ..Default::default()
-        };
-        let mut map = HeaderMap::new();
-        rl.inject_anthropic_response_headers(&mut map);
-
-        let req_reset = map
-            .get("anthropic-ratelimit-requests-reset")
-            .unwrap()
-            .to_str()
-            .unwrap();
-        let tok_reset = map
-            .get("anthropic-ratelimit-tokens-reset")
-            .unwrap()
-            .to_str()
-            .unwrap();
-        // Should be ISO 8601 format, not the raw OpenAI duration.
-        assert!(
-            req_reset.contains('T') && req_reset.ends_with('Z'),
-            "expected ISO 8601 timestamp, got: {req_reset}"
-        );
-        assert!(
-            tok_reset.contains('T') && tok_reset.ends_with('Z'),
-            "expected ISO 8601 timestamp, got: {tok_reset}"
-        );
-    }
-
-    #[test]
-    fn parse_openai_duration_various_formats() {
-        assert_eq!(parse_openai_duration("6ms"), Some(Duration::from_millis(6)));
-        assert_eq!(
-            parse_openai_duration("1s"),
-            Some(Duration::from_millis(1000))
-        );
-        assert_eq!(
-            parse_openai_duration("2m"),
-            Some(Duration::from_millis(120_000))
-        );
-        assert_eq!(
-            parse_openai_duration("1m30s"),
-            Some(Duration::from_millis(90_000))
-        );
-        assert_eq!(
-            parse_openai_duration("1h"),
-            Some(Duration::from_millis(3_600_000))
-        );
-        assert_eq!(
-            parse_openai_duration("1h30m"),
-            Some(Duration::from_millis(5_400_000))
-        );
-    }
-
-    #[test]
-    fn parse_openai_duration_invalid() {
-        assert_eq!(parse_openai_duration(""), None);
-        assert_eq!(parse_openai_duration("abc"), None);
-        assert_eq!(parse_openai_duration("123"), None); // no unit
-        assert_eq!(parse_openai_duration("1x"), None); // unknown unit
-    }
-
-    #[test]
-    fn openai_duration_to_iso8601_at_pinned_time() {
-        // 2025-06-16T12:00:00Z = 1750075200 epoch seconds
-        let anchor = std::time::UNIX_EPOCH + Duration::from_secs(1_750_075_200);
-        assert_eq!(
-            openai_duration_to_iso8601_at("1s", anchor).unwrap(),
-            "2025-06-16T12:00:01Z"
-        );
-        assert_eq!(
-            openai_duration_to_iso8601_at("1m30s", anchor).unwrap(),
-            "2025-06-16T12:01:30Z"
-        );
-        assert_eq!(
-            openai_duration_to_iso8601_at("500ms", anchor).unwrap(),
-            "2025-06-16T12:00:00Z" // 500ms rounds down to same second
-        );
-    }
-
-    #[test]
-    fn openai_duration_to_iso8601_invalid_returns_none() {
-        assert!(openai_duration_to_iso8601("garbage").is_none());
-        assert!(openai_duration_to_iso8601("").is_none());
     }
 }

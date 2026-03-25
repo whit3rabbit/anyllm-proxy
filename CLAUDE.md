@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-An Anthropic-to-OpenAI API translation proxy in Rust. Accepts Anthropic Messages API requests, translates them to OpenAI Chat Completions format, forwards to OpenAI, and translates back. Supports streaming SSE, tool calling, file/document blocks.
+**anyllm-proxy** is an Anthropic-to-OpenAI API translation proxy in Rust. Accepts Anthropic Messages API requests, translates them to OpenAI Chat Completions format, forwards to OpenAI, and translates back. Supports streaming SSE, tool calling, file/document blocks.
 
 All 11 implementation phases are complete.
 
@@ -28,8 +28,8 @@ All 11 implementation phases are complete.
 ```bash
 cargo build                          # build everything
 cargo test                           # run all tests (~417 tests, 4 ignored)
-cargo test -p anthropic_openai_translate  # translator crate only
-cargo test -p anthropic_openai_proxy      # proxy crate only
+cargo test -p anyllm_translate  # translator crate only
+cargo test -p anyllm_proxy      # proxy crate only
 cargo test health_endpoint            # single test by name
 cargo clippy -- -D warnings          # lint
 cargo fmt --check                    # format check
@@ -37,7 +37,7 @@ cargo fmt --check                    # format check
 
 Run the proxy (requires OPENAI_API_KEY):
 ```bash
-OPENAI_API_KEY=sk-... cargo run -p anthropic_openai_proxy
+OPENAI_API_KEY=sk-... cargo run -p anyllm_proxy
 # Listens on 0.0.0.0:3000, health at GET /health
 ```
 
@@ -50,7 +50,7 @@ OPENAI_API_KEY=sk-... cargo run -p anthropic_openai_proxy
 - `LISTEN_PORT`: Server port (default: `3000`)
 - `BIG_MODEL`: Backend model for sonnet/opus requests (default: `gpt-4o` for OpenAI, `gemini-2.5-pro` for Vertex/Gemini)
 - `SMALL_MODEL`: Backend model for haiku requests (default: `gpt-4o-mini` for OpenAI, `gemini-2.5-flash` for Vertex/Gemini)
-- `RUST_LOG`: Tracing filter (e.g., `info`, `anthropic_openai_proxy=debug`)
+- `RUST_LOG`: Tracing filter (e.g., `info`, `anyllm_proxy=debug`)
 - `TLS_CLIENT_CERT_P12`: Path to PKCS#12 (.p12/.pfx) client certificate for mTLS to the backend (optional)
 - `TLS_CLIENT_CERT_PASSWORD`: Password to decrypt the P12 file (required if P12 is set)
 - `TLS_CA_CERT`: Path to PEM-encoded CA certificate for verifying the backend server (optional)
@@ -67,7 +67,7 @@ OPENAI_API_KEY=sk-... cargo run -p anthropic_openai_proxy
 
 Cargo workspace with two crates:
 
-### `crates/translator` (lib: `anthropic_openai_translate`)
+### `crates/translator` (lib: `anyllm_translate`)
 Pure translation logic, no IO. Key modules:
 - **`anthropic/`**: Anthropic Messages API types (request, response, streaming events, errors)
 - **`openai/`**: OpenAI types for both Chat Completions and Responses APIs
@@ -83,7 +83,7 @@ Pure translation logic, no IO. Key modules:
 - **`util/`**: JSON helpers, ID generation (uuid v4), secret redaction
 - **`config.rs`**: Translator-level configuration, **`error.rs`**: Error types, **`translate.rs`**: Top-level translation entry points
 
-### `crates/proxy` (bin: `anthropic_openai_proxy`)
+### `crates/proxy` (bin: `anyllm_proxy`)
 HTTP proxy built on axum + reqwest:
 - **`config/`**: Env-based configuration (`mod.rs`), TLS client cert setup (`tls.rs`), URL validation (`url_validation.rs`)
 - **`server/routes.rs`**: Axum router (POST /v1/messages, GET /health, GET /metrics, GET /v1/models, stubs for count_tokens and batches)

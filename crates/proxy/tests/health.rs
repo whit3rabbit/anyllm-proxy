@@ -1,4 +1,4 @@
-use anthropic_openai_proxy::{config::Config, server::routes};
+use anyllm_proxy::{config::Config, server::routes};
 use tokio::net::TcpListener;
 
 #[tokio::test]

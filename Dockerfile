@@ -3,10 +3,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends libssl-dev pkg-
 WORKDIR /app
 COPY Cargo.toml Cargo.lock ./
 COPY crates crates
-RUN cargo build --release -p anthropic_openai_proxy
+RUN cargo build --release -p anyllm_proxy
 
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libssl3 && rm -rf /var/lib/apt/lists/*
-COPY --from=builder /app/target/release/anthropic_openai_proxy /usr/local/bin/
+COPY --from=builder /app/target/release/anyllm_proxy /usr/local/bin/
 EXPOSE 3000
-ENTRYPOINT ["anthropic_openai_proxy"]
+ENTRYPOINT ["anyllm_proxy"]

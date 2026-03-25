@@ -1,7 +1,7 @@
 // Golden-file tests: validate that fixture JSON files can be deserialized
 // and that translation between formats produces the expected shapes.
 
-use anthropic_openai_translate::{anthropic, mapping, openai};
+use anyllm_translate::{anthropic, mapping, openai};
 
 fn fixtures_dir() -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR"))

@@ -1,0 +1,30 @@
+[package]
+name = "anyllm_client"
+description = "Async HTTP client for Anthropic-to-OpenAI translation with retry, SSRF protection, and SSE streaming"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+categories = ["api-bindings", "web-programming::http-client"]
+keywords = ["anthropic", "openai", "translation", "llm", "client"]
+
+[features]
+default = ["ssrf-protection"]
+ssrf-protection = []
+
+[dependencies]
+anyllm_translate = { path = "../translator" }
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "native-tls", "http2"] }
+tokio = { version = "1", features = ["rt", "sync", "time"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+bytes = "1"
+futures = "0.3"
+httpdate = "1"
+thiserror = "2"
+pin-project-lite = "0.2"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }
+pretty_assertions = "1"

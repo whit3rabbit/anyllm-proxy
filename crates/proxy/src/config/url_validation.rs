@@ -4,6 +4,9 @@
 use std::net::IpAddr;
 use url::Url;
 
+// Re-export is_private_ip from the client crate (canonical location).
+pub use anyllm_client::http::is_private_ip;
+
 /// Validate that a base URL is safe to use as an upstream target.
 /// Rejects non-http(s) schemes, private/loopback IPs, and link-local addresses.
 /// For domain names, also resolves DNS and validates all resolved IPs to prevent
@@ -75,29 +78,6 @@ pub fn validate_base_url(raw: &str) -> Result<(), String> {
     }
 
     Ok(())
-}
-
-/// Returns true for loopback, private (RFC 1918), link-local, and
-/// cloud metadata IPs (169.254.169.254).
-pub fn is_private_ip(ip: IpAddr) -> bool {
-    match ip {
-        IpAddr::V4(v4) => {
-            v4.is_loopback()
-                || v4.is_private()
-                || v4.is_link_local()
-                || v4.is_broadcast()
-                || v4.is_unspecified()
-                // AWS/GCP/Azure metadata endpoint. SSRF to this IP lets
-                // attackers exfiltrate instance credentials.
-                || v4 == std::net::Ipv4Addr::new(169, 254, 169, 254)
-        }
-        IpAddr::V6(v6) => {
-            v6.is_loopback() || v6.is_unspecified()
-            // Check IPv4-mapped IPv6 addresses (::ffff:192.168.x.x) recursively;
-            // attackers can bypass IPv4 checks using the mapped representation.
-            || matches!(v6.to_ipv4_mapped(), Some(v4) if is_private_ip(IpAddr::V4(v4)))
-        }
-    }
 }
 
 #[cfg(test)]

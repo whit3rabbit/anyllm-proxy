@@ -11,7 +11,7 @@ These are the variables most users need.
 | `LISTEN_PORT` | `3000` | Port the proxy listens on. |
 | `BIG_MODEL` | `gpt-4o` | OpenAI model used when the Anthropic request specifies a sonnet or opus model. |
 | `SMALL_MODEL` | `gpt-4o-mini` | OpenAI model used when the Anthropic request specifies a haiku model. |
-| `RUST_LOG` | `info` | Tracing filter. Examples: `debug`, `anthropic_openai_proxy=trace`. |
+| `RUST_LOG` | `info` | Tracing filter. Examples: `debug`, `anyllm_proxy=trace`. |
 
 ## mTLS Client Certificates
 
@@ -44,5 +44,5 @@ OPENAI_BASE_URL=https://internal-llm.corp.example.com \
 TLS_CLIENT_CERT_P12=/etc/proxy/client.p12 \
 TLS_CLIENT_CERT_PASSWORD=changeit \
 TLS_CA_CERT=/etc/proxy/corp-ca.pem \
-cargo run -p anthropic_openai_proxy
+cargo run -p anyllm_proxy
 ```

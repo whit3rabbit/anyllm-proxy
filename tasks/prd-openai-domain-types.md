@@ -71,7 +71,7 @@ Define the Rust types that model the OpenAI Chat Completions and Responses APIs:
 - [ ] Fixture files in `fixtures/openai/`: `chat_completion_basic.json`, `chat_completion_tool_call.json`, `responses_basic.json`
 - [ ] Tests that deserialize each fixture into typed structs without error
 - [ ] Round-trip serialization produces semantically identical JSON
-- [ ] `cargo test -p anthropic_openai_translate` passes
+- [ ] `cargo test -p anyllm_translate` passes
 
 ## Functional Requirements
 
@@ -99,4 +99,4 @@ Define the Rust types that model the OpenAI Chat Completions and Responses APIs:
 
 - All fixture files deserialize without error
 - Round-trip serde produces equivalent JSON
-- `cargo test -p anthropic_openai_translate` passes
+- `cargo test -p anyllm_translate` passes

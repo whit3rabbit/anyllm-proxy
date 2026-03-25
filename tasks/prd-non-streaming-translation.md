@@ -115,4 +115,4 @@ Implement the core translation logic that converts Anthropic Messages API reques
 
 - All mapping functions have corresponding unit tests
 - Golden fixture tests: load Anthropic fixture, translate to OpenAI, compare against OpenAI fixture
-- `cargo test -p anthropic_openai_translate` passes with all new tests green
+- `cargo test -p anyllm_translate` passes with all new tests green

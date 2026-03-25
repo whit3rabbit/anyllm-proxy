@@ -1,4 +1,4 @@
-use anthropic_openai_proxy::{admin, config, server::routes};
+use anyllm_proxy::{admin, config, server::routes};
 use std::sync::Arc;
 use tracing_subscriber::prelude::*;
 
@@ -116,10 +116,8 @@ async fn main() {
     let (events_tx, _) = tokio::sync::broadcast::channel(1024);
     let log_tx = admin::db::spawn_write_buffer(db.clone());
 
-    let backend_metrics: std::collections::HashMap<
-        String,
-        anthropic_openai_proxy::metrics::Metrics,
-    > = std::collections::HashMap::new();
+    let backend_metrics: std::collections::HashMap<String, anyllm_proxy::metrics::Metrics> =
+        std::collections::HashMap::new();
 
     let shared = admin::state::SharedState {
         db: db.clone(),
@@ -188,7 +186,7 @@ async fn main() {
                 continue;
             }
             let mut backends = std::collections::HashMap::new();
-            let mut aggregate = anthropic_openai_proxy::metrics::MetricsSnapshot::default();
+            let mut aggregate = anyllm_proxy::metrics::MetricsSnapshot::default();
             for (name, m) in snapshot_shared.backend_metrics.iter() {
                 let snap = m.snapshot();
                 aggregate.requests_total += snap.requests_total;

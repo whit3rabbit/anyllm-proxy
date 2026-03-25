@@ -22,16 +22,16 @@ Set up the Cargo workspace, dependencies, and directory structure for the Anthro
 - [ ] `cargo test` runs (even if no tests yet)
 
 ### US-002: Scaffold translator crate
-**Description:** As a developer, I need the `anthropic_openai_translate` library crate with the module structure defined in PLAN.md so subsequent phases have a place to add types and mapping logic.
+**Description:** As a developer, I need the `anyllm_translate` library crate with the module structure defined in PLAN.md so subsequent phases have a place to add types and mapping logic.
 
 **Acceptance Criteria:**
 - [ ] `crates/translator/Cargo.toml` with `serde`, `serde_json`, `uuid`, `thiserror` dependencies
 - [ ] `src/lib.rs` with module declarations for `anthropic`, `openai`, `mapping`, `util`
 - [ ] Subdirectories: `anthropic/`, `openai/`, `mapping/`, `util/` with `mod.rs` stubs
-- [ ] `cargo build -p anthropic_openai_translate` succeeds
+- [ ] `cargo build -p anyllm_translate` succeeds
 
 ### US-003: Scaffold proxy crate
-**Description:** As a developer, I need the `anthropic_openai_proxy` binary crate with axum server skeleton and a health endpoint so I can verify the server starts.
+**Description:** As a developer, I need the `anyllm_proxy` binary crate with axum server skeleton and a health endpoint so I can verify the server starts.
 
 **Acceptance Criteria:**
 - [ ] `crates/proxy/Cargo.toml` with `tokio`, `axum`, `reqwest`, `tracing`, `tracing-subscriber` dependencies
@@ -59,7 +59,7 @@ Set up the Cargo workspace, dependencies, and directory structure for the Anthro
 
 - FR-1: Workspace builds with `cargo build` producing no errors or warnings
 - FR-2: `cargo test` runs and passes (even with zero test assertions initially)
-- FR-3: `cargo run -p anthropic_openai_proxy` starts a server on the configured port
+- FR-3: `cargo run -p anyllm_proxy` starts a server on the configured port
 - FR-4: `GET /health` returns HTTP 200 with JSON body `{"status":"ok"}`
 - FR-5: Environment variables `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `LISTEN_PORT` are read with sensible defaults
 

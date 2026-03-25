@@ -1,12 +1,12 @@
-//! # anthropic_openai_translate
+//! # anyllm_translate
 //!
 //! Pure, IO-free translation between Anthropic Messages API and OpenAI Chat Completions API.
 //!
 //! # Quick start
 //!
 //! ```rust
-//! use anthropic_openai_translate::{TranslationConfig, translate_request, translate_response};
-//! use anthropic_openai_translate::anthropic::MessageCreateRequest;
+//! use anyllm_translate::{TranslationConfig, translate_request, translate_response};
+//! use anyllm_translate::anthropic::MessageCreateRequest;
 //!
 //! let config = TranslationConfig::builder()
 //!     .model_map("haiku", "gpt-4o-mini")
@@ -35,14 +35,22 @@
 //! - [`config`] -- Translation configuration (model mapping, lossy behavior)
 //! - [`translate`] -- Convenience wrappers combining config with mapping functions
 
+/// Anthropic Messages API types (request, response, streaming events, errors).
 pub mod anthropic;
+/// Translation configuration: model mapping and lossy-translation behavior.
 pub mod config;
+/// Error types for translation failures.
 pub mod error;
+/// Stateless conversion functions between Anthropic and OpenAI API formats.
 pub mod mapping;
+/// HTTP middleware for request/response translation (requires `middleware` feature).
 #[cfg(feature = "middleware")]
 pub mod middleware;
+/// OpenAI Chat Completions and Responses API types.
 pub mod openai;
+/// Convenience wrappers combining config with mapping functions.
 pub mod translate;
+/// Shared utilities: ID generation, JSON helpers, secret redaction.
 pub mod util;
 
 // Convenience re-exports

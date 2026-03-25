@@ -1,10 +1,8 @@
 //! Integration test: verify the crate works as a standalone library without the proxy.
 
-use anthropic_openai_translate::anthropic::{MessageCreateRequest, MessageResponse, Usage};
-use anthropic_openai_translate::openai::ChatCompletionResponse;
-use anthropic_openai_translate::{
-    translate_request, translate_response, TranslateError, TranslationConfig,
-};
+use anyllm_translate::anthropic::{MessageCreateRequest, MessageResponse, Usage};
+use anyllm_translate::openai::ChatCompletionResponse;
+use anyllm_translate::{translate_request, translate_response, TranslateError, TranslationConfig};
 
 #[test]
 fn standalone_translate_request() {

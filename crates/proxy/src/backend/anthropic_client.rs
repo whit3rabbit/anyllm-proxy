@@ -144,22 +144,3 @@ impl AnthropicClient {
         unreachable!("loop runs MAX_RETRIES+1 times and always returns")
     }
 }
-
-impl RateLimitHeaders {
-    /// Extract rate limit headers from an Anthropic response.
-    /// Anthropic uses `anthropic-ratelimit-*` headers natively.
-    pub fn from_anthropic_headers(headers: &reqwest::header::HeaderMap) -> Self {
-        Self {
-            requests_limit: super::header_str(headers, "anthropic-ratelimit-requests-limit"),
-            requests_remaining: super::header_str(
-                headers,
-                "anthropic-ratelimit-requests-remaining",
-            ),
-            requests_reset: super::header_str(headers, "anthropic-ratelimit-requests-reset"),
-            tokens_limit: super::header_str(headers, "anthropic-ratelimit-tokens-limit"),
-            tokens_remaining: super::header_str(headers, "anthropic-ratelimit-tokens-remaining"),
-            tokens_reset: super::header_str(headers, "anthropic-ratelimit-tokens-reset"),
-            retry_after: super::header_str(headers, "retry-after"),
-        }
-    }
-}
