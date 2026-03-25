@@ -12,7 +12,7 @@ See PLAN.md for the full specification and TASKS.md for phased implementation st
 
 **Working (verified):**
 - Build: `cargo build` clean, `cargo clippy -- -D warnings` clean
-- Tests: ~367 tests passing, 4 ignored (live API)
+- Tests: ~390 tests passing, 4 ignored (live API)
 - Full Anthropic Messages API translation: non-streaming, streaming SSE, tool calling, file/document blocks
 - Proxy middleware: health, auth, request ID, size limits, concurrency limits, retry with backoff
 - Compatibility endpoints: /v1/models, count_tokens (approximate via tiktoken), batches (stub)
@@ -27,7 +27,7 @@ See PLAN.md for the full specification and TASKS.md for phased implementation st
 
 ```bash
 cargo build                          # build everything
-cargo test                           # run all tests (~367 tests, 4 ignored)
+cargo test                           # run all tests (~390 tests, 4 ignored)
 cargo test -p anthropic_openai_translate  # translator crate only
 cargo test -p anthropic_openai_proxy      # proxy crate only
 cargo test health_endpoint            # single test by name
@@ -85,14 +85,17 @@ Pure translation logic, no IO. Key modules:
 
 ### `crates/proxy` (bin: `anthropic_openai_proxy`)
 HTTP proxy built on axum + reqwest:
-- **`config.rs`**: Env-based configuration
+- **`config/`**: Env-based configuration (`mod.rs`), TLS client cert setup (`tls.rs`), URL validation (`url_validation.rs`)
 - **`server/routes.rs`**: Axum router (POST /v1/messages, GET /health, GET /metrics, GET /v1/models, stubs for count_tokens and batches)
 - **`server/middleware.rs`**: Auth validation (x-api-key), request ID injection, 32MB size limit, concurrency limit, logging
 - **`server/sse.rs`**: SSE response helpers for Anthropic-format streaming
+- **`server/streaming.rs`**: SSE streaming handler with pre-stream error propagation and backpressure
+- **`server/passthrough.rs`**: Anthropic passthrough handler (no translation, forwards as-is)
+- **`server/token_counting.rs`**: Approximate token counting via tiktoken
 - **`backend/mod.rs`**: `BackendClient` enum (OpenAI/OpenAIResponses/Vertex/GeminiOpenAI/Anthropic), `BackendError`, shared retry helpers
 - **`backend/openai_client.rs`**: reqwest client calling OpenAI-compatible Chat Completions with retry/backoff on 429/5xx (used for OpenAI, Vertex, and Gemini backends)
 - **`backend/anthropic_client.rs`**: Passthrough client forwarding Anthropic requests as-is to upstream Anthropic API (no translation)
-- **`admin/`**: Admin server (localhost-only) with config management, WebSocket live updates, token auth (`auth.rs`, `db.rs`, `mod.rs`, `routes.rs`, `state.rs`)
+- **`admin/`**: Admin server (localhost-only) with config management, WebSocket live updates (`ws.rs`), token auth (`auth.rs`, `db.rs`, `mod.rs`, `routes.rs`, `state.rs`)
 - **`admin-ui/`**: Static admin UI served by the admin server (`index.html`)
 - **`metrics/`**: Request count, success/error tracking, exposed via GET /metrics
 
@@ -115,13 +118,15 @@ Client (Anthropic format) -> proxy (axum)
 - Retry logic: 3 retries with exponential backoff + 25% jitter, respects retry-after header.
 - Backoff jitter is deterministic (upper bound, not random) to keep tests predictable.
 - `ChatCompletionRequest` uses `#[serde(flatten)] pub extra: serde_json::Map` to capture unknown OpenAI fields (e.g., `seed`, `logprobs`, `logit_bias`, `n`, `reasoning_effort`). These pass through to OpenAI without typed handling. Only fields that require translation logic (not just forwarding) need explicit struct fields.
+- DeepSeek/Qwen thinking model support: `reasoning_content` on `ChatMessage` and `ChunkDelta` maps bidirectionally to Anthropic thinking blocks. Request direction: Anthropic `Thinking` content blocks become `reasoning_content` on the assistant message. Response direction: `reasoning_content` becomes an Anthropic `Thinking` block preceding the text content. Streaming: `reasoning_content` deltas open a thinking content block, which is closed when regular `content` deltas begin. The `thinking` config (`budget_tokens`) is stripped with a warning since it has no standard OpenAI equivalent.
+- Local LLM compatibility: streaming tool calls handle missing/empty IDs by generating synthetic `toolu_` IDs. `FinishReason::Unknown` (serde catch-all) maps to `end_turn` for providers like DeepSeek that use non-standard finish reasons (e.g., `insufficient_system_resource`).
 
 ## Conventions
 
 - Most source files reference their PLAN.md line ranges in a comment at the top.
 - Test files live alongside source (`#[cfg(test)]` modules) and in `crates/proxy/tests/` for integration tests.
 - Error types use `thiserror` derive macros.
-- Test distribution: translator (~242 tests), proxy (~125 tests including integration/compatibility).
+- Test distribution: translator (~240 tests), proxy (~150 tests including integration/compatibility). Counts shift as features are added.
 
 ## References
 

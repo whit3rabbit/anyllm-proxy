@@ -23,6 +23,8 @@ fn test_config() -> Config {
 }
 
 async fn spawn_test_server() -> String {
+    // Enable open-relay mode for tests (no PROXY_API_KEYS configured).
+    std::env::set_var("PROXY_OPEN_RELAY", "true");
     let app = routes::app(test_config());
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -160,11 +162,25 @@ async fn health_no_auth_required() {
 }
 
 #[tokio::test]
+async fn metrics_endpoint_requires_auth() {
+    let base = spawn_test_server().await;
+    let client = Client::new();
+    // No auth header -- should be rejected
+    let resp = client.get(format!("{base}/metrics")).send().await.unwrap();
+    assert_eq!(resp.status(), 401);
+}
+
+#[tokio::test]
 async fn metrics_endpoint_returns_counters() {
     let base = spawn_test_server().await;
     let client = Client::new();
-    // No auth required for metrics
-    let resp = client.get(format!("{base}/metrics")).send().await.unwrap();
+    // Auth required for metrics
+    let resp = client
+        .get(format!("{base}/metrics"))
+        .header("x-api-key", "test")
+        .send()
+        .await
+        .unwrap();
     assert_eq!(resp.status(), 200);
     let body: serde_json::Value = resp.json().await.unwrap();
     // Multi-backend metrics format: { "backends": {...}, "total": {...} }

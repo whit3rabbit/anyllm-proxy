@@ -174,6 +174,7 @@ pub(crate) async fn messages_stream(
     body: anthropic::MessageCreateRequest,
     ctx: RequestCtx,
     mapped_model: String,
+    concurrency_permit: Option<super::routes::ConcurrencyPermit>,
 ) -> Result<
     (
         RateLimitHeaders,
@@ -198,8 +199,13 @@ pub(crate) async fn messages_stream(
             super::routes::inject_gemini_thinking(&body, &state.backend, &mut openai_req);
             openai_req.model = state.map_model(&openai_req.model);
             let model = body.model.clone();
+            let permit = concurrency_permit.clone();
 
             tokio::spawn(async move {
+                // Hold concurrency permit until the stream completes, not just
+                // until headers are sent, so the semaphore accurately bounds
+                // concurrent streaming connections.
+                let _permit = permit;
                 match client.chat_completion_stream(&openai_req).await {
                     Ok((response, rate_limits)) => {
                         rl_tx.send(Ok(rate_limits)).ok();
@@ -271,8 +277,10 @@ pub(crate) async fn messages_stream(
             responses_req.model = state.map_model(&responses_req.model);
             responses_req.stream = Some(true);
             let model = body.model.clone();
+            let permit = concurrency_permit;
 
             tokio::spawn(async move {
+                let _permit = permit;
                 match client.responses_stream(&responses_req).await {
                     Ok((response, rate_limits)) => {
                         rl_tx.send(Ok(rate_limits)).ok();

@@ -53,7 +53,21 @@ async fn main() {
     if let Ok(overrides) = admin::db::get_config_overrides(&conn) {
         for (key, value, _) in &overrides {
             match key.as_str() {
-                "log_level" => runtime_config.log_level = value.clone(),
+                "log_level" => {
+                    // Apply the same allowlist enforced by the admin API to
+                    // prevent a tampered SQLite database from enabling trace-level
+                    // logging, which would expose API keys in HTTP headers.
+                    const ALLOWED_LOG_LEVELS: &[&str] = &["error", "warn", "info", "debug"];
+                    let normalized = value.trim().to_lowercase();
+                    if ALLOWED_LOG_LEVELS.contains(&normalized.as_str()) {
+                        runtime_config.log_level = normalized;
+                    } else {
+                        tracing::warn!(
+                            value = %value,
+                            "ignoring invalid log_level override from database"
+                        );
+                    }
+                }
                 "log_bodies" => runtime_config.log_bodies = value == "true",
                 k if k.ends_with(".big_model") => {
                     let backend = k.strip_suffix(".big_model").unwrap();
@@ -114,6 +128,7 @@ async fn main() {
         backend_metrics: Arc::new(backend_metrics),
         log_tx,
         log_reload: Some(log_reload),
+        config_write_lock: Arc::new(tokio::sync::Mutex::new(())),
     };
 
     // Admin token: use env var or generate random UUID written to a file.
@@ -124,9 +139,12 @@ async fn main() {
         // Write token to file with restrictive permissions instead of stderr,
         // because stderr is captured by container log drivers in production.
         if let Err(e) = write_token_file(&token_path, &token) {
-            // Fall back to stderr if file write fails (e.g., read-only filesystem).
-            eprintln!("WARNING: could not write admin token to {token_path}: {e}");
-            eprintln!("Admin token: {token}");
+            // Do not print the token to stderr: container log drivers capture
+            // stderr and persist it in centralized logging systems.
+            panic!(
+                "Cannot write admin token to {token_path}: {e}. \
+                 Set ADMIN_TOKEN env var explicitly or ensure the path is writable."
+            );
         } else {
             // Log the path, not the token itself.
             tracing::info!(path = %token_path, "generated admin token written to file (set ADMIN_TOKEN env var to avoid this)");
@@ -263,7 +281,14 @@ fn write_token_file(path: &str, token: &str) -> std::io::Result<()> {
     };
 
     #[cfg(not(unix))]
-    let mut file = std::fs::File::create(path)?;
+    let mut file = {
+        tracing::warn!(
+            path = %path,
+            "non-Unix platform: admin token file may be world-readable. \
+             Set ADMIN_TOKEN env var explicitly in production."
+        );
+        std::fs::File::create(path)?
+    };
 
     file.write_all(token.as_bytes())?;
     file.write_all(b"\n")?;

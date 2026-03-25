@@ -1,6 +1,6 @@
 // Integration tests for multi-backend path-prefix routing.
 
-use anthropic_openai_proxy::config::{self, MultiConfig};
+use anthropic_openai_proxy::config::MultiConfig;
 use anthropic_openai_proxy::server::routes;
 use reqwest::Client;
 
@@ -21,6 +21,8 @@ fn test_multi_config() -> MultiConfig {
 }
 
 async fn spawn_multi_server() -> String {
+    // Enable open-relay mode for tests (no PROXY_API_KEYS configured).
+    std::env::set_var("PROXY_OPEN_RELAY", "true");
     let app = routes::app_multi(test_multi_config());
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -112,7 +114,12 @@ async fn unknown_prefix_returns_404() {
 async fn metrics_shows_per_backend_breakdown() {
     let base = spawn_multi_server().await;
     let client = Client::new();
-    let resp = client.get(format!("{base}/metrics")).send().await.unwrap();
+    let resp = client
+        .get(format!("{base}/metrics"))
+        .header("x-api-key", "any-key")
+        .send()
+        .await
+        .unwrap();
     assert_eq!(resp.status(), 200);
     let body: serde_json::Value = resp.json().await.unwrap();
     // Should have per-backend metrics

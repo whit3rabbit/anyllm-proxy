@@ -134,6 +134,7 @@ async fn serve_spa() -> impl IntoResponse {
                  connect-src 'self'; frame-ancestors 'none'",
             ),
             ("x-frame-options", "DENY"),
+            ("referrer-policy", "no-referrer"),
         ],
         SPA_HTML,
     )
@@ -237,6 +238,11 @@ async fn put_config(
         }
     }
 
+    // Serialize config writes so concurrent requests cannot interleave
+    // Phase 1 (SQLite) and Phase 2 (in-memory), which would leave them
+    // inconsistent.
+    let _config_guard = shared.config_write_lock.lock().await;
+
     // Phase 1: Persist to SQLite first. If the process crashes between
     // phases, the database is the source of truth and config is restored
     // on restart. Reversing the order would lose updates on crash.
@@ -283,6 +289,8 @@ async fn put_config(
             }
         }
     }
+
+    drop(_config_guard);
 
     // Broadcast config changes.
     for (key, value) in &db_writes {
@@ -345,14 +353,17 @@ async fn delete_config_override(
             Json(serde_json::json!({"error": "override not found"})),
         )
             .into_response(),
-        Some(Err(e)) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"error": e.to_string()})),
-        )
-            .into_response(),
+        Some(Err(e)) => {
+            tracing::error!(error = %e, "delete_config_override failed");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "internal database error"})),
+            )
+                .into_response()
+        }
         None => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"error": "task panicked"})),
+            Json(serde_json::json!({"error": "internal error"})),
         )
             .into_response(),
     }
@@ -470,10 +481,13 @@ async fn get_requests(
             "limit": limit,
             "offset": offset,
         })),
-        Some(Err(e)) => Json(serde_json::json!({
-            "error": e.to_string(),
-            "requests": [],
-        })),
+        Some(Err(e)) => {
+            tracing::error!(error = %e, "query_request_log failed");
+            Json(serde_json::json!({
+                "error": "internal database error",
+                "requests": [],
+            }))
+        }
         None => Json(serde_json::json!({
             "error": "task panicked",
             "requests": [],
@@ -499,14 +513,17 @@ async fn get_request_by_id(
             Json(serde_json::json!({"error": "request not found"})),
         )
             .into_response(),
-        Some(Err(e)) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"error": e.to_string()})),
-        )
-            .into_response(),
+        Some(Err(e)) => {
+            tracing::error!(error = %e, "get_request_by_id failed");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "internal database error"})),
+            )
+                .into_response()
+        }
         None => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"error": "task panicked"})),
+            Json(serde_json::json!({"error": "internal error"})),
         )
             .into_response(),
     }

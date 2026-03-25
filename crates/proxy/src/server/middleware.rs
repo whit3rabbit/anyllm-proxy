@@ -9,12 +9,13 @@ use axum::{
     middleware::Next,
     response::{IntoResponse, Json, Response},
 };
+use sha2::{Digest, Sha256};
 use std::sync::LazyLock;
 use subtle::ConstantTimeEq;
 
-/// Allowed API keys loaded from `PROXY_API_KEYS` (comma-separated).
-/// When the list is empty, any non-empty key is accepted (open-relay mode).
-static ALLOWED_API_KEYS: LazyLock<Vec<String>> = LazyLock::new(|| {
+/// Pre-hashed allowed API keys for constant-time comparison without
+/// leaking key length via timing. Each key is SHA-256 hashed at startup.
+static ALLOWED_KEY_HASHES: LazyLock<Vec<[u8; 32]>> = LazyLock::new(|| {
     let keys: Vec<String> = std::env::var("PROXY_API_KEYS")
         .unwrap_or_default()
         .split(',')
@@ -22,12 +23,31 @@ static ALLOWED_API_KEYS: LazyLock<Vec<String>> = LazyLock::new(|| {
         .filter(|s| !s.is_empty())
         .collect();
     if keys.is_empty() {
-        tracing::warn!(
-            "PROXY_API_KEYS is not set: proxy accepts ANY non-empty key (open-relay mode). \
-             Set PROXY_API_KEYS to restrict access."
-        );
+        let open_relay = std::env::var("PROXY_OPEN_RELAY")
+            .map(|v| v == "true" || v == "1")
+            .unwrap_or(false);
+        if open_relay {
+            tracing::warn!(
+                "PROXY_OPEN_RELAY=true: proxy accepts ANY non-empty key. \
+                 Set PROXY_API_KEYS to restrict access."
+            );
+        } else {
+            tracing::error!(
+                "PROXY_API_KEYS is not set and PROXY_OPEN_RELAY is not enabled. \
+                 The proxy will reject all requests. Set PROXY_API_KEYS or \
+                 set PROXY_OPEN_RELAY=true to allow unauthenticated access."
+            );
+        }
     }
-    keys
+    keys.iter().map(|k| Sha256::digest(k.as_bytes()).into()).collect()
+});
+
+/// Whether open-relay mode is explicitly enabled via PROXY_OPEN_RELAY=true.
+static OPEN_RELAY: LazyLock<bool> = LazyLock::new(|| {
+    ALLOWED_KEY_HASHES.is_empty()
+        && std::env::var("PROXY_OPEN_RELAY")
+            .map(|v| v == "true" || v == "1")
+            .unwrap_or(false)
 });
 
 /// Validate that the request carries a valid API key.
@@ -64,17 +84,26 @@ pub async fn validate_auth(
         }
     };
 
-    // Validate against the allowlist with constant-time comparison. Without
-    // this, an attacker could infer the correct key byte-by-byte by measuring
-    // response times (timing side-channel attack).
-    let is_allowed = ALLOWED_API_KEYS.iter().any(|allowed| {
-        allowed.len() == credential.len()
-            && bool::from(allowed.as_bytes().ct_eq(credential.as_bytes()))
-    });
-    if !ALLOWED_API_KEYS.is_empty() && !is_allowed {
+    // Compare SHA-256 hashes of the credential against pre-hashed allowed keys.
+    // Hashing eliminates the timing side-channel on key length: all comparisons
+    // operate on fixed-size 32-byte digests regardless of original key length.
+    let credential_hash: [u8; 32] = Sha256::digest(credential.as_bytes()).into();
+    let is_allowed = ALLOWED_KEY_HASHES
+        .iter()
+        .any(|h| bool::from(h.ct_eq(&credential_hash)));
+    if !ALLOWED_KEY_HASHES.is_empty() && !is_allowed {
         let err = create_anthropic_error(
             anthropic::ErrorType::AuthenticationError,
             "Invalid API key.".to_string(),
+            None,
+        );
+        return Err((StatusCode::UNAUTHORIZED, Json(err)).into_response());
+    }
+    // Reject if no keys configured and open-relay not explicitly enabled.
+    if ALLOWED_KEY_HASHES.is_empty() && !*OPEN_RELAY {
+        let err = create_anthropic_error(
+            anthropic::ErrorType::AuthenticationError,
+            "Server not configured for access. Contact the administrator.".to_string(),
             None,
         );
         return Err((StatusCode::UNAUTHORIZED, Json(err)).into_response());

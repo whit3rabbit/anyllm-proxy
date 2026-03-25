@@ -187,17 +187,12 @@ pub fn delete_config_override(conn: &Connection, key: &str) -> rusqlite::Result<
 /// Delete request log entries older than the given number of days.
 pub fn purge_old_logs(conn: &Connection, retention_days: u32) -> rusqlite::Result<usize> {
     // SQLite datetime comparison: delete rows where timestamp < cutoff
-    let cutoff = format!(
-        "{}",
-        // Approximate: subtract seconds
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs()
-            .saturating_sub(retention_days as u64 * 86400)
-    );
-    // Convert epoch to ISO 8601 for comparison
-    let cutoff_iso = epoch_to_iso8601(cutoff.parse::<u64>().unwrap_or(0));
+    let cutoff = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+        .saturating_sub(retention_days as u64 * 86400);
+    let cutoff_iso = epoch_to_iso8601(cutoff);
     let changed = conn.execute(
         "DELETE FROM request_log WHERE timestamp < ?1",
         params![cutoff_iso],

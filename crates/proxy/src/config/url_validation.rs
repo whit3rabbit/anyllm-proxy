@@ -49,18 +49,28 @@ pub fn validate_base_url(raw: &str) -> Result<(), String> {
                 .port()
                 .unwrap_or(if parsed.scheme() == "https" { 443 } else { 80 });
             let lookup = format!("{domain}:{port}");
-            if let Ok(addrs) = std::net::ToSocketAddrs::to_socket_addrs(&lookup) {
-                for addr in addrs {
-                    if is_private_ip(addr.ip()) {
-                        return Err(format!(
-                            "hostname '{domain}' resolves to private/loopback IP {}, not allowed",
-                            addr.ip()
-                        ));
+            match std::net::ToSocketAddrs::to_socket_addrs(&lookup) {
+                Ok(addrs) => {
+                    for addr in addrs {
+                        if is_private_ip(addr.ip()) {
+                            return Err(format!(
+                                "hostname '{domain}' resolves to private/loopback IP {}, not allowed",
+                                addr.ip()
+                            ));
+                        }
                     }
                 }
+                Err(e) => {
+                    // Allow through: the domain may not be resolvable in the
+                    // build/test environment but will work at runtime. The
+                    // runtime SsrfSafeDnsResolver provides connection-time protection.
+                    tracing::warn!(
+                        domain = %domain,
+                        error = %e,
+                        "DNS resolution failed at startup; domain will be validated at connection time"
+                    );
+                }
             }
-            // If DNS resolution fails, allow it (the domain may not be resolvable
-            // in the build/test environment but will work at runtime).
         }
     }
 

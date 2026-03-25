@@ -159,9 +159,9 @@ pub fn app_multi_with_shared(config: MultiConfig, shared: Option<SharedState>) -
         backend_metrics: Arc::new(backend_metrics),
     };
 
-    // Health and metrics are public, bypass auth and concurrency limits.
-    Router::new()
-        .route("/health", get(health))
+    // Metrics requires auth (prevents unauthenticated reconnaissance of
+    // backend names and traffic patterns).
+    let metrics_route = Router::new()
         .route(
             "/metrics",
             get(|State(gs): State<GlobalState>| async move {
@@ -189,6 +189,12 @@ pub fn app_multi_with_shared(config: MultiConfig, shared: Option<SharedState>) -
                 }))
             }),
         )
+        .layer(axum::middleware::from_fn(super::middleware::validate_auth));
+
+    // Health is public (no auth required).
+    Router::new()
+        .route("/health", get(health))
+        .merge(metrics_route)
         .merge(router)
         .fallback(fallback_not_found)
         .layer(axum::middleware::from_fn(super::middleware::add_request_id))
@@ -235,12 +241,14 @@ fn backend_router(state: AppState, is_anthropic: bool) -> Router<GlobalState> {
 
 /// Reject requests when the concurrency limit is reached (429), rather than
 /// queueing them like Tower's ConcurrencyLimitLayer would.
+/// The permit is stored in request extensions so streaming handlers can hold
+/// it until the stream completes (not just until headers are sent).
 async fn enforce_concurrency(
     State(state): State<AppState>,
-    request: axum::extract::Request,
+    mut request: axum::extract::Request,
     next: axum::middleware::Next,
 ) -> Response {
-    let Ok(_permit) = state.concurrency.try_acquire() else {
+    let Ok(permit) = state.concurrency.clone().try_acquire_owned() else {
         let err = mapping::errors_map::create_anthropic_error(
             anthropic::ErrorType::RateLimitError,
             "Proxy concurrency limit reached".to_string(),
@@ -248,8 +256,15 @@ async fn enforce_concurrency(
         );
         return (StatusCode::TOO_MANY_REQUESTS, Json(err)).into_response();
     };
+    request.extensions_mut().insert(ConcurrencyPermit(Arc::new(permit)));
     next.run(request).await
 }
+
+/// Wrapper so OwnedSemaphorePermit can be stored in request extensions.
+/// The field is never read directly; it exists as an RAII guard to hold
+/// the permit until the struct is dropped.
+#[derive(Clone)]
+pub(crate) struct ConcurrencyPermit(#[allow(dead_code)] pub(crate) Arc<tokio::sync::OwnedSemaphorePermit>);
 
 static MODELS_RESPONSE: std::sync::LazyLock<serde_json::Value> = std::sync::LazyLock::new(|| {
     serde_json::json!({
@@ -306,8 +321,12 @@ fn backend_error_to_response(error: BackendError) -> Response {
 async fn messages(
     State(state): State<AppState>,
     headers: axum::http::HeaderMap,
+    permit: Option<axum::Extension<ConcurrencyPermit>>,
     AnthropicJson(body): AnthropicJson<anthropic::MessageCreateRequest>,
 ) -> Response {
+    // Hold concurrency permit for streaming: passed to the spawned task so
+    // the permit lives until the stream completes, not just until headers are sent.
+    let permit = permit.map(|axum::Extension(p)| p);
     let ctx = RequestCtx {
         request_id: headers
             .get("x-request-id")
@@ -335,7 +354,7 @@ async fn messages(
         }
         let mapped_model = state.map_model(&body.model);
         // Logging deferred until stream completes (inside messages_stream tasks).
-        match messages_stream(state, body, ctx, mapped_model).await {
+        match messages_stream(state, body, ctx, mapped_model, permit).await {
             Ok((rate_limits, sse)) => {
                 let mut response = sse.into_response();
                 rate_limits.inject_anthropic_headers(response.headers_mut());

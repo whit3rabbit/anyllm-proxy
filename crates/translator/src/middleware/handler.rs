@@ -143,9 +143,9 @@ const MAX_SSE_BUFFER_SIZE: usize = 10 * 1024 * 1024;
 
 /// Find the first SSE frame boundary (`\n\n` or `\r\n\r\n`) in a byte slice.
 /// Returns `(position, delimiter_length)` so the caller can skip the full delimiter.
-fn find_double_newline(buf: &[u8]) -> Option<(usize, usize)> {
+fn find_double_newline(buf: &[u8], start: usize) -> Option<(usize, usize)> {
     let len = buf.len();
-    let mut i = 0;
+    let mut i = start;
     while i < len.saturating_sub(1) {
         if buf[i] == b'\n' && buf[i + 1] == b'\n' {
             return Some((i, 2));
@@ -178,6 +178,7 @@ where
     // split across TCP chunk boundaries.
     let mut buffer = BytesMut::new();
     let mut frame_events: Vec<StreamEvent> = Vec::new();
+    let mut search_from: usize = 0;
 
     while let Some(chunk_result) = stream.next().await {
         let bytes = match chunk_result {
@@ -197,7 +198,7 @@ where
             return false;
         }
 
-        while let Some((pos, delim_len)) = find_double_newline(&buffer) {
+        while let Some((pos, delim_len)) = find_double_newline(&buffer, search_from) {
             frame_events.clear();
             match std::str::from_utf8(&buffer[..pos]) {
                 Ok(frame_str) => {
@@ -215,11 +216,16 @@ where
                 }
             }
             let _ = buffer.split_to(pos + delim_len);
+            // split_to shifted the buffer; restart search at the beginning
+            search_from = 0;
 
             if !send_events(tx, &frame_events).await {
                 return false;
             }
         }
+        // Next chunk: resume scanning 3 bytes back from the end so a
+        // 4-byte delimiter (\r\n\r\n) straddling a chunk boundary is found.
+        search_from = buffer.len().saturating_sub(3);
     }
 
     true

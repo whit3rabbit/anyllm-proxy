@@ -326,7 +326,7 @@ impl StreamingTranslator {
             while self.active_tool_calls.len() <= idx {
                 self.active_tool_calls.push(ToolCallAccumulator {
                     block_index: 0,
-                    closed: false,
+                    closed: true, // Padding: never opened, so must not emit ContentBlockStop
                 });
             }
             self.active_tool_calls[idx] = ToolCallAccumulator {

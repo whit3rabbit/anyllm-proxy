@@ -63,6 +63,20 @@ pub struct Config {
     pub openai_api_format: OpenAIApiFormat,
 }
 
+/// Validate that a GCP identifier (project ID, region) contains only safe characters.
+/// Prevents URL injection when these values are interpolated into Vertex AI endpoint URLs.
+fn validate_gcp_identifier(name: &str, value: &str) {
+    if value.is_empty()
+        || !value
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_' || b == b'.')
+    {
+        panic!(
+            "{name} contains invalid characters: only alphanumeric, '-', '_', '.' are allowed, got: {value}"
+        );
+    }
+}
+
 impl Config {
     pub fn from_env() -> Self {
         let backend_str = std::env::var("BACKEND").unwrap_or_else(|_| "openai".into());
@@ -122,6 +136,8 @@ impl Config {
                     .unwrap_or_else(|_| panic!("VERTEX_PROJECT is required when BACKEND=vertex"));
                 let region = std::env::var("VERTEX_REGION")
                     .unwrap_or_else(|_| panic!("VERTEX_REGION is required when BACKEND=vertex"));
+                validate_gcp_identifier("VERTEX_PROJECT", &project);
+                validate_gcp_identifier("VERTEX_REGION", &region);
 
                 let backend_auth = if let Ok(api_key) = std::env::var("VERTEX_API_KEY") {
                     BackendAuth::GoogleApiKey(api_key)
@@ -476,6 +492,8 @@ impl MultiConfig {
                     .region
                     .as_deref()
                     .unwrap_or_else(|| panic!("backend '{name}': 'region' is required for vertex"));
+                validate_gcp_identifier("project", project);
+                validate_gcp_identifier("region", region);
 
                 let base_url = tb.base_url.clone().unwrap_or_else(|| {
                     format!(

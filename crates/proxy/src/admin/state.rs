@@ -33,6 +33,9 @@ pub struct SharedState {
     pub log_tx: tokio::sync::mpsc::Sender<RequestLogEntry>,
     /// Closure to reload tracing filter at runtime. None in tests.
     pub log_reload: Option<LogReloadFn>,
+    /// Serializes config write operations (Phase 1: SQLite + Phase 2: in-memory)
+    /// so concurrent PUT /admin/api/config requests cannot interleave.
+    pub config_write_lock: Arc<tokio::sync::Mutex<()>>,
 }
 
 /// Run a synchronous closure against the SQLite connection on the blocking
@@ -115,6 +118,7 @@ impl SharedState {
             backend_metrics: Arc::new(HashMap::new()),
             log_tx,
             log_reload: None,
+            config_write_lock: Arc::new(tokio::sync::Mutex::new(())),
         }
     }
 }

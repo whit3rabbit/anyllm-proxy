@@ -325,6 +325,7 @@ impl ResponsesStreamingTranslator {
     }
 
     fn handle_error(&mut self, event: &ResponsesStreamEvent) -> Vec<anthropic::StreamEvent> {
+        self.finished = true; // Error is terminal; prevent finish() from emitting closure events
         let message = event
             .data
             .get("response")
