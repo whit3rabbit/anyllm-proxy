@@ -98,13 +98,11 @@ pub fn anthropic_to_openai_request(
         })
     });
 
-    openai::ChatCompletionRequest {
+    let mut oai_req = openai::ChatCompletionRequest {
         model: req.model.clone(),
         messages,
-        // Sets both max_tokens (deprecated) and max_completion_tokens
-        // because local LLMs (vLLM, ollama) may only recognize the old
-        // field, while OpenAI prefers the new one. Trade-off: o-series
-        // models may reject requests with both fields set.
+        // Default: set both for local LLM compat (vLLM, ollama only
+        // recognize max_tokens). Overridden below for o-series models.
         max_tokens: Some(req.max_tokens),
         max_completion_tokens: Some(req.max_tokens),
         // Compat spec: "Between 0 and 1 (inclusive). Values greater than 1 are capped at 1."
@@ -132,7 +130,34 @@ pub fn anthropic_to_openai_request(
         user,
         parallel_tool_calls: None,
         extra: req.extra.clone(),
+    };
+
+    // o-series reasoning models (o1, o3, o4-mini, etc.) reject requests
+    // with both max_tokens and max_completion_tokens, and require the
+    // "developer" role instead of "system".
+    if is_o_series_model(&oai_req.model) {
+        oai_req.max_tokens = None;
+        for msg in &mut oai_req.messages {
+            if msg.role == openai::ChatRole::System {
+                msg.role = openai::ChatRole::Developer;
+            }
+        }
     }
+
+    oai_req
+}
+
+/// Returns true if the model name matches an OpenAI o-series reasoning model
+/// (o1, o3, o4-mini, etc.). Does not match "gpt-4o" where 'o' is a suffix.
+/// Update this list when new o-series model families ship.
+fn is_o_series_model(model: &str) -> bool {
+    // Case-insensitive without allocating a lowercase copy.
+    let prefixes: &[&str] = &["o1", "o3", "o4"];
+    prefixes.iter().any(|p| {
+        model.len() >= p.len()
+            && model[..p.len()].eq_ignore_ascii_case(p)
+            && (model.len() == p.len() || model.as_bytes()[p.len()] == b'-')
+    })
 }
 
 /// Convert a single Anthropic InputMessage into one or more OpenAI ChatMessages.
@@ -1966,5 +1991,65 @@ mod tests {
         };
         let resp = openai_to_anthropic_response(&oai_resp, "deepseek-chat");
         assert_eq!(resp.stop_reason, Some(anthropic::StopReason::EndTurn));
+    }
+
+    #[test]
+    fn is_o_series_model_matches() {
+        assert!(is_o_series_model("o1"));
+        assert!(is_o_series_model("o3"));
+        assert!(is_o_series_model("o4"));
+        assert!(is_o_series_model("o1-mini"));
+        assert!(is_o_series_model("o1-preview"));
+        assert!(is_o_series_model("o3-mini"));
+        assert!(is_o_series_model("o4-mini"));
+        assert!(is_o_series_model("O1")); // case-insensitive
+        assert!(is_o_series_model("O3-Mini"));
+    }
+
+    #[test]
+    fn is_o_series_model_rejects() {
+        assert!(!is_o_series_model("gpt-4o"));
+        assert!(!is_o_series_model("gpt-4o-mini"));
+        assert!(!is_o_series_model("gpt-4"));
+        assert!(!is_o_series_model("claude-3-opus"));
+    }
+
+    fn make_request(model: &str, system: Option<&str>) -> anthropic::MessageCreateRequest {
+        anthropic::MessageCreateRequest {
+            model: model.into(),
+            max_tokens: 1024,
+            messages: vec![],
+            system: system.map(|s| anthropic::System::Text(s.into())),
+            temperature: None,
+            top_p: None,
+            top_k: None,
+            stop_sequences: None,
+            tools: None,
+            tool_choice: None,
+            metadata: None,
+            thinking: None,
+            stream: None,
+            extra: serde_json::Map::new(),
+        }
+    }
+
+    #[test]
+    fn o_series_model_gets_only_max_completion_tokens() {
+        let req = make_request("o1-mini", Some("You are helpful."));
+        let oai = anthropic_to_openai_request(&req);
+        assert!(oai.max_tokens.is_none(), "o-series should not set max_tokens");
+        assert_eq!(oai.max_completion_tokens, Some(1024));
+        // System role should be converted to Developer for o-series.
+        assert_eq!(oai.messages[0].role, openai::ChatRole::Developer);
+    }
+
+    #[test]
+    fn non_o_series_model_gets_both_max_tokens() {
+        let req = make_request("gpt-4o", Some("You are helpful."));
+        let oai = anthropic_to_openai_request(&req);
+        assert_eq!(oai.max_tokens, Some(1024));
+        assert_eq!(oai.max_completion_tokens, Some(1024));
+        // System role should remain System for non-o-series.
+        assert_eq!(oai.messages[0].role, openai::ChatRole::System);
     }
 }

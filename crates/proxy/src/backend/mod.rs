@@ -134,9 +134,12 @@ pub(crate) fn build_http_client(tls: &TlsConfig) -> Client {
 
     builder
         .connect_timeout(Duration::from_secs(10))
-        // Prevent indefinite hangs if a backend accepts the connection but
-        // stops sending data. 5 minutes is generous for long LLM generations.
-        .read_timeout(Duration::from_secs(300))
+        // 15 min read timeout: generous for slow-starting reasoning models
+        // (o1/o3 can think >5 min before the first chunk) while still
+        // bounding hung connections that would otherwise pin resources.
+        .read_timeout(Duration::from_secs(900))
+        // Detect dead TCP connections (peer crash, network drop).
+        .tcp_keepalive(Duration::from_secs(60))
         // Validate resolved IPs at connection time to prevent DNS rebinding SSRF.
         .dns_resolver(std::sync::Arc::new(SsrfSafeDnsResolver))
         .build()
@@ -295,6 +298,83 @@ impl BackendClient {
     }
 }
 
+/// Parse OpenAI's duration format (e.g., "6ms", "1s", "1m30s", "2m") into a
+/// [`Duration`]. Returns `None` for unrecognized formats.
+fn parse_openai_duration(s: &str) -> Option<Duration> {
+    let s = s.trim();
+    if s.is_empty() {
+        return None;
+    }
+    let mut total_ms: u64 = 0;
+    let mut num_start: Option<usize> = None;
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        let c = bytes[i];
+        if c.is_ascii_digit() || c == b'.' {
+            if num_start.is_none() {
+                num_start = Some(i);
+            }
+            i += 1;
+        } else if c.is_ascii_alphabetic() {
+            let start = num_start?;
+            let num_str = &s[start..i];
+            let unit_start = i;
+            while i < bytes.len() && bytes[i].is_ascii_alphabetic() {
+                i += 1;
+            }
+            let unit = &s[unit_start..i];
+            let value: f64 = num_str.parse().ok()?;
+            let ms = match unit {
+                "ms" => value,
+                "s" => value * 1_000.0,
+                "m" => value * 60_000.0,
+                "h" => value * 3_600_000.0,
+                _ => return None,
+            };
+            total_ms += ms.round() as u64;
+            num_start = None;
+        } else {
+            return None;
+        }
+    }
+    // Trailing number with no unit is invalid
+    if num_start.is_some() {
+        return None;
+    }
+    Some(Duration::from_millis(total_ms))
+}
+
+/// Convert an OpenAI relative duration string to an ISO 8601 UTC timestamp
+/// by adding it to the current time. Returns `None` if parsing fails.
+///
+/// Accepts an `anchor` time so callers can pin the base for testability.
+fn openai_duration_to_iso8601_at(s: &str, anchor: std::time::SystemTime) -> Option<String> {
+    let dur = parse_openai_duration(s)?;
+    let reset_time = anchor + dur;
+    let secs = reset_time
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()?
+        .as_secs();
+    Some(crate::admin::db::epoch_to_iso8601(secs))
+}
+
+/// Convenience wrapper using the current time as anchor.
+fn openai_duration_to_iso8601(s: &str) -> Option<String> {
+    openai_duration_to_iso8601_at(s, std::time::SystemTime::now())
+}
+
+/// Convert an OpenAI relative duration to ISO 8601, falling back to the raw
+/// value with a warning if parsing fails.
+fn convert_reset_duration(raw: &Option<String>, field: &str) -> Option<String> {
+    raw.as_deref().map(|v| {
+        openai_duration_to_iso8601(v).unwrap_or_else(|| {
+            tracing::warn!(value = v, field, "failed to parse reset duration, forwarding raw");
+            v.to_string()
+        })
+    })
+}
+
 /// Rate limit headers extracted from backend responses.
 #[derive(Debug, Default, Clone)]
 pub struct RateLimitHeaders {
@@ -342,6 +422,10 @@ impl RateLimitHeaders {
     }
 
     /// Inject Anthropic-format rate limit headers into a response HeaderMap.
+    ///
+    /// The `*_reset` fields are converted from OpenAI's relative duration
+    /// format (e.g., "1s") to Anthropic's ISO 8601 UTC timestamp format.
+    /// Falls back to the raw value with a warning if parsing fails.
     pub fn inject_anthropic_headers(&self, map: &mut HeaderMap) {
         set_if_some(
             map,
@@ -353,18 +437,16 @@ impl RateLimitHeaders {
             "anthropic-ratelimit-requests-remaining",
             &self.requests_remaining,
         );
-        set_if_some(
-            map,
-            "anthropic-ratelimit-requests-reset",
-            &self.requests_reset,
-        );
+        let req_reset = convert_reset_duration(&self.requests_reset, "requests_reset");
+        set_if_some(map, "anthropic-ratelimit-requests-reset", &req_reset);
         set_if_some(map, "anthropic-ratelimit-tokens-limit", &self.tokens_limit);
         set_if_some(
             map,
             "anthropic-ratelimit-tokens-remaining",
             &self.tokens_remaining,
         );
-        set_if_some(map, "anthropic-ratelimit-tokens-reset", &self.tokens_reset);
+        let tok_reset = convert_reset_duration(&self.tokens_reset, "tokens_reset");
+        set_if_some(map, "anthropic-ratelimit-tokens-reset", &tok_reset);
         set_if_some(map, "retry-after", &self.retry_after);
     }
 }
@@ -438,5 +520,96 @@ mod rate_limit_tests {
         let mut map = HeaderMap::new();
         rl.inject_anthropic_headers(&mut map);
         assert!(map.is_empty());
+    }
+
+    #[test]
+    fn inject_anthropic_headers_converts_reset_to_iso8601() {
+        let rl = RateLimitHeaders {
+            requests_reset: Some("1s".into()),
+            tokens_reset: Some("500ms".into()),
+            ..Default::default()
+        };
+        let mut map = HeaderMap::new();
+        rl.inject_anthropic_headers(&mut map);
+
+        let req_reset = map
+            .get("anthropic-ratelimit-requests-reset")
+            .unwrap()
+            .to_str()
+            .unwrap();
+        let tok_reset = map
+            .get("anthropic-ratelimit-tokens-reset")
+            .unwrap()
+            .to_str()
+            .unwrap();
+        // Should be ISO 8601 format, not the raw OpenAI duration.
+        assert!(
+            req_reset.contains('T') && req_reset.ends_with('Z'),
+            "expected ISO 8601 timestamp, got: {req_reset}"
+        );
+        assert!(
+            tok_reset.contains('T') && tok_reset.ends_with('Z'),
+            "expected ISO 8601 timestamp, got: {tok_reset}"
+        );
+    }
+
+    #[test]
+    fn parse_openai_duration_various_formats() {
+        assert_eq!(
+            parse_openai_duration("6ms"),
+            Some(Duration::from_millis(6))
+        );
+        assert_eq!(
+            parse_openai_duration("1s"),
+            Some(Duration::from_millis(1000))
+        );
+        assert_eq!(
+            parse_openai_duration("2m"),
+            Some(Duration::from_millis(120_000))
+        );
+        assert_eq!(
+            parse_openai_duration("1m30s"),
+            Some(Duration::from_millis(90_000))
+        );
+        assert_eq!(
+            parse_openai_duration("1h"),
+            Some(Duration::from_millis(3_600_000))
+        );
+        assert_eq!(
+            parse_openai_duration("1h30m"),
+            Some(Duration::from_millis(5_400_000))
+        );
+    }
+
+    #[test]
+    fn parse_openai_duration_invalid() {
+        assert_eq!(parse_openai_duration(""), None);
+        assert_eq!(parse_openai_duration("abc"), None);
+        assert_eq!(parse_openai_duration("123"), None); // no unit
+        assert_eq!(parse_openai_duration("1x"), None); // unknown unit
+    }
+
+    #[test]
+    fn openai_duration_to_iso8601_at_pinned_time() {
+        // 2025-06-16T12:00:00Z = 1750075200 epoch seconds
+        let anchor = std::time::UNIX_EPOCH + Duration::from_secs(1_750_075_200);
+        assert_eq!(
+            openai_duration_to_iso8601_at("1s", anchor).unwrap(),
+            "2025-06-16T12:00:01Z"
+        );
+        assert_eq!(
+            openai_duration_to_iso8601_at("1m30s", anchor).unwrap(),
+            "2025-06-16T12:01:30Z"
+        );
+        assert_eq!(
+            openai_duration_to_iso8601_at("500ms", anchor).unwrap(),
+            "2025-06-16T12:00:00Z" // 500ms rounds down to same second
+        );
+    }
+
+    #[test]
+    fn openai_duration_to_iso8601_invalid_returns_none() {
+        assert!(openai_duration_to_iso8601("garbage").is_none());
+        assert!(openai_duration_to_iso8601("").is_none());
     }
 }

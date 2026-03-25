@@ -287,7 +287,7 @@ fn chrono_now() -> String {
 }
 
 /// Convert unix epoch seconds to ISO 8601 string (UTC, second precision).
-fn epoch_to_iso8601(epoch: u64) -> String {
+pub(crate) fn epoch_to_iso8601(epoch: u64) -> String {
     // Manual conversion without chrono.
     let secs = epoch;
     let days = secs / 86400;
