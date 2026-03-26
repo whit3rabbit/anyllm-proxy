@@ -25,6 +25,22 @@ async fn main() {
     // Use a reload layer so the admin API can change log_level at runtime.
     let env_filter = tracing_subscriber::EnvFilter::from_default_env();
     let (filter, reload_handle) = tracing_subscriber::reload::Layer::new(env_filter);
+
+    // When the `otel` feature is enabled, wire an OpenTelemetry tracing layer
+    // into the subscriber so that spans are exported as OTLP traces.
+    #[cfg(feature = "otel")]
+    let _otel_guard = {
+        let (guard, tracer) = anyllm_proxy::otel::init_otel();
+        let otel_layer = tracing_opentelemetry::OpenTelemetryLayer::new(tracer);
+        tracing_subscriber::registry()
+            .with(filter)
+            .with(tracing_subscriber::fmt::layer().json())
+            .with(otel_layer)
+            .init();
+        guard
+    };
+
+    #[cfg(not(feature = "otel"))]
     tracing_subscriber::registry()
         .with(filter)
         .with(tracing_subscriber::fmt::layer().json())

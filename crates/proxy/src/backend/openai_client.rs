@@ -74,8 +74,8 @@ impl OpenAIClient {
                     format!("{endpoint}/openai/deployments/{deployment}/embeddings?api-version={api_version}"),
                 )
             }
-            BackendKind::Anthropic => {
-                unreachable!("OpenAIClient should not be constructed for Anthropic backend")
+            BackendKind::Anthropic | BackendKind::Bedrock => {
+                unreachable!("OpenAIClient should not be constructed for Anthropic/Bedrock backend")
             }
         };
 

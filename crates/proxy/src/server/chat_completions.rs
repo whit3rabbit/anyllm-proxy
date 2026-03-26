@@ -234,8 +234,8 @@ pub(crate) async fn chat_completions(
                 }
             }
         }
-        BackendClient::Anthropic(_) => openai_error_response(
-            "Anthropic passthrough backend does not support /v1/chat/completions",
+        BackendClient::Anthropic(_) | BackendClient::Bedrock(_) => openai_error_response(
+            "This backend does not support /v1/chat/completions. Use /v1/messages instead.",
             "invalid_request_error",
             StatusCode::BAD_REQUEST,
         ),
@@ -273,9 +273,9 @@ async fn chat_completions_stream(
         | BackendClient::Vertex(c)
         | BackendClient::GeminiOpenAI(c)
         | BackendClient::OpenAIResponses(c) => c.clone(),
-        BackendClient::Anthropic(_) => {
+        BackendClient::Anthropic(_) | BackendClient::Bedrock(_) => {
             return openai_error_response(
-                "Anthropic passthrough backend does not support /v1/chat/completions streaming",
+                "This backend does not support /v1/chat/completions. Use /v1/messages instead.",
                 "invalid_request_error",
                 StatusCode::BAD_REQUEST,
             );

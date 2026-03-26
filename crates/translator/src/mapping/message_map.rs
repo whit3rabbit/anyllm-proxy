@@ -1,7 +1,7 @@
 // Anthropic <-> OpenAI message mapping
 
 use crate::anthropic;
-use crate::mapping::{streaming_map, tools_map, usage_map};
+use crate::mapping::{streaming_map, tools_map, usage_map, warnings::TranslationWarnings};
 use crate::openai;
 use crate::util;
 
@@ -21,6 +21,44 @@ pub fn extract_system_text(system: &anthropic::System) -> String {
             .collect::<Vec<_>>()
             .join("\n"),
     }
+}
+
+/// Compute degradation warnings for an Anthropic request without performing translation.
+///
+/// Returns a `TranslationWarnings` value listing every feature that will be silently
+/// dropped or degraded when this request is translated to an OpenAI request.
+/// The proxy injects these as an `x-anyllm-degradation` response header so clients
+/// can detect silent drops without inspecting server logs.
+pub fn compute_request_warnings(req: &anthropic::MessageCreateRequest) -> TranslationWarnings {
+    let mut w = TranslationWarnings::default();
+    if req.top_k.is_some() {
+        w.add("top_k");
+    }
+    if req.thinking.is_some() {
+        w.add("thinking_config");
+    }
+    if let Some(ref seqs) = req.stop_sequences {
+        if seqs.len() > 4 {
+            w.add("stop_sequences_truncated");
+        }
+    }
+    if let Some(anthropic::System::Blocks(blocks)) = &req.system {
+        if blocks.iter().any(|b| b.cache_control.is_some()) {
+            w.add("cache_control");
+        }
+    }
+    let has_document = req.messages.iter().any(|msg| {
+        match &msg.content {
+            anthropic::Content::Blocks(blocks) => blocks.iter().any(|b| {
+                matches!(b, anthropic::ContentBlock::Document { .. })
+            }),
+            _ => false,
+        }
+    });
+    if has_document {
+        w.add("document_blocks");
+    }
+    w
 }
 
 /// Convert an Anthropic MessageCreateRequest to an OpenAI ChatCompletionRequest.
@@ -63,6 +101,14 @@ pub fn anthropic_to_openai_request(
         .tool_choice
         .as_ref()
         .map(tools_map::anthropic_tool_choice_to_openai);
+
+    // Map disable_parallel_tool_use to OpenAI parallel_tool_calls.
+    // Compat spec: "Fully supported". See: https://docs.anthropic.com/en/api/openai-sdk#tools--functions-fields
+    let parallel_tool_calls = match req.tool_choice.as_ref() {
+        Some(anthropic::ToolChoice::Auto { disable_parallel_tool_use: Some(true) })
+        | Some(anthropic::ToolChoice::Any { disable_parallel_tool_use: Some(true) }) => Some(false),
+        _ => None,
+    };
 
     // Map metadata.user_id to OpenAI user field.
     // Compat spec: user is "Ignored", but we forward it for traceability.
@@ -127,7 +173,7 @@ pub fn anthropic_to_openai_request(
         frequency_penalty: None,
         response_format: None,
         user,
-        parallel_tool_calls: None,
+        parallel_tool_calls,
         extra: req.extra.clone(),
     };
 
@@ -678,7 +724,7 @@ mod tests {
     #[test]
     fn tool_choice_auto() {
         let mut req = basic_request();
-        req.tool_choice = Some(anthropic::ToolChoice::Auto);
+        req.tool_choice = Some(anthropic::ToolChoice::Auto { disable_parallel_tool_use: None });
         let oai = anthropic_to_openai_request(&req);
         assert!(matches!(
             oai.tool_choice,
@@ -689,7 +735,7 @@ mod tests {
     #[test]
     fn tool_choice_any_becomes_required() {
         let mut req = basic_request();
-        req.tool_choice = Some(anthropic::ToolChoice::Any);
+        req.tool_choice = Some(anthropic::ToolChoice::Any { disable_parallel_tool_use: None });
         let oai = anthropic_to_openai_request(&req);
         assert!(matches!(
             oai.tool_choice,
@@ -722,6 +768,33 @@ mod tests {
             }
             other => panic!("expected Named tool choice, got {:?}", other),
         }
+    }
+
+    #[test]
+    fn disable_parallel_tool_use_sets_parallel_tool_calls_false() {
+        let mut req = basic_request();
+        req.tool_choice = Some(anthropic::ToolChoice::Auto {
+            disable_parallel_tool_use: Some(true),
+        });
+        let oai = anthropic_to_openai_request(&req);
+        assert_eq!(oai.parallel_tool_calls, Some(false));
+    }
+
+    #[test]
+    fn disable_parallel_tool_use_false_leaves_parallel_tool_calls_none() {
+        let mut req = basic_request();
+        req.tool_choice = Some(anthropic::ToolChoice::Auto {
+            disable_parallel_tool_use: Some(false),
+        });
+        let oai = anthropic_to_openai_request(&req);
+        assert!(oai.parallel_tool_calls.is_none());
+    }
+
+    #[test]
+    fn no_tool_choice_leaves_parallel_tool_calls_none() {
+        let req = basic_request();
+        let oai = anthropic_to_openai_request(&req);
+        assert!(oai.parallel_tool_calls.is_none());
     }
 
     #[test]
@@ -2109,5 +2182,101 @@ mod tests {
         req.temperature = Some(0.7);
         let oai = anthropic_to_openai_request(&req);
         assert_eq!(oai.temperature, Some(0.7));
+    }
+
+    // --- compute_request_warnings ---
+
+    #[test]
+    fn warnings_empty_for_plain_request() {
+        let req = basic_request();
+        let w = compute_request_warnings(&req);
+        assert!(w.is_empty());
+        assert!(w.as_header_value().is_none());
+    }
+
+    #[test]
+    fn warnings_top_k() {
+        let mut req = basic_request();
+        req.top_k = Some(40);
+        let w = compute_request_warnings(&req);
+        assert_eq!(w.as_header_value().unwrap(), "top_k");
+    }
+
+    #[test]
+    fn warnings_thinking_config() {
+        let mut req = basic_request();
+        req.thinking = Some(anthropic::ThinkingConfig::Enabled { budget_tokens: 5000 });
+        let w = compute_request_warnings(&req);
+        assert_eq!(w.as_header_value().unwrap(), "thinking_config");
+    }
+
+    #[test]
+    fn warnings_stop_sequences_truncated_at_5() {
+        let mut req = basic_request();
+        req.stop_sequences = Some(vec![
+            "a".to_string(),
+            "b".to_string(),
+            "c".to_string(),
+            "d".to_string(),
+            "e".to_string(),
+        ]);
+        let w = compute_request_warnings(&req);
+        assert_eq!(w.as_header_value().unwrap(), "stop_sequences_truncated");
+    }
+
+    #[test]
+    fn warnings_stop_sequences_4_is_fine() {
+        let mut req = basic_request();
+        req.stop_sequences = Some(vec![
+            "a".to_string(),
+            "b".to_string(),
+            "c".to_string(),
+            "d".to_string(),
+        ]);
+        let w = compute_request_warnings(&req);
+        assert!(w.is_empty());
+    }
+
+    #[test]
+    fn warnings_cache_control_on_system() {
+        let mut req = basic_request();
+        req.system = Some(anthropic::System::Blocks(vec![anthropic::SystemBlock {
+            block_type: "text".to_string(),
+            text: "You are helpful.".to_string(),
+            cache_control: Some(anthropic::CacheControl {
+                cache_type: "ephemeral".to_string(),
+            }),
+        }]));
+        let w = compute_request_warnings(&req);
+        assert_eq!(w.as_header_value().unwrap(), "cache_control");
+    }
+
+    #[test]
+    fn warnings_document_blocks() {
+        let mut req = basic_request();
+        req.messages = vec![anthropic::InputMessage {
+            role: anthropic::Role::User,
+            content: anthropic::Content::Blocks(vec![anthropic::ContentBlock::Document {
+                source: anthropic::DocumentSource {
+                    source_type: "base64".to_string(),
+                    media_type: "application/pdf".to_string(),
+                    data: "dGVzdA==".to_string(),
+                },
+                title: None,
+            }]),
+        }];
+        let w = compute_request_warnings(&req);
+        assert_eq!(w.as_header_value().unwrap(), "document_blocks");
+    }
+
+    #[test]
+    fn warnings_multiple_combined() {
+        let mut req = basic_request();
+        req.top_k = Some(10);
+        req.thinking = Some(anthropic::ThinkingConfig::Enabled { budget_tokens: 1000 });
+        let w = compute_request_warnings(&req);
+        let val = w.as_header_value().unwrap();
+        assert!(val.contains("top_k"), "missing top_k in: {val}");
+        assert!(val.contains("thinking_config"), "missing thinking_config in: {val}");
     }
 }

@@ -12,11 +12,13 @@ All 11 implementation phases are complete.
 
 **Working (verified):**
 - Build: `cargo build` clean, `cargo clippy -- -D warnings` clean
-- Tests: ~417 tests passing, 4 ignored (live API)
+- Tests: ~480 tests passing, 4 ignored (live API)
 - Full Anthropic Messages API translation: non-streaming, streaming SSE, tool calling, file/document blocks
 - Proxy middleware: health, auth, request ID, size limits, concurrency limits, retry with backoff
 - Compatibility endpoints: /v1/models, count_tokens (approximate via tiktoken), batches (stub)
 - Model mapping and lossy-translation warnings
+- `POST /v1/embeddings` passthrough: forwards directly to the backend with no translation; works with OpenAI, Vertex, Gemini (`gemini-embedding-exp-03-07`), and vLLM/HuggingFace models. Not mounted for the Anthropic passthrough backend.
+- `x-anyllm-degradation` response header: set when features are silently dropped during translation (e.g., `top_k`, `thinking_config`, `cache_control`, `document_blocks`, `stop_sequences_truncated`)
 
 **Not fully validated:**
 - OpenAI Responses API backend: wired up via `OPENAI_API_FORMAT=responses` but not tested against live API
@@ -27,7 +29,8 @@ All 11 implementation phases are complete.
 
 ```bash
 cargo build                          # build everything
-cargo test                           # run all tests (~417 tests, 4 ignored)
+cargo test                           # run all tests (~480 tests, 4 ignored)
+cargo test -p anyllm_client     # client crate only
 cargo test -p anyllm_translate  # translator crate only
 cargo test -p anyllm_proxy      # proxy crate only
 cargo test health_endpoint            # single test by name
@@ -62,10 +65,22 @@ OPENAI_API_KEY=sk-... cargo run -p anyllm_proxy
 - `GEMINI_BASE_URL`: Gemini API base URL (default: `https://generativelanguage.googleapis.com/v1beta`)
 - `PROXY_API_KEYS`: Comma-separated list of allowed API keys for proxy authentication (optional; if unset, any non-empty key is accepted)
 - `LOG_BODIES`: Enable request/response body logging at debug level (`true` or `1`, default: disabled)
+- `OTEL_EXPORTER_OTLP_ENDPOINT`: OTLP collector endpoint (default: `http://localhost:4318`). Only effective when built with `--features otel`.
+- `OTEL_SERVICE_NAME`: Service name for exported traces. Only effective when built with `--features otel`.
+- `OTEL_TRACES_SAMPLER`: Sampling strategy (default: `parentbased_always_on`). Only effective when built with `--features otel`.
 
 ## Architecture
 
-Cargo workspace with two crates:
+Cargo workspace with three crates:
+
+### `crates/client` (lib: `anyllm_client`)
+High-level async HTTP client (Anthropic-in, Anthropic-out). Depends on `anyllm_translate` for translation logic. Key modules:
+- **`client.rs`**: `Client` struct with `ClientConfig` builder; `messages()` for non-streaming, streaming variant for SSE
+- **`http.rs`**: reqwest client builder with optional SSRF-safe DNS resolution and mTLS (PKCS#12)
+- **`retry.rs`**: Generic retry with exponential backoff + jitter; `is_retryable`, `send_with_retry`
+- **`rate_limit.rs`**: Parses `x-ratelimit-*` / `retry-after` headers into a typed struct
+- **`sse.rs`**: Framework-agnostic SSE frame parser (`find_double_newline`)
+- **`error.rs`**: `ClientError` enum
 
 ### `crates/translator` (lib: `anyllm_translate`)
 Pure translation logic, no IO. Key modules:
@@ -79,6 +94,7 @@ Pure translation logic, no IO. Key modules:
   - `streaming_map`: SSE event stream translation state machine
   - `responses_message_map`: Anthropic to/from OpenAI Responses API mapping
   - `responses_streaming_map`: Responses API SSE event stream translation state machine
+  - `warnings`: `TranslationWarnings` collector; lossy drops are surfaced via `x-anyllm-degradation` response header
 - **`middleware/`**: Request/response handler orchestrating translation and backend calls
 - **`util/`**: JSON helpers, ID generation (uuid v4), secret redaction
 - **`config.rs`**: Translator-level configuration, **`error.rs`**: Error types, **`translate.rs`**: Top-level translation entry points
@@ -126,8 +142,11 @@ Client (Anthropic format) -> proxy (axum)
 - Some source files reference PLAN.md line ranges in a comment at the top (historical; PLAN.md has been removed).
 - Test files live alongside source (`#[cfg(test)]` modules) and in `crates/proxy/tests/` for integration tests.
 - Error types use `thiserror` derive macros.
-- Test distribution: translator (~263 tests), proxy (~154 tests including integration/compatibility). Counts shift as features are added.
+- Test distribution: translator (~273 tests), proxy + client (~30 tests including integration/compatibility). Counts shift as features are added.
 
 ## References
 
 - OpenAI API spec: https://github.com/openai/openai-openapi/blob/manual_spec/openapi.yaml (very large, ~70k+ lines). See https://simonwillison.net/2024/Dec/22/openai-openapi/ for context on the spec's size and structure. Do not attempt to load the full spec into context; reference specific sections as needed.
+
+## Recent Changes
+- 20260325-120000-litellm-gap-fill: Added [if applicable, e.g., PostgreSQL, CoreData, files or N/A]

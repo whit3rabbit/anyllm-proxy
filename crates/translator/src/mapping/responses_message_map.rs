@@ -53,8 +53,8 @@ pub fn anthropic_to_responses_request(req: &anthropic::MessageCreateRequest) -> 
     }
     if let Some(ref tc) = req.tool_choice {
         let mapped = match tc {
-            anthropic::ToolChoice::Auto => json!("auto"),
-            anthropic::ToolChoice::Any => json!("required"),
+            anthropic::ToolChoice::Auto { .. } => json!("auto"),
+            anthropic::ToolChoice::Any { .. } => json!("required"),
             anthropic::ToolChoice::None => json!("none"),
             anthropic::ToolChoice::Tool { name } => json!({
                 "type": "function",

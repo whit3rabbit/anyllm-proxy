@@ -131,7 +131,7 @@ pub fn app_multi_with_shared(config: MultiConfig, shared: Option<SharedState>) -
 
     // Build per-backend sub-routers. Keep a map of AppState so the default
     // backend can reuse the same state (same semaphore, same reqwest client).
-    let mut backend_states: HashMap<String, (AppState, bool)> = HashMap::new();
+    let mut backend_states: HashMap<String, (AppState, HandlerMode)> = HashMap::new();
     for (name, bc) in &config.backends {
         let metrics = Metrics::new();
         backend_metrics.insert(name.clone(), metrics.clone());
@@ -146,9 +146,13 @@ pub fn app_multi_with_shared(config: MultiConfig, shared: Option<SharedState>) -
             omit_stream_options: bc.omit_stream_options,
         };
 
-        let is_anthropic = bc.kind == BackendKind::Anthropic;
-        let sub = backend_router(state.clone(), is_anthropic);
-        backend_states.insert(name.clone(), (state, is_anthropic));
+        let mode = match bc.kind {
+            BackendKind::Anthropic => HandlerMode::Anthropic,
+            BackendKind::Bedrock => HandlerMode::Bedrock,
+            _ => HandlerMode::Translate,
+        };
+        let sub = backend_router(state.clone(), mode);
+        backend_states.insert(name.clone(), (state, mode));
 
         // Nest under /{name}/
         router = router.nest(&format!("/{name}"), sub);
@@ -156,8 +160,8 @@ pub fn app_multi_with_shared(config: MultiConfig, shared: Option<SharedState>) -
 
     // Default backend: also serve at un-prefixed /v1/messages for backward compat.
     // Reuses the same AppState (shared semaphore, connection pool) as the named route.
-    if let Some((default_state, is_anthropic)) = backend_states.get(&config.default_backend) {
-        let default_sub = backend_router(default_state.clone(), *is_anthropic);
+    if let Some((default_state, mode)) = backend_states.get(&config.default_backend) {
+        let default_sub = backend_router(default_state.clone(), *mode);
         router = router.merge(default_sub);
     }
 
@@ -217,15 +221,30 @@ async fn fallback_not_found() -> Response {
     (StatusCode::NOT_FOUND, Json(err)).into_response()
 }
 
+/// Which handler mode a backend uses.
+#[derive(Debug, Clone, Copy)]
+enum HandlerMode {
+    /// Anthropic passthrough (no translation, forwards raw bytes).
+    Anthropic,
+    /// Bedrock (SigV4 signing, event stream decoding, Anthropic format).
+    Bedrock,
+    /// Translation (Anthropic -> OpenAI -> backend -> OpenAI -> Anthropic).
+    Translate,
+}
+
 /// Build the sub-router for a single backend.
-/// If `is_anthropic` is true, uses the passthrough handler instead of the translation handler.
-fn backend_router(state: AppState, is_anthropic: bool) -> Router<GlobalState> {
-    let api_routes = if is_anthropic {
-        Router::new()
+fn backend_router(state: AppState, mode: HandlerMode) -> Router<GlobalState> {
+    let api_routes = match mode {
+        HandlerMode::Anthropic => Router::new()
             .route("/v1/messages", post(anthropic_passthrough))
-            .route("/v1/models", get(models))
-    } else {
-        Router::new()
+            .route("/v1/models", get(models)),
+        HandlerMode::Bedrock => Router::new()
+            .route(
+                "/v1/messages",
+                post(super::bedrock_passthrough::bedrock_passthrough),
+            )
+            .route("/v1/models", get(models)),
+        HandlerMode::Translate => Router::new()
             .route("/v1/messages", post(messages))
             .route(
                 "/v1/chat/completions",
@@ -234,7 +253,7 @@ fn backend_router(state: AppState, is_anthropic: bool) -> Router<GlobalState> {
             .route("/v1/models", get(models))
             .route("/v1/messages/count_tokens", post(count_tokens))
             .route("/v1/messages/batches", post(batches))
-            .route("/v1/embeddings", post(embeddings))
+            .route("/v1/embeddings", post(embeddings)),
     };
 
     api_routes
@@ -563,12 +582,12 @@ async fn messages(
                 }
             }
         }
-        BackendClient::Anthropic(_) => {
-            // Anthropic passthrough is handled by a separate handler that works with raw bytes.
+        BackendClient::Anthropic(_) | BackendClient::Bedrock(_) => {
+            // These backends are handled by separate handlers (passthrough / Bedrock).
             // If we reach here, something is misconfigured.
             let err = mapping::errors_map::create_anthropic_error(
                 anthropic::ErrorType::ApiError,
-                "Anthropic passthrough does not use the translation handler".to_string(),
+                "This backend does not use the translation handler".to_string(),
                 None,
             );
             (StatusCode::INTERNAL_SERVER_ERROR, Json(err)).into_response()

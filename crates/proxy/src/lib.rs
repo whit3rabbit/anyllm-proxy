@@ -6,5 +6,8 @@ pub mod backend;
 pub mod config;
 /// Request count, success/error tracking, exposed via GET /metrics.
 pub mod metrics;
+/// Optional OpenTelemetry OTLP trace export (requires `otel` feature).
+#[cfg(feature = "otel")]
+pub mod otel;
 /// Axum HTTP server: routes, middleware (auth, request ID, size/concurrency limits), SSE streaming.
 pub mod server;

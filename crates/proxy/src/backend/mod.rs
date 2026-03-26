@@ -1,10 +1,13 @@
 /// Passthrough client forwarding Anthropic requests as-is to upstream Anthropic API.
 pub mod anthropic_client;
+/// AWS Bedrock client with SigV4 request signing.
+pub mod bedrock_client;
 /// reqwest client for OpenAI-compatible Chat Completions and Responses APIs with retry/backoff.
 pub mod openai_client;
 
 use crate::config::{BackendAuth, BackendConfig, BackendKind, Config, OpenAIApiFormat, TlsConfig};
 use anthropic_client::{AnthropicClient, AnthropicClientError};
+use bedrock_client::{BedrockClient, BedrockClientError};
 use openai_client::{OpenAIClient, OpenAIClientError};
 
 // Re-export from the client crate so existing code paths (streaming, routes, etc.) keep working.
@@ -66,6 +69,8 @@ pub enum BackendClient {
     GeminiOpenAI(OpenAIClient),
     /// Passthrough to real Anthropic API (no translation).
     Anthropic(AnthropicClient),
+    /// AWS Bedrock: sends Anthropic-format requests with SigV4 signing.
+    Bedrock(BedrockClient),
 }
 
 /// Unified error type for all backend clients.
@@ -73,6 +78,7 @@ pub enum BackendClient {
 pub enum BackendError {
     OpenAI(OpenAIClientError),
     Anthropic(AnthropicClientError),
+    Bedrock(BedrockClientError),
 }
 
 impl BackendError {
@@ -80,6 +86,7 @@ impl BackendError {
     pub fn api_error_status(&self) -> Option<u16> {
         match self {
             Self::OpenAI(OpenAIClientError::ApiError { status, .. }) => Some(*status),
+            Self::Bedrock(BedrockClientError::ApiError { status, .. }) => Some(*status),
             _ => None,
         }
     }
@@ -94,6 +101,7 @@ impl BackendError {
         match self {
             Self::OpenAI(e) => e.to_string(),
             Self::Anthropic(e) => e.to_string(),
+            Self::Bedrock(e) => e.to_string(),
         }
     }
 
@@ -114,6 +122,7 @@ impl std::fmt::Display for BackendError {
         match self {
             Self::OpenAI(e) => write!(f, "{e}"),
             Self::Anthropic(e) => write!(f, "{e}"),
+            Self::Bedrock(e) => write!(f, "{e}"),
         }
     }
 }
@@ -127,6 +136,12 @@ impl From<OpenAIClientError> for BackendError {
 impl From<AnthropicClientError> for BackendError {
     fn from(e: AnthropicClientError) -> Self {
         Self::Anthropic(e)
+    }
+}
+
+impl From<BedrockClientError> for BackendError {
+    fn from(e: BedrockClientError) -> Self {
+        Self::Bedrock(e)
     }
 }
 
@@ -147,11 +162,11 @@ impl BackendClient {
                 .embeddings_passthrough(body, content_type)
                 .await
                 .map_err(BackendError::OpenAI),
-            Self::Anthropic(_) => {
-                // Anthropic has no embeddings API.
+            Self::Anthropic(_) | Self::Bedrock(_) => {
+                // Anthropic and Bedrock have no embeddings API.
                 let err = anyllm_translate::mapping::errors_map::create_anthropic_error(
                     anyllm_translate::anthropic::ErrorType::InvalidRequestError,
-                    "Embeddings are not supported by the Anthropic backend.".to_string(),
+                    "Embeddings are not supported by this backend.".to_string(),
                     None,
                 );
                 let body = serde_json::to_vec(&err).unwrap_or_default();
@@ -182,6 +197,11 @@ impl BackendClient {
                 &config.openai_api_key,
                 &config.tls,
             )),
+            BackendKind::Bedrock => {
+                // Bedrock config is stored in openai_base_url (region) and openai_api_key (unused).
+                // Credentials come from env vars at Config::from_env time.
+                unreachable!("Bedrock backend uses from_backend_config, not Config::new")
+            }
         }
     }
 
@@ -210,6 +230,15 @@ impl BackendClient {
             BackendKind::Vertex => Self::Vertex(OpenAIClient::new(&legacy)),
             BackendKind::Gemini => Self::GeminiOpenAI(OpenAIClient::new(&legacy)),
             BackendKind::Anthropic => Self::Anthropic(AnthropicClient::from_backend_config(bc)),
+            BackendKind::Bedrock => Self::Bedrock(BedrockClient::new(
+                bc.base_url.clone(), // region is stored in base_url for Bedrock
+                bc.bedrock_credentials
+                    .clone()
+                    .expect("Bedrock credentials must be set"),
+                bc.model_mapping.big_model.clone(),
+                bc.model_mapping.small_model.clone(),
+                &bc.tls,
+            )),
         }
     }
 }

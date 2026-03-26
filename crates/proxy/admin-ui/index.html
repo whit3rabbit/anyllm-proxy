@@ -105,10 +105,11 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
   <div style="display:flex;gap:8px;margin:16px 0">
     <button class="btn btn-primary" id="btn-save-settings">Save Changes</button>
     <button class="btn btn-secondary" id="btn-reload-config">Reload</button>
+    <button class="btn btn-secondary" id="btn-export-env" title="Download .anyllm.env template">Export .env</button>
   </div>
-  <div class="section-label" style="margin-top:24px">Read-Only <span class="error">(requires restart)</span></div>
+  <div class="section-label" style="margin-top:24px">Environment <span class="error">(requires restart to change)</span></div>
   <div class="readonly-section" id="readonly-config">
-    <div style="color:#8b949e;font-size:12px">Configuration loaded from environment variables.</div>
+    <div style="color:#8b949e;font-size:12px">Loading...</div>
   </div>
 </div>
 
@@ -187,7 +188,7 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
       navEl.classList.add('active');
       document.getElementById('tab-' + navEl.dataset.tab).classList.add('active');
       if (navEl.dataset.tab === 'requests') loadRequests();
-      if (navEl.dataset.tab === 'settings') loadConfig();
+      if (navEl.dataset.tab === 'settings') { loadConfig(); loadEnv(); }
       if (navEl.dataset.tab === 'backends') loadBackends();
     });
   });
@@ -402,7 +403,95 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
   }
 
   document.getElementById('btn-save-settings').addEventListener('click', saveSettings);
-  document.getElementById('btn-reload-config').addEventListener('click', loadConfig);
+  document.getElementById('btn-reload-config').addEventListener('click', function() { loadConfig(); loadEnv(); });
+  document.getElementById('btn-export-env').addEventListener('click', exportEnvFile);
+
+  // -- Environment variables (read-only, requires restart to change) --
+  var ENV_GROUPS = [
+    { label: 'Core', keys: ['BACKEND','LISTEN_PORT','BIG_MODEL','SMALL_MODEL','RUST_LOG','LOG_BODIES','PROXY_CONFIG'] },
+    { label: 'OpenAI / Compatible', keys: ['OPENAI_BASE_URL','OPENAI_API_FORMAT','OPENAI_API_KEY'] },
+    { label: 'Vertex AI', keys: ['VERTEX_PROJECT','VERTEX_REGION','VERTEX_API_KEY'] },
+    { label: 'Gemini', keys: ['GEMINI_BASE_URL','GEMINI_API_KEY'] },
+    { label: 'Auth & TLS', keys: ['PROXY_API_KEYS','TLS_CLIENT_CERT_P12','TLS_CA_CERT'] },
+    { label: 'Admin', keys: ['ADMIN_PORT','ADMIN_DB_PATH','ADMIN_LOG_RETENTION_DAYS'] },
+  ];
+  var ENV_SECRET_KEYS = {'OPENAI_API_KEY':1,'VERTEX_API_KEY':1,'GEMINI_API_KEY':1,'PROXY_API_KEYS':1};
+
+  function loadEnv() {
+    apiFetch('/env').then(function(data) {
+      var container = document.getElementById('readonly-config');
+      clearChildren(container, false);
+      ENV_GROUPS.forEach(function(group) {
+        var hasAny = group.keys.some(function(k) { return data[k] != null; });
+        if (!hasAny) return;
+        var rows = [];
+        group.keys.forEach(function(k) {
+          var val = data[k];
+          if (val == null) return;
+          rows.push(el('div', {className: 'model-grid', style:{marginTop:'4px'}}, [
+            el('div', {className: 'label', textContent: k + ':'}),
+            el('div', {textContent: String(val), style:{fontFamily:'monospace',fontSize:'12px',color:'#c9d1d9'}})
+          ]));
+        });
+        if (rows.length === 0) return;
+        var header = el('div', {style:{color:'#8b949e',fontSize:'11px',textTransform:'uppercase',letterSpacing:'0.5px',marginTop:'10px',marginBottom:'4px'}, textContent: group.label});
+        container.appendChild(header);
+        rows.forEach(function(r) { container.appendChild(r); });
+      });
+      if (!container.children.length) {
+        container.appendChild(el('div', {style:{color:'#8b949e',fontSize:'12px'}, textContent: 'No environment variables set (using defaults).'}));
+      }
+    }).catch(function(e) {
+      var container = document.getElementById('readonly-config');
+      container.textContent = 'Failed to load environment variables.';
+      console.error('Env load failed:', e);
+    });
+  }
+
+  // -- Export .env file --
+  // Generates a .anyllm.env template the user can load with --env-file.
+  // Secret values (API keys) are masked server-side, so they appear as empty
+  // placeholders the user must fill in manually.
+  function exportEnvFile() {
+    apiFetch('/env').then(function(data) {
+      var lines = [
+        '# anyllm-proxy configuration',
+        '# Load with:  anyllm_proxy --env-file .anyllm.env',
+        '# Docker:     docker run --env-file .anyllm.env anyllm-proxy',
+        '#',
+        '# Secret values (API keys) are intentionally left blank for security.',
+        '# Fill them in before use.',
+        '',
+      ];
+
+      ENV_GROUPS.forEach(function(section) {
+        var hasAny = section.keys.some(function(k) { return data[k] != null || k in ENV_SECRET_KEYS; });
+        if (!hasAny) return;
+        lines.push('# --- ' + section.label + ' ---');
+        section.keys.forEach(function(k) {
+          if (k in ENV_SECRET_KEYS) {
+            // Always emit secret keys as empty placeholders.
+            lines.push(k + '=');
+          } else if (data[k] != null) {
+            lines.push(k + '=' + String(data[k]));
+          }
+          // Omit unset non-secret keys entirely to keep the file minimal.
+        });
+        lines.push('');
+      });
+
+      var blob = new Blob([lines.join('\n')], {type: 'text/plain'});
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = '.anyllm.env';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(a.href);
+    }).catch(function(e) {
+      alert('Failed to fetch env: ' + e.message);
+    });
+  }
 
   // -- Backends detail --
   function loadBackends() {

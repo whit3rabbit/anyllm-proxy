@@ -51,10 +51,10 @@ pub fn openai_tools_to_anthropic(tools: &[openai::ChatTool]) -> Vec<anthropic::T
 /// OpenAI: <https://platform.openai.com/docs/api-reference/chat/create>
 pub fn anthropic_tool_choice_to_openai(tc: &anthropic::ToolChoice) -> openai::ChatToolChoice {
     match tc {
-        anthropic::ToolChoice::Auto => openai::ChatToolChoice::Simple("auto".to_string()),
+        anthropic::ToolChoice::Auto { .. } => openai::ChatToolChoice::Simple("auto".to_string()),
         // Any = "model must call at least one tool". OpenAI's "required"
         // is the closest: it forces a tool call when tools are defined.
-        anthropic::ToolChoice::Any => openai::ChatToolChoice::Simple("required".to_string()),
+        anthropic::ToolChoice::Any { .. } => openai::ChatToolChoice::Simple("required".to_string()),
         anthropic::ToolChoice::None => openai::ChatToolChoice::Simple("none".to_string()),
         anthropic::ToolChoice::Tool { name } => {
             openai::ChatToolChoice::Named(openai::chat_completions::NamedToolChoice {
@@ -73,10 +73,10 @@ pub fn openai_tool_choice_to_anthropic(tc: &openai::ChatToolChoice) -> anthropic
     match tc {
         openai::ChatToolChoice::Simple(s) => match s.as_str() {
             "none" => anthropic::ToolChoice::None,
-            "required" => anthropic::ToolChoice::Any,
+            "required" => anthropic::ToolChoice::Any { disable_parallel_tool_use: None },
             // Default unknown values to Auto for forward compatibility;
             // rejecting would break when OpenAI adds new tool_choice variants.
-            _ => anthropic::ToolChoice::Auto,
+            _ => anthropic::ToolChoice::Auto { disable_parallel_tool_use: None },
         },
         openai::ChatToolChoice::Named(named) => anthropic::ToolChoice::Tool {
             name: named.function.name.clone(),
@@ -218,20 +218,20 @@ mod tests {
 
     #[test]
     fn tool_choice_auto() {
-        let openai = anthropic_tool_choice_to_openai(&anthropic::ToolChoice::Auto);
+        let openai = anthropic_tool_choice_to_openai(&anthropic::ToolChoice::Auto { disable_parallel_tool_use: None });
         assert!(matches!(openai, openai::ChatToolChoice::Simple(ref s) if s == "auto"));
 
         let back = openai_tool_choice_to_anthropic(&openai);
-        assert!(matches!(back, anthropic::ToolChoice::Auto));
+        assert!(matches!(back, anthropic::ToolChoice::Auto { .. }));
     }
 
     #[test]
     fn tool_choice_any_to_required() {
-        let openai = anthropic_tool_choice_to_openai(&anthropic::ToolChoice::Any);
+        let openai = anthropic_tool_choice_to_openai(&anthropic::ToolChoice::Any { disable_parallel_tool_use: None });
         assert!(matches!(openai, openai::ChatToolChoice::Simple(ref s) if s == "required"));
 
         let back = openai_tool_choice_to_anthropic(&openai);
-        assert!(matches!(back, anthropic::ToolChoice::Any));
+        assert!(matches!(back, anthropic::ToolChoice::Any { .. }));
     }
 
     #[test]
@@ -270,8 +270,26 @@ mod tests {
         let tc = openai::ChatToolChoice::Simple("something_else".into());
         assert!(matches!(
             openai_tool_choice_to_anthropic(&tc),
-            anthropic::ToolChoice::Auto
+            anthropic::ToolChoice::Auto { .. }
         ));
+    }
+
+    #[test]
+    fn disable_parallel_tool_use_roundtrips_via_serde() {
+        // Ensure the field survives JSON deserialization
+        let json = serde_json::json!({"type": "auto", "disable_parallel_tool_use": true});
+        let tc: anthropic::ToolChoice = serde_json::from_value(json).unwrap();
+        match tc {
+            anthropic::ToolChoice::Auto { disable_parallel_tool_use: Some(true) } => {}
+            other => panic!("expected Auto with disable_parallel_tool_use=true, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn auto_without_disable_parallel_omits_field_in_json() {
+        let tc = anthropic::ToolChoice::Auto { disable_parallel_tool_use: None };
+        let json = serde_json::to_value(&tc).unwrap();
+        assert_eq!(json, serde_json::json!({"type": "auto"}));
     }
 
     // --- Claude Code tool schema round-trips ---

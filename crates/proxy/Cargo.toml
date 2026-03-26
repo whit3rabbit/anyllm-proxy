@@ -32,6 +32,8 @@ httpdate = "1"
 dashmap = "6"
 aws-sigv4 = { version = "1.4", features = ["sign-http"] }
 aws-credential-types = "1.2"
+aws-smithy-runtime-api = "1"
+base64 = "0.22"
 
 [features]
 otel = [

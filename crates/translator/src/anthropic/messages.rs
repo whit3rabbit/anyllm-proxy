@@ -197,9 +197,17 @@ pub struct Tool {
 #[serde(tag = "type")]
 pub enum ToolChoice {
     #[serde(rename = "auto")]
-    Auto,
+    Auto {
+        /// Disable parallel tool use. Maps to OpenAI `parallel_tool_calls: false`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        disable_parallel_tool_use: Option<bool>,
+    },
     #[serde(rename = "any")]
-    Any,
+    Any {
+        /// Disable parallel tool use. Maps to OpenAI `parallel_tool_calls: false`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        disable_parallel_tool_use: Option<bool>,
+    },
     #[serde(rename = "none")]
     None,
     #[serde(rename = "tool")]
@@ -365,7 +373,7 @@ mod tests {
         assert_eq!(tools[0].name, "get_weather");
         assert!(tools[0].description.is_some());
         match req.tool_choice.unwrap() {
-            ToolChoice::Auto => {}
+            ToolChoice::Auto { .. } => {}
             other => panic!("expected ToolChoice::Auto, got {:?}", other),
         }
     }

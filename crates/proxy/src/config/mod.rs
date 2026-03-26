@@ -19,6 +19,7 @@ pub enum BackendKind {
     Vertex,
     Gemini,
     Anthropic,
+    Bedrock,
 }
 
 /// Which OpenAI API format to use (only relevant when BACKEND=openai).
@@ -92,8 +93,9 @@ impl Config {
             "vertex" => BackendKind::Vertex,
             "gemini" => BackendKind::Gemini,
             "anthropic" => BackendKind::Anthropic,
+            "bedrock" => BackendKind::Bedrock,
             other => {
-                panic!("unknown BACKEND value '{other}', expected 'openai', 'azure', 'vertex', 'gemini', or 'anthropic'")
+                panic!("unknown BACKEND value '{other}', expected 'openai', 'azure', 'vertex', 'gemini', 'anthropic', or 'bedrock'")
             }
         };
 
@@ -267,6 +269,37 @@ impl Config {
                     openai_api_format: OpenAIApiFormat::Chat,
                 }
             }
+            BackendKind::Bedrock => {
+                let region = std::env::var("AWS_REGION")
+                    .unwrap_or_else(|_| panic!("AWS_REGION is required when BACKEND=bedrock"));
+                validate_gcp_identifier("AWS_REGION", &region); // reuse safe-char validation
+
+                // Validate credentials are present at startup; the actual values
+                // are read again when constructing BedrockClient.
+                let _access_key_id = std::env::var("AWS_ACCESS_KEY_ID").unwrap_or_else(|_| {
+                    panic!("AWS_ACCESS_KEY_ID is required when BACKEND=bedrock")
+                });
+                let _secret_access_key = std::env::var("AWS_SECRET_ACCESS_KEY").unwrap_or_else(
+                    |_| panic!("AWS_SECRET_ACCESS_KEY is required when BACKEND=bedrock"),
+                );
+                let _session_token = std::env::var("AWS_SESSION_TOKEN").ok();
+
+                Self {
+                    backend,
+                    openai_api_key: String::new(),
+                    // Store region in openai_base_url for wrap_config
+                    openai_base_url: region.clone(),
+                    listen_port,
+                    model_mapping: ModelMapping::from_env_with_defaults(
+                        "anthropic.claude-sonnet-4-20250514-v1:0",
+                        "anthropic.claude-haiku-4-5-20251001-v1:0",
+                    ),
+                    tls,
+                    backend_auth: BackendAuth::BearerToken(String::new()),
+                    log_bodies,
+                    openai_api_format: OpenAIApiFormat::Chat,
+                }
+            }
         }
     }
 }
@@ -318,6 +351,22 @@ fn contains_ignore_ascii_case(haystack: &[u8], needle: &[u8]) -> bool {
         .any(|w| w.eq_ignore_ascii_case(needle))
 }
 
+/// Read AWS credentials from environment variables for the Bedrock backend.
+fn bedrock_credentials_from_env() -> aws_credential_types::Credentials {
+    let access_key_id = std::env::var("AWS_ACCESS_KEY_ID")
+        .unwrap_or_else(|_| panic!("AWS_ACCESS_KEY_ID is required for bedrock"));
+    let secret_access_key = std::env::var("AWS_SECRET_ACCESS_KEY")
+        .unwrap_or_else(|_| panic!("AWS_SECRET_ACCESS_KEY is required for bedrock"));
+    let session_token = std::env::var("AWS_SESSION_TOKEN").ok();
+    aws_credential_types::Credentials::new(
+        access_key_id,
+        secret_access_key,
+        session_token,
+        None,
+        "env",
+    )
+}
+
 // ---------------------------------------------------------------------------
 // Multi-backend configuration
 // ---------------------------------------------------------------------------
@@ -357,6 +406,8 @@ pub struct BackendConfig {
     /// (older Ollama, text-generation-webui, LM Studio) that reject unknown
     /// fields with HTTP 400.
     pub omit_stream_options: bool,
+    /// AWS credentials for Bedrock backend. None for all other backends.
+    pub bedrock_credentials: Option<aws_credential_types::Credentials>,
 }
 
 /// Top-level multi-backend configuration loaded from TOML.
@@ -403,6 +454,10 @@ struct TomlBackendConfig {
     access_token: Option<String>,
     // Strip stream_options from streaming requests (local LLM compat)
     omit_stream_options: Option<bool>,
+    // Bedrock-specific: AWS credentials (support env: prefix for env var resolution)
+    aws_access_key_id: Option<String>,
+    aws_secret_access_key: Option<String>,
+    aws_session_token: Option<String>,
 }
 
 impl MultiConfig {
@@ -435,11 +490,19 @@ impl MultiConfig {
             BackendKind::Vertex => "vertex",
             BackendKind::Gemini => "gemini",
             BackendKind::Anthropic => "anthropic",
+            BackendKind::Bedrock => "bedrock",
         };
 
         let omit_stream_options = std::env::var("OMIT_STREAM_OPTIONS")
             .map(|v| v == "true" || v == "1")
             .unwrap_or(false);
+
+        // For Bedrock, read AWS credentials from env vars.
+        let bedrock_credentials = if config.backend == BackendKind::Bedrock {
+            Some(bedrock_credentials_from_env())
+        } else {
+            None
+        };
 
         let bc = BackendConfig {
             kind: config.backend.clone(),
@@ -451,6 +514,7 @@ impl MultiConfig {
             backend_auth: config.backend_auth.clone(),
             log_bodies: config.log_bodies,
             omit_stream_options,
+            bedrock_credentials,
         };
 
         let mut backends = IndexMap::new();
@@ -521,6 +585,7 @@ impl MultiConfig {
             "vertex" => BackendKind::Vertex,
             "gemini" => BackendKind::Gemini,
             "anthropic" => BackendKind::Anthropic,
+            "bedrock" => BackendKind::Bedrock,
             other => panic!("unknown backend kind '{other}' for backend '{name}'"),
         };
 
@@ -684,6 +749,62 @@ impl MultiConfig {
                 };
                 (base_url, auth, mm, OpenAIApiFormat::Chat)
             }
+            BackendKind::Bedrock => {
+                let region = tb.region.as_deref().unwrap_or_else(|| {
+                    panic!("backend '{name}': 'region' is required for bedrock")
+                });
+                validate_gcp_identifier("region", region);
+
+                // For Bedrock, base_url stores the region (used by BedrockClient to build URLs)
+                let auth = BackendAuth::BearerToken(String::new());
+                let mm = ModelMapping {
+                    big_model: tb.big_model.clone().unwrap_or_else(|| {
+                        "anthropic.claude-sonnet-4-20250514-v1:0".to_string()
+                    }),
+                    small_model: tb.small_model.clone().unwrap_or_else(|| {
+                        "anthropic.claude-haiku-4-5-20251001-v1:0".to_string()
+                    }),
+                };
+                (region.to_string(), auth, mm, OpenAIApiFormat::Chat)
+            }
+        };
+
+        // Build AWS credentials for Bedrock from TOML fields or env vars.
+        let bedrock_credentials = if kind == BackendKind::Bedrock {
+            let access_key_id = tb
+                .aws_access_key_id
+                .as_deref()
+                .map(|v| resolve_env_value(v).unwrap_or_else(|e| panic!("backend '{name}': {e}")))
+                .unwrap_or_else(|| {
+                    std::env::var("AWS_ACCESS_KEY_ID").unwrap_or_else(|_| {
+                        panic!("backend '{name}': aws_access_key_id or AWS_ACCESS_KEY_ID required")
+                    })
+                });
+            let secret_access_key = tb
+                .aws_secret_access_key
+                .as_deref()
+                .map(|v| resolve_env_value(v).unwrap_or_else(|e| panic!("backend '{name}': {e}")))
+                .unwrap_or_else(|| {
+                    std::env::var("AWS_SECRET_ACCESS_KEY").unwrap_or_else(|_| {
+                        panic!(
+                            "backend '{name}': aws_secret_access_key or AWS_SECRET_ACCESS_KEY required"
+                        )
+                    })
+                });
+            let session_token = tb
+                .aws_session_token
+                .as_deref()
+                .map(|v| resolve_env_value(v).unwrap_or_else(|e| panic!("backend '{name}': {e}")))
+                .or_else(|| std::env::var("AWS_SESSION_TOKEN").ok());
+            Some(aws_credential_types::Credentials::new(
+                access_key_id,
+                secret_access_key,
+                session_token,
+                None,
+                "toml-config",
+            ))
+        } else {
+            None
         };
 
         BackendConfig {
@@ -696,6 +817,7 @@ impl MultiConfig {
             backend_auth,
             log_bodies,
             omit_stream_options: tb.omit_stream_options.unwrap_or(false),
+            bedrock_credentials,
         }
     }
 }

@@ -45,6 +45,35 @@ These are the variables most users need.
 | `RUST_LOG` | `info` | Tracing filter. Examples: `debug`, `anyllm_proxy=trace`. |
 | `DISABLE_ADMIN` | (unset) | Set to `1`, `true`, or `yes` to force-disable the admin web interface even when `--webui` is passed. Useful in automated/container environments. |
 
+## AWS Bedrock
+
+Set `BACKEND=bedrock` to route through AWS Bedrock. The proxy sends Anthropic Messages API format directly to Bedrock (no OpenAI translation). Requests are signed with AWS SigV4.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AWS_REGION` | (required) | AWS region, e.g. `us-east-1`. |
+| `AWS_ACCESS_KEY_ID` | (required) | AWS access key ID for SigV4 signing. |
+| `AWS_SECRET_ACCESS_KEY` | (required) | AWS secret access key for SigV4 signing. |
+| `AWS_SESSION_TOKEN` | (optional) | Temporary session token for STS credentials. |
+| `BIG_MODEL` | `anthropic.claude-sonnet-4-20250514-v1:0` | Bedrock model ID for sonnet/opus requests. |
+| `SMALL_MODEL` | `anthropic.claude-haiku-4-5-20251001-v1:0` | Bedrock model ID for haiku requests. |
+
+### Example
+
+```bash
+BACKEND=bedrock \
+AWS_REGION=us-east-1 \
+AWS_ACCESS_KEY_ID=AKIA... \
+AWS_SECRET_ACCESS_KEY=wJalr... \
+cargo run -p anyllm_proxy
+```
+
+### Streaming
+
+Bedrock streaming uses AWS Event Stream binary framing instead of SSE. The proxy decodes Event Stream frames and re-emits them as standard SSE events, so downstream clients see the same Anthropic SSE format as with other backends.
+
+---
+
 ## Azure OpenAI
 
 Set `BACKEND=azure` to route through Azure OpenAI Service. The request/response format is identical to standard OpenAI Chat Completions; only the URL scheme and auth header differ.
@@ -148,3 +177,24 @@ ADMIN_DB_PATH=/var/lib/anyllm/admin.db \
 anyllm_proxy --webui
 # Open: http://127.0.0.1:4000/admin/?token=my-secret-token
 ```
+
+---
+
+## OpenTelemetry (optional)
+
+Trace export is opt-in. Build with the `otel` cargo feature to enable it:
+
+```bash
+cargo build -p anyllm_proxy --features otel
+```
+
+When the feature is enabled, the proxy initializes an OTLP span exporter that sends traces over HTTP/protobuf. The OTLP SDK reads configuration from standard environment variables; no proxy-specific config is needed.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4318` | OTLP collector endpoint (HTTP). |
+| `OTEL_SERVICE_NAME` | `unknown_service` | Service name attached to all exported spans. Set this to `anyllm-proxy` or your deployment name. |
+| `OTEL_TRACES_SAMPLER` | `parentbased_always_on` | Sampling strategy. Common values: `always_on`, `always_off`, `traceidratio` (pair with `OTEL_TRACES_SAMPLER_ARG`). |
+| `OTEL_TRACES_SAMPLER_ARG` | (none) | Argument for the sampler, e.g. `0.1` for 10% sampling with `traceidratio`. |
+
+When built without the `otel` feature (the default), none of these variables have any effect and there is zero runtime overhead.

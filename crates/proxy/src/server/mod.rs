@@ -1,3 +1,5 @@
+/// AWS Bedrock passthrough handler (SigV4 signing + event stream decoding).
+mod bedrock_passthrough;
 /// OpenAI Chat Completions input handler (POST /v1/chat/completions).
 mod chat_completions;
 /// Auth validation, request ID injection, size limits, concurrency limits, header logging.

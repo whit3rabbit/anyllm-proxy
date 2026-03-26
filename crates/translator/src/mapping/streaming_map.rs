@@ -80,6 +80,8 @@ impl StreamingTranslator {
         if let Some(ref usage) = chunk.usage {
             self.usage.input_tokens = usage.prompt_tokens;
             self.usage.output_tokens = usage.completion_tokens;
+            self.usage.cache_read_input_tokens =
+                crate::mapping::usage_map::extract_cached_tokens(usage.prompt_tokens_details.as_ref());
         }
 
         for choice in &chunk.choices {
@@ -1198,5 +1200,38 @@ mod tests {
         assert!(
             matches!(&events[0], anthropic::StreamEvent::ContentBlockStop { index } if *index == 0)
         );
+    }
+
+    #[test]
+    fn usage_chunk_with_cached_tokens_maps_cache_read() {
+        let mut translator = StreamingTranslator::new("gpt-4o".into());
+        let chunk = ChatCompletionChunk {
+            id: "c1".into(),
+            object: "chat.completion.chunk".into(),
+            model: "gpt-4o".into(),
+            choices: vec![],
+            usage: Some(crate::openai::ChatUsage {
+                prompt_tokens: 100,
+                completion_tokens: 50,
+                total_tokens: 150,
+                completion_tokens_details: None,
+                prompt_tokens_details: Some(serde_json::json!({"cached_tokens": 42})),
+            }),
+            created: None,
+            system_fingerprint: None,
+        };
+        translator.process_chunk(&chunk);
+        let usage = translator.usage().expect("usage should be present");
+        assert_eq!(usage.input_tokens, 100);
+        assert_eq!(usage.output_tokens, 50);
+        assert_eq!(usage.cache_read_input_tokens, Some(42));
+    }
+
+    #[test]
+    fn usage_chunk_without_cached_tokens_leaves_cache_read_none() {
+        let mut translator = StreamingTranslator::new("gpt-4o".into());
+        translator.process_chunk(&usage_chunk("c1", "gpt-4o", 10, 5));
+        let usage = translator.usage().expect("usage should be present");
+        assert!(usage.cache_read_input_tokens.is_none());
     }
 }

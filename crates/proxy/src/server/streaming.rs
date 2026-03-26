@@ -320,11 +320,11 @@ pub(crate) async fn messages_stream(
                 }
             });
         }
-        BackendClient::Anthropic(_) => {
+        BackendClient::Anthropic(_) | BackendClient::Bedrock(_) => {
             drop(rl_tx);
             let _ = tx
                 .send(Ok(Event::default().data(
-                    r#"{"error":"anthropic passthrough does not use this handler"}"#,
+                    r#"{"error":"this backend does not use the translation streaming handler"}"#,
                 )))
                 .await;
         }

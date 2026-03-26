@@ -60,7 +60,7 @@
 - [x] T014 [US1] Create `crates/proxy/src/server/chat_completions.rs` with non-streaming handler: extract `Json<ChatCompletionRequest>`, call `openai_to_anthropic_request`, dispatch to `BackendClient`, call `anthropic_to_openai_response`, return `Json<ChatCompletionResponse>`. Set `x-anyllm-degradation` header from `TranslationWarnings`. Return OpenAI-shaped errors on validation failure (missing max_tokens -> 400 `invalid_request_error`).
 - [x] T015 [US1] Add streaming handler in `crates/proxy/src/server/chat_completions.rs`: when `stream: true`, dispatch to backend streaming path, create `ReverseStreamingTranslator`, emit `text/event-stream` with `data: {chunk}\n\n` lines (no `event:` prefix, matching OpenAI SSE format). Terminate with `data: [DONE]\n\n`.
 - [x] T016 [US1] Register `POST /v1/chat/completions` route in `crates/proxy/src/server/routes.rs` on the existing backend router. Apply same middleware (auth, request ID, size limit, concurrency limit) as the `/v1/messages` route.
-- [ ] T017 [US1] Add integration tests in `crates/proxy/tests/` (new file `chat_completions.rs` or extend existing): non-streaming basic response, streaming basic response, tool call round-trip, missing max_tokens returns 400, degradation header set for lossy fields, empty messages returns 400.
+- [x] T017 [US1] Add integration tests in `crates/proxy/tests/` (new file `chat_completions.rs` or extend existing): non-streaming basic response, streaming basic response, tool call round-trip, missing max_tokens returns 400, degradation header set for lossy fields, empty messages returns 400.
 
 **Checkpoint**: `cargo test -p anyllm_proxy` passes. `POST /v1/chat/completions` works end-to-end with a mock or live backend.
 
@@ -74,11 +74,11 @@
 
 ### Implementation for User Story 2
 
-- [ ] T018 [US2] Add `BackendKind::AzureOpenAI` variant to the backend enum in `crates/proxy/src/config/mod.rs`. Parse `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT`, `AZURE_OPENAI_API_VERSION` (default `"2024-10-21"`) from env. Construct full URL: `{endpoint}/openai/deployments/{deployment}/chat/completions?api-version={version}` at config load time. Validate URL with existing `validate_url` function.
-- [ ] T019 [US2] Add `BackendAuth::AzureApiKey(String)` variant (or equivalent) in `crates/proxy/src/backend/mod.rs`. Map it to `RequestAuth::Header { name: "api-key", value: key }` in the auth application logic. Add `BackendClient::AzureOpenAI(OpenAIClient)` variant that constructs `OpenAIClient` with the pre-built Azure URL and `AzureApiKey` auth.
-- [ ] T020 [US2] Modify `crates/proxy/src/backend/openai_client.rs` to accept Azure's pre-constructed URL. The `chat_completions_url` for Azure is the full URL from config (no `/v1/chat/completions` suffix appended). Ensure the `model` field in the request body is still populated (Azure ignores it but accepts it).
-- [ ] T021 [US2] Add `#[ignore]` integration test in `crates/proxy/tests/` for Azure backend: send a request via the proxy configured with `BACKEND=azure`, verify response is valid Anthropic format. Requires `AZURE_OPENAI_API_KEY` env var to run.
-- [ ] T022 [US2] Update `docs/ENV.md` with Azure-specific env vars and usage example.
+- [x] T018 [US2] Add `BackendKind::AzureOpenAI` variant to the backend enum in `crates/proxy/src/config/mod.rs`. Parse `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT`, `AZURE_OPENAI_API_VERSION` (default `"2024-10-21"`) from env. Construct full URL: `{endpoint}/openai/deployments/{deployment}/chat/completions?api-version={version}` at config load time. Validate URL with existing `validate_url` function.
+- [x] T019 [US2] Add `BackendAuth::AzureApiKey(String)` variant (or equivalent) in `crates/proxy/src/backend/mod.rs`. Map it to `RequestAuth::Header { name: "api-key", value: key }` in the auth application logic. Add `BackendClient::AzureOpenAI(OpenAIClient)` variant that constructs `OpenAIClient` with the pre-built Azure URL and `AzureApiKey` auth.
+- [x] T020 [US2] Modify `crates/proxy/src/backend/openai_client.rs` to accept Azure's pre-constructed URL. The `chat_completions_url` for Azure is the full URL from config (no `/v1/chat/completions` suffix appended). Ensure the `model` field in the request body is still populated (Azure ignores it but accepts it).
+- [x] T021 [US2] Add `#[ignore]` integration test in `crates/proxy/tests/` for Azure backend: send a request via the proxy configured with `BACKEND=azure`, verify response is valid Anthropic format. Requires `AZURE_OPENAI_API_KEY` env var to run.
+- [x] T022 [US2] Update `docs/ENV.md` with Azure-specific env vars and usage example.
 
 **Checkpoint**: `cargo build` clean. Azure config parsing tested. `#[ignore]` live test exists.
 
@@ -134,13 +134,13 @@
 
 ### Implementation for User Story 5
 
-- [ ] T039 [P] [US5] Add `ClientBuilder` to `crates/client/src/client.rs` with method chaining: `fn new() -> Self`, `fn base_url(mut self, url: &str) -> Self`, `fn api_key(mut self, key: &str) -> Self`, `fn timeout(mut self, d: Duration) -> Self`, `fn read_timeout(mut self, d: Duration) -> Self`, `fn max_retries(mut self, n: u32) -> Self`, `fn tls_config(mut self, cfg: TlsConfig) -> Self`, `fn build(self) -> Result<Client, ClientError>`. Implement `Client::builder() -> ClientBuilder` convenience method.
-- [ ] T040 [P] [US5] Create `crates/client/src/tools.rs` with `ToolBuilder` and `ToolChoiceBuilder`. `ToolBuilder`: `fn new(name: &str) -> Self`, `fn description(mut self, desc: &str) -> Self`, `fn input_schema(mut self, schema: Value) -> Self`, `fn build(self) -> Tool`. `ToolChoiceBuilder`: `fn auto() -> ToolChoice`, `fn any() -> ToolChoice`, `fn none() -> ToolChoice`, `fn specific(name: &str) -> ToolChoice`.
-- [ ] T041 [US5] Add streaming return type to `crates/client/src/client.rs`: `fn messages_stream(&self, req: MessageCreateRequest) -> Result<impl Stream<Item = Result<StreamEvent, ClientError>>, ClientError>`. Parse SSE frames from the reqwest response byte stream, deserialize each `data:` line into `StreamEvent`.
-- [ ] T042 [US5] Update `crates/client/src/lib.rs` to re-export all public types: `Client`, `ClientBuilder`, `ClientConfig`, `ClientError`, `Tool`, `ToolBuilder`, `ToolChoice`, `ToolChoiceBuilder`, `StreamEvent`, and all Anthropic request/response types from `anyllm_translate`.
-- [ ] T043 [US5] Add rustdoc examples to all public types and methods in `crates/client/src/client.rs`, `crates/client/src/tools.rs`, and `crates/client/src/lib.rs`. Each builder method and each public function gets a `/// # Examples` block.
-- [ ] T044 [US5] Bump `anyllm_client` version to `0.2.0` in `crates/client/Cargo.toml`.
-- [ ] T045 [US5] Add unit tests for `ClientBuilder` (valid build, missing required fields), `ToolBuilder`, and `ToolChoiceBuilder` in their respective `#[cfg(test)]` modules.
+- [x] T039 [P] [US5] Add `ClientBuilder` to `crates/client/src/client.rs` with method chaining: `fn new() -> Self`, `fn base_url(mut self, url: &str) -> Self`, `fn api_key(mut self, key: &str) -> Self`, `fn timeout(mut self, d: Duration) -> Self`, `fn read_timeout(mut self, d: Duration) -> Self`, `fn max_retries(mut self, n: u32) -> Self`, `fn tls_config(mut self, cfg: TlsConfig) -> Self`, `fn build(self) -> Result<Client, ClientError>`. Implement `Client::builder() -> ClientBuilder` convenience method.
+- [x] T040 [P] [US5] Create `crates/client/src/tools.rs` with `ToolBuilder` and `ToolChoiceBuilder`. `ToolBuilder`: `fn new(name: &str) -> Self`, `fn description(mut self, desc: &str) -> Self`, `fn input_schema(mut self, schema: Value) -> Self`, `fn build(self) -> Tool`. `ToolChoiceBuilder`: `fn auto() -> ToolChoice`, `fn any() -> ToolChoice`, `fn none() -> ToolChoice`, `fn specific(name: &str) -> ToolChoice`.
+- [x] T041 [US5] Add streaming return type to `crates/client/src/client.rs`: `fn messages_stream(&self, req: MessageCreateRequest) -> Result<impl Stream<Item = Result<StreamEvent, ClientError>>, ClientError>`. Parse SSE frames from the reqwest response byte stream, deserialize each `data:` line into `StreamEvent`.
+- [x] T042 [US5] Update `crates/client/src/lib.rs` to re-export all public types: `Client`, `ClientBuilder`, `ClientConfig`, `ClientError`, `Tool`, `ToolBuilder`, `ToolChoice`, `ToolChoiceBuilder`, `StreamEvent`, and all Anthropic request/response types from `anyllm_translate`.
+- [x] T043 [US5] Add rustdoc examples to all public types and methods in `crates/client/src/client.rs`, `crates/client/src/tools.rs`, and `crates/client/src/lib.rs`. Each builder method and each public function gets a `/// # Examples` block.
+- [x] T044 [US5] Bump `anyllm_client` version to `0.2.0` in `crates/client/Cargo.toml`.
+- [x] T045 [US5] Add unit tests for `ClientBuilder` (valid build, missing required fields), `ToolBuilder`, and `ToolChoiceBuilder` in their respective `#[cfg(test)]` modules.
 
 **Checkpoint**: `cargo doc -p anyllm_client --no-deps` builds clean. `cargo test -p anyllm_client` passes.
 
@@ -187,7 +187,7 @@
 
 **Purpose**: Final validation, documentation updates, and CI adjustments
 
-- [ ] T057 [P] Update `docs/COMPARISON_LITELLM.md` to reflect closed gaps: `POST /v1/chat/completions` input, Bedrock backend, Azure backend, virtual key management, per-key rate limiting, OTEL export. Move items from "Major gap" to "Advantage" or "Parity" as appropriate.
+- [x] T057 [P] Update `docs/COMPARISON_LITELLM.md` to reflect closed gaps: `POST /v1/chat/completions` input, Bedrock backend, Azure backend, virtual key management, per-key rate limiting, OTEL export. Move items from "Major gap" to "Advantage" or "Parity" as appropriate.
 - [ ] T058 [P] Update `CLAUDE.md` with new backend types, new env vars, new admin endpoints, new source files, and updated test counts.
 - [ ] T059 [P] Update `README.md` with quickstart examples for new features (reference `quickstart.md` content).
 - [ ] T060 Run `cargo clippy -- -D warnings` across all crates and fix any warnings.
