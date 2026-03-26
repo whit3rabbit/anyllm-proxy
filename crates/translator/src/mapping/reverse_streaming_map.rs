@@ -4,6 +4,7 @@
 // objects. This is the inverse of StreamingTranslator in streaming_map.rs.
 
 use crate::anthropic;
+use crate::mapping::reverse_message_map::anthropic_stop_reason_to_openai;
 use crate::openai;
 use crate::openai::streaming::{
     ChatCompletionChunk, ChunkChoice, ChunkDelta, ChunkFunctionCall, ChunkToolCall,
@@ -137,12 +138,10 @@ impl ReverseStreamingTranslator {
                 if let Some(u) = usage {
                     self.output_tokens = Some(u.output_tokens);
                 }
-                let finish_reason = delta.stop_reason.as_ref().map(|sr| match sr {
-                    anthropic::StopReason::EndTurn => openai::FinishReason::Stop,
-                    anthropic::StopReason::MaxTokens => openai::FinishReason::Length,
-                    anthropic::StopReason::ToolUse => openai::FinishReason::ToolCalls,
-                    anthropic::StopReason::StopSequence => openai::FinishReason::Stop,
-                });
+                let finish_reason = delta
+                    .stop_reason
+                    .as_ref()
+                    .map(anthropic_stop_reason_to_openai);
                 let mut chunks = vec![self.make_chunk(ChunkDelta::default(), finish_reason)];
                 // Emit usage chunk if we have token counts
                 if let (Some(input), Some(output)) = (self.input_tokens, self.output_tokens) {

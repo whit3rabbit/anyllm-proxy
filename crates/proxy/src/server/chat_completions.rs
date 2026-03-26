@@ -258,14 +258,13 @@ async fn chat_completions_stream(
     // Translate to OpenAI format for the backend
     let mut openai_req = mapping::message_map::anthropic_to_openai_request(&anthropic_req);
     super::routes::inject_gemini_thinking(&anthropic_req, &state.backend, &mut openai_req);
-    if state.omit_stream_options {
-        openai_req.stream_options = None;
-    }
     openai_req.model = state.map_model(&openai_req.model);
     openai_req.stream = Some(true);
-    openai_req.stream_options = Some(openai::StreamOptions {
-        include_usage: true,
-    });
+    if !state.omit_stream_options {
+        openai_req.stream_options = Some(openai::StreamOptions {
+            include_usage: true,
+        });
+    }
 
     let client = match &state.backend {
         BackendClient::OpenAI(c)

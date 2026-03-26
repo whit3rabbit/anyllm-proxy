@@ -101,30 +101,25 @@ pub fn openai_to_anthropic_request(
         }
     }
 
-    // Map tools
     let tools = req
         .tools
         .as_ref()
         .map(|t| tools_map::openai_tools_to_anthropic(t));
 
-    // Map tool_choice
     let tool_choice = req
         .tool_choice
         .as_ref()
         .map(tools_map::openai_tool_choice_to_anthropic);
 
-    // Map stop sequences
     let stop_sequences = req.stop.as_ref().map(|s| match s {
         openai::Stop::Single(s) => vec![s.clone()],
         openai::Stop::Multiple(v) => v.clone(),
     });
 
-    // Map user to metadata
     let metadata = req.user.as_ref().map(|u| anthropic::Metadata {
         user_id: Some(u.clone()),
     });
 
-    // Record lossy fields as warnings
     if req.presence_penalty.is_some() {
         warnings.add("presence_penalty");
     }
@@ -147,7 +142,6 @@ pub fn openai_to_anthropic_request(
         warnings.add("stream_options");
     }
 
-    // Map parallel_tool_calls: false -> disable_parallel_tool_use: true
     let tool_choice = match (tool_choice, req.parallel_tool_calls) {
         (Some(anthropic::ToolChoice::Auto { .. }), Some(false)) => {
             Some(anthropic::ToolChoice::Auto {

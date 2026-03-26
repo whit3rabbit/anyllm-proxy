@@ -664,6 +664,8 @@ async fn create_key(
                     super::keys::VirtualKeyMeta {
                         id,
                         description: body.description.clone(),
+                        // Expiry is checked via ISO string comparison in VirtualKeyRow::status();
+                        // the DashMap is only used for auth + rate limiting.
                         expires_at: None,
                         rpm_limit: body.rpm_limit,
                         tpm_limit: body.tpm_limit,

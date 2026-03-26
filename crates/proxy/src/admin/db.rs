@@ -377,29 +377,36 @@ pub fn insert_virtual_key(
 }
 
 /// List all virtual keys (active, expired, revoked).
+/// Map a SQLite row (from the standard 13-column SELECT) to a VirtualKeyRow.
+fn row_to_virtual_key(row: &rusqlite::Row) -> rusqlite::Result<VirtualKeyRow> {
+    Ok(VirtualKeyRow {
+        id: row.get(0)?,
+        key_hash: row.get(1)?,
+        key_prefix: row.get(2)?,
+        description: row.get(3)?,
+        created_at: row.get(4)?,
+        expires_at: row.get(5)?,
+        revoked_at: row.get(6)?,
+        rpm_limit: row.get::<_, Option<i64>>(7)?.map(|v| v as u32),
+        tpm_limit: row.get::<_, Option<i64>>(8)?.map(|v| v as u32),
+        spend_limit: row.get(9)?,
+        total_spend: row.get::<_, f64>(10).unwrap_or(0.0),
+        total_requests: row.get::<_, i64>(11).unwrap_or(0),
+        total_tokens: row.get::<_, i64>(12).unwrap_or(0),
+    })
+}
+
+const VIRTUAL_KEY_COLUMNS: &str =
+    "id, key_hash, key_prefix, description, created_at, expires_at, revoked_at, \
+     rpm_limit, tpm_limit, spend_limit, total_spend, total_requests, total_tokens";
+
+/// List all virtual keys (active, expired, revoked).
 pub fn list_virtual_keys(conn: &Connection) -> rusqlite::Result<Vec<VirtualKeyRow>> {
-    let mut stmt = conn.prepare(
-        "SELECT id, key_hash, key_prefix, description, created_at, expires_at, revoked_at,
-                rpm_limit, tpm_limit, spend_limit, total_spend, total_requests, total_tokens
-         FROM virtual_api_key ORDER BY id DESC",
-    )?;
-    let rows = stmt.query_map([], |row| {
-        Ok(VirtualKeyRow {
-            id: row.get(0)?,
-            key_hash: row.get(1)?,
-            key_prefix: row.get(2)?,
-            description: row.get(3)?,
-            created_at: row.get(4)?,
-            expires_at: row.get(5)?,
-            revoked_at: row.get(6)?,
-            rpm_limit: row.get::<_, Option<i64>>(7)?.map(|v| v as u32),
-            tpm_limit: row.get::<_, Option<i64>>(8)?.map(|v| v as u32),
-            spend_limit: row.get(9)?,
-            total_spend: row.get::<_, f64>(10).unwrap_or(0.0),
-            total_requests: row.get::<_, i64>(11).unwrap_or(0),
-            total_tokens: row.get::<_, i64>(12).unwrap_or(0),
-        })
-    })?;
+    let sql = format!(
+        "SELECT {VIRTUAL_KEY_COLUMNS} FROM virtual_api_key ORDER BY id DESC"
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map([], row_to_virtual_key)?;
     rows.collect()
 }
 
@@ -413,56 +420,22 @@ pub fn revoke_virtual_key(conn: &Connection, id: i64) -> rusqlite::Result<Option
     if updated == 0 {
         return Ok(None);
     }
-    let mut stmt = conn.prepare(
-        "SELECT id, key_hash, key_prefix, description, created_at, expires_at, revoked_at,
-                rpm_limit, tpm_limit, spend_limit, total_spend, total_requests, total_tokens
-         FROM virtual_api_key WHERE id = ?1",
-    )?;
-    stmt.query_row(params![id], |row| {
-        Ok(Some(VirtualKeyRow {
-            id: row.get(0)?,
-            key_hash: row.get(1)?,
-            key_prefix: row.get(2)?,
-            description: row.get(3)?,
-            created_at: row.get(4)?,
-            expires_at: row.get(5)?,
-            revoked_at: row.get(6)?,
-            rpm_limit: row.get::<_, Option<i64>>(7)?.map(|v| v as u32),
-            tpm_limit: row.get::<_, Option<i64>>(8)?.map(|v| v as u32),
-            spend_limit: row.get(9)?,
-            total_spend: row.get::<_, f64>(10).unwrap_or(0.0),
-            total_requests: row.get::<_, i64>(11).unwrap_or(0),
-            total_tokens: row.get::<_, i64>(12).unwrap_or(0),
-        }))
-    })
+    let sql = format!(
+        "SELECT {VIRTUAL_KEY_COLUMNS} FROM virtual_api_key WHERE id = ?1"
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    stmt.query_row(params![id], |row| Ok(Some(row_to_virtual_key(row)?)))
 }
 
 /// Load all active (non-revoked, non-expired) virtual keys from the database.
 pub fn load_active_virtual_keys(conn: &Connection) -> rusqlite::Result<Vec<VirtualKeyRow>> {
     let now = now_iso8601();
-    let mut stmt = conn.prepare(
-        "SELECT id, key_hash, key_prefix, description, created_at, expires_at, revoked_at,
-                rpm_limit, tpm_limit, spend_limit, total_spend, total_requests, total_tokens
-         FROM virtual_api_key
-         WHERE revoked_at IS NULL AND (expires_at IS NULL OR expires_at > ?1)",
-    )?;
-    let rows = stmt.query_map(params![now], |row| {
-        Ok(VirtualKeyRow {
-            id: row.get(0)?,
-            key_hash: row.get(1)?,
-            key_prefix: row.get(2)?,
-            description: row.get(3)?,
-            created_at: row.get(4)?,
-            expires_at: row.get(5)?,
-            revoked_at: row.get(6)?,
-            rpm_limit: row.get::<_, Option<i64>>(7)?.map(|v| v as u32),
-            tpm_limit: row.get::<_, Option<i64>>(8)?.map(|v| v as u32),
-            spend_limit: row.get(9)?,
-            total_spend: row.get::<_, f64>(10).unwrap_or(0.0),
-            total_requests: row.get::<_, i64>(11).unwrap_or(0),
-            total_tokens: row.get::<_, i64>(12).unwrap_or(0),
-        })
-    })?;
+    let sql = format!(
+        "SELECT {VIRTUAL_KEY_COLUMNS} FROM virtual_api_key \
+         WHERE revoked_at IS NULL AND (expires_at IS NULL OR expires_at > ?1)"
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map(params![now], row_to_virtual_key)?;
     rows.collect()
 }
 

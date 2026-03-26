@@ -158,6 +158,15 @@ async fn bedrock_stream(
             };
             event_buf.extend_from_slice(&bytes);
 
+            if event_buf.len() > crate::backend::MAX_SSE_BUFFER_SIZE {
+                tracing::error!(
+                    buffer_len = event_buf.len(),
+                    "Bedrock event stream buffer exceeded maximum size, aborting"
+                );
+                metrics.record_error();
+                return;
+            }
+
             // Decode all complete frames in the buffer
             while let Some(payload) = eventstream::decode_frame(&mut event_buf) {
                 if let Some(event_json) = eventstream::extract_event_from_payload(&payload) {
@@ -186,22 +195,27 @@ async fn bedrock_stream(
     resp
 }
 
-/// Detect the Anthropic SSE event type from a JSON string.
-/// Falls back to "message" if the type field is not found.
+/// Extract the Anthropic SSE event type from a JSON string without a full parse.
+/// Looks for `"type":"<value>"` and returns the value. Falls back to "message".
 fn detect_event_type(json: &str) -> &str {
-    // Quick extraction without full parse: look for "type":"..."
-    if let Ok(v) = serde_json::from_str::<serde_json::Value>(json) {
-        if let Some(t) = v.get("type").and_then(|t| t.as_str()) {
-            return match t {
-                "message_start" => "message_start",
-                "content_block_start" => "content_block_start",
-                "content_block_delta" => "content_block_delta",
-                "content_block_stop" => "content_block_stop",
-                "message_delta" => "message_delta",
-                "message_stop" => "message_stop",
-                "ping" => "ping",
-                _ => "message",
-            };
+    // Avoid serde_json::from_str on every streaming event. The "type" field
+    // is always near the start of Anthropic event JSON.
+    if let Some(pos) = json.find("\"type\":") {
+        let rest = &json[pos + 7..]; // skip `"type":`
+        let rest = rest.trim_start();
+        if let Some(inner) = rest.strip_prefix('"') {
+            if let Some(end) = inner.find('"') {
+                return match &inner[..end] {
+                    "message_start" => "message_start",
+                    "content_block_start" => "content_block_start",
+                    "content_block_delta" => "content_block_delta",
+                    "content_block_stop" => "content_block_stop",
+                    "message_delta" => "message_delta",
+                    "message_stop" => "message_stop",
+                    "ping" => "ping",
+                    _ => "message",
+                };
+            }
         }
     }
     "message"
