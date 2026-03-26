@@ -1,6 +1,6 @@
 // Auth, logging, and request size limit middleware
 
-use crate::admin::keys::VirtualKeyMeta;
+use crate::admin::keys::{now_ms, RateLimitState, VirtualKeyMeta};
 use anyllm_translate::anthropic;
 use anyllm_translate::mapping::errors_map::create_anthropic_error;
 use axum::{
@@ -13,6 +13,13 @@ use dashmap::DashMap;
 use sha2::{Digest, Sha256};
 use std::sync::{Arc, LazyLock, OnceLock};
 use subtle::ConstantTimeEq;
+
+/// Context passed from auth middleware to handlers for post-response TPM recording.
+/// Inserted into request extensions when a virtual key with a TPM limit is used.
+#[derive(Clone)]
+pub struct VirtualKeyContext {
+    pub(crate) rate_state: Arc<RateLimitState>,
+}
 
 /// Global reference to the virtual keys DashMap, set once during startup.
 /// Checked during auth after the static ALLOWED_KEY_HASHES check.
@@ -69,7 +76,7 @@ static OPEN_RELAY: LazyLock<bool> = LazyLock::new(|| {
 /// Anthropic: <https://docs.anthropic.com/en/api/messages>
 pub async fn validate_auth(
     headers: HeaderMap,
-    request: Request<Body>,
+    mut request: Request<Body>,
     next: Next,
 ) -> Result<Response, Response> {
     let api_key = headers
@@ -113,12 +120,10 @@ pub async fn validate_auth(
     // Check 2: virtual keys from DashMap (with per-key rate limiting)
     if let Some(map) = VIRTUAL_KEYS.get() {
         if let Some(meta) = map.get(&credential_hash) {
+            let now_ms = now_ms();
+
             // Enforce RPM limit if configured
             if let Some(rpm_limit) = meta.rpm_limit {
-                let now_ms = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_millis() as u64;
                 if let Err(retry_after) = meta.rate_state.check_rpm(rpm_limit, now_ms) {
                     let err = create_anthropic_error(
                         anthropic::ErrorType::RateLimitError,
@@ -132,6 +137,26 @@ pub async fn validate_auth(
                     return Err(resp);
                 }
             }
+
+            // Enforce TPM limit pre-check and register context for post-response recording
+            if let Some(tpm_limit) = meta.tpm_limit {
+                if let Err(retry_after) = meta.rate_state.check_tpm(tpm_limit, now_ms) {
+                    let err = create_anthropic_error(
+                        anthropic::ErrorType::RateLimitError,
+                        "Token rate limit exceeded for this API key.".to_string(),
+                        None,
+                    );
+                    let mut resp = (StatusCode::TOO_MANY_REQUESTS, Json(err)).into_response();
+                    if let Ok(val) = axum::http::HeaderValue::from_str(&retry_after.to_string()) {
+                        resp.headers_mut().insert("retry-after", val);
+                    }
+                    return Err(resp);
+                }
+                request.extensions_mut().insert(VirtualKeyContext {
+                    rate_state: meta.rate_state.clone(),
+                });
+            }
+
             return Ok(next.run(request).await);
         }
     }

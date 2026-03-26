@@ -111,8 +111,7 @@ pub struct RequestLogEntry {
 }
 
 impl SharedState {
-    /// Construct a minimal SharedState for unit tests (in-memory DB, dummy channel).
-    #[cfg(test)]
+    /// Construct a minimal SharedState for tests (in-memory DB, dummy channel).
     pub fn new_for_test() -> Self {
         let conn = rusqlite::Connection::open_in_memory().expect("in-memory sqlite");
         crate::admin::db::init_db(&conn).expect("init_db");

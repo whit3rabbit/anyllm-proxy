@@ -120,7 +120,7 @@
 - [x] T035 [US4] Add admin API endpoints in `crates/proxy/src/admin/routes.rs`: `POST /admin/api/keys` (create key, insert to DB, insert to DashMap, return raw key once), `GET /admin/api/keys` (list from DB with computed status), `DELETE /admin/api/keys/{id}` (set `revoked_at` in DB, remove from DashMap, return confirmation).
 - [x] T036 [US4] Extend auth middleware in `crates/proxy/src/server/middleware.rs` to check the DashMap after checking env-var keys. SHA-256 hash the incoming credential, look up in DashMap, verify `revoked_at` is None and `expires_at` is not past. If both checks fail, return 401.
 - [x] T037 [US4] Add unit tests for key generation and hashing in `crates/proxy/src/admin/keys.rs` `#[cfg(test)]` module: key format, prefix extraction, hash determinism.
-- [ ] T038 [US4] Add integration tests for virtual key admin API in `crates/proxy/tests/`: create key, list keys, use key for auth, revoke key, verify revoked key is rejected.
+- [x] T038 [US4] Add integration tests for virtual key admin API in `crates/proxy/tests/`: create key, list keys, use key for auth, revoke key, verify revoked key is rejected.
 
 **Checkpoint**: `cargo test -p anyllm_proxy` passes. Virtual key CRUD works. Key revocation is immediate.
 
@@ -157,9 +157,9 @@
 - [x] T046 [US6] Add `RateLimitState` struct to `crates/proxy/src/admin/keys.rs`: `rpm_window: Mutex<VecDeque<u64>>`, `tpm_window: Mutex<VecDeque<(u64, u32)>>`. Add `fn check_rpm(&self, limit: u32) -> Result<(), Duration>` (returns Ok or Err with retry-after duration) and `fn record_rpm(&self)`. Same pattern for TPM: `fn check_tpm(&self, limit: u32, tokens: u32) -> Result<(), Duration>` and `fn record_tpm(&self, tokens: u32)`. Drain entries older than 60 seconds on each check.
 - [x] T047 [US6] Add `rate_state: Arc<RateLimitState>` field to `VirtualKeyMeta` in DashMap. Initialize a new `RateLimitState` for each key loaded on startup and each key created via admin API.
 - [x] T048 [US6] Extend auth middleware in `crates/proxy/src/server/middleware.rs`: after virtual key validation passes, check `rate_state.check_rpm(key.rpm_limit)`. If exceeded, return HTTP 429 with `retry-after: {seconds}` header and OpenAI-shaped rate limit error body. TPM check happens after the response (post-middleware or in the handler) since token count is only known after the backend responds.
-- [ ] T049 [US6] Add post-response TPM recording: after the backend response is received and token count is known, call `rate_state.record_tpm(output_tokens)`. If TPM would be exceeded, the next request's pre-check catches it.
+- [x] T049 [US6] Add post-response TPM recording: after the backend response is received and token count is known, call `rate_state.record_tpm(output_tokens)`. If TPM would be exceeded, the next request's pre-check catches it.
 - [x] T050 [US6] Add unit tests for `RateLimitState` in `crates/proxy/src/admin/keys.rs` `#[cfg(test)]` module: window expiry, RPM enforcement, TPM enforcement, concurrent access safety.
-- [ ] T051 [US6] Add integration test for rate limiting in `crates/proxy/tests/`: create key with `rpm_limit: 2`, send 2 requests (200), send 3rd request (429 with `retry-after` header).
+- [x] T051 [US6] Add integration test for rate limiting in `crates/proxy/tests/`: create key with `rpm_limit: 2`, send 2 requests (200), send 3rd request (429 with `retry-after` header).
 
 **Checkpoint**: `cargo test -p anyllm_proxy` passes. Rate limiting enforced per-key.
 
@@ -188,8 +188,8 @@
 **Purpose**: Final validation, documentation updates, and CI adjustments
 
 - [x] T057 [P] Update `docs/COMPARISON_LITELLM.md` to reflect closed gaps: `POST /v1/chat/completions` input, Bedrock backend, Azure backend, virtual key management, per-key rate limiting, OTEL export. Move items from "Major gap" to "Advantage" or "Parity" as appropriate.
-- [ ] T058 [P] Update `CLAUDE.md` with new backend types, new env vars, new admin endpoints, new source files, and updated test counts.
-- [ ] T059 [P] Update `README.md` with quickstart examples for new features (reference `quickstart.md` content).
+- [x] T058 [P] Update `CLAUDE.md` with new backend types, new env vars, new admin endpoints, new source files, and updated test counts.
+- [x] T059 [P] Update `README.md` with quickstart examples for new features (reference `quickstart.md` content).
 - [x] T060 Run `cargo clippy -- -D warnings` across all crates and fix any warnings.
 - [x] T061 Run `cargo fmt --check` and fix any formatting issues.
 - [x] T062 Run `cargo test` full suite and verify all tests pass (expect ~550+ tests).

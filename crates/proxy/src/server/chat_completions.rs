@@ -59,8 +59,10 @@ pub(crate) async fn chat_completions(
     State(state): State<AppState>,
     headers: axum::http::HeaderMap,
     permit: Option<axum::Extension<ConcurrencyPermit>>,
+    vk_ctx: Option<axum::Extension<crate::server::middleware::VirtualKeyContext>>,
     body: Result<Json<openai::ChatCompletionRequest>, axum::extract::rejection::JsonRejection>,
 ) -> Response {
+    let vk_ctx = vk_ctx.map(|axum::Extension(c)| c);
     let body = match body {
         Ok(Json(b)) => b,
         Err(e) => {
@@ -144,6 +146,10 @@ pub(crate) async fn chat_completions(
                     );
                     let oai_response =
                         translate_anthropic_to_openai_response(&anthropic_resp, &original_model);
+                    super::routes::record_vk_tpm(
+                        &vk_ctx,
+                        anthropic_resp.usage.output_tokens,
+                    );
                     log_request(
                         &state.shared,
                         ctx.log_entry(
@@ -197,6 +203,10 @@ pub(crate) async fn chat_completions(
                         );
                     let oai_response =
                         translate_anthropic_to_openai_response(&anthropic_resp, &original_model);
+                    super::routes::record_vk_tpm(
+                        &vk_ctx,
+                        anthropic_resp.usage.output_tokens,
+                    );
                     log_request(
                         &state.shared,
                         ctx.log_entry(

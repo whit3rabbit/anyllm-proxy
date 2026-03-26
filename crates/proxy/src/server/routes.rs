@@ -413,11 +413,13 @@ async fn messages(
     State(state): State<AppState>,
     headers: axum::http::HeaderMap,
     permit: Option<axum::Extension<ConcurrencyPermit>>,
+    vk_ctx: Option<axum::Extension<super::middleware::VirtualKeyContext>>,
     AnthropicJson(body): AnthropicJson<anthropic::MessageCreateRequest>,
 ) -> Response {
     // Hold concurrency permit for streaming: passed to the spawned task so
     // the permit lives until the stream completes, not just until headers are sent.
     let permit = permit.map(|axum::Extension(p)| p);
+    let vk_ctx = vk_ctx.map(|axum::Extension(c)| c);
     let ctx = RequestCtx {
         request_id: headers
             .get("x-request-id")
@@ -487,6 +489,7 @@ async fn messages(
                             "response body"
                         );
                     }
+                    record_vk_tpm(&vk_ctx, anthropic_resp.usage.output_tokens);
                     log_request(
                         &state.shared,
                         ctx.log_entry(
@@ -545,6 +548,7 @@ async fn messages(
                             "response body"
                         );
                     }
+                    record_vk_tpm(&vk_ctx, anthropic_resp.usage.output_tokens);
                     log_request(
                         &state.shared,
                         ctx.log_entry(
@@ -649,6 +653,18 @@ pub(crate) fn inject_gemini_thinking(
                 "thinking_config": { "thinking_budget": budget_tokens }
             }),
         );
+    }
+}
+
+/// Record output tokens against the virtual key's TPM sliding window.
+/// Called after the backend response is received and token count is known.
+pub(crate) fn record_vk_tpm(
+    vk_ctx: &Option<super::middleware::VirtualKeyContext>,
+    output_tokens: u32,
+) {
+    if let Some(ctx) = vk_ctx {
+        ctx.rate_state
+            .record_tpm(crate::admin::keys::now_ms(), output_tokens);
     }
 }
 

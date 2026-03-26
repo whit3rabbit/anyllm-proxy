@@ -4,6 +4,14 @@ use sha2::{Digest, Sha256};
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
+/// Current time as milliseconds since the Unix epoch. Used for rate-limit sliding windows.
+pub(crate) fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
+}
+
 /// Generate a new virtual API key.
 /// Returns (raw_key, key_prefix, key_hash_hex).
 /// The raw_key is shown once at creation; key_prefix is for display; key_hash_hex is stored.
