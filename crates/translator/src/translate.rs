@@ -6,9 +6,20 @@
 use crate::anthropic::{MessageCreateRequest, MessageResponse};
 use crate::config::TranslationConfig;
 use crate::error::TranslateError;
-use crate::mapping::{message_map, responses_message_map, responses_streaming_map, streaming_map};
+use crate::mapping::{
+    message_map, responses_message_map, responses_streaming_map, reverse_message_map,
+    reverse_streaming_map, streaming_map,
+};
 use crate::openai::responses::{ResponsesRequest, ResponsesResponse};
 use crate::openai::{ChatCompletionRequest, ChatCompletionResponse};
+pub use crate::mapping::warnings::TranslationWarnings;
+
+/// Compute degradation warnings for a request — features that will be dropped in translation.
+///
+/// Call this before translating; inject the result as `x-anyllm-degradation` header.
+pub fn compute_request_warnings(req: &MessageCreateRequest) -> TranslationWarnings {
+    message_map::compute_request_warnings(req)
+}
 
 /// Translate an Anthropic request to an OpenAI Chat Completions request.
 ///
@@ -58,6 +69,38 @@ pub fn translate_response_responses(
     original_model: &str,
 ) -> MessageResponse {
     responses_message_map::responses_to_anthropic_response(resp, original_model)
+}
+
+/// Translate an OpenAI Chat Completions request to an Anthropic request.
+///
+/// Returns an error if `max_tokens` / `max_completion_tokens` is absent.
+/// Populates `warnings` with features dropped during translation.
+pub fn translate_openai_to_anthropic_request(
+    req: &ChatCompletionRequest,
+    warnings: &mut TranslationWarnings,
+) -> Result<MessageCreateRequest, TranslateError> {
+    reverse_message_map::openai_to_anthropic_request(req, warnings)
+}
+
+/// Translate an Anthropic response to an OpenAI Chat Completions response.
+///
+/// `model` is used as the response's `model` field.
+pub fn translate_anthropic_to_openai_response(
+    resp: &MessageResponse,
+    model: &str,
+) -> ChatCompletionResponse {
+    reverse_message_map::anthropic_to_openai_response(resp, model)
+}
+
+/// Create a new reverse streaming translator (Anthropic SSE -> OpenAI chunks).
+///
+/// The returned translator is stateful: feed Anthropic StreamEvent items via
+/// `process_event()`, which returns OpenAI ChatCompletionChunk objects.
+pub fn new_reverse_stream_translator(
+    id: String,
+    model: String,
+) -> reverse_streaming_map::ReverseStreamingTranslator {
+    reverse_streaming_map::ReverseStreamingTranslator::new(id, model)
 }
 
 /// Create a new streaming translator for OpenAI Responses API events.

@@ -12,6 +12,12 @@ pub mod streaming_map;
 pub mod tools_map;
 /// Token usage field mapping between Anthropic and OpenAI formats.
 pub mod usage_map;
+/// Degradation warning collection for client-visible feature-drop signals.
+pub mod warnings;
+/// Reverse message mapping: OpenAI Chat Completions -> Anthropic Messages.
+pub mod reverse_message_map;
+/// Reverse streaming: Anthropic SSE events -> OpenAI ChatCompletionChunk SSE.
+pub mod reverse_streaming_map;
 
 /// Format an OpenAI refusal string as Anthropic text content.
 /// Anthropic has no refusal type, so we surface it as a bracketed text marker.

@@ -1,8 +1,10 @@
 // Shared state between the proxy and admin server.
 // RuntimeConfig holds mutable settings; AdminEvent is broadcast to WebSocket clients.
 
+use crate::admin::keys::VirtualKeyMeta;
 use crate::config::ModelMapping;
 use crate::metrics::Metrics;
+use dashmap::DashMap;
 use indexmap::IndexMap;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
@@ -36,6 +38,9 @@ pub struct SharedState {
     /// Serializes config write operations (Phase 1: SQLite + Phase 2: in-memory)
     /// so concurrent PUT /admin/api/config requests cannot interleave.
     pub config_write_lock: Arc<tokio::sync::Mutex<()>>,
+    /// In-memory cache of active virtual API keys, keyed by SHA-256 hash bytes.
+    /// Populated from SQLite at startup; updated on create/revoke via admin API.
+    pub virtual_keys: Arc<DashMap<[u8; 32], VirtualKeyMeta>>,
 }
 
 /// Run a synchronous closure against the SQLite connection on the blocking
@@ -125,6 +130,7 @@ impl SharedState {
             log_tx,
             log_reload: None,
             config_write_lock: Arc::new(tokio::sync::Mutex::new(())),
+            virtual_keys: Arc::new(DashMap::new()),
         }
     }
 }

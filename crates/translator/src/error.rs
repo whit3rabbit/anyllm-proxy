@@ -10,4 +10,8 @@ pub enum TranslateError {
     /// A translation step failed (validation, unsupported feature with strict config, etc.).
     #[error("translation error: {0}")]
     Translation(String),
+
+    /// A required field was missing from the input.
+    #[error("missing field: {0}")]
+    MissingField(String),
 }

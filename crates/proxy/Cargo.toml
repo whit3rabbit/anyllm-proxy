@@ -7,8 +7,8 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-anyllm_translate = { path = "../translator" }
-anyllm_client = { path = "../client" }
+anyllm_translate = { path = "../translator", version = "0.1.0" }
+anyllm_client = { path = "../client", version = "0.2.0" }
 axum = { version = "0.8", features = ["ws"] }
 tokio = { version = "1", features = ["full"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "native-tls", "http2"] }
@@ -29,6 +29,35 @@ subtle = "2"
 sha2 = "0.10"
 rusqlite = { version = "0.32", features = ["bundled"] }
 httpdate = "1"
+dashmap = "6"
+aws-sigv4 = { version = "1.4", features = ["sign-http"] }
+aws-credential-types = "1.2"
+
+[features]
+otel = [
+    "opentelemetry",
+    "opentelemetry_sdk",
+    "opentelemetry-otlp",
+    "tracing-opentelemetry",
+]
+
+[dependencies.opentelemetry]
+version = "0.31"
+optional = true
+
+[dependencies.opentelemetry_sdk]
+version = "0.31"
+optional = true
+
+[dependencies.opentelemetry-otlp]
+version = "0.31"
+default-features = false
+features = ["trace", "http-proto", "reqwest-client"]
+optional = true
+
+[dependencies.tracing-opentelemetry]
+version = "0.32"
+optional = true
 
 [dev-dependencies]
 pretty_assertions = "1"

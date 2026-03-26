@@ -14,6 +14,7 @@ pub struct OpenAIClient {
     client: Client,
     chat_completions_url: String,
     responses_url: String,
+    embeddings_url: String,
     auth: BackendAuth,
 }
 
@@ -27,22 +28,52 @@ impl OpenAIClient {
         // - OpenAI: {base}/v1/chat/completions (base has no path)
         // - Vertex: {base}/chat/completions (base ends at .../openapi)
         // - Gemini: {base}/chat/completions (config appends /openai to base)
-        let (chat_completions_url, responses_url) = match config.backend {
+        let (chat_completions_url, responses_url, embeddings_url) = match config.backend {
             BackendKind::OpenAI => (
                 format!("{}/v1/chat/completions", config.openai_base_url),
                 format!("{}/v1/responses", config.openai_base_url),
+                format!("{}/v1/embeddings", config.openai_base_url),
             ),
             BackendKind::Vertex => (
                 format!("{}/chat/completions", config.openai_base_url),
                 // Vertex does not support Responses API; URL included for completeness
                 format!("{}/responses", config.openai_base_url),
+                format!("{}/embeddings", config.openai_base_url),
             ),
             BackendKind::Gemini => (
                 // openai_base_url already has /openai appended by config,
                 // producing .../v1beta/openai/chat/completions
                 format!("{}/chat/completions", config.openai_base_url),
                 format!("{}/responses", config.openai_base_url),
+                // Gemini embeddings: .../v1beta/openai/embeddings
+                format!("{}/embeddings", config.openai_base_url),
             ),
+            BackendKind::AzureOpenAI => {
+                // Azure URL is pre-constructed in config (includes deployment + api-version).
+                // Embeddings and Responses URLs are derived by replacing the path component.
+                let endpoint = config
+                    .openai_base_url
+                    .split("/openai/deployments/")
+                    .next()
+                    .unwrap_or(&config.openai_base_url);
+                let api_version = config
+                    .openai_base_url
+                    .split("api-version=")
+                    .nth(1)
+                    .unwrap_or("2024-10-21");
+                let deployment = config
+                    .openai_base_url
+                    .split("/openai/deployments/")
+                    .nth(1)
+                    .and_then(|s| s.split('/').next())
+                    .unwrap_or("");
+                (
+                    config.openai_base_url.clone(),
+                    // Azure Responses API is not widely available; provide URL for completeness
+                    format!("{endpoint}/openai/deployments/{deployment}/responses?api-version={api_version}"),
+                    format!("{endpoint}/openai/deployments/{deployment}/embeddings?api-version={api_version}"),
+                )
+            }
             BackendKind::Anthropic => {
                 unreachable!("OpenAIClient should not be constructed for Anthropic backend")
             }
@@ -52,6 +83,7 @@ impl OpenAIClient {
             client,
             chat_completions_url,
             responses_url,
+            embeddings_url,
             auth: config.backend_auth.clone(),
         }
     }
@@ -157,6 +189,38 @@ impl OpenAIClient {
         .await?;
         let rate_limits = RateLimitHeaders::from_openai_headers(response.headers());
         Ok((response, rate_limits))
+    }
+
+    /// Forward a raw embeddings request body to the backend embeddings endpoint.
+    /// No retry: embeddings are idempotent but we keep it simple — callers can retry.
+    ///
+    /// OpenAI: <https://platform.openai.com/docs/api-reference/embeddings/create>
+    pub async fn embeddings_passthrough(
+        &self,
+        body: bytes::Bytes,
+        content_type: &str,
+    ) -> Result<(axum::http::StatusCode, axum::http::HeaderMap, bytes::Bytes), OpenAIClientError>
+    {
+        let mut req = self
+            .client
+            .post(&self.embeddings_url)
+            .body(body)
+            .header("content-type", content_type);
+        req = match &self.auth {
+            BackendAuth::BearerToken(token) => req.bearer_auth(token),
+            BackendAuth::GoogleApiKey(key) => req.header("x-goog-api-key", key),
+            BackendAuth::AzureApiKey(key) => req.header("api-key", key),
+        };
+
+        let response = req.send().await.map_err(OpenAIClientError::Request)?;
+        let status = axum::http::StatusCode::from_u16(response.status().as_u16())
+            .unwrap_or(axum::http::StatusCode::INTERNAL_SERVER_ERROR);
+        let mut resp_headers = axum::http::HeaderMap::new();
+        if let Some(ct) = response.headers().get("content-type") {
+            resp_headers.insert("content-type", ct.clone());
+        }
+        let resp_body = response.bytes().await.map_err(OpenAIClientError::Request)?;
+        Ok((status, resp_headers, resp_body))
     }
 }
 
@@ -345,5 +409,109 @@ mod tests {
         assert!(client
             .chat_completions_url
             .ends_with("/openapi/chat/completions"));
+    }
+
+    #[test]
+    fn embeddings_url_openai() {
+        use crate::config::{BackendKind, ModelMapping, OpenAIApiFormat, TlsConfig};
+        let config = Config {
+            backend: BackendKind::OpenAI,
+            openai_api_key: "test".into(),
+            openai_base_url: "https://api.openai.com".into(),
+            listen_port: 3000,
+            model_mapping: ModelMapping {
+                big_model: "gpt-4o".into(),
+                small_model: "gpt-4o-mini".into(),
+            },
+            tls: TlsConfig::default(),
+            backend_auth: BackendAuth::BearerToken("test".into()),
+            log_bodies: false,
+            openai_api_format: OpenAIApiFormat::Chat,
+        };
+        let client = OpenAIClient::new(&config);
+        assert_eq!(
+            client.embeddings_url,
+            "https://api.openai.com/v1/embeddings"
+        );
+    }
+
+    #[test]
+    fn embeddings_url_vertex() {
+        use crate::config::{BackendKind, ModelMapping, OpenAIApiFormat, TlsConfig};
+        let config = Config {
+            backend: BackendKind::Vertex,
+            openai_api_key: String::new(),
+            openai_base_url: "https://us-central1-aiplatform.googleapis.com/v1/projects/my-project/locations/us-central1/endpoints/openapi".into(),
+            listen_port: 3000,
+            model_mapping: ModelMapping {
+                big_model: "gemini-2.5-pro".into(),
+                small_model: "gemini-2.5-flash".into(),
+            },
+            tls: TlsConfig::default(),
+            backend_auth: BackendAuth::GoogleApiKey("test-key".into()),
+            log_bodies: false,
+            openai_api_format: OpenAIApiFormat::Chat,
+        };
+        let client = OpenAIClient::new(&config);
+        assert!(
+            client.embeddings_url.ends_with("/openapi/embeddings"),
+            "got: {}",
+            client.embeddings_url
+        );
+    }
+
+    #[test]
+    fn embeddings_url_gemini() {
+        use crate::config::{BackendKind, ModelMapping, OpenAIApiFormat, TlsConfig};
+        let config = Config {
+            backend: BackendKind::Gemini,
+            openai_api_key: String::new(),
+            // Config appends /openai to the base, so this is what arrives here
+            openai_base_url: "https://generativelanguage.googleapis.com/v1beta/openai".into(),
+            listen_port: 3000,
+            model_mapping: ModelMapping {
+                big_model: "gemini-2.5-pro".into(),
+                small_model: "gemini-2.5-flash".into(),
+            },
+            tls: TlsConfig::default(),
+            backend_auth: BackendAuth::GoogleApiKey("test-gemini-key".into()),
+            log_bodies: false,
+            openai_api_format: OpenAIApiFormat::Chat,
+        };
+        let client = OpenAIClient::new(&config);
+        assert_eq!(
+            client.embeddings_url,
+            "https://generativelanguage.googleapis.com/v1beta/openai/embeddings"
+        );
+    }
+
+    #[test]
+    fn azure_url_passthrough() {
+        use crate::config::{BackendKind, ModelMapping, OpenAIApiFormat, TlsConfig};
+        let config = Config {
+            backend: BackendKind::AzureOpenAI,
+            openai_api_key: String::new(),
+            openai_base_url: "https://myresource.openai.azure.com/openai/deployments/gpt-4o/chat/completions?api-version=2024-10-21".into(),
+            listen_port: 3000,
+            model_mapping: ModelMapping {
+                big_model: "gpt-4o".into(),
+                small_model: "gpt-4o-mini".into(),
+            },
+            tls: TlsConfig::default(),
+            backend_auth: BackendAuth::AzureApiKey("test-azure-key".into()),
+            log_bodies: false,
+            openai_api_format: OpenAIApiFormat::Chat,
+        };
+        let client = OpenAIClient::new(&config);
+        // Chat completions URL is the pre-built URL, unchanged
+        assert_eq!(
+            client.chat_completions_url,
+            "https://myresource.openai.azure.com/openai/deployments/gpt-4o/chat/completions?api-version=2024-10-21"
+        );
+        // Embeddings URL is derived from the endpoint and deployment
+        assert_eq!(
+            client.embeddings_url,
+            "https://myresource.openai.azure.com/openai/deployments/gpt-4o/embeddings?api-version=2024-10-21"
+        );
     }
 }

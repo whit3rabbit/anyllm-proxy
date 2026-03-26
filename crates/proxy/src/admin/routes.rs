@@ -8,7 +8,7 @@ use axum::{
     http::StatusCode,
     middleware,
     response::IntoResponse,
-    routing::{delete, get},
+    routing::{delete, get, post},
     Json, Router,
 };
 use std::sync::Arc;
@@ -86,10 +86,13 @@ pub fn admin_router(shared: SharedState, token: Arc<String>) -> Router {
             "/admin/api/config/overrides/{key}",
             delete(delete_config_override),
         )
+        .route("/admin/api/env", get(get_env))
         .route("/admin/api/metrics", get(get_metrics))
         .route("/admin/api/requests", get(get_requests))
         .route("/admin/api/requests/{id}", get(get_request_by_id))
         .route("/admin/api/backends", get(get_backends))
+        .route("/admin/api/keys", post(create_key).get(list_keys))
+        .route("/admin/api/keys/{id}", delete(revoke_key))
         .with_state(shared.clone())
         .layer(middleware::from_fn_with_state(
             token.clone(),
@@ -138,6 +141,58 @@ async fn serve_spa() -> impl IntoResponse {
         ],
         SPA_HTML,
     )
+}
+
+// -- Env endpoint --
+
+/// GET /admin/api/env -- effective environment variable values.
+/// Secrets (API keys, tokens) are masked; plain config values are shown as-is.
+async fn get_env() -> Json<serde_json::Value> {
+    fn plain(key: &str) -> serde_json::Value {
+        match std::env::var(key) {
+            Ok(v) if !v.is_empty() => serde_json::Value::String(v),
+            _ => serde_json::Value::Null,
+        }
+    }
+    fn secret(key: &str) -> serde_json::Value {
+        match std::env::var(key) {
+            Ok(v) if !v.is_empty() => {
+                serde_json::Value::String(anyllm_translate::util::redact::redact_secret(&v))
+            }
+            _ => serde_json::Value::Null,
+        }
+    }
+
+    Json(serde_json::json!({
+        // Core proxy config
+        "BACKEND":            plain("BACKEND"),
+        "LISTEN_PORT":        plain("LISTEN_PORT"),
+        "BIG_MODEL":          plain("BIG_MODEL"),
+        "SMALL_MODEL":        plain("SMALL_MODEL"),
+        "RUST_LOG":           plain("RUST_LOG"),
+        "LOG_BODIES":         plain("LOG_BODIES"),
+        "PROXY_CONFIG":       plain("PROXY_CONFIG"),
+        // OpenAI / compatible
+        "OPENAI_BASE_URL":    plain("OPENAI_BASE_URL"),
+        "OPENAI_API_FORMAT":  plain("OPENAI_API_FORMAT"),
+        "OPENAI_API_KEY":     secret("OPENAI_API_KEY"),
+        // Vertex AI
+        "VERTEX_PROJECT":     plain("VERTEX_PROJECT"),
+        "VERTEX_REGION":      plain("VERTEX_REGION"),
+        "VERTEX_API_KEY":     secret("VERTEX_API_KEY"),
+        // Gemini
+        "GEMINI_BASE_URL":    plain("GEMINI_BASE_URL"),
+        "GEMINI_API_KEY":     secret("GEMINI_API_KEY"),
+        // Auth
+        "PROXY_API_KEYS":     secret("PROXY_API_KEYS"),
+        // TLS
+        "TLS_CLIENT_CERT_P12": plain("TLS_CLIENT_CERT_P12"),
+        "TLS_CA_CERT":         plain("TLS_CA_CERT"),
+        // Admin
+        "ADMIN_PORT":               plain("ADMIN_PORT"),
+        "ADMIN_DB_PATH":            plain("ADMIN_DB_PATH"),
+        "ADMIN_LOG_RETENTION_DAYS": plain("ADMIN_LOG_RETENTION_DAYS"),
+    }))
 }
 
 // -- Config endpoints --
@@ -559,6 +614,154 @@ async fn get_backends(State(shared): State<SharedState>) -> Json<serde_json::Val
     }
 
     Json(serde_json::json!({ "backends": backends }))
+}
+
+// --- Virtual API Key Management ---
+
+#[derive(serde::Deserialize)]
+struct CreateKeyRequest {
+    description: Option<String>,
+    expires_at: Option<String>,
+    rpm_limit: Option<u32>,
+    tpm_limit: Option<u32>,
+    spend_limit: Option<f64>,
+}
+
+/// POST /admin/api/keys -- create a new virtual API key.
+async fn create_key(
+    State(shared): State<SharedState>,
+    Json(body): Json<CreateKeyRequest>,
+) -> axum::response::Response {
+    let (raw_key, key_prefix, key_hash_hex) = super::keys::generate_virtual_key();
+    let result = super::state::with_db(&shared.db, {
+        let hash = key_hash_hex.clone();
+        let prefix = key_prefix.clone();
+        let desc = body.description.clone();
+        let exp = body.expires_at.clone();
+        let rpm = body.rpm_limit;
+        let tpm = body.tpm_limit;
+        let spend = body.spend_limit;
+        move |conn| {
+            super::db::insert_virtual_key(
+                conn,
+                &hash,
+                &prefix,
+                desc.as_deref(),
+                exp.as_deref(),
+                rpm,
+                tpm,
+                spend,
+            )
+        }
+    })
+    .await;
+
+    match result {
+        Some(Ok(id)) => {
+            if let Some(hash_bytes) = super::keys::hash_from_hex(&key_hash_hex) {
+                shared.virtual_keys.insert(
+                    hash_bytes,
+                    super::keys::VirtualKeyMeta {
+                        id,
+                        description: body.description.clone(),
+                        expires_at: None,
+                        rpm_limit: body.rpm_limit,
+                        tpm_limit: body.tpm_limit,
+                        rate_state: std::sync::Arc::new(super::keys::RateLimitState::new()),
+                    },
+                );
+            }
+            (
+                StatusCode::CREATED,
+                Json(serde_json::json!({
+                    "id": id,
+                    "key": raw_key,
+                    "key_prefix": key_prefix,
+                    "description": body.description,
+                    "created_at": super::db::now_iso8601(),
+                    "expires_at": body.expires_at,
+                    "rpm_limit": body.rpm_limit,
+                    "tpm_limit": body.tpm_limit,
+                    "spend_limit": body.spend_limit,
+                })),
+            )
+                .into_response()
+        }
+        _ => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": "Failed to create key"})),
+        )
+            .into_response(),
+    }
+}
+
+/// GET /admin/api/keys -- list all virtual keys.
+async fn list_keys(State(shared): State<SharedState>) -> axum::response::Response {
+    let result = super::state::with_db(&shared.db, super::db::list_virtual_keys).await;
+    match result {
+        Some(Ok(keys)) => {
+            let enriched: Vec<serde_json::Value> = keys
+                .iter()
+                .map(|k| {
+                    serde_json::json!({
+                        "id": k.id,
+                        "key_prefix": k.key_prefix,
+                        "description": k.description,
+                        "created_at": k.created_at,
+                        "expires_at": k.expires_at,
+                        "revoked_at": k.revoked_at,
+                        "rpm_limit": k.rpm_limit,
+                        "tpm_limit": k.tpm_limit,
+                        "spend_limit": k.spend_limit,
+                        "total_spend": k.total_spend,
+                        "total_requests": k.total_requests,
+                        "total_tokens": k.total_tokens,
+                        "status": k.status(),
+                    })
+                })
+                .collect();
+            Json(serde_json::json!({ "keys": enriched })).into_response()
+        }
+        _ => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": "Failed to list keys"})),
+        )
+            .into_response(),
+    }
+}
+
+/// DELETE /admin/api/keys/{id} -- revoke a virtual key.
+async fn revoke_key(
+    State(shared): State<SharedState>,
+    Path(id): Path<i64>,
+) -> axum::response::Response {
+    let result = super::state::with_db(&shared.db, move |conn| {
+        super::db::revoke_virtual_key(conn, id)
+    })
+    .await;
+    match result {
+        Some(Ok(Some(row))) => {
+            if let Some(hash_bytes) = super::keys::hash_from_hex(&row.key_hash) {
+                shared.virtual_keys.remove(&hash_bytes);
+            }
+            Json(serde_json::json!({
+                "id": row.id,
+                "revoked_at": row.revoked_at,
+                "status": "revoked",
+            }))
+            .into_response()
+        }
+        Some(Ok(None)) => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": "Key not found or already revoked"})),
+        )
+            .into_response(),
+        _ => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": "Failed to revoke key"})),
+        )
+            .into_response(),
+    }
 }
 
 #[cfg(test)]

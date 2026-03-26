@@ -2,7 +2,7 @@ use crate::admin::state::{AdminEvent, RequestLogEntry, RuntimeConfig, SharedStat
 use crate::backend::{BackendClient, BackendError};
 use crate::config::{BackendKind, Config, MultiConfig};
 use crate::metrics::Metrics;
-use anyllm_translate::{anthropic, mapping, openai};
+use anyllm_translate::{anthropic, compute_request_warnings, mapping, openai};
 use axum::{
     extract::{rejection::JsonRejection, DefaultBodyLimit, FromRequest, State},
     http::StatusCode,
@@ -227,9 +227,14 @@ fn backend_router(state: AppState, is_anthropic: bool) -> Router<GlobalState> {
     } else {
         Router::new()
             .route("/v1/messages", post(messages))
+            .route(
+                "/v1/chat/completions",
+                post(super::chat_completions::chat_completions),
+            )
             .route("/v1/models", get(models))
             .route("/v1/messages/count_tokens", post(count_tokens))
             .route("/v1/messages/batches", post(batches))
+            .route("/v1/embeddings", post(embeddings))
     };
 
     api_routes
@@ -279,13 +284,27 @@ pub(crate) struct ConcurrencyPermit(
 static MODELS_RESPONSE: std::sync::LazyLock<serde_json::Value> = std::sync::LazyLock::new(|| {
     serde_json::json!({
         "data": [
-            {"id": "claude-opus-4-6", "display_name": "Claude Opus 4.6", "created_at": "2025-05-14T00:00:00Z", "type": "model"},
-            {"id": "claude-sonnet-4-6", "display_name": "Claude Sonnet 4.6", "created_at": "2025-05-14T00:00:00Z", "type": "model"},
-            {"id": "claude-haiku-4-5-20251001", "display_name": "Claude Haiku 4.5", "created_at": "2025-05-14T00:00:00Z", "type": "model"},
+            // Claude 4.x
+            {"id": "claude-opus-4-6",            "display_name": "Claude Opus 4.6",            "created_at": "2025-05-14T00:00:00Z", "type": "model"},
+            {"id": "claude-sonnet-4-6",           "display_name": "Claude Sonnet 4.6",          "created_at": "2025-05-14T00:00:00Z", "type": "model"},
+            {"id": "claude-opus-4-5",             "display_name": "Claude Opus 4.5",            "created_at": "2025-05-14T00:00:00Z", "type": "model"},
+            {"id": "claude-sonnet-4-5",           "display_name": "Claude Sonnet 4.5",          "created_at": "2025-05-14T00:00:00Z", "type": "model"},
+            {"id": "claude-haiku-4-5",            "display_name": "Claude Haiku 4.5",           "created_at": "2025-05-14T00:00:00Z", "type": "model"},
+            {"id": "claude-haiku-4-5-20251001",   "display_name": "Claude Haiku 4.5 (Oct 2025)","created_at": "2025-10-01T00:00:00Z", "type": "model"},
+            // Claude 3.7
+            {"id": "claude-3-7-sonnet-20250219",  "display_name": "Claude 3.7 Sonnet",          "created_at": "2025-02-19T00:00:00Z", "type": "model"},
+            // Claude 3.5
+            {"id": "claude-3-5-sonnet-20241022",  "display_name": "Claude 3.5 Sonnet (Oct 2024)","created_at": "2024-10-22T00:00:00Z", "type": "model"},
+            {"id": "claude-3-5-sonnet-20240620",  "display_name": "Claude 3.5 Sonnet (Jun 2024)","created_at": "2024-06-20T00:00:00Z", "type": "model"},
+            {"id": "claude-3-5-haiku-20241022",   "display_name": "Claude 3.5 Haiku",           "created_at": "2024-10-22T00:00:00Z", "type": "model"},
+            // Claude 3
+            {"id": "claude-3-opus-20240229",      "display_name": "Claude 3 Opus",              "created_at": "2024-02-29T00:00:00Z", "type": "model"},
+            {"id": "claude-3-sonnet-20240229",    "display_name": "Claude 3 Sonnet",            "created_at": "2024-02-29T00:00:00Z", "type": "model"},
+            {"id": "claude-3-haiku-20240307",     "display_name": "Claude 3 Haiku",             "created_at": "2024-03-07T00:00:00Z", "type": "model"},
         ],
         "has_more": false,
         "first_id": "claude-opus-4-6",
-        "last_id": "claude-haiku-4-5-20251001",
+        "last_id": "claude-3-haiku-20240307",
     })
 });
 
@@ -328,6 +347,49 @@ fn backend_error_to_response(error: BackendError) -> Response {
     (StatusCode::INTERNAL_SERVER_ERROR, Json(err)).into_response()
 }
 
+/// Inject degradation warnings as `x-anyllm-degradation` header if any features were dropped.
+pub(crate) fn inject_degradation_header(
+    headers: &mut axum::http::HeaderMap,
+    warnings: &anyllm_translate::TranslationWarnings,
+) {
+    if let Some(val) = warnings.as_header_value() {
+        if let Ok(hv) = axum::http::HeaderValue::from_str(&val) {
+            headers.insert("x-anyllm-degradation", hv);
+        }
+    }
+}
+
+/// Embeddings passthrough: forwards OpenAI-format embedding requests directly to the backend.
+/// No translation needed — embedding model names pass through unchanged.
+/// Returns 501 for the Anthropic passthrough backend (no embeddings endpoint).
+async fn embeddings(
+    State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
+    body: axum::body::Bytes,
+) -> Response {
+    let content_type = headers
+        .get(axum::http::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("application/json")
+        .to_string();
+
+    match state
+        .backend
+        .embeddings_passthrough(body, &content_type)
+        .await
+    {
+        Ok((status, resp_headers, resp_body)) => {
+            let mut response = (status, resp_body).into_response();
+            // Forward content-type from backend response
+            for (k, v) in &resp_headers {
+                response.headers_mut().insert(k, v.clone());
+            }
+            response
+        }
+        Err(e) => backend_error_to_response(e),
+    }
+}
+
 async fn messages(
     State(state): State<AppState>,
     headers: axum::http::HeaderMap,
@@ -358,6 +420,8 @@ async fn messages(
         );
     }
 
+    let warnings = compute_request_warnings(&body);
+
     if body.stream == Some(true) {
         if state.log_bodies() {
             tracing::debug!(model = %body.model, "streaming request initiated");
@@ -368,6 +432,7 @@ async fn messages(
             Ok((rate_limits, sse)) => {
                 let mut response = sse.into_response();
                 rate_limits.inject_anthropic_response_headers(response.headers_mut());
+                inject_degradation_header(response.headers_mut(), &warnings);
                 return response;
             }
             Err(e) => {
@@ -376,9 +441,9 @@ async fn messages(
             }
         }
     }
-
     match &state.backend {
         BackendClient::OpenAI(client)
+        | BackendClient::AzureOpenAI(client)
         | BackendClient::Vertex(client)
         | BackendClient::GeminiOpenAI(client) => {
             let mut openai_req = mapping::message_map::anthropic_to_openai_request(&body);
@@ -419,6 +484,7 @@ async fn messages(
                     );
                     let mut response = (StatusCode::OK, Json(anthropic_resp)).into_response();
                     rate_limits.inject_anthropic_response_headers(response.headers_mut());
+                    inject_degradation_header(response.headers_mut(), &warnings);
                     response
                 }
                 Err(e) => {
@@ -476,6 +542,7 @@ async fn messages(
                     );
                     let mut response = (StatusCode::OK, Json(anthropic_resp)).into_response();
                     rate_limits.inject_anthropic_response_headers(response.headers_mut());
+                    inject_degradation_header(response.headers_mut(), &warnings);
                     response
                 }
                 Err(e) => {

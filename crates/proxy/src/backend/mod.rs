@@ -42,6 +42,10 @@ pub(crate) async fn send_with_retry<E: RetryableError>(
             name: "x-goog-api-key",
             value: key,
         },
+        BackendAuth::AzureApiKey(key) => anyllm_client::retry::RequestAuth::Header {
+            name: "api-key",
+            value: key,
+        },
     };
     anyllm_client::retry::send_with_retry(client, url, &request_auth, body, label).await
 }
@@ -55,6 +59,8 @@ pub enum BackendClient {
     /// with a different request/response shape. Separate variant so callers
     /// can pattern-match on the API format.
     OpenAIResponses(OpenAIClient),
+    /// Azure OpenAI: same Chat Completions format, different auth and URL scheme.
+    AzureOpenAI(OpenAIClient),
     Vertex(OpenAIClient),
     /// Gemini via OpenAI-compatible endpoint (reuses OpenAI translation path).
     GeminiOpenAI(OpenAIClient),
@@ -125,6 +131,39 @@ impl From<AnthropicClientError> for BackendError {
 }
 
 impl BackendClient {
+    /// Forward a raw embeddings request to the backend. No translation — model names pass through.
+    /// Returns `501 Not Implemented` for the Anthropic backend (no embeddings endpoint).
+    pub async fn embeddings_passthrough(
+        &self,
+        body: bytes::Bytes,
+        content_type: &str,
+    ) -> Result<(axum::http::StatusCode, axum::http::HeaderMap, bytes::Bytes), BackendError> {
+        match self {
+            Self::OpenAI(c)
+            | Self::AzureOpenAI(c)
+            | Self::Vertex(c)
+            | Self::GeminiOpenAI(c)
+            | Self::OpenAIResponses(c) => c
+                .embeddings_passthrough(body, content_type)
+                .await
+                .map_err(BackendError::OpenAI),
+            Self::Anthropic(_) => {
+                // Anthropic has no embeddings API.
+                let err = anyllm_translate::mapping::errors_map::create_anthropic_error(
+                    anyllm_translate::anthropic::ErrorType::InvalidRequestError,
+                    "Embeddings are not supported by the Anthropic backend.".to_string(),
+                    None,
+                );
+                let body = serde_json::to_vec(&err).unwrap_or_default();
+                Ok((
+                    axum::http::StatusCode::NOT_IMPLEMENTED,
+                    axum::http::HeaderMap::new(),
+                    bytes::Bytes::from(body),
+                ))
+            }
+        }
+    }
+
     /// Create a backend client from a single-backend [`Config`].
     ///
     /// Dispatches on [`Config::backend`] and [`Config::openai_api_format`] to construct
@@ -135,6 +174,7 @@ impl BackendClient {
                 OpenAIApiFormat::Chat => Self::OpenAI(OpenAIClient::new(config)),
                 OpenAIApiFormat::Responses => Self::OpenAIResponses(OpenAIClient::new(config)),
             },
+            BackendKind::AzureOpenAI => Self::AzureOpenAI(OpenAIClient::new(config)),
             BackendKind::Vertex => Self::Vertex(OpenAIClient::new(config)),
             BackendKind::Gemini => Self::GeminiOpenAI(OpenAIClient::new(config)),
             BackendKind::Anthropic => Self::Anthropic(AnthropicClient::new(
@@ -166,6 +206,7 @@ impl BackendClient {
                 OpenAIApiFormat::Chat => Self::OpenAI(OpenAIClient::new(&legacy)),
                 OpenAIApiFormat::Responses => Self::OpenAIResponses(OpenAIClient::new(&legacy)),
             },
+            BackendKind::AzureOpenAI => Self::AzureOpenAI(OpenAIClient::new(&legacy)),
             BackendKind::Vertex => Self::Vertex(OpenAIClient::new(&legacy)),
             BackendKind::Gemini => Self::GeminiOpenAI(OpenAIClient::new(&legacy)),
             BackendKind::Anthropic => Self::Anthropic(AnthropicClient::from_backend_config(bc)),

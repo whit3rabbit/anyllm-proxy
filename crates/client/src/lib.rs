@@ -42,7 +42,8 @@
 //!
 //! # Modules
 //!
-//! - [`client`] -- High-level `Client` for Anthropic-in, Anthropic-out API calls
+//! - [`client`] -- High-level `Client` and [`ClientBuilder`] for Anthropic-in, Anthropic-out API calls
+//! - [`tools`] -- Builder helpers for [`Tool`] definitions and [`ToolChoice`]
 //! - [`http`] -- HTTP client builder with TLS and SSRF protection
 //! - [`retry`] -- Generic retry logic with exponential backoff
 //! - [`rate_limit`] -- Rate limit header extraction and format conversion
@@ -55,11 +56,19 @@ pub mod http;
 pub mod rate_limit;
 pub mod retry;
 pub mod sse;
+pub(crate) mod streaming;
+pub mod tools;
 
 // Convenience re-exports
-pub use client::{Auth, Client, ClientConfig, ClientConfigBuilder};
+pub use client::{Auth, Client, ClientBuilder, ClientConfig, ClientConfigBuilder};
 pub use error::ClientError;
 pub use http::{build_http_client, HttpClientConfig};
 pub use rate_limit::RateLimitHeaders;
 pub use retry::{backoff_delay, is_retryable, parse_retry_after, send_with_retry, RetryableError};
 pub use sse::{find_double_newline, SseError};
+pub use tools::{ToolBuilder, ToolChoiceBuilder};
+
+// Re-export key types from the translator crate so downstream users
+// do not need a direct dependency on `anyllm_translate`.
+pub use anyllm_translate::anthropic::streaming::StreamEvent;
+pub use anyllm_translate::anthropic::{Tool, ToolChoice};

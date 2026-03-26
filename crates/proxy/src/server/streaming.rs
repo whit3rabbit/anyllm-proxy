@@ -1,6 +1,6 @@
 // SSE streaming infrastructure and the messages_stream handler.
 
-use crate::backend::{BackendClient, RateLimitHeaders, find_double_newline, MAX_SSE_BUFFER_SIZE};
+use crate::backend::{find_double_newline, BackendClient, RateLimitHeaders, MAX_SSE_BUFFER_SIZE};
 use crate::metrics::Metrics;
 use anyllm_translate::{anthropic, mapping, openai};
 use axum::response::sse::{Event, KeepAlive, Sse};
@@ -165,6 +165,7 @@ pub(crate) async fn messages_stream(
 
     match &state.backend {
         BackendClient::OpenAI(client)
+        | BackendClient::AzureOpenAI(client)
         | BackendClient::Vertex(client)
         | BackendClient::GeminiOpenAI(client) => {
             let client = client.clone();

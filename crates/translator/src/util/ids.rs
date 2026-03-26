@@ -18,6 +18,11 @@ pub fn generate_tool_use_id() -> String {
     format!("toolu_{}", uuid::Uuid::new_v4().as_simple())
 }
 
+/// Generate a raw UUID v4 without hyphens (for custom prefix use).
+pub fn generate_uuid() -> String {
+    uuid::Uuid::new_v4().as_simple().to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,5 +1,36 @@
 # Environment Variables
 
+## Env Files
+
+Instead of setting variables in the shell, you can store them in a `.env` file and load it at startup.
+
+**Auto-load:** If `.anyllm.env` exists in the current directory, it is loaded automatically.
+
+**Explicit flag:**
+```bash
+anyllm_proxy --env-file ~/configs/deepseek.env
+```
+
+**File format** (`KEY=VALUE`, Docker `--env-file` compatible):
+```env
+# Comments are supported
+OPENAI_API_KEY=sk-...
+OPENAI_BASE_URL=https://api.deepseek.com/v1
+BIG_MODEL=deepseek-coder
+SMALL_MODEL=deepseek-chat
+export LISTEN_PORT=3000   # export prefix is also accepted
+```
+
+Rules:
+- Lines starting with `#` are ignored.
+- Values may be optionally quoted with `"double"` or `'single'` quotes.
+- Environment variables already set in the shell take precedence over the file.
+- Use `docker run --env-file <path>` to pass the same file to a container.
+
+The admin UI (Settings tab) has an **Export .env** button that generates a template from the current running configuration.
+
+---
+
 ## Core
 
 These are the variables most users need.
@@ -12,6 +43,35 @@ These are the variables most users need.
 | `BIG_MODEL` | `gpt-4o` | OpenAI model used when the Anthropic request specifies a sonnet or opus model. |
 | `SMALL_MODEL` | `gpt-4o-mini` | OpenAI model used when the Anthropic request specifies a haiku model. |
 | `RUST_LOG` | `info` | Tracing filter. Examples: `debug`, `anyllm_proxy=trace`. |
+| `DISABLE_ADMIN` | (unset) | Set to `1`, `true`, or `yes` to force-disable the admin web interface even when `--webui` is passed. Useful in automated/container environments. |
+
+## Azure OpenAI
+
+Set `BACKEND=azure` to route through Azure OpenAI Service. The request/response format is identical to standard OpenAI Chat Completions; only the URL scheme and auth header differ.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AZURE_OPENAI_API_KEY` | (required) | Azure OpenAI API key. Sent as `api-key` header. |
+| `AZURE_OPENAI_ENDPOINT` | (required) | Full Azure resource endpoint, e.g. `https://my-resource.openai.azure.com`. Accepts sovereign cloud URLs. |
+| `AZURE_OPENAI_DEPLOYMENT` | (required) | Deployment name (the model deployment you created in Azure portal). |
+| `AZURE_OPENAI_API_VERSION` | `2024-10-21` | Azure API version string appended as `?api-version=` query parameter. |
+
+The proxy constructs the full URL as:
+```
+{AZURE_OPENAI_ENDPOINT}/openai/deployments/{AZURE_OPENAI_DEPLOYMENT}/chat/completions?api-version={AZURE_OPENAI_API_VERSION}
+```
+
+### Example
+
+```bash
+BACKEND=azure \
+AZURE_OPENAI_API_KEY=abc123 \
+AZURE_OPENAI_ENDPOINT=https://my-resource.openai.azure.com \
+AZURE_OPENAI_DEPLOYMENT=gpt-4o \
+cargo run -p anyllm_proxy
+```
+
+---
 
 ## mTLS Client Certificates
 
@@ -45,4 +105,46 @@ TLS_CLIENT_CERT_P12=/etc/proxy/client.p12 \
 TLS_CLIENT_CERT_PASSWORD=changeit \
 TLS_CA_CERT=/etc/proxy/corp-ca.pem \
 cargo run -p anyllm_proxy
+```
+
+---
+
+## Admin Web UI
+
+The admin web interface is **opt-in**. Start the proxy with `--webui` or `--admin` to enable it.
+
+```bash
+anyllm_proxy --webui
+```
+
+The dashboard binds to `localhost:3001` only (never externally accessible). It shows live request logs, latency percentiles, error rates, per-backend metrics, and lets you change log level and model mappings without restarting the server. The Settings tab also displays all active environment variables (secrets are masked).
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ADMIN_PORT` | `3001` | Port for the admin dashboard. Must differ from `LISTEN_PORT`. |
+| `ADMIN_TOKEN` | (generated) | Bearer token for the admin API. If unset, a random UUID is generated at startup and written to `ADMIN_TOKEN_FILE`. |
+| `ADMIN_TOKEN_FILE` | `.admin_token` | File path where the generated admin token is written. Permissions are set to `0600` on Unix. |
+| `ADMIN_DB_PATH` | `admin.db` | SQLite database path for request logging and config overrides (model mappings, log level). Config overrides survive restarts. |
+| `ADMIN_LOG_RETENTION_DAYS` | `7` | Days to retain request log entries before automatic purge. |
+| `DISABLE_ADMIN` | (unset) | Set to `1`, `true`, or `yes` to force-disable the admin server even when `--webui` is passed. Useful in container deployments where the flag might be baked into the entrypoint. |
+
+### Token security
+
+The admin token is printed to `ADMIN_TOKEN_FILE` (default `.admin_token`) rather than stdout/stderr, because container log drivers capture stderr and persist it in centralized logging systems. On Unix, the file is created with mode `0600`.
+
+In production, set `ADMIN_TOKEN` explicitly:
+
+```bash
+ADMIN_TOKEN=$(openssl rand -hex 32) anyllm_proxy --webui
+```
+
+### Example
+
+```bash
+# Proxy + admin UI on a custom port with a fixed token
+ADMIN_PORT=4000 \
+ADMIN_TOKEN=my-secret-token \
+ADMIN_DB_PATH=/var/lib/anyllm/admin.db \
+anyllm_proxy --webui
+# Open: http://127.0.0.1:4000/admin/?token=my-secret-token
 ```

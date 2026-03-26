@@ -36,6 +36,23 @@ pub fn init_db(conn: &Connection) -> rusqlite::Result<()> {
             value      TEXT NOT NULL,
             updated_at TEXT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS virtual_api_key (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            key_hash        TEXT NOT NULL UNIQUE,
+            key_prefix      TEXT NOT NULL,
+            description     TEXT,
+            created_at      TEXT NOT NULL,
+            expires_at      TEXT,
+            revoked_at      TEXT,
+            spend_limit     REAL,
+            rpm_limit       INTEGER,
+            tpm_limit       INTEGER,
+            total_spend     REAL NOT NULL DEFAULT 0,
+            total_requests  INTEGER NOT NULL DEFAULT 0,
+            total_tokens    INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE INDEX IF NOT EXISTS idx_vak_hash ON virtual_api_key(key_hash);
         ",
     )?;
     Ok(())
@@ -324,6 +341,129 @@ fn days_to_ymd(days: u64) -> (u64, u64, u64) {
 /// Get the current time as ISO 8601 UTC string.
 pub fn now_iso8601() -> String {
     chrono_now()
+}
+
+// --- Virtual API Key CRUD ---
+
+use super::keys::VirtualKeyRow;
+
+/// Insert a new virtual API key.
+#[allow(clippy::too_many_arguments)]
+pub fn insert_virtual_key(
+    conn: &Connection,
+    key_hash: &str,
+    key_prefix: &str,
+    description: Option<&str>,
+    expires_at: Option<&str>,
+    rpm_limit: Option<u32>,
+    tpm_limit: Option<u32>,
+    spend_limit: Option<f64>,
+) -> rusqlite::Result<i64> {
+    conn.execute(
+        "INSERT INTO virtual_api_key (key_hash, key_prefix, description, created_at, expires_at, rpm_limit, tpm_limit, spend_limit)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        params![
+            key_hash,
+            key_prefix,
+            description,
+            now_iso8601(),
+            expires_at,
+            rpm_limit.map(|v| v as i64),
+            tpm_limit.map(|v| v as i64),
+            spend_limit,
+        ],
+    )?;
+    Ok(conn.last_insert_rowid())
+}
+
+/// List all virtual keys (active, expired, revoked).
+pub fn list_virtual_keys(conn: &Connection) -> rusqlite::Result<Vec<VirtualKeyRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, key_hash, key_prefix, description, created_at, expires_at, revoked_at,
+                rpm_limit, tpm_limit, spend_limit, total_spend, total_requests, total_tokens
+         FROM virtual_api_key ORDER BY id DESC",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        Ok(VirtualKeyRow {
+            id: row.get(0)?,
+            key_hash: row.get(1)?,
+            key_prefix: row.get(2)?,
+            description: row.get(3)?,
+            created_at: row.get(4)?,
+            expires_at: row.get(5)?,
+            revoked_at: row.get(6)?,
+            rpm_limit: row.get::<_, Option<i64>>(7)?.map(|v| v as u32),
+            tpm_limit: row.get::<_, Option<i64>>(8)?.map(|v| v as u32),
+            spend_limit: row.get(9)?,
+            total_spend: row.get::<_, f64>(10).unwrap_or(0.0),
+            total_requests: row.get::<_, i64>(11).unwrap_or(0),
+            total_tokens: row.get::<_, i64>(12).unwrap_or(0),
+        })
+    })?;
+    rows.collect()
+}
+
+/// Revoke a virtual key by setting revoked_at. Returns the row if found.
+pub fn revoke_virtual_key(conn: &Connection, id: i64) -> rusqlite::Result<Option<VirtualKeyRow>> {
+    let now = now_iso8601();
+    let updated = conn.execute(
+        "UPDATE virtual_api_key SET revoked_at = ?1 WHERE id = ?2 AND revoked_at IS NULL",
+        params![now, id],
+    )?;
+    if updated == 0 {
+        return Ok(None);
+    }
+    let mut stmt = conn.prepare(
+        "SELECT id, key_hash, key_prefix, description, created_at, expires_at, revoked_at,
+                rpm_limit, tpm_limit, spend_limit, total_spend, total_requests, total_tokens
+         FROM virtual_api_key WHERE id = ?1",
+    )?;
+    stmt.query_row(params![id], |row| {
+        Ok(Some(VirtualKeyRow {
+            id: row.get(0)?,
+            key_hash: row.get(1)?,
+            key_prefix: row.get(2)?,
+            description: row.get(3)?,
+            created_at: row.get(4)?,
+            expires_at: row.get(5)?,
+            revoked_at: row.get(6)?,
+            rpm_limit: row.get::<_, Option<i64>>(7)?.map(|v| v as u32),
+            tpm_limit: row.get::<_, Option<i64>>(8)?.map(|v| v as u32),
+            spend_limit: row.get(9)?,
+            total_spend: row.get::<_, f64>(10).unwrap_or(0.0),
+            total_requests: row.get::<_, i64>(11).unwrap_or(0),
+            total_tokens: row.get::<_, i64>(12).unwrap_or(0),
+        }))
+    })
+}
+
+/// Load all active (non-revoked, non-expired) virtual keys from the database.
+pub fn load_active_virtual_keys(conn: &Connection) -> rusqlite::Result<Vec<VirtualKeyRow>> {
+    let now = now_iso8601();
+    let mut stmt = conn.prepare(
+        "SELECT id, key_hash, key_prefix, description, created_at, expires_at, revoked_at,
+                rpm_limit, tpm_limit, spend_limit, total_spend, total_requests, total_tokens
+         FROM virtual_api_key
+         WHERE revoked_at IS NULL AND (expires_at IS NULL OR expires_at > ?1)",
+    )?;
+    let rows = stmt.query_map(params![now], |row| {
+        Ok(VirtualKeyRow {
+            id: row.get(0)?,
+            key_hash: row.get(1)?,
+            key_prefix: row.get(2)?,
+            description: row.get(3)?,
+            created_at: row.get(4)?,
+            expires_at: row.get(5)?,
+            revoked_at: row.get(6)?,
+            rpm_limit: row.get::<_, Option<i64>>(7)?.map(|v| v as u32),
+            tpm_limit: row.get::<_, Option<i64>>(8)?.map(|v| v as u32),
+            spend_limit: row.get(9)?,
+            total_spend: row.get::<_, f64>(10).unwrap_or(0.0),
+            total_requests: row.get::<_, i64>(11).unwrap_or(0),
+            total_tokens: row.get::<_, i64>(12).unwrap_or(0),
+        })
+    })?;
+    rows.collect()
 }
 
 #[cfg(test)]

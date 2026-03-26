@@ -1,5 +1,6 @@
 // Auth, logging, and request size limit middleware
 
+use crate::admin::keys::VirtualKeyMeta;
 use anyllm_translate::anthropic;
 use anyllm_translate::mapping::errors_map::create_anthropic_error;
 use axum::{
@@ -8,9 +9,19 @@ use axum::{
     middleware::Next,
     response::{IntoResponse, Json, Response},
 };
+use dashmap::DashMap;
 use sha2::{Digest, Sha256};
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock, OnceLock};
 use subtle::ConstantTimeEq;
+
+/// Global reference to the virtual keys DashMap, set once during startup.
+/// Checked during auth after the static ALLOWED_KEY_HASHES check.
+static VIRTUAL_KEYS: OnceLock<Arc<DashMap<[u8; 32], VirtualKeyMeta>>> = OnceLock::new();
+
+/// Initialize the global virtual keys reference. Called once from main.
+pub fn set_virtual_keys(keys: Arc<DashMap<[u8; 32], VirtualKeyMeta>>) {
+    let _ = VIRTUAL_KEYS.set(keys);
+}
 
 /// Pre-hashed allowed API keys for constant-time comparison without
 /// leaking key length via timing. Each key is SHA-256 hashed at startup.
@@ -89,28 +100,59 @@ pub async fn validate_auth(
     // Hashing eliminates the timing side-channel on key length: all comparisons
     // operate on fixed-size 32-byte digests regardless of original key length.
     let credential_hash: [u8; 32] = Sha256::digest(credential.as_bytes()).into();
-    let is_allowed = ALLOWED_KEY_HASHES
+
+    // Check 1: static env-var keys (constant-time comparison)
+    let env_key_match = ALLOWED_KEY_HASHES
         .iter()
         .any(|h| bool::from(h.ct_eq(&credential_hash)));
-    if !ALLOWED_KEY_HASHES.is_empty() && !is_allowed {
-        let err = create_anthropic_error(
-            anthropic::ErrorType::AuthenticationError,
-            "Invalid API key.".to_string(),
-            None,
-        );
-        return Err((StatusCode::UNAUTHORIZED, Json(err)).into_response());
-    }
-    // Reject if no keys configured and open-relay not explicitly enabled.
-    if ALLOWED_KEY_HASHES.is_empty() && !*OPEN_RELAY {
-        let err = create_anthropic_error(
-            anthropic::ErrorType::AuthenticationError,
-            "Server not configured for access. Contact the administrator.".to_string(),
-            None,
-        );
-        return Err((StatusCode::UNAUTHORIZED, Json(err)).into_response());
+
+    if env_key_match {
+        return Ok(next.run(request).await);
     }
 
-    Ok(next.run(request).await)
+    // Check 2: virtual keys from DashMap (with per-key rate limiting)
+    if let Some(map) = VIRTUAL_KEYS.get() {
+        if let Some(meta) = map.get(&credential_hash) {
+            // Enforce RPM limit if configured
+            if let Some(rpm_limit) = meta.rpm_limit {
+                let now_ms = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis() as u64;
+                if let Err(retry_after) = meta.rate_state.check_rpm(rpm_limit, now_ms) {
+                    let err = create_anthropic_error(
+                        anthropic::ErrorType::RateLimitError,
+                        "Rate limit exceeded for this API key.".to_string(),
+                        None,
+                    );
+                    let mut resp = (StatusCode::TOO_MANY_REQUESTS, Json(err)).into_response();
+                    if let Ok(val) = axum::http::HeaderValue::from_str(&retry_after.to_string()) {
+                        resp.headers_mut().insert("retry-after", val);
+                    }
+                    return Err(resp);
+                }
+            }
+            return Ok(next.run(request).await);
+        }
+    }
+
+    // Check 3: open-relay mode (any non-empty key accepted)
+    if *OPEN_RELAY {
+        return Ok(next.run(request).await);
+    }
+
+    // No match found: reject
+    let message = if ALLOWED_KEY_HASHES.is_empty() {
+        "Server not configured for access. Contact the administrator."
+    } else {
+        "Invalid API key."
+    };
+    let err = create_anthropic_error(
+        anthropic::ErrorType::AuthenticationError,
+        message.to_string(),
+        None,
+    );
+    Err((StatusCode::UNAUTHORIZED, Json(err)).into_response())
 }
 
 /// Attach a request ID to the request and echo it on the response.

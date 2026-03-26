@@ -1,3 +1,5 @@
+/// OpenAI Chat Completions input handler (POST /v1/chat/completions).
+mod chat_completions;
 /// Auth validation, request ID injection, size limits, concurrency limits, header logging.
 pub mod middleware;
 /// Anthropic passthrough handler (no translation, forwards as-is).

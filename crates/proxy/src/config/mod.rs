@@ -15,6 +15,7 @@ const GEMINI_OPENAI_PATH: &str = "/openai";
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BackendKind {
     OpenAI,
+    AzureOpenAI,
     Vertex,
     Gemini,
     Anthropic,
@@ -36,6 +37,8 @@ pub enum BackendAuth {
     BearerToken(String),
     /// `x-goog-api-key: {key}` (Vertex API key)
     GoogleApiKey(String),
+    /// `api-key: {key}` (Azure OpenAI)
+    AzureApiKey(String),
 }
 
 impl fmt::Debug for BackendAuth {
@@ -43,6 +46,7 @@ impl fmt::Debug for BackendAuth {
         match self {
             Self::BearerToken(_) => write!(f, "BearerToken([REDACTED])"),
             Self::GoogleApiKey(_) => write!(f, "GoogleApiKey([REDACTED])"),
+            Self::AzureApiKey(_) => write!(f, "AzureApiKey([REDACTED])"),
         }
     }
 }
@@ -84,11 +88,12 @@ impl Config {
         let backend_str = std::env::var("BACKEND").unwrap_or_else(|_| "openai".into());
         let backend = match backend_str.to_ascii_lowercase().as_str() {
             "openai" => BackendKind::OpenAI,
+            "azure" => BackendKind::AzureOpenAI,
             "vertex" => BackendKind::Vertex,
             "gemini" => BackendKind::Gemini,
             "anthropic" => BackendKind::Anthropic,
             other => {
-                panic!("unknown BACKEND value '{other}', expected 'openai', 'vertex', 'gemini', or 'anthropic'")
+                panic!("unknown BACKEND value '{other}', expected 'openai', 'azure', 'vertex', 'gemini', or 'anthropic'")
             }
         };
 
@@ -131,6 +136,43 @@ impl Config {
                     backend_auth,
                     log_bodies,
                     openai_api_format,
+                }
+            }
+            BackendKind::AzureOpenAI => {
+                let endpoint = std::env::var("AZURE_OPENAI_ENDPOINT").unwrap_or_else(|_| {
+                    panic!("AZURE_OPENAI_ENDPOINT is required when BACKEND=azure")
+                });
+                let deployment = std::env::var("AZURE_OPENAI_DEPLOYMENT").unwrap_or_else(|_| {
+                    panic!("AZURE_OPENAI_DEPLOYMENT is required when BACKEND=azure")
+                });
+                let api_key = std::env::var("AZURE_OPENAI_API_KEY").unwrap_or_else(|_| {
+                    panic!("AZURE_OPENAI_API_KEY is required when BACKEND=azure")
+                });
+                let api_version = std::env::var("AZURE_OPENAI_API_VERSION")
+                    .unwrap_or_else(|_| "2024-10-21".to_string());
+
+                // Pre-construct the full URL; no suffix is appended by OpenAIClient.
+                let base_url = format!(
+                    "{}/openai/deployments/{}/chat/completions?api-version={}",
+                    endpoint.trim_end_matches('/'),
+                    deployment,
+                    api_version
+                );
+                // Validate the endpoint (not the full URL, which has query params)
+                if let Err(e) = validate_base_url(endpoint.trim_end_matches('/')) {
+                    panic!("AZURE_OPENAI_ENDPOINT rejected: {e}");
+                }
+
+                Self {
+                    backend,
+                    openai_api_key: String::new(),
+                    openai_base_url: base_url,
+                    listen_port,
+                    model_mapping: ModelMapping::from_env_with_defaults("gpt-4o", "gpt-4o-mini"),
+                    tls,
+                    backend_auth: BackendAuth::AzureApiKey(api_key),
+                    log_bodies,
+                    openai_api_format: OpenAIApiFormat::Chat,
                 }
             }
             BackendKind::Vertex => {
@@ -353,6 +395,10 @@ struct TomlBackendConfig {
     // Vertex-specific
     project: Option<String>,
     region: Option<String>,
+    // Azure-specific
+    endpoint: Option<String>,
+    deployment: Option<String>,
+    api_version: Option<String>,
     // Optional env var name for Google access token (Vertex)
     access_token: Option<String>,
     // Strip stream_options from streaming requests (local LLM compat)
@@ -385,6 +431,7 @@ impl MultiConfig {
     fn wrap_config(config: &Config) -> Self {
         let name = match config.backend {
             BackendKind::OpenAI => "openai",
+            BackendKind::AzureOpenAI => "azure",
             BackendKind::Vertex => "vertex",
             BackendKind::Gemini => "gemini",
             BackendKind::Anthropic => "anthropic",
@@ -470,6 +517,7 @@ impl MultiConfig {
     ) -> BackendConfig {
         let kind = match tb.kind.to_ascii_lowercase().as_str() {
             "openai" => BackendKind::OpenAI,
+            "azure" => BackendKind::AzureOpenAI,
             "vertex" => BackendKind::Vertex,
             "gemini" => BackendKind::Gemini,
             "anthropic" => BackendKind::Anthropic,
@@ -511,6 +559,38 @@ impl MultiConfig {
                         .unwrap_or_else(|| "gpt-4o-mini".to_string()),
                 };
                 (base_url, auth, mm, fmt)
+            }
+            BackendKind::AzureOpenAI => {
+                if api_key.is_empty() {
+                    panic!("backend '{name}': api_key is required for azure");
+                }
+                let endpoint = tb.endpoint.as_deref().unwrap_or_else(|| {
+                    panic!("backend '{name}': 'endpoint' is required for azure")
+                });
+                let deployment = tb.deployment.as_deref().unwrap_or_else(|| {
+                    panic!("backend '{name}': 'deployment' is required for azure")
+                });
+                let api_version = tb.api_version.as_deref().unwrap_or("2024-10-21");
+
+                if let Err(e) = validate_base_url(endpoint.trim_end_matches('/')) {
+                    panic!("backend '{name}' endpoint rejected: {e}");
+                }
+
+                let base_url = format!(
+                    "{}/openai/deployments/{}/chat/completions?api-version={}",
+                    endpoint.trim_end_matches('/'),
+                    deployment,
+                    api_version
+                );
+                let auth = BackendAuth::AzureApiKey(api_key.clone());
+                let mm = ModelMapping {
+                    big_model: tb.big_model.clone().unwrap_or_else(|| "gpt-4o".to_string()),
+                    small_model: tb
+                        .small_model
+                        .clone()
+                        .unwrap_or_else(|| "gpt-4o-mini".to_string()),
+                };
+                (base_url, auth, mm, OpenAIApiFormat::Chat)
             }
             BackendKind::Vertex => {
                 let project = tb.project.as_deref().unwrap_or_else(|| {
@@ -724,6 +804,11 @@ mod tests {
         let debug = format!("{:?}", api_key);
         assert!(debug.contains("REDACTED"));
         assert!(!debug.contains("secret-key"));
+
+        let azure_key = BackendAuth::AzureApiKey("azure-secret".into());
+        let debug = format!("{:?}", azure_key);
+        assert!(debug.contains("REDACTED"));
+        assert!(!debug.contains("azure-secret"));
     }
 
     // --- MultiConfig TOML parsing tests ---
@@ -963,5 +1048,77 @@ mod tests {
             bc.base_url,
             "https://generativelanguage.googleapis.com/v1beta/openai"
         );
+    }
+
+    // --- Azure OpenAI tests ---
+
+    #[test]
+    fn multi_config_parses_azure_backend() {
+        let toml = r#"
+            [backends.azure]
+            kind = "azure"
+            api_key = "az-test-key"
+            endpoint = "https://my-resource.openai.azure.com"
+            deployment = "gpt-4o-deploy"
+        "#;
+        let mc = MultiConfig::from_toml_str(toml);
+        let bc = &mc.backends["azure"];
+        assert_eq!(bc.kind, BackendKind::AzureOpenAI);
+        assert_eq!(
+            bc.base_url,
+            "https://my-resource.openai.azure.com/openai/deployments/gpt-4o-deploy/chat/completions?api-version=2024-10-21"
+        );
+        assert!(matches!(bc.backend_auth, BackendAuth::AzureApiKey(_)));
+    }
+
+    #[test]
+    fn multi_config_azure_custom_api_version() {
+        let toml = r#"
+            [backends.azure]
+            kind = "azure"
+            api_key = "az-test-key"
+            endpoint = "https://my-resource.openai.azure.com"
+            deployment = "gpt-4o-deploy"
+            api_version = "2025-01-01"
+        "#;
+        let mc = MultiConfig::from_toml_str(toml);
+        let bc = &mc.backends["azure"];
+        assert!(bc.base_url.contains("api-version=2025-01-01"));
+    }
+
+    #[test]
+    #[should_panic(expected = "api_key is required for azure")]
+    fn multi_config_panics_azure_no_key() {
+        let toml = r#"
+            [backends.azure]
+            kind = "azure"
+            endpoint = "https://my-resource.openai.azure.com"
+            deployment = "gpt-4o-deploy"
+        "#;
+        MultiConfig::from_toml_str(toml);
+    }
+
+    #[test]
+    #[should_panic(expected = "endpoint' is required for azure")]
+    fn multi_config_panics_azure_no_endpoint() {
+        let toml = r#"
+            [backends.azure]
+            kind = "azure"
+            api_key = "az-test-key"
+            deployment = "gpt-4o-deploy"
+        "#;
+        MultiConfig::from_toml_str(toml);
+    }
+
+    #[test]
+    #[should_panic(expected = "deployment' is required for azure")]
+    fn multi_config_panics_azure_no_deployment() {
+        let toml = r#"
+            [backends.azure]
+            kind = "azure"
+            api_key = "az-test-key"
+            endpoint = "https://my-resource.openai.azure.com"
+        "#;
+        MultiConfig::from_toml_str(toml);
     }
 }

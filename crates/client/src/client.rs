@@ -5,17 +5,15 @@
 use anyllm_translate::anthropic::messages::MessageResponse;
 use anyllm_translate::anthropic::streaming::StreamEvent;
 use anyllm_translate::anthropic::MessageCreateRequest;
-use anyllm_translate::openai::{
-    ChatCompletionChunk, ChatCompletionRequest, ChatCompletionResponse,
-};
-use anyllm_translate::{mapping, translate_request, translate_response, TranslationConfig};
+use anyllm_translate::openai::{ChatCompletionRequest, ChatCompletionResponse};
+use anyllm_translate::{translate_request, translate_response, TranslationConfig};
 use futures::Stream;
-use pin_project_lite::pin_project;
 
 use crate::error::ClientError;
 use crate::http::{build_http_client, HttpClientConfig};
 use crate::rate_limit::RateLimitHeaders;
 use crate::retry::{self, RetryableError};
+use crate::streaming::SseTranslatingStream;
 
 /// Authentication for the backend API.
 #[derive(Clone, Debug)]
@@ -122,10 +120,126 @@ impl From<InternalError> for ClientError {
     }
 }
 
+/// Simplified builder for [`Client`] with sensible defaults.
+///
+/// Use this when you want a quick client without manually wiring
+/// [`ClientConfig`], [`HttpClientConfig`], and [`TranslationConfig`].
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use anyllm_client::ClientBuilder;
+///
+/// # fn example() -> Result<(), anyllm_client::ClientError> {
+/// let client = ClientBuilder::new()
+///     .base_url("https://api.openai.com/v1/chat/completions")
+///     .api_key("sk-...")
+///     .build()?;
+/// # Ok(())
+/// # }
+/// ```
+pub struct ClientBuilder {
+    base_url: Option<String>,
+    api_key: Option<String>,
+    timeout: Option<std::time::Duration>,
+    read_timeout: Option<std::time::Duration>,
+    max_retries: Option<u32>,
+}
+
+impl ClientBuilder {
+    /// Create a new builder with all fields unset.
+    pub fn new() -> Self {
+        Self {
+            base_url: None,
+            api_key: None,
+            timeout: None,
+            read_timeout: None,
+            max_retries: None,
+        }
+    }
+
+    /// Set the backend URL (e.g., `https://api.openai.com/v1/chat/completions`).
+    pub fn base_url(mut self, url: &str) -> Self {
+        self.base_url = Some(url.to_string());
+        self
+    }
+
+    /// Set the API key used as a Bearer token.
+    pub fn api_key(mut self, key: &str) -> Self {
+        self.api_key = Some(key.to_string());
+        self
+    }
+
+    /// Set the connection timeout (default: 10s).
+    pub fn timeout(mut self, duration: std::time::Duration) -> Self {
+        self.timeout = Some(duration);
+        self
+    }
+
+    /// Set the read timeout (default: 900s).
+    pub fn read_timeout(mut self, duration: std::time::Duration) -> Self {
+        self.read_timeout = Some(duration);
+        self
+    }
+
+    /// Set the maximum number of retries on 429/5xx (default: 3).
+    ///
+    /// Note: this value is stored for forward compatibility but the current
+    /// retry implementation uses the crate-level [`MAX_RETRIES`](crate::retry::MAX_RETRIES) constant.
+    pub fn max_retries(mut self, n: u32) -> Self {
+        self.max_retries = Some(n);
+        self
+    }
+
+    /// Build the [`Client`], returning an error if `base_url` is missing.
+    pub fn build(self) -> Result<Client, ClientError> {
+        let base_url = self.base_url.ok_or_else(|| {
+            ClientError::ApiError {
+                status: 0,
+                message: "ClientBuilder: base_url is required".to_string(),
+                body: String::new(),
+            }
+        })?;
+
+        let http_config = HttpClientConfig {
+            connect_timeout: self.timeout,
+            read_timeout: self.read_timeout,
+            ..HttpClientConfig::new()
+        };
+
+        let config = ClientConfig {
+            chat_completions_url: base_url,
+            auth: Auth::Bearer(self.api_key.unwrap_or_default()),
+            http: http_config,
+            translation: TranslationConfig::default(),
+        };
+
+        Ok(Client::new(config))
+    }
+}
+
+impl Default for ClientBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Async HTTP client for Anthropic-to-OpenAI translation.
 ///
 /// Accepts Anthropic Messages API requests, translates to OpenAI format,
 /// sends to the configured backend, and translates the response back.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use anyllm_client::{Client, ClientConfig, Auth};
+///
+/// let config = ClientConfig::builder()
+///     .backend_url("https://api.openai.com/v1/chat/completions")
+///     .auth(Auth::Bearer("sk-...".into()))
+///     .build();
+/// let client = Client::new(config);
+/// ```
 #[derive(Clone)]
 pub struct Client {
     http: reqwest::Client,
@@ -137,6 +251,25 @@ impl Client {
     pub fn new(config: ClientConfig) -> Self {
         let http = build_http_client(&config.http);
         Self { http, config }
+    }
+
+    /// Return a [`ClientBuilder`] for simplified construction.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use anyllm_client::Client;
+    ///
+    /// # fn example() -> Result<(), anyllm_client::ClientError> {
+    /// let client = Client::builder()
+    ///     .base_url("https://api.openai.com/v1/chat/completions")
+    ///     .api_key("sk-...")
+    ///     .build()?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn builder() -> ClientBuilder {
+        ClientBuilder::new()
     }
 
     /// Create from an existing reqwest client and configuration.
@@ -236,81 +369,6 @@ impl Client {
     }
 }
 
-// -- Streaming implementation --
-
-pin_project! {
-    /// A stream that reads SSE frames from a reqwest response, translates
-    /// OpenAI chunks to Anthropic StreamEvents, and yields them.
-    struct SseTranslatingStream {
-        #[pin]
-        inner: futures::channel::mpsc::Receiver<Result<StreamEvent, ClientError>>,
-    }
-}
-
-impl SseTranslatingStream {
-    fn new(response: reqwest::Response, model: String) -> Self {
-        let (mut tx, rx) = futures::channel::mpsc::channel(32);
-
-        // Spawn a task to read SSE frames and translate them.
-        tokio::spawn(async move {
-            let mut translator = mapping::streaming_map::StreamingTranslator::new(model);
-            let mut done = false;
-
-            let result = crate::sse::read_sse_stream(
-                response,
-                |json_str| {
-                    if json_str == "[DONE]" {
-                        done = true;
-                        return Some(translator.finish());
-                    }
-                    match serde_json::from_str::<ChatCompletionChunk>(json_str) {
-                        Ok(chunk) => Some(translator.process_chunk(&chunk)),
-                        Err(e) => {
-                            tracing::debug!("failed to parse streaming chunk: {e}");
-                            None
-                        }
-                    }
-                },
-                |events| {
-                    for event in events {
-                        // Block on send; if receiver is dropped, stop.
-                        if tx.try_send(Ok(event.clone())).is_err() {
-                            return false;
-                        }
-                    }
-                    true
-                },
-            )
-            .await;
-
-            if let Err(e) = result {
-                let _ = tx.try_send(Err(ClientError::Sse(e)));
-            } else if !done {
-                // Stream ended without [DONE]; flush remaining events.
-                let events = translator.finish();
-                for event in events {
-                    if tx.try_send(Ok(event)).is_err() {
-                        break;
-                    }
-                }
-            }
-        });
-
-        Self { inner: rx }
-    }
-}
-
-impl Stream for SseTranslatingStream {
-    type Item = Result<StreamEvent, ClientError>;
-
-    fn poll_next(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Option<Self::Item>> {
-        self.project().inner.poll_next(cx)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -357,5 +415,46 @@ mod tests {
             .build();
 
         let _client = Client::new(config);
+    }
+
+    #[test]
+    fn client_builder_success() {
+        let client = ClientBuilder::new()
+            .base_url("https://api.openai.com/v1/chat/completions")
+            .api_key("sk-test")
+            .timeout(std::time::Duration::from_secs(5))
+            .read_timeout(std::time::Duration::from_secs(30))
+            .max_retries(2)
+            .build();
+        assert!(client.is_ok());
+    }
+
+    #[test]
+    fn client_builder_missing_url() {
+        let result = ClientBuilder::new().api_key("sk-test").build();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn client_builder_default_api_key() {
+        // No api_key set: should still build (empty bearer token).
+        let client = ClientBuilder::new()
+            .base_url("https://example.com")
+            .build();
+        assert!(client.is_ok());
+    }
+
+    #[test]
+    fn client_builder_via_client() {
+        let client = Client::builder()
+            .base_url("https://example.com")
+            .build();
+        assert!(client.is_ok());
+    }
+
+    #[test]
+    fn client_builder_default_trait() {
+        let builder = ClientBuilder::default();
+        assert!(builder.base_url.is_none());
     }
 }
