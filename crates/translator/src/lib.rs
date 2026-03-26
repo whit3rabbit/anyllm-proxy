@@ -56,10 +56,10 @@ pub mod util;
 // Convenience re-exports
 pub use config::{LossyBehavior, TranslationConfig, TranslationConfigBuilder};
 pub use error::TranslateError;
+pub use mapping::reverse_streaming_map::ReverseStreamingTranslator;
 pub use translate::{
     compute_request_warnings, new_responses_stream_translator, new_reverse_stream_translator,
-    new_stream_translator, translate_anthropic_to_openai_response, translate_openai_to_anthropic_request,
-    translate_request, translate_request_responses, translate_response,
-    translate_response_responses, TranslationWarnings,
+    new_stream_translator, translate_anthropic_to_openai_response,
+    translate_openai_to_anthropic_request, translate_request, translate_request_responses,
+    translate_response, translate_response_responses, TranslationWarnings,
 };
-pub use mapping::reverse_streaming_map::ReverseStreamingTranslator;

@@ -92,14 +92,14 @@
 
 ### Implementation for User Story 3
 
-- [ ] T023 [US3] Create `crates/proxy/src/backend/bedrock_client.rs` with `BedrockClient` struct. Fields: `http_client: reqwest::Client`, `region: String`, `credentials: aws_credential_types::Credentials`, `big_model: String`, `small_model: String`. Implement `fn new(config: &BedrockConfig, http_client: reqwest::Client) -> Self`.
-- [ ] T024 [US3] Implement non-streaming `send_request` on `BedrockClient` in `crates/proxy/src/backend/bedrock_client.rs`: build Bedrock URL (`https://bedrock-runtime.{region}.amazonaws.com/model/{model_id}/invoke`), serialize Anthropic request body with `anthropic_version: "bedrock-2023-05-31"` (model field omitted from body), sign request with `aws_sigv4::http_request::sign()`, send via reqwest, deserialize response as `MessageResponse`.
-- [ ] T025 [US3] Implement AWS Event Stream binary frame decoder in `crates/proxy/src/backend/bedrock_client.rs` (or a submodule): parse 4-byte prelude length, 4-byte headers length, headers, payload, 4-byte CRC32 checksum. Extract `chunk.bytes` field, base64-decode to get Anthropic SSE JSON. Target: ~80 lines.
-- [ ] T026 [US3] Implement streaming `send_request_stream` on `BedrockClient` in `crates/proxy/src/backend/bedrock_client.rs`: build URL with `/invoke-with-response-stream`, sign request, send via reqwest with streaming response, pipe response bytes through event stream decoder, yield Anthropic `StreamEvent` items compatible with existing `StreamingTranslator`.
-- [ ] T027 [US3] Add `BackendKind::Bedrock` to `crates/proxy/src/config/mod.rs`. Parse `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` (optional) from env. Store as `BedrockConfig`. Add `BackendClient::Bedrock(BedrockClient)` variant to `crates/proxy/src/backend/mod.rs` and wire through dispatch.
-- [ ] T028 [US3] Add unit tests for event stream decoder in `crates/proxy/src/backend/bedrock_client.rs` `#[cfg(test)]` module: parse a known binary frame, extract payload, verify CRC, handle partial frames.
-- [ ] T029 [US3] Add `#[ignore]` integration test in `crates/proxy/tests/` for Bedrock backend: non-streaming and streaming paths. Requires AWS credentials.
-- [ ] T030 [US3] Update `docs/ENV.md` with Bedrock-specific env vars and usage example.
+- [x] T023 [US3] Create `crates/proxy/src/backend/bedrock_client.rs` with `BedrockClient` struct. Fields: `http_client: reqwest::Client`, `region: String`, `credentials: aws_credential_types::Credentials`, `big_model: String`, `small_model: String`. Implement `fn new(config: &BedrockConfig, http_client: reqwest::Client) -> Self`.
+- [x] T024 [US3] Implement non-streaming `send_request` on `BedrockClient` in `crates/proxy/src/backend/bedrock_client.rs`: build Bedrock URL (`https://bedrock-runtime.{region}.amazonaws.com/model/{model_id}/invoke`), serialize Anthropic request body with `anthropic_version: "bedrock-2023-05-31"` (model field omitted from body), sign request with `aws_sigv4::http_request::sign()`, send via reqwest, deserialize response as `MessageResponse`.
+- [x] T025 [US3] Implement AWS Event Stream binary frame decoder in `crates/proxy/src/backend/bedrock_client.rs` (or a submodule): parse 4-byte prelude length, 4-byte headers length, headers, payload, 4-byte CRC32 checksum. Extract `chunk.bytes` field, base64-decode to get Anthropic SSE JSON. Target: ~80 lines.
+- [x] T026 [US3] Implement streaming `send_request_stream` on `BedrockClient` in `crates/proxy/src/backend/bedrock_client.rs`: build URL with `/invoke-with-response-stream`, sign request, send via reqwest with streaming response, pipe response bytes through event stream decoder, yield Anthropic `StreamEvent` items compatible with existing `StreamingTranslator`.
+- [x] T027 [US3] Add `BackendKind::Bedrock` to `crates/proxy/src/config/mod.rs`. Parse `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` (optional) from env. Store as `BedrockConfig`. Add `BackendClient::Bedrock(BedrockClient)` variant to `crates/proxy/src/backend/mod.rs` and wire through dispatch.
+- [x] T028 [US3] Add unit tests for event stream decoder in `crates/proxy/src/backend/bedrock_client.rs` `#[cfg(test)]` module: parse a known binary frame, extract payload, verify CRC, handle partial frames.
+- [x] T029 [US3] Add `#[ignore]` integration test in `crates/proxy/tests/` for Bedrock backend: non-streaming and streaming paths. Requires AWS credentials.
+- [x] T030 [US3] Update `docs/ENV.md` with Bedrock-specific env vars and usage example.
 
 **Checkpoint**: `cargo build` clean. Event stream decoder unit tests pass. `#[ignore]` live tests exist.
 
@@ -173,11 +173,11 @@
 
 ### Implementation for User Story 7
 
-- [ ] T052 [US7] Create `crates/proxy/src/otel.rs` behind `#[cfg(feature = "otel")]`. Implement `fn init_otel() -> OtelGuard`: build `SdkTracerProvider` with `opentelemetry-otlp` `SpanExporter` (http-proto, reqwest-client), set global tracer provider, set `TraceContextPropagator`. Return `OtelGuard` struct whose `Drop` impl calls `provider.shutdown()`.
-- [ ] T053 [US7] Modify tracing subscriber initialization in `crates/proxy/src/main.rs`: under `#[cfg(feature = "otel")]`, add `OpenTelemetryLayer::new(tracer)` to the existing `tracing_subscriber::registry()` chain. Store `OtelGuard` in a variable that lives for the duration of `main`. Ensure the non-otel path is unchanged via `#[cfg(not(feature = "otel"))]`.
-- [ ] T054 [US7] Add span attributes to request handlers: in the existing request middleware or handler instrumentation, record `http.request.id`, `gen_ai.request.model`, `gen_ai.response.model`, `http.response.status_code`, `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens` via `tracing::Span::current().record(...)`. Ensure the `#[tracing::instrument]` macros declare these fields.
-- [ ] T055 [US7] Verify `cargo build -p anyllm_proxy` (without `otel` feature) still compiles and has no OTEL dependencies. Verify `cargo build -p anyllm_proxy --features otel` compiles clean.
-- [ ] T056 [US7] Update `docs/ENV.md` with OTEL-related env vars: `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_SERVICE_NAME`, `OTEL_TRACES_SAMPLER`. Document the `--features otel` build flag.
+- [x] T052 [US7] Create `crates/proxy/src/otel.rs` behind `#[cfg(feature = "otel")]`. Implement `fn init_otel() -> OtelGuard`: build `SdkTracerProvider` with `opentelemetry-otlp` `SpanExporter` (http-proto, reqwest-client), set global tracer provider, set `TraceContextPropagator`. Return `OtelGuard` struct whose `Drop` impl calls `provider.shutdown()`.
+- [x] T053 [US7] Modify tracing subscriber initialization in `crates/proxy/src/main.rs`: under `#[cfg(feature = "otel")]`, add `OpenTelemetryLayer::new(tracer)` to the existing `tracing_subscriber::registry()` chain. Store `OtelGuard` in a variable that lives for the duration of `main`. Ensure the non-otel path is unchanged via `#[cfg(not(feature = "otel"))]`.
+- [x] T054 [US7] Add span attributes to request handlers: in the existing request middleware or handler instrumentation, record `http.request.id`, `gen_ai.request.model`, `gen_ai.response.model`, `http.response.status_code`, `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens` via `tracing::Span::current().record(...)`. Ensure the `#[tracing::instrument]` macros declare these fields.
+- [x] T055 [US7] Verify `cargo build -p anyllm_proxy` (without `otel` feature) still compiles and has no OTEL dependencies. Verify `cargo build -p anyllm_proxy --features otel` compiles clean.
+- [x] T056 [US7] Update `docs/ENV.md` with OTEL-related env vars: `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_SERVICE_NAME`, `OTEL_TRACES_SAMPLER`. Document the `--features otel` build flag.
 
 **Checkpoint**: Both `cargo build` (default) and `cargo build --features otel` compile. No runtime overhead when feature is off.
 
@@ -190,10 +190,10 @@
 - [x] T057 [P] Update `docs/COMPARISON_LITELLM.md` to reflect closed gaps: `POST /v1/chat/completions` input, Bedrock backend, Azure backend, virtual key management, per-key rate limiting, OTEL export. Move items from "Major gap" to "Advantage" or "Parity" as appropriate.
 - [ ] T058 [P] Update `CLAUDE.md` with new backend types, new env vars, new admin endpoints, new source files, and updated test counts.
 - [ ] T059 [P] Update `README.md` with quickstart examples for new features (reference `quickstart.md` content).
-- [ ] T060 Run `cargo clippy -- -D warnings` across all crates and fix any warnings.
-- [ ] T061 Run `cargo fmt --check` and fix any formatting issues.
-- [ ] T062 Run `cargo test` full suite and verify all tests pass (expect ~550+ tests).
-- [ ] T063 Verify all new source files are under 400 lines (excluding `#[cfg(test)]` modules).
+- [x] T060 Run `cargo clippy -- -D warnings` across all crates and fix any warnings.
+- [x] T061 Run `cargo fmt --check` and fix any formatting issues.
+- [x] T062 Run `cargo test` full suite and verify all tests pass (expect ~550+ tests).
+- [x] T063 Verify all new source files are under 400 lines (excluding `#[cfg(test)]` modules).
 
 ---
 

@@ -140,8 +140,7 @@ async fn bedrock_stream(
         }
     };
 
-    let (tx, rx) =
-        tokio::sync::mpsc::channel::<Result<String, std::convert::Infallible>>(32);
+    let (tx, rx) = tokio::sync::mpsc::channel::<Result<String, std::convert::Infallible>>(32);
     let metrics = state.metrics.clone();
 
     tokio::spawn(async move {

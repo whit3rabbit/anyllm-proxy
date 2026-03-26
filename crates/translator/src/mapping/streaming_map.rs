@@ -80,8 +80,9 @@ impl StreamingTranslator {
         if let Some(ref usage) = chunk.usage {
             self.usage.input_tokens = usage.prompt_tokens;
             self.usage.output_tokens = usage.completion_tokens;
-            self.usage.cache_read_input_tokens =
-                crate::mapping::usage_map::extract_cached_tokens(usage.prompt_tokens_details.as_ref());
+            self.usage.cache_read_input_tokens = crate::mapping::usage_map::extract_cached_tokens(
+                usage.prompt_tokens_details.as_ref(),
+            );
         }
 
         for choice in &chunk.choices {

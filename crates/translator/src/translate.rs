@@ -6,13 +6,13 @@
 use crate::anthropic::{MessageCreateRequest, MessageResponse};
 use crate::config::TranslationConfig;
 use crate::error::TranslateError;
+pub use crate::mapping::warnings::TranslationWarnings;
 use crate::mapping::{
     message_map, responses_message_map, responses_streaming_map, reverse_message_map,
     reverse_streaming_map, streaming_map,
 };
 use crate::openai::responses::{ResponsesRequest, ResponsesResponse};
 use crate::openai::{ChatCompletionRequest, ChatCompletionResponse};
-pub use crate::mapping::warnings::TranslationWarnings;
 
 /// Compute degradation warnings for a request — features that will be dropped in translation.
 ///

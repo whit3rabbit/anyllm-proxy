@@ -204,16 +204,14 @@ pub fn anthropic_to_openai_response(
                     },
                 });
             }
-            anthropic::ContentBlock::Thinking { thinking, .. } => {
-                match &mut reasoning_content {
-                    Some(existing) => {
-                        existing.push_str(thinking);
-                    }
-                    None => {
-                        reasoning_content = Some(thinking.clone());
-                    }
+            anthropic::ContentBlock::Thinking { thinking, .. } => match &mut reasoning_content {
+                Some(existing) => {
+                    existing.push_str(thinking);
                 }
-            }
+                None => {
+                    reasoning_content = Some(thinking.clone());
+                }
+            },
             _ => {}
         }
     }
@@ -446,7 +444,9 @@ mod tests {
         .unwrap();
         let mut w = TranslationWarnings::default();
         let result = openai_to_anthropic_request(&req, &mut w).unwrap();
-        assert!(matches!(result.system, Some(anthropic::System::Text(ref s)) if s == "You are helpful."));
+        assert!(
+            matches!(result.system, Some(anthropic::System::Text(ref s)) if s == "You are helpful.")
+        );
         assert_eq!(result.messages.len(), 1); // system not in messages
     }
 
@@ -463,7 +463,9 @@ mod tests {
         .unwrap();
         let mut w = TranslationWarnings::default();
         let result = openai_to_anthropic_request(&req, &mut w).unwrap();
-        assert!(matches!(result.system, Some(anthropic::System::Text(ref s)) if s == "Be concise."));
+        assert!(
+            matches!(result.system, Some(anthropic::System::Text(ref s)) if s == "Be concise.")
+        );
     }
 
     #[test]
@@ -518,7 +520,9 @@ mod tests {
         // Second message (assistant) should have tool_use block
         match &result.messages[1].content {
             anthropic::Content::Blocks(blocks) => {
-                assert!(matches!(&blocks[0], anthropic::ContentBlock::ToolUse { name, .. } if name == "get_weather"));
+                assert!(
+                    matches!(&blocks[0], anthropic::ContentBlock::ToolUse { name, .. } if name == "get_weather")
+                );
             }
             _ => panic!("expected blocks"),
         }
@@ -558,7 +562,10 @@ mod tests {
         .unwrap();
         let mut w = TranslationWarnings::default();
         let result = openai_to_anthropic_request(&req, &mut w).unwrap();
-        assert_eq!(result.stop_sequences, Some(vec!["END".into(), "STOP".into()]));
+        assert_eq!(
+            result.stop_sequences,
+            Some(vec!["END".into(), "STOP".into()])
+        );
     }
 
     // --- Response tests ---
@@ -591,7 +598,10 @@ mod tests {
             Some(openai::ChatContent::Text(s)) => assert_eq!(s, "Hello!"),
             other => panic!("expected Text, got {:?}", other),
         }
-        assert_eq!(result.choices[0].finish_reason, Some(openai::FinishReason::Stop));
+        assert_eq!(
+            result.choices[0].finish_reason,
+            Some(openai::FinishReason::Stop)
+        );
         let usage = result.usage.unwrap();
         assert_eq!(usage.prompt_tokens, 10);
         assert_eq!(usage.completion_tokens, 5);
@@ -619,7 +629,10 @@ mod tests {
         assert_eq!(tc.len(), 1);
         assert_eq!(tc[0].id, "call_1");
         assert_eq!(tc[0].function.name, "get_weather");
-        assert_eq!(result.choices[0].finish_reason, Some(openai::FinishReason::ToolCalls));
+        assert_eq!(
+            result.choices[0].finish_reason,
+            Some(openai::FinishReason::ToolCalls)
+        );
     }
 
     #[test]
@@ -723,7 +736,9 @@ mod tests {
         let result = openai_to_anthropic_request(&req, &mut w).unwrap();
         assert!(matches!(
             result.tool_choice,
-            Some(anthropic::ToolChoice::Auto { disable_parallel_tool_use: Some(true) })
+            Some(anthropic::ToolChoice::Auto {
+                disable_parallel_tool_use: Some(true)
+            })
         ));
     }
 }

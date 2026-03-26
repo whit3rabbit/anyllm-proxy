@@ -193,12 +193,10 @@ impl ClientBuilder {
 
     /// Build the [`Client`], returning an error if `base_url` is missing.
     pub fn build(self) -> Result<Client, ClientError> {
-        let base_url = self.base_url.ok_or_else(|| {
-            ClientError::ApiError {
-                status: 0,
-                message: "ClientBuilder: base_url is required".to_string(),
-                body: String::new(),
-            }
+        let base_url = self.base_url.ok_or_else(|| ClientError::ApiError {
+            status: 0,
+            message: "ClientBuilder: base_url is required".to_string(),
+            body: String::new(),
         })?;
 
         let http_config = HttpClientConfig {
@@ -438,17 +436,13 @@ mod tests {
     #[test]
     fn client_builder_default_api_key() {
         // No api_key set: should still build (empty bearer token).
-        let client = ClientBuilder::new()
-            .base_url("https://example.com")
-            .build();
+        let client = ClientBuilder::new().base_url("https://example.com").build();
         assert!(client.is_ok());
     }
 
     #[test]
     fn client_builder_via_client() {
-        let client = Client::builder()
-            .base_url("https://example.com")
-            .build();
+        let client = Client::builder().base_url("https://example.com").build();
         assert!(client.is_ok());
     }
 

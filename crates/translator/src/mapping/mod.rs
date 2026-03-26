@@ -6,6 +6,10 @@ pub mod message_map;
 pub mod responses_message_map;
 /// Responses API SSE event stream translation state machine.
 pub mod responses_streaming_map;
+/// Reverse message mapping: OpenAI Chat Completions -> Anthropic Messages.
+pub mod reverse_message_map;
+/// Reverse streaming: Anthropic SSE events -> OpenAI ChatCompletionChunk SSE.
+pub mod reverse_streaming_map;
 /// Chat Completions SSE event stream translation state machine.
 pub mod streaming_map;
 /// Tool definitions and tool_use/tool_call translation.
@@ -14,10 +18,6 @@ pub mod tools_map;
 pub mod usage_map;
 /// Degradation warning collection for client-visible feature-drop signals.
 pub mod warnings;
-/// Reverse message mapping: OpenAI Chat Completions -> Anthropic Messages.
-pub mod reverse_message_map;
-/// Reverse streaming: Anthropic SSE events -> OpenAI ChatCompletionChunk SSE.
-pub mod reverse_streaming_map;
 
 /// Format an OpenAI refusal string as Anthropic text content.
 /// Anthropic has no refusal type, so we surface it as a bracketed text marker.

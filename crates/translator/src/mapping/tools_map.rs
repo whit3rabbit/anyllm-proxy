@@ -73,10 +73,14 @@ pub fn openai_tool_choice_to_anthropic(tc: &openai::ChatToolChoice) -> anthropic
     match tc {
         openai::ChatToolChoice::Simple(s) => match s.as_str() {
             "none" => anthropic::ToolChoice::None,
-            "required" => anthropic::ToolChoice::Any { disable_parallel_tool_use: None },
+            "required" => anthropic::ToolChoice::Any {
+                disable_parallel_tool_use: None,
+            },
             // Default unknown values to Auto for forward compatibility;
             // rejecting would break when OpenAI adds new tool_choice variants.
-            _ => anthropic::ToolChoice::Auto { disable_parallel_tool_use: None },
+            _ => anthropic::ToolChoice::Auto {
+                disable_parallel_tool_use: None,
+            },
         },
         openai::ChatToolChoice::Named(named) => anthropic::ToolChoice::Tool {
             name: named.function.name.clone(),
@@ -218,7 +222,9 @@ mod tests {
 
     #[test]
     fn tool_choice_auto() {
-        let openai = anthropic_tool_choice_to_openai(&anthropic::ToolChoice::Auto { disable_parallel_tool_use: None });
+        let openai = anthropic_tool_choice_to_openai(&anthropic::ToolChoice::Auto {
+            disable_parallel_tool_use: None,
+        });
         assert!(matches!(openai, openai::ChatToolChoice::Simple(ref s) if s == "auto"));
 
         let back = openai_tool_choice_to_anthropic(&openai);
@@ -227,7 +233,9 @@ mod tests {
 
     #[test]
     fn tool_choice_any_to_required() {
-        let openai = anthropic_tool_choice_to_openai(&anthropic::ToolChoice::Any { disable_parallel_tool_use: None });
+        let openai = anthropic_tool_choice_to_openai(&anthropic::ToolChoice::Any {
+            disable_parallel_tool_use: None,
+        });
         assert!(matches!(openai, openai::ChatToolChoice::Simple(ref s) if s == "required"));
 
         let back = openai_tool_choice_to_anthropic(&openai);
@@ -280,14 +288,21 @@ mod tests {
         let json = serde_json::json!({"type": "auto", "disable_parallel_tool_use": true});
         let tc: anthropic::ToolChoice = serde_json::from_value(json).unwrap();
         match tc {
-            anthropic::ToolChoice::Auto { disable_parallel_tool_use: Some(true) } => {}
-            other => panic!("expected Auto with disable_parallel_tool_use=true, got {:?}", other),
+            anthropic::ToolChoice::Auto {
+                disable_parallel_tool_use: Some(true),
+            } => {}
+            other => panic!(
+                "expected Auto with disable_parallel_tool_use=true, got {:?}",
+                other
+            ),
         }
     }
 
     #[test]
     fn auto_without_disable_parallel_omits_field_in_json() {
-        let tc = anthropic::ToolChoice::Auto { disable_parallel_tool_use: None };
+        let tc = anthropic::ToolChoice::Auto {
+            disable_parallel_tool_use: None,
+        };
         let json = serde_json::to_value(&tc).unwrap();
         assert_eq!(json, serde_json::json!({"type": "auto"}));
     }

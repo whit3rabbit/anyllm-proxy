@@ -5,9 +5,7 @@
 use super::{build_http_client, RateLimitHeaders};
 use crate::config::TlsConfig;
 use aws_credential_types::Credentials;
-use aws_sigv4::http_request::{
-    sign, SignableBody, SignableRequest, SigningSettings,
-};
+use aws_sigv4::http_request::{sign, SignableBody, SignableRequest, SigningSettings};
 use aws_sigv4::sign::v4;
 use reqwest::Client;
 use tokio::time::sleep;
@@ -174,12 +172,8 @@ impl BedrockClient {
         };
 
         for attempt in 0..=super::MAX_RETRIES {
-            let base_headers = [
-                ("content-type", content_type),
-                ("accept", accept),
-            ];
-            let signing_headers = self
-                .sign_request("POST", &url, &body, &base_headers)?;
+            let base_headers = [("content-type", content_type), ("accept", accept)];
+            let signing_headers = self.sign_request("POST", &url, &body, &base_headers)?;
 
             let mut rb = self
                 .client
@@ -293,9 +287,7 @@ pub mod eventstream {
 
         // Base64 decode
         use base64::Engine;
-        let decoded = base64::engine::general_purpose::STANDARD
-            .decode(b64)
-            .ok()?;
+        let decoded = base64::engine::general_purpose::STANDARD.decode(b64).ok()?;
         String::from_utf8(decoded).ok()
     }
 }

@@ -22,6 +22,7 @@ All 11 implementation phases are complete.
 
 **Not fully validated:**
 - OpenAI Responses API backend: wired up via `OPENAI_API_FORMAT=responses` but not tested against live API
+- AWS Bedrock backend: wired up via `BACKEND=bedrock` with SigV4 signing and Event Stream decoding; not tested against live API. Run with `AWS_REGION=... AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... cargo test --test live_bedrock -- --ignored --test-threads=1`
 - Live API integration tests exist (`crates/proxy/tests/live_api.rs`) but are `#[ignore]` by default; run with `OPENAI_API_KEY=sk-... cargo test --test live_api -- --ignored --test-threads=1`
 - Metrics endpoint exists (GET /metrics returns JSON counters) but streaming requests only track total count, not success/error
 
@@ -46,7 +47,7 @@ OPENAI_API_KEY=sk-... cargo run -p anyllm_proxy
 
 ## Environment Variables
 
-- `BACKEND`: Backend provider: `openai` (default), `vertex`, `gemini`, or `anthropic` (passthrough, no translation)
+- `BACKEND`: Backend provider: `openai` (default), `vertex`, `gemini`, `anthropic` (passthrough), or `bedrock` (SigV4-signed, Anthropic format)
 - `OPENAI_API_KEY`: OpenAI API key (required when BACKEND=openai, empty default)
 - `OPENAI_BASE_URL`: OpenAI base URL (default: `https://api.openai.com`)
 - `OPENAI_API_FORMAT`: OpenAI API format: `chat` (default, Chat Completions) or `responses` (Responses API). Only relevant when BACKEND=openai.
@@ -63,6 +64,10 @@ OPENAI_API_KEY=sk-... cargo run -p anyllm_proxy
 - `GOOGLE_ACCESS_TOKEN`: OAuth bearer token for Vertex AI (alternative to VERTEX_API_KEY)
 - `GEMINI_API_KEY`: Google API key for Gemini Developer API (required when BACKEND=gemini)
 - `GEMINI_BASE_URL`: Gemini API base URL (default: `https://generativelanguage.googleapis.com/v1beta`)
+- `AWS_REGION`: AWS region for Bedrock (required when BACKEND=bedrock)
+- `AWS_ACCESS_KEY_ID`: AWS access key ID for SigV4 signing (required when BACKEND=bedrock)
+- `AWS_SECRET_ACCESS_KEY`: AWS secret access key for SigV4 signing (required when BACKEND=bedrock)
+- `AWS_SESSION_TOKEN`: Temporary session token for STS credentials (optional, BACKEND=bedrock)
 - `PROXY_API_KEYS`: Comma-separated list of allowed API keys for proxy authentication (optional; if unset, any non-empty key is accepted)
 - `LOG_BODIES`: Enable request/response body logging at debug level (`true` or `1`, default: disabled)
 - `OTEL_EXPORTER_OTLP_ENDPOINT`: OTLP collector endpoint (default: `http://localhost:4318`). Only effective when built with `--features otel`.
@@ -107,10 +112,12 @@ HTTP proxy built on axum + reqwest:
 - **`server/sse.rs`**: SSE response helpers for Anthropic-format streaming
 - **`server/streaming.rs`**: SSE streaming handler with pre-stream error propagation and backpressure
 - **`server/passthrough.rs`**: Anthropic passthrough handler (no translation, forwards as-is)
+- **`server/bedrock_passthrough.rs`**: Bedrock handler (SigV4 signing, model-in-URL, Event Stream decoding for streaming)
 - **`server/token_counting.rs`**: Approximate token counting via tiktoken
-- **`backend/mod.rs`**: `BackendClient` enum (OpenAI/OpenAIResponses/Vertex/GeminiOpenAI/Anthropic), `BackendError`, shared retry helpers
+- **`backend/mod.rs`**: `BackendClient` enum (OpenAI/OpenAIResponses/Vertex/GeminiOpenAI/Anthropic/Bedrock), `BackendError`, shared retry helpers
 - **`backend/openai_client.rs`**: reqwest client calling OpenAI-compatible Chat Completions with retry/backoff on 429/5xx (used for OpenAI, Vertex, and Gemini backends)
 - **`backend/anthropic_client.rs`**: Passthrough client forwarding Anthropic requests as-is to upstream Anthropic API (no translation)
+- **`backend/bedrock_client.rs`**: AWS Bedrock client with SigV4 signing, AWS Event Stream binary frame decoder for streaming
 - **`admin/`**: Admin server (localhost-only) with config management, WebSocket live updates (`ws.rs`), token auth (`auth.rs`, `db.rs`, `mod.rs`, `routes.rs`, `state.rs`)
 - **`admin-ui/`**: Static admin UI served by the admin server (`index.html`)
 - **`metrics/`**: Request count, success/error tracking, exposed via GET /metrics

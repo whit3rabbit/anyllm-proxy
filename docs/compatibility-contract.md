@@ -19,6 +19,7 @@
 | Temperature | Supported | Pass-through (0..1 subset of 0..2) |
 | top_p | Supported | Direct pass-through |
 | GET /v1/models | Supported | Static model list |
+| POST /v1/embeddings | Supported (passthrough) | No translation; model names forwarded as-is. Works with OpenAI, Vertex, Gemini (`gemini-embedding-exp-03-07`), vLLM/HuggingFace (`BAAI/bge-m3`), and any OpenAI-compatible backend. Not available for the Anthropic passthrough backend (route not mounted). |
 
 ## Unsupported Features (Explicit Error)
 
@@ -48,6 +49,25 @@
 | MCP tools | Would need Responses API |
 | WebSocket mode | Anthropic doesn't support |
 
+## Observability
+
+### `x-anyllm-degradation` Response Header
+
+When the proxy silently drops or degrades Anthropic request features during translation, it sets the `x-anyllm-degradation` response header. The value is a comma-separated list of dropped feature names. If no features were dropped, the header is absent.
+
+| Feature tag | Condition |
+|---|---|
+| `top_k` | Request included `top_k` (no OpenAI equivalent) |
+| `thinking_config` | Request included extended thinking config |
+| `stop_sequences_truncated` | Request had more than 4 stop sequences (OpenAI limit is 4) |
+| `cache_control` | System prompt blocks included `cache_control` |
+| `document_blocks` | Request contained document (PDF) content blocks |
+
+Example:
+```
+x-anyllm-degradation: top_k, cache_control
+```
+
 ## Model Name Mapping
 
 Model names are passed through as-is. The static /v1/models endpoint lists:
@@ -65,4 +85,5 @@ Clients may use any model name; it's forwarded to OpenAI directly. Configure mod
 | GET /v1/models | GET /v1/models | Static response |
 | POST /v1/messages/count_tokens | POST /v1/messages/count_tokens | 400 error |
 | POST /v1/messages/batches | POST /v1/messages/batches | 400 error |
+| POST /v1/embeddings | POST /v1/embeddings | Passthrough to `{OPENAI_BASE_URL}/v1/embeddings` (OpenAI) or `{OPENAI_BASE_URL}/embeddings` (Vertex/Gemini) |
 | GET /health | GET /health | Local (no auth required) |

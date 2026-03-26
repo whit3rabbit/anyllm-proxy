@@ -279,9 +279,10 @@ impl Config {
                 let _access_key_id = std::env::var("AWS_ACCESS_KEY_ID").unwrap_or_else(|_| {
                     panic!("AWS_ACCESS_KEY_ID is required when BACKEND=bedrock")
                 });
-                let _secret_access_key = std::env::var("AWS_SECRET_ACCESS_KEY").unwrap_or_else(
-                    |_| panic!("AWS_SECRET_ACCESS_KEY is required when BACKEND=bedrock"),
-                );
+                let _secret_access_key =
+                    std::env::var("AWS_SECRET_ACCESS_KEY").unwrap_or_else(|_| {
+                        panic!("AWS_SECRET_ACCESS_KEY is required when BACKEND=bedrock")
+                    });
                 let _session_token = std::env::var("AWS_SESSION_TOKEN").ok();
 
                 Self {
@@ -757,14 +758,15 @@ impl MultiConfig {
 
                 // For Bedrock, base_url stores the region (used by BedrockClient to build URLs)
                 let auth = BackendAuth::BearerToken(String::new());
-                let mm = ModelMapping {
-                    big_model: tb.big_model.clone().unwrap_or_else(|| {
-                        "anthropic.claude-sonnet-4-20250514-v1:0".to_string()
-                    }),
-                    small_model: tb.small_model.clone().unwrap_or_else(|| {
-                        "anthropic.claude-haiku-4-5-20251001-v1:0".to_string()
-                    }),
-                };
+                let mm =
+                    ModelMapping {
+                        big_model: tb.big_model.clone().unwrap_or_else(|| {
+                            "anthropic.claude-sonnet-4-20250514-v1:0".to_string()
+                        }),
+                        small_model: tb.small_model.clone().unwrap_or_else(|| {
+                            "anthropic.claude-haiku-4-5-20251001-v1:0".to_string()
+                        }),
+                    };
                 (region.to_string(), auth, mm, OpenAIApiFormat::Chat)
             }
         };

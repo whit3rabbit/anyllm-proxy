@@ -5,7 +5,9 @@
 
 use crate::anthropic;
 use crate::openai;
-use crate::openai::streaming::{ChatCompletionChunk, ChunkChoice, ChunkDelta, ChunkFunctionCall, ChunkToolCall};
+use crate::openai::streaming::{
+    ChatCompletionChunk, ChunkChoice, ChunkDelta, ChunkFunctionCall, ChunkToolCall,
+};
 
 /// Sentinel value returned by `process_event` to signal the stream is done.
 /// The caller should emit `data: [DONE]\n\n` when it sees this.
@@ -88,67 +90,60 @@ impl ReverseStreamingTranslator {
                     _ => vec![],
                 }
             }
-            anthropic::StreamEvent::ContentBlockDelta { delta, .. } => {
-                match delta {
-                    anthropic::streaming::Delta::TextDelta { text } => {
-                        vec![self.make_chunk(
-                            ChunkDelta {
-                                content: Some(text.clone()),
-                                ..Default::default()
-                            },
-                            None,
-                        )]
-                    }
-                    anthropic::streaming::Delta::InputJsonDelta { partial_json } => {
-                        if self.tool_call_index < 0 {
-                            return vec![];
-                        }
-                        let tc = ChunkToolCall {
-                            index: self.tool_call_index as u32,
-                            id: None,
-                            call_type: None,
-                            function: Some(ChunkFunctionCall {
-                                name: None,
-                                arguments: Some(partial_json.clone()),
-                            }),
-                        };
-                        vec![self.make_chunk(
-                            ChunkDelta {
-                                tool_calls: Some(vec![tc]),
-                                ..Default::default()
-                            },
-                            None,
-                        )]
-                    }
-                    anthropic::streaming::Delta::ThinkingDelta { thinking } => {
-                        vec![self.make_chunk(
-                            ChunkDelta {
-                                reasoning_content: Some(thinking.clone()),
-                                ..Default::default()
-                            },
-                            None,
-                        )]
-                    }
-                    anthropic::streaming::Delta::SignatureDelta { .. } => vec![],
+            anthropic::StreamEvent::ContentBlockDelta { delta, .. } => match delta {
+                anthropic::streaming::Delta::TextDelta { text } => {
+                    vec![self.make_chunk(
+                        ChunkDelta {
+                            content: Some(text.clone()),
+                            ..Default::default()
+                        },
+                        None,
+                    )]
                 }
-            }
+                anthropic::streaming::Delta::InputJsonDelta { partial_json } => {
+                    if self.tool_call_index < 0 {
+                        return vec![];
+                    }
+                    let tc = ChunkToolCall {
+                        index: self.tool_call_index as u32,
+                        id: None,
+                        call_type: None,
+                        function: Some(ChunkFunctionCall {
+                            name: None,
+                            arguments: Some(partial_json.clone()),
+                        }),
+                    };
+                    vec![self.make_chunk(
+                        ChunkDelta {
+                            tool_calls: Some(vec![tc]),
+                            ..Default::default()
+                        },
+                        None,
+                    )]
+                }
+                anthropic::streaming::Delta::ThinkingDelta { thinking } => {
+                    vec![self.make_chunk(
+                        ChunkDelta {
+                            reasoning_content: Some(thinking.clone()),
+                            ..Default::default()
+                        },
+                        None,
+                    )]
+                }
+                anthropic::streaming::Delta::SignatureDelta { .. } => vec![],
+            },
             anthropic::StreamEvent::ContentBlockStop { .. } => vec![],
             anthropic::StreamEvent::MessageDelta { delta, usage } => {
                 if let Some(u) = usage {
                     self.output_tokens = Some(u.output_tokens);
                 }
-                let finish_reason = delta.stop_reason.as_ref().map(|sr| {
-                    match sr {
-                        anthropic::StopReason::EndTurn => openai::FinishReason::Stop,
-                        anthropic::StopReason::MaxTokens => openai::FinishReason::Length,
-                        anthropic::StopReason::ToolUse => openai::FinishReason::ToolCalls,
-                        anthropic::StopReason::StopSequence => openai::FinishReason::Stop,
-                    }
+                let finish_reason = delta.stop_reason.as_ref().map(|sr| match sr {
+                    anthropic::StopReason::EndTurn => openai::FinishReason::Stop,
+                    anthropic::StopReason::MaxTokens => openai::FinishReason::Length,
+                    anthropic::StopReason::ToolUse => openai::FinishReason::ToolCalls,
+                    anthropic::StopReason::StopSequence => openai::FinishReason::Stop,
                 });
-                let mut chunks = vec![self.make_chunk(
-                    ChunkDelta::default(),
-                    finish_reason,
-                )];
+                let mut chunks = vec![self.make_chunk(ChunkDelta::default(), finish_reason)];
                 // Emit usage chunk if we have token counts
                 if let (Some(input), Some(output)) = (self.input_tokens, self.output_tokens) {
                     chunks.push(ChatCompletionChunk {
@@ -225,13 +220,21 @@ mod tests {
                 model: "claude-sonnet".to_string(),
                 stop_reason: None,
                 stop_sequence: None,
-                usage: Usage { input_tokens: 10, output_tokens: 0, cache_creation_input_tokens: None, cache_read_input_tokens: None },
+                usage: Usage {
+                    input_tokens: 10,
+                    output_tokens: 0,
+                    cache_creation_input_tokens: None,
+                    cache_read_input_tokens: None,
+                },
                 created: Some(1700000000),
             },
         };
         let chunks = t.process_event(&event);
         assert_eq!(chunks.len(), 1);
-        assert_eq!(chunks[0].choices[0].delta.role, Some(openai::ChatRole::Assistant));
+        assert_eq!(
+            chunks[0].choices[0].delta.role,
+            Some(openai::ChatRole::Assistant)
+        );
         assert!(chunks[0].choices[0].finish_reason.is_none());
     }
 
@@ -240,7 +243,9 @@ mod tests {
         let mut t = make_translator();
         let event = StreamEvent::ContentBlockDelta {
             index: 0,
-            delta: Delta::TextDelta { text: "Hello".to_string() },
+            delta: Delta::TextDelta {
+                text: "Hello".to_string(),
+            },
         };
         let chunks = t.process_event(&event);
         assert_eq!(chunks.len(), 1);
@@ -263,19 +268,27 @@ mod tests {
         assert_eq!(chunks.len(), 1);
         let tc = &chunks[0].choices[0].delta.tool_calls.as_ref().unwrap()[0];
         assert_eq!(tc.id.as_deref(), Some("call_123"));
-        assert_eq!(tc.function.as_ref().unwrap().name.as_deref(), Some("get_weather"));
+        assert_eq!(
+            tc.function.as_ref().unwrap().name.as_deref(),
+            Some("get_weather")
+        );
 
         // Delta with args
         let delta = StreamEvent::ContentBlockDelta {
             index: 0,
-            delta: Delta::InputJsonDelta { partial_json: "{\"loc".to_string() },
+            delta: Delta::InputJsonDelta {
+                partial_json: "{\"loc".to_string(),
+            },
         };
         let chunks = t.process_event(&delta);
         assert_eq!(chunks.len(), 1);
         let tc = &chunks[0].choices[0].delta.tool_calls.as_ref().unwrap()[0];
         assert_eq!(tc.index, 0);
         assert!(tc.id.is_none()); // Only first chunk has id
-        assert_eq!(tc.function.as_ref().unwrap().arguments.as_deref(), Some("{\"loc"));
+        assert_eq!(
+            tc.function.as_ref().unwrap().arguments.as_deref(),
+            Some("{\"loc")
+        );
     }
 
     #[test]
@@ -283,11 +296,16 @@ mod tests {
         let mut t = make_translator();
         let event = StreamEvent::ContentBlockDelta {
             index: 0,
-            delta: Delta::ThinkingDelta { thinking: "Let me think...".to_string() },
+            delta: Delta::ThinkingDelta {
+                thinking: "Let me think...".to_string(),
+            },
         };
         let chunks = t.process_event(&event);
         assert_eq!(chunks.len(), 1);
-        assert_eq!(chunks[0].choices[0].delta.reasoning_content.as_deref(), Some("Let me think..."));
+        assert_eq!(
+            chunks[0].choices[0].delta.reasoning_content.as_deref(),
+            Some("Let me think...")
+        );
     }
 
     #[test]
@@ -303,7 +321,12 @@ mod tests {
                 model: "claude".to_string(),
                 stop_reason: None,
                 stop_sequence: None,
-                usage: Usage { input_tokens: 10, output_tokens: 0, cache_creation_input_tokens: None, cache_read_input_tokens: None },
+                usage: Usage {
+                    input_tokens: 10,
+                    output_tokens: 0,
+                    cache_creation_input_tokens: None,
+                    cache_read_input_tokens: None,
+                },
                 created: None,
             },
         };
@@ -318,7 +341,10 @@ mod tests {
         };
         let chunks = t.process_event(&event);
         assert_eq!(chunks.len(), 2); // finish chunk + usage chunk
-        assert_eq!(chunks[0].choices[0].finish_reason, Some(openai::FinishReason::Stop));
+        assert_eq!(
+            chunks[0].choices[0].finish_reason,
+            Some(openai::FinishReason::Stop)
+        );
         let usage = chunks[1].usage.as_ref().unwrap();
         assert_eq!(usage.prompt_tokens, 10);
         assert_eq!(usage.completion_tokens, 5);
@@ -353,7 +379,10 @@ mod tests {
             },
         };
         let chunks = t.process_event(&start1);
-        assert_eq!(chunks[0].choices[0].delta.tool_calls.as_ref().unwrap()[0].index, 0);
+        assert_eq!(
+            chunks[0].choices[0].delta.tool_calls.as_ref().unwrap()[0].index,
+            0
+        );
 
         // Second tool
         let start2 = StreamEvent::ContentBlockStart {
@@ -365,6 +394,9 @@ mod tests {
             },
         };
         let chunks = t.process_event(&start2);
-        assert_eq!(chunks[0].choices[0].delta.tool_calls.as_ref().unwrap()[0].index, 1);
+        assert_eq!(
+            chunks[0].choices[0].delta.tool_calls.as_ref().unwrap()[0].index,
+            1
+        );
     }
 }

@@ -47,13 +47,11 @@ pub fn compute_request_warnings(req: &anthropic::MessageCreateRequest) -> Transl
             w.add("cache_control");
         }
     }
-    let has_document = req.messages.iter().any(|msg| {
-        match &msg.content {
-            anthropic::Content::Blocks(blocks) => blocks.iter().any(|b| {
-                matches!(b, anthropic::ContentBlock::Document { .. })
-            }),
-            _ => false,
-        }
+    let has_document = req.messages.iter().any(|msg| match &msg.content {
+        anthropic::Content::Blocks(blocks) => blocks
+            .iter()
+            .any(|b| matches!(b, anthropic::ContentBlock::Document { .. })),
+        _ => false,
     });
     if has_document {
         w.add("document_blocks");
@@ -105,8 +103,12 @@ pub fn anthropic_to_openai_request(
     // Map disable_parallel_tool_use to OpenAI parallel_tool_calls.
     // Compat spec: "Fully supported". See: https://docs.anthropic.com/en/api/openai-sdk#tools--functions-fields
     let parallel_tool_calls = match req.tool_choice.as_ref() {
-        Some(anthropic::ToolChoice::Auto { disable_parallel_tool_use: Some(true) })
-        | Some(anthropic::ToolChoice::Any { disable_parallel_tool_use: Some(true) }) => Some(false),
+        Some(anthropic::ToolChoice::Auto {
+            disable_parallel_tool_use: Some(true),
+        })
+        | Some(anthropic::ToolChoice::Any {
+            disable_parallel_tool_use: Some(true),
+        }) => Some(false),
         _ => None,
     };
 
@@ -724,7 +726,9 @@ mod tests {
     #[test]
     fn tool_choice_auto() {
         let mut req = basic_request();
-        req.tool_choice = Some(anthropic::ToolChoice::Auto { disable_parallel_tool_use: None });
+        req.tool_choice = Some(anthropic::ToolChoice::Auto {
+            disable_parallel_tool_use: None,
+        });
         let oai = anthropic_to_openai_request(&req);
         assert!(matches!(
             oai.tool_choice,
@@ -735,7 +739,9 @@ mod tests {
     #[test]
     fn tool_choice_any_becomes_required() {
         let mut req = basic_request();
-        req.tool_choice = Some(anthropic::ToolChoice::Any { disable_parallel_tool_use: None });
+        req.tool_choice = Some(anthropic::ToolChoice::Any {
+            disable_parallel_tool_use: None,
+        });
         let oai = anthropic_to_openai_request(&req);
         assert!(matches!(
             oai.tool_choice,
@@ -2205,7 +2211,9 @@ mod tests {
     #[test]
     fn warnings_thinking_config() {
         let mut req = basic_request();
-        req.thinking = Some(anthropic::ThinkingConfig::Enabled { budget_tokens: 5000 });
+        req.thinking = Some(anthropic::ThinkingConfig::Enabled {
+            budget_tokens: 5000,
+        });
         let w = compute_request_warnings(&req);
         assert_eq!(w.as_header_value().unwrap(), "thinking_config");
     }
@@ -2273,10 +2281,15 @@ mod tests {
     fn warnings_multiple_combined() {
         let mut req = basic_request();
         req.top_k = Some(10);
-        req.thinking = Some(anthropic::ThinkingConfig::Enabled { budget_tokens: 1000 });
+        req.thinking = Some(anthropic::ThinkingConfig::Enabled {
+            budget_tokens: 1000,
+        });
         let w = compute_request_warnings(&req);
         let val = w.as_header_value().unwrap();
         assert!(val.contains("top_k"), "missing top_k in: {val}");
-        assert!(val.contains("thinking_config"), "missing thinking_config in: {val}");
+        assert!(
+            val.contains("thinking_config"),
+            "missing thinking_config in: {val}"
+        );
     }
 }
