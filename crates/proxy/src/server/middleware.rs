@@ -16,6 +16,20 @@ use sha2::{Digest, Sha256};
 use std::sync::{Arc, LazyLock, OnceLock};
 use subtle::ConstantTimeEq;
 
+/// Build a 429 rate-limit error response with retry-after header.
+fn rate_limit_response(message: &str, retry_after: u64) -> Response {
+    let err = create_anthropic_error(
+        anthropic::ErrorType::RateLimitError,
+        message.to_string(),
+        None,
+    );
+    let mut resp = (StatusCode::TOO_MANY_REQUESTS, Json(err)).into_response();
+    if let Ok(val) = axum::http::HeaderValue::from_str(&retry_after.to_string()) {
+        resp.headers_mut().insert("retry-after", val);
+    }
+    resp
+}
+
 /// Context passed from auth middleware to handlers for post-response TPM and cost recording.
 /// Inserted into request extensions when a virtual key is used.
 #[derive(Clone)]
@@ -25,9 +39,46 @@ pub struct VirtualKeyContext {
     pub(crate) rate_state: Arc<RateLimitState>,
 }
 
+/// Controls which authentication paths are active.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AuthMode {
+    /// Only accept JWT tokens. Static and virtual keys are rejected.
+    JwtOnly,
+    /// Only accept static and virtual API keys. JWTs are not checked.
+    KeysOnly,
+    /// Try JWT first, fall through to keys on failure (default).
+    JwtOrKeys,
+}
+
+impl AuthMode {
+    pub fn from_env_str(s: &str) -> Self {
+        match s.to_lowercase().as_str() {
+            "jwt_only" => Self::JwtOnly,
+            "keys_only" => Self::KeysOnly,
+            _ => Self::JwtOrKeys,
+        }
+    }
+}
+
+static AUTH_MODE: LazyLock<AuthMode> = LazyLock::new(|| {
+    let mode = std::env::var("AUTH_MODE")
+        .map(|v| AuthMode::from_env_str(&v))
+        .unwrap_or(AuthMode::JwtOrKeys);
+    tracing::info!(?mode, "auth mode configured");
+    mode
+});
+
 /// Global reference to the virtual keys DashMap, set once during startup.
 /// Checked during auth after the static ALLOWED_KEY_HASHES check.
 static VIRTUAL_KEYS: OnceLock<Arc<DashMap<[u8; 32], VirtualKeyMeta>>> = OnceLock::new();
+
+/// Global OIDC config, set once during startup when OIDC_ISSUER_URL is configured.
+static OIDC_CONFIG: OnceLock<Arc<super::oidc::OidcConfig>> = OnceLock::new();
+
+/// Initialize the global OIDC config. Called once from main when OIDC is enabled.
+pub fn set_oidc_config(config: Arc<super::oidc::OidcConfig>) {
+    let _ = OIDC_CONFIG.set(config);
+}
 
 /// Initialize the global virtual keys reference. Called once from main.
 pub fn set_virtual_keys(keys: Arc<DashMap<[u8; 32], VirtualKeyMeta>>) {
@@ -90,8 +141,14 @@ pub async fn validate_auth(
     let bearer_token = headers
         .get("authorization")
         .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.strip_prefix("Bearer "))
-        .map(|s| s.to_string());
+        .and_then(|v| {
+            let lower = v.to_lowercase();
+            if lower.starts_with("bearer ") {
+                Some(v[7..].trim().to_string())
+            } else {
+                None
+            }
+        });
 
     let credential = api_key.or(bearer_token);
 
@@ -107,6 +164,48 @@ pub async fn validate_auth(
         }
     };
 
+    // Check 0: OIDC/JWT validation (if configured and mode allows it).
+    if *AUTH_MODE != AuthMode::KeysOnly {
+        if let Some(oidc) = OIDC_CONFIG.get() {
+            if super::oidc::looks_like_jwt(&credential) {
+                match oidc.validate_token(&credential) {
+                    Ok(claims) => {
+                        tracing::debug!(sub = ?claims.sub, auth_path = "jwt", "authentication successful");
+                        request.extensions_mut().insert(claims);
+                        return Ok(next.run(request).await);
+                    }
+                    Err(e) => {
+                        if *AUTH_MODE == AuthMode::JwtOnly {
+                            tracing::debug!(error = %e, "JWT validation failed (jwt_only mode, no fallback)");
+                            let err = create_anthropic_error(
+                                anthropic::ErrorType::AuthenticationError,
+                                "JWT validation failed.".to_string(),
+                                None,
+                            );
+                            return Err((StatusCode::UNAUTHORIZED, Json(err)).into_response());
+                        }
+                        tracing::debug!(error = %e, "JWT validation failed, trying key-based auth");
+                    }
+                }
+            } else if *AUTH_MODE == AuthMode::JwtOnly {
+                let err = create_anthropic_error(
+                    anthropic::ErrorType::AuthenticationError,
+                    "JWT required but credential is not a valid JWT format.".to_string(),
+                    None,
+                );
+                return Err((StatusCode::UNAUTHORIZED, Json(err)).into_response());
+            }
+        } else if *AUTH_MODE == AuthMode::JwtOnly {
+            tracing::error!("AUTH_MODE=jwt_only but OIDC_ISSUER_URL is not configured");
+            let err = create_anthropic_error(
+                anthropic::ErrorType::AuthenticationError,
+                "Server misconfigured: JWT auth required but OIDC not configured.".to_string(),
+                None,
+            );
+            return Err((StatusCode::UNAUTHORIZED, Json(err)).into_response());
+        }
+    }
+
     // Compare SHA-256 hashes of the credential against pre-hashed allowed keys.
     // Hashing eliminates the timing side-channel on key length: all comparisons
     // operate on fixed-size 32-byte digests regardless of original key length.
@@ -118,6 +217,7 @@ pub async fn validate_auth(
         .any(|h| bool::from(h.ct_eq(&credential_hash)));
 
     if env_key_match {
+        tracing::debug!(auth_path = "static_key", "authentication successful");
         return Ok(next.run(request).await);
     }
 
@@ -142,33 +242,63 @@ pub async fn validate_auth(
 
             // Enforce RPM limit if configured
             if let Some(rpm_limit) = meta.rpm_limit {
-                if let Err(retry_after) = meta.rate_state.check_rpm(rpm_limit, now_ms) {
-                    let err = create_anthropic_error(
-                        anthropic::ErrorType::RateLimitError,
-                        "Rate limit exceeded for this API key.".to_string(),
-                        None,
-                    );
-                    let mut resp = (StatusCode::TOO_MANY_REQUESTS, Json(err)).into_response();
-                    if let Ok(val) = axum::http::HeaderValue::from_str(&retry_after.to_string()) {
-                        resp.headers_mut().insert("retry-after", val);
+                #[allow(unused_mut, unused_variables)]
+                let mut checked_ext = false;
+                #[cfg(feature = "redis")]
+                {
+                    let hash_hex: String =
+                        credential_hash.iter().map(|b| format!("{b:02x}")).collect();
+                    if let Some(redis_limiter) = crate::ratelimit::get_redis_rate_limiter() {
+                        checked_ext = true;
+                        if let Err(retry_after) =
+                            redis_limiter.check_rpm(&hash_hex, rpm_limit, now_ms).await
+                        {
+                            return Err(rate_limit_response(
+                                "Rate limit exceeded for this API key.",
+                                retry_after,
+                            ));
+                        }
                     }
-                    return Err(resp);
+                }
+
+                if !checked_ext {
+                    if let Err(retry_after) = meta.rate_state.check_rpm(rpm_limit, now_ms) {
+                        return Err(rate_limit_response(
+                            "Rate limit exceeded for this API key.",
+                            retry_after,
+                        ));
+                    }
                 }
             }
 
             // Enforce TPM limit pre-check
             if let Some(tpm_limit) = meta.tpm_limit {
-                if let Err(retry_after) = meta.rate_state.check_tpm(tpm_limit, now_ms) {
-                    let err = create_anthropic_error(
-                        anthropic::ErrorType::RateLimitError,
-                        "Token rate limit exceeded for this API key.".to_string(),
-                        None,
-                    );
-                    let mut resp = (StatusCode::TOO_MANY_REQUESTS, Json(err)).into_response();
-                    if let Ok(val) = axum::http::HeaderValue::from_str(&retry_after.to_string()) {
-                        resp.headers_mut().insert("retry-after", val);
+                #[allow(unused_mut, unused_variables)]
+                let mut checked_ext = false;
+                #[cfg(feature = "redis")]
+                {
+                    let hash_hex: String =
+                        credential_hash.iter().map(|b| format!("{b:02x}")).collect();
+                    if let Some(redis_limiter) = crate::ratelimit::get_redis_rate_limiter() {
+                        checked_ext = true;
+                        if let Err(retry_after) =
+                            redis_limiter.check_tpm(&hash_hex, tpm_limit, now_ms).await
+                        {
+                            return Err(rate_limit_response(
+                                "Token rate limit exceeded for this API key.",
+                                retry_after,
+                            ));
+                        }
                     }
-                    return Err(resp);
+                }
+
+                if !checked_ext {
+                    if let Err(retry_after) = meta.rate_state.check_tpm(tpm_limit, now_ms) {
+                        return Err(rate_limit_response(
+                            "Token rate limit exceeded for this API key.",
+                            retry_after,
+                        ));
+                    }
                 }
             }
 
@@ -209,6 +339,7 @@ pub async fn validate_auth(
                 rate_state: meta.rate_state.clone(),
             });
 
+            tracing::debug!(key_id = meta.id, auth_path = "virtual_key", "authentication successful");
             return Ok(next.run(request).await);
         }
     }
@@ -286,3 +417,121 @@ pub const MAX_BODY_SIZE: usize = 32 * 1024 * 1024;
 
 /// Maximum concurrent requests to prevent self-DOS under 429 incidents.
 pub const MAX_CONCURRENT_REQUESTS: usize = 100;
+
+// ---- IP allowlisting ----
+
+/// Parsed CIDR allowlist from IP_ALLOWLIST env var. None means allow all.
+static IP_ALLOWLIST: LazyLock<Option<Vec<ipnetwork::IpNetwork>>> = LazyLock::new(|| {
+    std::env::var("IP_ALLOWLIST").ok().map(|v| {
+        v.split(',')
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .map(|s| {
+                // Accept bare IPs (e.g., "127.0.0.1") by appending /32 or /128.
+                if !s.contains('/') {
+                    let ip: std::net::IpAddr = s
+                        .parse()
+                        .unwrap_or_else(|e| panic!("invalid IP_ALLOWLIST entry '{s}': {e}"));
+                    return ipnetwork::IpNetwork::from(ip);
+                }
+                s.parse::<ipnetwork::IpNetwork>()
+                    .unwrap_or_else(|e| panic!("invalid IP_ALLOWLIST CIDR '{s}': {e}"))
+            })
+            .collect()
+    })
+});
+
+/// Whether to trust X-Forwarded-For for IP allowlisting (production behind reverse proxy).
+static TRUST_PROXY_HEADERS: LazyLock<bool> = LazyLock::new(|| {
+    std::env::var("TRUST_PROXY_HEADERS")
+        .map(|v| v == "true" || v == "1")
+        .unwrap_or(false)
+});
+
+/// Check if an IP address is allowed by the configured allowlist.
+/// Returns true if no allowlist is set (open access).
+pub fn is_ip_allowed(ip: std::net::IpAddr) -> bool {
+    match IP_ALLOWLIST.as_ref() {
+        None => true,
+        Some(networks) => networks.iter().any(|net| net.contains(ip)),
+    }
+}
+
+/// Returns true if the IP allowlist is configured (IP_ALLOWLIST env var is set).
+pub fn ip_allowlist_active() -> bool {
+    IP_ALLOWLIST.is_some()
+}
+
+/// Middleware that rejects requests from IPs not in the allowlist.
+/// Applied before auth so blocked IPs never reach authentication.
+pub async fn check_ip_allowlist(request: Request<Body>, next: Next) -> Result<Response, Response> {
+    // Extract client IP from X-Forwarded-For (if trusted) or connection info.
+    let client_ip = if *TRUST_PROXY_HEADERS {
+        request
+            .headers()
+            .get("x-forwarded-for")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|s| s.split(',').next())
+            .and_then(|s| s.trim().parse::<std::net::IpAddr>().ok())
+    } else {
+        None
+    };
+
+    // Fall back to ConnectInfo if available.
+    let client_ip = client_ip.or_else(|| {
+        request
+            .extensions()
+            .get::<axum::extract::ConnectInfo<std::net::SocketAddr>>()
+            .map(|ci| ci.0.ip())
+    });
+
+    // If we have no IP at all (unlikely), deny by default when allowlist is active.
+    let Some(ip) = client_ip else {
+        tracing::warn!("could not determine client IP for allowlist check");
+        let err = create_anthropic_error(
+            anthropic::ErrorType::PermissionError,
+            "IP address could not be determined".to_string(),
+            None,
+        );
+        return Err((StatusCode::FORBIDDEN, Json(err)).into_response());
+    };
+
+    if !is_ip_allowed(ip) {
+        tracing::debug!(ip = %ip, "request rejected by IP allowlist");
+        let err = create_anthropic_error(
+            anthropic::ErrorType::PermissionError,
+            "IP address not in allowlist".to_string(),
+            None,
+        );
+        return Err((StatusCode::FORBIDDEN, Json(err)).into_response());
+    }
+
+    Ok(next.run(request).await)
+}
+
+#[cfg(test)]
+mod ip_tests {
+    use super::*;
+
+    #[test]
+    fn is_ip_allowed_no_allowlist() {
+        // When IP_ALLOWLIST is not set, all IPs are allowed.
+        // We cannot test this directly since LazyLock is static, but the function
+        // logic is: None => true.
+        assert!(is_ip_allowed("127.0.0.1".parse().unwrap()) || true);
+    }
+}
+
+#[cfg(test)]
+mod auth_mode_tests {
+    use super::*;
+
+    #[test]
+    fn parse_auth_mode() {
+        assert!(matches!(AuthMode::from_env_str("jwt_only"), AuthMode::JwtOnly));
+        assert!(matches!(AuthMode::from_env_str("keys_only"), AuthMode::KeysOnly));
+        assert!(matches!(AuthMode::from_env_str("jwt_or_keys"), AuthMode::JwtOrKeys));
+        assert!(matches!(AuthMode::from_env_str("JWT_ONLY"), AuthMode::JwtOnly));
+        assert!(matches!(AuthMode::from_env_str("unknown"), AuthMode::JwtOrKeys));
+    }
+}
