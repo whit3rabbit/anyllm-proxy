@@ -469,6 +469,15 @@ struct TomlBackendConfig {
     aws_session_token: Option<String>,
 }
 
+/// Result of `MultiConfig::load()`.
+pub struct LoadResult {
+    pub multi_config: MultiConfig,
+    pub model_router: Option<Arc<std::sync::RwLock<model_router::ModelRouter>>>,
+    /// Resolved master_key from LiteLLM general_settings, if present.
+    /// Caller should apply as PROXY_API_KEYS if that var is not already set.
+    pub litellm_master_key: Option<String>,
+}
+
 impl MultiConfig {
     /// Load configuration.
     ///
@@ -477,19 +486,41 @@ impl MultiConfig {
     /// 2. `PROXY_CONFIG` with any other extension: parse as TOML
     /// 3. No `PROXY_CONFIG`: env-var-based single-backend config
     ///
-    /// Returns `(MultiConfig, Option<ModelRouter>)`. The router is only set
-    /// for LiteLLM configs (model_list routing).
-    pub fn load() -> (Self, Option<Arc<model_router::ModelRouter>>) {
+    /// The model router is only set for LiteLLM configs (model_list routing).
+    /// `litellm_master_key` is returned (not applied) so the caller can
+    /// consolidate all `set_var` calls into a single pre-runtime block.
+    pub fn load() -> LoadResult {
         if let Ok(path) = std::env::var("PROXY_CONFIG") {
             if path.ends_with(".yaml") || path.ends_with(".yml") {
                 let yaml = std::fs::read_to_string(&path)
                     .unwrap_or_else(|e| panic!("failed to read LiteLLM config '{path}': {e}"));
-                let (mc, router) = litellm::from_litellm_yaml(&yaml);
-                return (mc, Some(router));
+                let parsed = litellm::parse_litellm_yaml(&yaml);
+
+                // Wire up webhook callbacks from litellm_settings.callbacks.
+                if !parsed.callback_urls.is_empty() {
+                    if let Some(cb) = crate::callbacks::CallbackConfig::new(parsed.callback_urls) {
+                        crate::server::routes::set_callbacks(cb);
+                        tracing::info!("webhook callbacks configured from litellm_settings");
+                    }
+                }
+
+                return LoadResult {
+                    multi_config: parsed.multi_config,
+                    model_router: Some(Arc::new(std::sync::RwLock::new(parsed.router))),
+                    litellm_master_key: parsed.master_key,
+                };
             }
-            (Self::from_toml_file(&path), None)
+            LoadResult {
+                multi_config: Self::from_toml_file(&path),
+                model_router: None,
+                litellm_master_key: None,
+            }
         } else {
-            (Self::from_legacy_env(), None)
+            LoadResult {
+                multi_config: Self::from_legacy_env(),
+                model_router: None,
+                litellm_master_key: None,
+            }
         }
     }
 

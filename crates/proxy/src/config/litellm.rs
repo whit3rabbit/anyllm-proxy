@@ -9,7 +9,7 @@ use std::sync::Arc;
 use indexmap::IndexMap;
 use serde::Deserialize;
 
-use super::model_router::{Deployment, ModelRouter};
+use super::model_router::{Deployment, ModelRouter, RoutingStrategy};
 use super::{
     resolve_env_value, validate_base_url, BackendAuth, BackendConfig, BackendKind, ModelMapping,
     MultiConfig, OpenAIApiFormat, TlsConfig,
@@ -42,6 +42,7 @@ struct LiteLLMParams {
     api_key: Option<String>,
     rpm: Option<u32>,
     tpm: Option<u64>,
+    weight: Option<u32>,
     // Azure-specific
     api_version: Option<String>,
     // Bedrock-specific
@@ -59,14 +60,36 @@ struct LiteLLMSettings {
     num_retries: Option<u32>,
     #[serde(default)]
     request_timeout: Option<u64>,
+    #[serde(default)]
+    callbacks: Vec<String>,
     #[serde(flatten)]
     _extra: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Deserialize)]
 struct RouterSettings {
+    #[serde(default)]
+    routing_strategy: Option<String>,
     #[serde(flatten)]
     _extra: serde_json::Map<String, serde_json::Value>,
+}
+
+/// Map LiteLLM routing_strategy string to our enum.
+fn parse_routing_strategy(s: &str) -> RoutingStrategy {
+    match s.to_ascii_lowercase().replace('_', "-").as_str() {
+        "simple-shuffle" | "round-robin" => RoutingStrategy::RoundRobin,
+        "least-busy" => RoutingStrategy::LeastBusy,
+        "latency-based-routing" | "latency-based" => RoutingStrategy::LatencyBased,
+        "usage-based-routing" | "usage-based" => RoutingStrategy::LeastBusy,
+        "weighted" => RoutingStrategy::Weighted,
+        other => {
+            tracing::warn!(
+                strategy = %other,
+                "unknown routing_strategy, falling back to round-robin"
+            );
+            RoutingStrategy::RoundRobin
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -124,7 +147,23 @@ fn hash_string(s: &str) -> u64 {
 ///
 /// # Panics
 /// On invalid YAML, missing required fields, or unresolvable env var references.
-pub fn from_litellm_yaml(yaml: &str) -> (MultiConfig, Arc<ModelRouter>) {
+/// Parsed result from a LiteLLM config file.
+pub struct LiteLLMParsed {
+    pub multi_config: MultiConfig,
+    pub router: ModelRouter,
+    /// Webhook callback URLs from litellm_settings.callbacks.
+    pub callback_urls: Vec<String>,
+    /// Resolved `general_settings.master_key`, if present.
+    /// Caller should apply as PROXY_API_KEYS if that var is not already set.
+    pub master_key: Option<String>,
+}
+
+pub fn from_litellm_yaml(yaml: &str) -> (MultiConfig, ModelRouter) {
+    let parsed = parse_litellm_yaml(yaml);
+    (parsed.multi_config, parsed.router)
+}
+
+pub fn parse_litellm_yaml(yaml: &str) -> LiteLLMParsed {
     let config: LiteLLMConfig =
         serde_yaml::from_str(yaml).unwrap_or_else(|e| panic!("invalid LiteLLM config YAML: {e}"));
 
@@ -132,22 +171,20 @@ pub fn from_litellm_yaml(yaml: &str) -> (MultiConfig, Arc<ModelRouter>) {
         panic!("LiteLLM config must define at least one entry in model_list");
     }
 
-    // Apply general_settings.master_key as PROXY_API_KEYS if not already set.
-    if let Some(ref gs) = config.general_settings {
-        if let Some(ref mk) = gs.master_key {
-            let resolved = resolve_env_value(mk)
-                .unwrap_or_else(|e| panic!("general_settings.master_key: {e}"));
-            if std::env::var("PROXY_API_KEYS").is_err() {
-                // SAFETY: called single-threaded at startup.
-                unsafe { std::env::set_var("PROXY_API_KEYS", &resolved) };
-                tracing::info!("applied general_settings.master_key as PROXY_API_KEYS");
-            }
-        }
+    // Resolve general_settings.master_key but do not call set_var here.
+    // The caller applies it in the consolidated env override block.
+    let master_key = if let Some(ref gs) = config.general_settings {
+        let mk = gs.master_key.as_ref().map(|mk| {
+            resolve_env_value(mk).unwrap_or_else(|e| panic!("general_settings.master_key: {e}"))
+        });
         // Log unsupported keys at warn.
         for key in gs._extra.keys() {
             tracing::warn!(key = %key, "unsupported general_settings key (ignored)");
         }
-    }
+        mk
+    } else {
+        None
+    };
 
     if let Some(ref ls) = config.litellm_settings {
         for key in ls._extra.keys() {
@@ -217,6 +254,7 @@ pub fn from_litellm_yaml(yaml: &str) -> (MultiConfig, Arc<ModelRouter>) {
                 actual_model,
                 rpm: params.rpm,
                 tpm: params.tpm,
+                weight: params.weight,
             });
     }
 
@@ -239,25 +277,50 @@ pub fn from_litellm_yaml(yaml: &str) -> (MultiConfig, Arc<ModelRouter>) {
         backends,
     };
 
+    // Determine routing strategy from router_settings.
+    let strategy = config
+        .router_settings
+        .as_ref()
+        .and_then(|rs| rs.routing_strategy.as_deref())
+        .map(parse_routing_strategy)
+        .unwrap_or_default();
+
+    if strategy != RoutingStrategy::RoundRobin {
+        tracing::info!(strategy = ?strategy, "using routing strategy from config");
+    }
+
     // Build ModelRouter.
     let mut routes: HashMap<String, Vec<Arc<Deployment>>> = HashMap::new();
     for (model_name, specs) in model_deployments {
         let deployments = specs
             .into_iter()
             .map(|s| {
-                Arc::new(Deployment::new(
+                Arc::new(Deployment::with_weight(
                     s.backend_name,
                     s.actual_model,
                     s.rpm,
                     s.tpm,
+                    s.weight.unwrap_or(1),
                 ))
             })
             .collect();
         routes.insert(model_name, deployments);
     }
 
-    let router = Arc::new(ModelRouter::new(routes));
-    (multi, router)
+    let router = ModelRouter::with_strategy(routes, strategy);
+
+    let callback_urls = config
+        .litellm_settings
+        .as_ref()
+        .map(|s| s.callbacks.clone())
+        .unwrap_or_default();
+
+    LiteLLMParsed {
+        multi_config: multi,
+        router,
+        callback_urls,
+        master_key,
+    }
 }
 
 struct DeploymentSpec {
@@ -265,6 +328,7 @@ struct DeploymentSpec {
     actual_model: String,
     rpm: Option<u32>,
     tpm: Option<u64>,
+    weight: Option<u32>,
 }
 
 /// Determine the base URL for a deployment, applying provider-specific defaults.
@@ -285,9 +349,9 @@ fn resolve_base_url(kind: &BackendKind, params: &LiteLLMParams) -> String {
             params
                 .aws_region_name
                 .as_deref()
-                .or_else(|| std::env::var("AWS_REGION").ok().as_deref().map(|_| ""))
-                .unwrap_or("us-east-1")
-                .to_string()
+                .map(|v| v.to_string())
+                .or_else(|| std::env::var("AWS_REGION").ok())
+                .unwrap_or_else(|| "us-east-1".to_string())
         }
         // Azure and Vertex require api_base in the config.
         BackendKind::AzureOpenAI => {
@@ -406,16 +470,6 @@ fn build_backend_config(
         omit_stream_options: false,
         bedrock_credentials,
     }
-}
-
-// Bedrock region helper: fix the resolve_base_url for bedrock to return region properly.
-fn _bedrock_region(params: &LiteLLMParams) -> String {
-    params
-        .aws_region_name
-        .as_deref()
-        .map(|v| resolve_env_value(v).unwrap_or_else(|e| panic!("aws_region_name: {e}")))
-        .or_else(|| std::env::var("AWS_REGION").ok())
-        .unwrap_or_else(|| "us-east-1".to_string())
 }
 
 #[cfg(test)]
@@ -571,6 +625,74 @@ general_settings:
         // Should not panic; unknown fields are captured by serde(flatten).
         let (multi, router) = from_litellm_yaml(yaml);
         assert_eq!(multi.backends.len(), 1);
+        assert!(router.has_model("gpt-4o"));
+    }
+
+    #[test]
+    fn routing_strategy_parsed() {
+        let yaml = r#"
+model_list:
+  - model_name: gpt-4o
+    litellm_params:
+      model: openai/gpt-4o
+      api_key: sk-test
+
+router_settings:
+  routing_strategy: least-busy
+"#;
+        let (_, router) = from_litellm_yaml(yaml);
+        assert_eq!(router.strategy(), RoutingStrategy::LeastBusy);
+    }
+
+    #[test]
+    fn routing_strategy_latency() {
+        let yaml = r#"
+model_list:
+  - model_name: gpt-4o
+    litellm_params:
+      model: openai/gpt-4o
+      api_key: sk-test
+
+router_settings:
+  routing_strategy: latency-based-routing
+"#;
+        let (_, router) = from_litellm_yaml(yaml);
+        assert_eq!(router.strategy(), RoutingStrategy::LatencyBased);
+    }
+
+    #[test]
+    fn routing_strategy_defaults_to_round_robin() {
+        let yaml = r#"
+model_list:
+  - model_name: gpt-4o
+    litellm_params:
+      model: openai/gpt-4o
+      api_key: sk-test
+"#;
+        let (_, router) = from_litellm_yaml(yaml);
+        assert_eq!(router.strategy(), RoutingStrategy::RoundRobin);
+    }
+
+    #[test]
+    fn weight_field_parsed() {
+        let yaml = r#"
+model_list:
+  - model_name: gpt-4o
+    litellm_params:
+      model: openai/gpt-4o
+      api_key: sk-key-1
+      weight: 3
+  - model_name: gpt-4o
+    litellm_params:
+      model: openai/gpt-4o
+      api_key: sk-key-2
+      weight: 1
+
+router_settings:
+  routing_strategy: weighted
+"#;
+        let (_, router) = from_litellm_yaml(yaml);
+        assert_eq!(router.strategy(), RoutingStrategy::Weighted);
         assert!(router.has_model("gpt-4o"));
     }
 

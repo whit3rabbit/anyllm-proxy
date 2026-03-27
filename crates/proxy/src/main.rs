@@ -4,8 +4,7 @@ use tracing_subscriber::prelude::*;
 
 #[tokio::main]
 async fn main() {
-    // Load env file before anything else so RUST_LOG and backend config are visible.
-    // Explicit --env-file <path> takes priority; otherwise auto-load .anyllm.env if present.
+    // ---- Phase 1: Collect env file overrides (before tracing init) ----
     let args: Vec<String> = std::env::args().collect();
     let env_file_path = args
         .windows(2)
@@ -18,16 +17,28 @@ async fn main() {
                 None
             }
         });
-    if let Some(path) = env_file_path {
-        load_env_file(path);
+    let env_file_vars = env_file_path
+        .map(parse_env_file)
+        .unwrap_or_default();
+
+    // ---- Phase 2: Apply env file vars (needed for RUST_LOG before tracing init) ----
+    // SAFETY: single-threaded, before tokio spawns workers.
+    unsafe {
+        for (key, val) in &env_file_vars {
+            std::env::set_var(key, val);
+        }
+    }
+    if !env_file_vars.is_empty() {
+        eprintln!(
+            "anyllm_proxy: loaded {} variable(s) from env file",
+            env_file_vars.len()
+        );
     }
 
-    // Use a reload layer so the admin API can change log_level at runtime.
+    // ---- Phase 3: Init tracing (needs RUST_LOG from env file) ----
     let env_filter = tracing_subscriber::EnvFilter::from_default_env();
     let (filter, reload_handle) = tracing_subscriber::reload::Layer::new(env_filter);
 
-    // When the `otel` feature is enabled, wire an OpenTelemetry tracing layer
-    // into the subscriber so that spans are exported as OTLP traces.
     #[cfg(feature = "otel")]
     let _otel_guard = {
         let (guard, tracer) = anyllm_proxy::otel::init_otel();
@@ -46,10 +57,29 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer().json())
         .init();
 
-    // Apply LiteLLM env var aliases before loading config.
-    config::env_aliases::apply_env_aliases();
+    // ---- Phase 4: Compute remaining env overrides and apply in one block ----
+    let aliases = config::env_aliases::compute_env_aliases();
 
-    let (multi_config, model_router) = config::MultiConfig::load();
+    // Apply alias overrides so config::MultiConfig::load() sees them.
+    // SAFETY: still single-threaded at this point (no spawns yet).
+    unsafe {
+        for (key, val) in &aliases {
+            std::env::set_var(key, val);
+        }
+    }
+
+    let load_result = config::MultiConfig::load();
+    let multi_config = load_result.multi_config;
+    let model_router = load_result.model_router;
+
+    // Apply litellm master_key if PROXY_API_KEYS is still unset.
+    if let Some(ref mk) = load_result.litellm_master_key {
+        if std::env::var("PROXY_API_KEYS").is_err() {
+            // SAFETY: still single-threaded, no spawns yet.
+            unsafe { std::env::set_var("PROXY_API_KEYS", mk) };
+            tracing::info!("applied general_settings.master_key as PROXY_API_KEYS");
+        }
+    }
     let listen_port = multi_config.listen_port;
 
     // Wire up WEBHOOK_URLS env var (if LiteLLM callbacks weren't already set).
@@ -433,28 +463,29 @@ async fn main() {
     tracing::info!("server shut down gracefully");
 }
 
-/// Load a `.env`-format file and apply values to the process environment.
+/// Parse a `.env`-format file and return `(key, value)` pairs to set.
 ///
 /// Rules:
 /// - `KEY=VALUE` sets the variable. Surrounding whitespace is trimmed.
 /// - Values may be optionally wrapped in `"double"` or `'single'` quotes.
 /// - Lines starting with `#` (after trimming) are comments.
-/// - Already-set environment variables are never overwritten; the real
+/// - Already-set environment variables are skipped; the real
 ///   environment always takes precedence over the file.
 /// - `export KEY=VALUE` syntax is supported (the `export` prefix is stripped).
 ///
+/// Returns pairs that should be applied via `set_var` in the consolidated block.
 /// Compatible with Docker `--env-file` and standard dotenv tooling.
-fn load_env_file(path: &str) {
+fn parse_env_file(path: &str) -> Vec<(String, String)> {
     let content = match std::fs::read_to_string(path) {
         Ok(c) => c,
         Err(e) => {
             // Print directly; tracing isn't initialized yet.
             eprintln!("anyllm_proxy: could not read env file '{path}': {e}");
-            return;
+            return Vec::new();
         }
     };
 
-    let mut loaded = 0usize;
+    let mut pairs = Vec::new();
     for (lineno, raw) in content.lines().enumerate() {
         let line = raw.trim();
         if line.is_empty() || line.starts_with('#') {
@@ -482,15 +513,12 @@ fn load_env_file(path: &str) {
         } else {
             val
         };
-        // Only set if not already present so the real environment wins.
+        // Only include if not already present so the real environment wins.
         if std::env::var(key).is_err() {
-            // SAFETY: called before any threads are spawned (before tokio runtime).
-            #[allow(deprecated)]
-            std::env::set_var(key, val);
-            loaded += 1;
+            pairs.push((key.to_string(), val.to_string()));
         }
     }
-    eprintln!("anyllm_proxy: loaded {loaded} variable(s) from '{path}'");
+    pairs
 }
 
 /// Write the admin token to a file with mode 0600 (owner-only read/write).
