@@ -207,6 +207,42 @@ pub fn insert_request_log(conn: &Connection, entry: &RequestLogEntry) -> rusqlit
 }
 
 /// Query request log with optional filters and pagination.
+/// Typed status code filter -- prevents SQL injection by construction.
+/// Only valid patterns are representable; invalid input is rejected at parse time.
+enum StatusFilter {
+    Exact(u16),
+    Class2xx,
+    Class4xx,
+    Class5xx,
+}
+
+impl StatusFilter {
+    fn parse(s: &str) -> Option<Self> {
+        match s {
+            "2xx" => Some(Self::Class2xx),
+            "4xx" => Some(Self::Class4xx),
+            "5xx" => Some(Self::Class5xx),
+            other => other.parse::<u16>().ok().map(Self::Exact),
+        }
+    }
+
+    fn apply_to_query(
+        &self,
+        sql: &mut String,
+        params: &mut Vec<Box<dyn rusqlite::types::ToSql>>,
+    ) {
+        match self {
+            Self::Exact(code) => {
+                sql.push_str(" AND status_code = ?");
+                params.push(Box::new(*code as i64));
+            }
+            Self::Class2xx => sql.push_str(" AND status_code >= 200 AND status_code < 300"),
+            Self::Class4xx => sql.push_str(" AND status_code >= 400 AND status_code < 500"),
+            Self::Class5xx => sql.push_str(" AND status_code >= 500 AND status_code < 600"),
+        }
+    }
+}
+
 pub fn query_request_log(
     conn: &Connection,
     limit: u32,
@@ -233,16 +269,10 @@ pub fn query_request_log(
         param_values.push(Box::new(s.to_string()));
     }
     if let Some(sf) = status_filter {
-        // Support "5xx", "4xx", "2xx" patterns or exact status code
-        match sf {
-            "2xx" => sql.push_str(" AND status_code >= 200 AND status_code < 300"),
-            "4xx" => sql.push_str(" AND status_code >= 400 AND status_code < 500"),
-            "5xx" => sql.push_str(" AND status_code >= 500 AND status_code < 600"),
-            exact => {
-                sql.push_str(" AND status_code = ?");
-                param_values.push(Box::new(exact.to_string()));
-            }
+        if let Some(parsed) = StatusFilter::parse(sf) {
+            parsed.apply_to_query(&mut sql, &mut param_values);
         }
+        // Invalid filter silently ignored
     }
     if let Some(kid) = key_id {
         sql.push_str(" AND key_id = ?");
@@ -949,5 +979,50 @@ mod tests {
         assert_eq!(page2.len(), 2);
         let page3 = query_audit_log(&conn, 2, 4).unwrap();
         assert_eq!(page3.len(), 1);
+    }
+
+    #[test]
+    fn status_filter_parses_valid_inputs() {
+        assert!(StatusFilter::parse("200").is_some());
+        assert!(StatusFilter::parse("2xx").is_some());
+        assert!(StatusFilter::parse("4xx").is_some());
+        assert!(StatusFilter::parse("5xx").is_some());
+        assert!(StatusFilter::parse("404").is_some());
+    }
+
+    #[test]
+    fn status_filter_rejects_invalid_inputs() {
+        assert!(StatusFilter::parse("abc").is_none());
+        assert!(StatusFilter::parse("2xx; DROP TABLE").is_none());
+        assert!(StatusFilter::parse("").is_none());
+        assert!(StatusFilter::parse("99999").is_none()); // overflows u16
+        assert!(StatusFilter::parse("-1").is_none());
+    }
+
+    #[test]
+    fn status_filter_exact_code_query() {
+        let conn = in_memory_db();
+        insert_request_log(&conn, &sample_entry()).unwrap(); // status 200
+
+        let mut err_entry = sample_entry();
+        err_entry.request_id = "test-404".into();
+        err_entry.status_code = 404;
+        insert_request_log(&conn, &err_entry).unwrap();
+
+        // Exact code filter should match only the 404 entry.
+        let results = query_request_log(&conn, 10, 0, None, None, Some("404"), None).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].status_code, 404);
+    }
+
+    #[test]
+    fn status_filter_invalid_ignored() {
+        let conn = in_memory_db();
+        insert_request_log(&conn, &sample_entry()).unwrap();
+
+        // Invalid filter should be silently ignored, returning all rows.
+        let results =
+            query_request_log(&conn, 10, 0, None, None, Some("garbage"), None).unwrap();
+        assert_eq!(results.len(), 1);
     }
 }
