@@ -337,8 +337,8 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
   }
 
   function toggleRequestDetail(row, requestId) {
-    var next = row.nextSibling;
-    if (next && next.classList && next.classList.contains('feed-detail')) {
+    var next = row.nextElementSibling;
+    if (next && next.classList.contains('feed-detail')) {
       next.parentNode.removeChild(next);
       return;
     }
@@ -932,14 +932,15 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
       clearChildren(container, false);
 
       if (data.note) {
-        strategyEl.textContent = data.note;
-      } else {
-        strategyEl.textContent = data.strategy ? ('Strategy: ' + data.strategy) : '';
+        strategyEl.textContent = '';
+        container.appendChild(el('div', {className: 'empty', textContent: data.note}));
+        return;
       }
+      strategyEl.textContent = data.strategy ? ('Strategy: ' + data.strategy) : '';
 
       var models = data.models || [];
       if (models.length === 0) {
-        container.appendChild(el('div', {className: 'empty', textContent: data.note || 'No model deployments configured.'}));
+        container.appendChild(el('div', {className: 'empty', textContent: 'No model deployments configured.'}));
         return;
       }
 
