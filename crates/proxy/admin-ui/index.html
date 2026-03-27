@@ -491,7 +491,15 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
       }
       if (metrics.latency_p50_ms != null) document.getElementById('stat-p50').textContent = formatLatency(metrics.latency_p50_ms);
       if (metrics.latency_p95_ms != null) document.getElementById('stat-p95').textContent = formatLatency(metrics.latency_p95_ms);
-      if (metrics.error_rate != null) document.getElementById('stat-error-rate').textContent = (metrics.error_rate * 100).toFixed(1) + '%';
+      if (metrics.error_rate != null) {
+        var pct = (metrics.error_rate * 100).toFixed(1) + '%';
+        var errEl = document.getElementById('stat-error-rate');
+        errEl.textContent = pct;
+        errEl.style.color = metrics.error_rate > 0.05 ? '#f85149' : '#3fb950';
+      }
+      if (metrics.requests_per_second != null) {
+        document.getElementById('stat-rpm').textContent = (metrics.requests_per_second * 60).toFixed(0);
+      }
     }).catch(function(e) { console.error('Dashboard load failed:', e); });
 
     apiFetch('/backends').then(function(data) {
@@ -500,7 +508,7 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
       (data.backends || []).forEach(function(b) {
         var card = el('div', {className: 'card'}, [
           el('div', {className: 'card-header'}, [el('span', {className: 'card-name', textContent: b.name})]),
-          el('div', {className: 'card-body', textContent: b.big_model + ' / ' + b.small_model + ' | ' + (b.metrics.requests_total||0) + ' reqs'})
+          el('div', {className: 'card-body', textContent: b.big_model + ' / ' + b.small_model + ' | ' + (b.metrics.requests_total||0) + ' reqs | ' + (b.metrics.requests_error||0) + ' errs'})
         ]);
         container.appendChild(card);
       });
@@ -626,10 +634,13 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
     { label: 'OpenAI / Compatible', keys: ['OPENAI_BASE_URL','OPENAI_API_FORMAT','OPENAI_API_KEY'] },
     { label: 'Vertex AI', keys: ['VERTEX_PROJECT','VERTEX_REGION','VERTEX_API_KEY'] },
     { label: 'Gemini', keys: ['GEMINI_BASE_URL','GEMINI_API_KEY'] },
-    { label: 'Auth & TLS', keys: ['PROXY_API_KEYS','TLS_CLIENT_CERT_P12','TLS_CA_CERT'] },
+    { label: 'Azure OpenAI', keys: ['AZURE_OPENAI_ENDPOINT','AZURE_OPENAI_DEPLOYMENT','AZURE_OPENAI_API_KEY','AZURE_OPENAI_API_VERSION'] },
+    { label: 'AWS Bedrock', keys: ['AWS_REGION','AWS_ACCESS_KEY_ID','AWS_SECRET_ACCESS_KEY','AWS_SESSION_TOKEN'] },
+    { label: 'Auth & TLS', keys: ['PROXY_API_KEYS','PROXY_OPEN_RELAY','TLS_CLIENT_CERT_P12','TLS_CA_CERT'] },
+    { label: 'Network', keys: ['IP_ALLOWLIST','TRUST_PROXY_HEADERS','WEBHOOK_URLS'] },
     { label: 'Admin', keys: ['ADMIN_PORT','ADMIN_DB_PATH','ADMIN_LOG_RETENTION_DAYS'] },
   ];
-  var ENV_SECRET_KEYS = {'OPENAI_API_KEY':1,'VERTEX_API_KEY':1,'GEMINI_API_KEY':1,'PROXY_API_KEYS':1};
+  var ENV_SECRET_KEYS = {'OPENAI_API_KEY':1,'VERTEX_API_KEY':1,'GEMINI_API_KEY':1,'PROXY_API_KEYS':1,'AZURE_OPENAI_API_KEY':1,'AWS_SECRET_ACCESS_KEY':1,'AWS_SESSION_TOKEN':1};
 
   function loadEnv() {
     apiFetch('/env').then(function(data) {
