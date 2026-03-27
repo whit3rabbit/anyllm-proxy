@@ -4,6 +4,54 @@ use sha2::{Digest, Sha256};
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
+/// Role assigned to a virtual API key, controlling access scope.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeyRole {
+    Admin,
+    Developer,
+}
+
+impl KeyRole {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            KeyRole::Admin => "admin",
+            KeyRole::Developer => "developer",
+        }
+    }
+
+    pub fn from_str_or_default(s: &str) -> Self {
+        match s.to_lowercase().as_str() {
+            "admin" => KeyRole::Admin,
+            _ => KeyRole::Developer,
+        }
+    }
+}
+
+/// Budget reset period for a virtual key.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BudgetDuration {
+    Daily,
+    Monthly,
+}
+
+impl BudgetDuration {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            BudgetDuration::Daily => "daily",
+            BudgetDuration::Monthly => "monthly",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.to_lowercase().as_str() {
+            "daily" => Some(BudgetDuration::Daily),
+            "monthly" => Some(BudgetDuration::Monthly),
+            _ => None,
+        }
+    }
+
+}
+
 /// Current time as milliseconds since the Unix epoch. Used for rate-limit sliding windows.
 pub(crate) fn now_ms() -> u64 {
     std::time::SystemTime::now()
@@ -56,6 +104,16 @@ pub struct VirtualKeyMeta {
     pub rpm_limit: Option<u32>,
     pub tpm_limit: Option<u32>,
     pub rate_state: Arc<RateLimitState>,
+    /// Access role (admin or developer). Defaults to developer.
+    pub role: KeyRole,
+    /// Maximum budget in USD per period. None = unlimited.
+    pub max_budget_usd: Option<f64>,
+    /// Budget reset period. None = lifetime budget (no reset).
+    pub budget_duration: Option<BudgetDuration>,
+    /// Start of the current budget period (ISO 8601 UTC).
+    pub period_start: Option<String>,
+    /// Accumulated spend in the current period.
+    pub period_spend_usd: f64,
 }
 
 /// Sliding window rate limit state per virtual key.
@@ -125,6 +183,104 @@ impl RateLimitState {
     }
 }
 
+/// Check whether the budget period has elapsed and reset spend if so.
+/// Returns true if a reset occurred.
+/// Does NOT persist to SQLite; caller should fire-and-forget a DB update.
+pub fn check_and_reset_period(meta: &mut VirtualKeyMeta) -> bool {
+    let duration = match meta.budget_duration {
+        Some(d) => d,
+        None => return false, // Lifetime budget, no periodic reset
+    };
+
+    let now_epoch = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+
+    let boundary_epoch = match &meta.period_start {
+        Some(start) => next_period_boundary(start, duration),
+        None => {
+            // No period_start set yet; initialize it now
+            meta.period_start = Some(current_period_start(now_epoch, duration));
+            meta.period_spend_usd = 0.0;
+            return true;
+        }
+    };
+
+    if let Some(boundary) = boundary_epoch {
+        if now_epoch >= boundary {
+            meta.period_start = Some(current_period_start(now_epoch, duration));
+            meta.period_spend_usd = 0.0;
+            return true;
+        }
+    }
+    false
+}
+
+/// Compute the epoch timestamp of the next period boundary given a period start ISO string.
+fn next_period_boundary(start_iso: &str, duration: BudgetDuration) -> Option<u64> {
+    // Parse the ISO 8601 date to extract year, month, day
+    // Format: "2026-03-22T00:00:00Z"
+    if start_iso.len() < 10 {
+        return None;
+    }
+    let year: u64 = start_iso[0..4].parse().ok()?;
+    let month: u64 = start_iso[5..7].parse().ok()?;
+    let day: u64 = start_iso[8..10].parse().ok()?;
+
+    match duration {
+        BudgetDuration::Daily => {
+            // Next day at UTC midnight
+            let start_epoch = ymd_to_epoch(year, month, day);
+            Some(start_epoch + 86400)
+        }
+        BudgetDuration::Monthly => {
+            // 1st of next month at UTC midnight
+            let (ny, nm) = if month == 12 {
+                (year + 1, 1)
+            } else {
+                (year, month + 1)
+            };
+            Some(ymd_to_epoch(ny, nm, 1))
+        }
+    }
+}
+
+/// Compute the current period start for a given epoch time.
+fn current_period_start(now_epoch: u64, duration: BudgetDuration) -> String {
+    let days = now_epoch / 86400;
+    let (year, month, day) = super::db::days_to_ymd(days);
+    match duration {
+        BudgetDuration::Daily => {
+            format!("{year:04}-{month:02}-{day:02}T00:00:00Z")
+        }
+        BudgetDuration::Monthly => {
+            format!("{year:04}-{month:02}-01T00:00:00Z")
+        }
+    }
+}
+
+/// Convert year/month/day to epoch seconds (UTC midnight).
+fn ymd_to_epoch(year: u64, month: u64, day: u64) -> u64 {
+    // Inverse of the Hinnant algorithm used in db.rs
+    let y = if month <= 2 { year - 1 } else { year };
+    let m = if month <= 2 { month + 9 } else { month - 3 };
+    let era = y / 400;
+    let yoe = y - era * 400;
+    let doy = (153 * m + 2) / 5 + day - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    let days = era * 146097 + doe - 719468;
+    days * 86400
+}
+
+/// Compute the ISO 8601 string for when the current period resets.
+pub fn period_reset_at(meta: &VirtualKeyMeta) -> Option<String> {
+    let duration = meta.budget_duration?;
+    let start = meta.period_start.as_ref()?;
+    let boundary = next_period_boundary(start, duration)?;
+    Some(super::db::epoch_to_iso8601(boundary))
+}
+
 /// Row from the virtual_api_key table.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct VirtualKeyRow {
@@ -141,6 +297,13 @@ pub struct VirtualKeyRow {
     pub total_spend: f64,
     pub total_requests: i64,
     pub total_tokens: i64,
+    pub role: String,
+    pub max_budget_usd: Option<f64>,
+    pub budget_duration: Option<String>,
+    pub period_start: Option<String>,
+    pub period_spend_usd: f64,
+    pub total_input_tokens: i64,
+    pub total_output_tokens: i64,
 }
 
 impl VirtualKeyRow {
@@ -225,5 +388,113 @@ mod tests {
         assert!(state.check_tpm(100, now + 1).is_err());
         // After 60 seconds
         assert!(state.check_tpm(100, now + 60_001).is_ok());
+    }
+
+    // -- KeyRole tests --
+
+    #[test]
+    fn key_role_roundtrip() {
+        assert_eq!(KeyRole::Admin.as_str(), "admin");
+        assert_eq!(KeyRole::Developer.as_str(), "developer");
+        assert_eq!(KeyRole::from_str_or_default("admin"), KeyRole::Admin);
+        assert_eq!(KeyRole::from_str_or_default("Admin"), KeyRole::Admin);
+        assert_eq!(
+            KeyRole::from_str_or_default("developer"),
+            KeyRole::Developer
+        );
+        assert_eq!(KeyRole::from_str_or_default("unknown"), KeyRole::Developer);
+        assert_eq!(KeyRole::from_str_or_default(""), KeyRole::Developer);
+    }
+
+    // -- BudgetDuration tests --
+
+    #[test]
+    fn budget_duration_roundtrip() {
+        assert_eq!(BudgetDuration::Daily.as_str(), "daily");
+        assert_eq!(BudgetDuration::Monthly.as_str(), "monthly");
+        assert_eq!(BudgetDuration::parse("daily"), Some(BudgetDuration::Daily));
+        assert_eq!(
+            BudgetDuration::parse("Monthly"),
+            Some(BudgetDuration::Monthly)
+        );
+        assert_eq!(BudgetDuration::parse("weekly"), None);
+    }
+
+    // -- Period boundary tests --
+
+    #[test]
+    fn ymd_to_epoch_known_values() {
+        // 1970-01-01 = epoch 0
+        assert_eq!(ymd_to_epoch(1970, 1, 1), 0);
+        // 2020-01-01 = 1577836800
+        assert_eq!(ymd_to_epoch(2020, 1, 1), 1577836800);
+    }
+
+    #[test]
+    fn next_period_boundary_daily() {
+        let start = "2026-03-25T00:00:00Z";
+        let boundary = next_period_boundary(start, BudgetDuration::Daily).unwrap();
+        // Should be 2026-03-26 midnight
+        let expected = ymd_to_epoch(2026, 3, 26);
+        assert_eq!(boundary, expected);
+    }
+
+    #[test]
+    fn next_period_boundary_monthly() {
+        let start = "2026-03-01T00:00:00Z";
+        let boundary = next_period_boundary(start, BudgetDuration::Monthly).unwrap();
+        // Should be 2026-04-01 midnight
+        let expected = ymd_to_epoch(2026, 4, 1);
+        assert_eq!(boundary, expected);
+    }
+
+    #[test]
+    fn next_period_boundary_monthly_december() {
+        let start = "2026-12-01T00:00:00Z";
+        let boundary = next_period_boundary(start, BudgetDuration::Monthly).unwrap();
+        // Should be 2027-01-01 midnight
+        let expected = ymd_to_epoch(2027, 1, 1);
+        assert_eq!(boundary, expected);
+    }
+
+    #[test]
+    fn check_and_reset_period_no_duration() {
+        let mut meta = VirtualKeyMeta {
+            id: 1,
+            description: None,
+            expires_at: None,
+            rpm_limit: None,
+            tpm_limit: None,
+            rate_state: Arc::new(RateLimitState::new()),
+            role: KeyRole::Developer,
+            max_budget_usd: Some(10.0),
+            budget_duration: None, // lifetime, no reset
+            period_start: Some("2020-01-01T00:00:00Z".to_string()),
+            period_spend_usd: 5.0,
+        };
+        // No reset because no duration
+        assert!(!check_and_reset_period(&mut meta));
+        assert_eq!(meta.period_spend_usd, 5.0);
+    }
+
+    #[test]
+    fn check_and_reset_period_resets_when_past_boundary() {
+        let mut meta = VirtualKeyMeta {
+            id: 1,
+            description: None,
+            expires_at: None,
+            rpm_limit: None,
+            tpm_limit: None,
+            rate_state: Arc::new(RateLimitState::new()),
+            role: KeyRole::Developer,
+            max_budget_usd: Some(10.0),
+            budget_duration: Some(BudgetDuration::Daily),
+            period_start: Some("2020-01-01T00:00:00Z".to_string()),
+            period_spend_usd: 5.0,
+        };
+        // Period start is in 2020, so it should reset
+        assert!(check_and_reset_period(&mut meta));
+        assert_eq!(meta.period_spend_usd, 0.0);
+        assert!(meta.period_start.is_some());
     }
 }

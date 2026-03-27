@@ -178,4 +178,9 @@ Client (Anthropic format) -> proxy (axum)
 - OpenAI API spec: https://github.com/openai/openai-openapi/blob/manual_spec/openapi.yaml (very large, ~70k+ lines). See https://simonwillison.net/2024/Dec/22/openai-openapi/ for context on the spec's size and structure. Do not attempt to load the full spec into context; reference specific sections as needed.
 
 ## Recent Changes
+- 001-litellm-parity: Added Rust stable (1.83+, workspace edition 2021)
 - 20260325-120000-litellm-gap-fill: Added POST /v1/chat/completions (OpenAI format input), Azure OpenAI backend (BACKEND=azure), virtual key management (admin API + DashMap cache), per-key RPM/TPM rate limiting, Rust client v0.2.0 (ClientBuilder + ToolBuilder + messages_stream), optional OpenTelemetry export (--features otel), ReverseStreamingTranslator in translator crate, reverse translation functions openai_to_anthropic_request / anthropic_to_openai_response
+
+## Active Technologies
+- Rust stable (1.83+, workspace edition 2021) (001-litellm-parity)
+- SQLite (existing, extended with new tables); Redis (optional Tier 1 cache); Qdran (001-litellm-parity)

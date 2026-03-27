@@ -1,6 +1,8 @@
 // Auth, logging, and request size limit middleware
 
-use crate::admin::keys::{now_ms, RateLimitState, VirtualKeyMeta};
+use crate::admin::keys::{
+    check_and_reset_period, now_ms, period_reset_at, KeyRole, RateLimitState, VirtualKeyMeta,
+};
 use anyllm_translate::anthropic;
 use anyllm_translate::mapping::errors_map::create_anthropic_error;
 use axum::{
@@ -14,10 +16,12 @@ use sha2::{Digest, Sha256};
 use std::sync::{Arc, LazyLock, OnceLock};
 use subtle::ConstantTimeEq;
 
-/// Context passed from auth middleware to handlers for post-response TPM recording.
-/// Inserted into request extensions when a virtual key with a TPM limit is used.
+/// Context passed from auth middleware to handlers for post-response TPM and cost recording.
+/// Inserted into request extensions when a virtual key is used.
 #[derive(Clone)]
 pub struct VirtualKeyContext {
+    /// Database row ID for the virtual key (used for cost accumulation).
+    pub(crate) key_id: i64,
     pub(crate) rate_state: Arc<RateLimitState>,
 }
 
@@ -117,9 +121,23 @@ pub async fn validate_auth(
         return Ok(next.run(request).await);
     }
 
-    // Check 2: virtual keys from DashMap (with per-key rate limiting)
+    // Check 2: virtual keys from DashMap (with per-key rate limiting, budget, RBAC)
     if let Some(map) = VIRTUAL_KEYS.get() {
-        if let Some(meta) = map.get(&credential_hash) {
+        if let Some(mut meta) = map.get_mut(&credential_hash) {
+            // RBAC: developer keys cannot access admin endpoints
+            if meta.role == KeyRole::Developer {
+                let path = request.uri().path();
+                if path.starts_with("/admin/") || path.starts_with("/admin") {
+                    let err_body = serde_json::json!({
+                        "error": {
+                            "type": "permission_denied",
+                            "message": "This key does not have permission to access admin endpoints."
+                        }
+                    });
+                    return Err((StatusCode::FORBIDDEN, Json(err_body)).into_response());
+                }
+            }
+
             let now_ms = now_ms();
 
             // Enforce RPM limit if configured
@@ -138,7 +156,7 @@ pub async fn validate_auth(
                 }
             }
 
-            // Enforce TPM limit pre-check and register context for post-response recording
+            // Enforce TPM limit pre-check
             if let Some(tpm_limit) = meta.tpm_limit {
                 if let Err(retry_after) = meta.rate_state.check_tpm(tpm_limit, now_ms) {
                     let err = create_anthropic_error(
@@ -152,10 +170,44 @@ pub async fn validate_auth(
                     }
                     return Err(resp);
                 }
-                request.extensions_mut().insert(VirtualKeyContext {
-                    rate_state: meta.rate_state.clone(),
-                });
             }
+
+            // Budget enforcement: lazy period reset then check
+            if meta.max_budget_usd.is_some() {
+                let did_reset = check_and_reset_period(&mut meta);
+                if did_reset {
+                    tracing::debug!(
+                        key_id = meta.id,
+                        period_start = ?meta.period_start,
+                        "budget period reset"
+                    );
+                }
+                if let Some(limit) = meta.max_budget_usd {
+                    if meta.period_spend_usd >= limit {
+                        let reset_at = period_reset_at(&meta);
+                        let err_body = serde_json::json!({
+                            "error": {
+                                "type": "budget_exceeded",
+                                "message": format!(
+                                    "This API key has exhausted its budget. Current period spend: ${:.2} of ${:.2} limit.",
+                                    meta.period_spend_usd, limit
+                                ),
+                                "budget_limit_usd": limit,
+                                "period_spend_usd": meta.period_spend_usd,
+                                "budget_duration": meta.budget_duration.as_ref().map(|d| d.as_str()),
+                                "period_reset_at": reset_at,
+                            }
+                        });
+                        return Err((StatusCode::TOO_MANY_REQUESTS, Json(err_body)).into_response());
+                    }
+                }
+            }
+
+            // Always insert context for post-response TPM recording and cost tracking.
+            request.extensions_mut().insert(VirtualKeyContext {
+                key_id: meta.id,
+                rate_state: meta.rate_state.clone(),
+            });
 
             return Ok(next.run(request).await);
         }

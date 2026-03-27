@@ -176,10 +176,18 @@ async fn main() {
                             admin::keys::VirtualKeyMeta {
                                 id: key_row.id,
                                 description: key_row.description.clone(),
-                                expires_at: None, // Expiry checked from the ISO string at auth time
+                                expires_at: None,
                                 rpm_limit: key_row.rpm_limit,
                                 tpm_limit: key_row.tpm_limit,
                                 rate_state: Arc::new(admin::keys::RateLimitState::new()),
+                                role: admin::keys::KeyRole::from_str_or_default(&key_row.role),
+                                max_budget_usd: key_row.max_budget_usd,
+                                budget_duration: key_row
+                                    .budget_duration
+                                    .as_deref()
+                                    .and_then(admin::keys::BudgetDuration::parse),
+                                period_start: key_row.period_start.clone(),
+                                period_spend_usd: key_row.period_spend_usd,
                             },
                         );
                     }

@@ -1,7 +1,11 @@
+/// Audio transcription and text-to-speech passthrough handlers.
+pub mod audio;
 /// AWS Bedrock passthrough handler (SigV4 signing + event stream decoding).
 mod bedrock_passthrough;
 /// OpenAI Chat Completions input handler (POST /v1/chat/completions).
 mod chat_completions;
+/// Image generation passthrough handler.
+pub mod images;
 /// Auth validation, request ID injection, size limits, concurrency limits, header logging.
 pub mod middleware;
 /// Anthropic passthrough handler (no translation, forwards as-is).

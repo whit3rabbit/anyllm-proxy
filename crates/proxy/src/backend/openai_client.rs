@@ -16,6 +16,10 @@ pub struct OpenAIClient {
     responses_url: String,
     embeddings_url: String,
     auth: BackendAuth,
+    /// The backend kind, needed for constructing passthrough URLs at runtime.
+    backend_kind: BackendKind,
+    /// Raw base URL from config, used to build passthrough endpoint URLs.
+    base_url: String,
 }
 
 impl OpenAIClient {
@@ -85,6 +89,8 @@ impl OpenAIClient {
             responses_url,
             embeddings_url,
             auth: config.backend_auth.clone(),
+            backend_kind: config.backend.clone(),
+            base_url: config.openai_base_url.clone(),
         }
     }
 
@@ -191,19 +197,59 @@ impl OpenAIClient {
         Ok((response, rate_limits))
     }
 
-    /// Forward a raw embeddings request body to the backend embeddings endpoint.
-    /// No retry: embeddings are idempotent but we keep it simple — callers can retry.
-    ///
-    /// OpenAI: <https://platform.openai.com/docs/api-reference/embeddings/create>
-    pub async fn embeddings_passthrough(
+    /// Build a passthrough URL for the given path suffix (e.g., "/v1/audio/speech").
+    /// Adjusts for backend-specific URL schemes (Azure deployments, Vertex/Gemini paths).
+    pub fn passthrough_url(&self, path: &str) -> String {
+        match self.backend_kind {
+            BackendKind::OpenAI => format!("{}{}", self.base_url, path),
+            BackendKind::AzureOpenAI => {
+                // Azure: {endpoint}/openai/deployments/{deployment}/{suffix}?api-version=...
+                let endpoint = self
+                    .base_url
+                    .split("/openai/deployments/")
+                    .next()
+                    .unwrap_or(&self.base_url);
+                let api_version = self
+                    .base_url
+                    .split("api-version=")
+                    .nth(1)
+                    .unwrap_or("2024-10-21");
+                let deployment = self
+                    .base_url
+                    .split("/openai/deployments/")
+                    .nth(1)
+                    .and_then(|s| s.split('/').next())
+                    .unwrap_or("");
+                // Strip leading /v1/ to get the resource name (e.g., "audio/speech")
+                let suffix = path.strip_prefix("/v1/").unwrap_or(path);
+                format!(
+                    "{endpoint}/openai/deployments/{deployment}/{suffix}?api-version={api_version}"
+                )
+            }
+            BackendKind::Vertex | BackendKind::Gemini => {
+                // Vertex/Gemini: base_url already has provider-specific prefix,
+                // just append the path without /v1 prefix
+                let suffix = path.strip_prefix("/v1/").unwrap_or(path);
+                format!("{}/{}", self.base_url, suffix)
+            }
+            BackendKind::Anthropic | BackendKind::Bedrock => {
+                unreachable!("OpenAIClient should not be constructed for Anthropic/Bedrock")
+            }
+        }
+    }
+
+    /// Forward a raw request body to an arbitrary backend endpoint.
+    /// No retry: passthrough requests are forwarded once (callers can retry).
+    pub async fn raw_passthrough(
         &self,
+        url: &str,
         body: bytes::Bytes,
         content_type: &str,
     ) -> Result<(axum::http::StatusCode, axum::http::HeaderMap, bytes::Bytes), OpenAIClientError>
     {
         let mut req = self
             .client
-            .post(&self.embeddings_url)
+            .post(url)
             .body(body)
             .header("content-type", content_type);
         req = match &self.auth {
@@ -221,6 +267,20 @@ impl OpenAIClient {
         }
         let resp_body = response.bytes().await.map_err(OpenAIClientError::Request)?;
         Ok((status, resp_headers, resp_body))
+    }
+
+    /// Forward a raw embeddings request body to the backend embeddings endpoint.
+    /// No retry: embeddings are idempotent but we keep it simple, callers can retry.
+    ///
+    /// OpenAI: <https://platform.openai.com/docs/api-reference/embeddings/create>
+    pub async fn embeddings_passthrough(
+        &self,
+        body: bytes::Bytes,
+        content_type: &str,
+    ) -> Result<(axum::http::StatusCode, axum::http::HeaderMap, bytes::Bytes), OpenAIClientError>
+    {
+        self.raw_passthrough(&self.embeddings_url, body, content_type)
+            .await
     }
 }
 

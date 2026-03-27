@@ -6,6 +6,8 @@ pub mod db;
 pub mod keys;
 /// Admin HTTP router: config management, request log queries, metrics.
 pub mod routes;
+/// Per-key spend queries for cost tracking.
+pub mod spend;
 /// Shared mutable state between proxy handlers and admin server.
 pub mod state;
 /// WebSocket handler for live admin event streaming.

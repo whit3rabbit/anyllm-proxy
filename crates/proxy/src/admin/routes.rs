@@ -93,6 +93,10 @@ pub fn admin_router(shared: SharedState, token: Arc<String>) -> Router {
         .route("/admin/api/backends", get(get_backends))
         .route("/admin/api/keys", post(create_key).get(list_keys))
         .route("/admin/api/keys/{id}", delete(revoke_key))
+        .route(
+            "/admin/api/keys/{id}/spend",
+            get(super::spend::get_key_spend),
+        )
         .with_state(shared.clone())
         .layer(middleware::from_fn_with_state(
             token.clone(),
@@ -625,6 +629,9 @@ struct CreateKeyRequest {
     rpm_limit: Option<u32>,
     tpm_limit: Option<u32>,
     spend_limit: Option<f64>,
+    role: Option<String>,
+    max_budget_usd: Option<f64>,
+    budget_duration: Option<String>,
 }
 
 /// POST /admin/api/keys -- create a new virtual API key.
@@ -633,6 +640,8 @@ async fn create_key(
     Json(body): Json<CreateKeyRequest>,
 ) -> axum::response::Response {
     let (raw_key, key_prefix, key_hash_hex) = super::keys::generate_virtual_key();
+    let role_str = body.role.as_deref().unwrap_or("developer");
+    let role = super::keys::KeyRole::from_str_or_default(role_str);
     let result = super::state::with_db(&shared.db, {
         let hash = key_hash_hex.clone();
         let prefix = key_prefix.clone();
@@ -641,16 +650,24 @@ async fn create_key(
         let rpm = body.rpm_limit;
         let tpm = body.tpm_limit;
         let spend = body.spend_limit;
+        let role_s = role_str.to_string();
+        let max_budget = body.max_budget_usd;
+        let budget_dur = body.budget_duration.clone();
         move |conn| {
             super::db::insert_virtual_key(
                 conn,
-                &hash,
-                &prefix,
-                desc.as_deref(),
-                exp.as_deref(),
-                rpm,
-                tpm,
-                spend,
+                &super::db::InsertVirtualKeyParams {
+                    key_hash: &hash,
+                    key_prefix: &prefix,
+                    description: desc.as_deref(),
+                    expires_at: exp.as_deref(),
+                    rpm_limit: rpm,
+                    tpm_limit: tpm,
+                    spend_limit: spend,
+                    role: &role_s,
+                    max_budget_usd: max_budget,
+                    budget_duration: budget_dur.as_deref(),
+                },
             )
         }
     })
@@ -664,12 +681,18 @@ async fn create_key(
                     super::keys::VirtualKeyMeta {
                         id,
                         description: body.description.clone(),
-                        // Expiry is checked via ISO string comparison in VirtualKeyRow::status();
-                        // the DashMap is only used for auth + rate limiting.
                         expires_at: None,
                         rpm_limit: body.rpm_limit,
                         tpm_limit: body.tpm_limit,
                         rate_state: std::sync::Arc::new(super::keys::RateLimitState::new()),
+                        role,
+                        max_budget_usd: body.max_budget_usd,
+                        budget_duration: body
+                            .budget_duration
+                            .as_deref()
+                            .and_then(super::keys::BudgetDuration::parse),
+                        period_start: Some(super::db::now_iso8601()),
+                        period_spend_usd: 0.0,
                     },
                 );
             }
@@ -685,6 +708,9 @@ async fn create_key(
                     "rpm_limit": body.rpm_limit,
                     "tpm_limit": body.tpm_limit,
                     "spend_limit": body.spend_limit,
+                    "role": role.as_str(),
+                    "max_budget_usd": body.max_budget_usd,
+                    "budget_duration": body.budget_duration,
                 })),
             )
                 .into_response()
@@ -719,6 +745,10 @@ async fn list_keys(State(shared): State<SharedState>) -> axum::response::Respons
                         "total_requests": k.total_requests,
                         "total_tokens": k.total_tokens,
                         "status": k.status(),
+                        "role": k.role,
+                        "max_budget_usd": k.max_budget_usd,
+                        "budget_duration": k.budget_duration,
+                        "period_spend_usd": k.period_spend_usd,
                     })
                 })
                 .collect();

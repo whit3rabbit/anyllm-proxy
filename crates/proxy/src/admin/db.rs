@@ -53,8 +53,60 @@ pub fn init_db(conn: &Connection) -> rusqlite::Result<()> {
             total_tokens    INTEGER NOT NULL DEFAULT 0
         );
         CREATE INDEX IF NOT EXISTS idx_vak_hash ON virtual_api_key(key_hash);
+
+        CREATE TABLE IF NOT EXISTS batch_file (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            file_id     TEXT NOT NULL UNIQUE,
+            key_id      INTEGER,
+            purpose     TEXT NOT NULL,
+            filename    TEXT,
+            byte_size   INTEGER NOT NULL,
+            line_count  INTEGER NOT NULL,
+            content     BLOB NOT NULL,
+            created_at  TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS batch_job (
+            id                       INTEGER PRIMARY KEY AUTOINCREMENT,
+            batch_id                 TEXT NOT NULL UNIQUE,
+            key_id                   INTEGER,
+            input_file_id            TEXT NOT NULL,
+            backend_batch_id         TEXT,
+            backend_name             TEXT NOT NULL,
+            status                   TEXT NOT NULL,
+            request_counts_total     INTEGER NOT NULL DEFAULT 0,
+            request_counts_completed INTEGER NOT NULL DEFAULT 0,
+            request_counts_failed    INTEGER NOT NULL DEFAULT 0,
+            output_file_id           TEXT,
+            error_file_id            TEXT,
+            created_at               TEXT NOT NULL,
+            completed_at             TEXT,
+            expires_at               TEXT,
+            metadata                 TEXT
+        );
         ",
     )?;
+
+    // Schema migrations for virtual_api_key new columns (idempotent via IF NOT EXISTS).
+    // SQLite 3.37+ supports ADD COLUMN IF NOT EXISTS.
+    let migration_stmts = [
+        "ALTER TABLE virtual_api_key ADD COLUMN role TEXT NOT NULL DEFAULT 'developer'",
+        "ALTER TABLE virtual_api_key ADD COLUMN max_budget_usd REAL",
+        "ALTER TABLE virtual_api_key ADD COLUMN budget_duration TEXT",
+        "ALTER TABLE virtual_api_key ADD COLUMN period_start TEXT",
+        "ALTER TABLE virtual_api_key ADD COLUMN period_spend_usd REAL NOT NULL DEFAULT 0.0",
+        "ALTER TABLE virtual_api_key ADD COLUMN total_input_tokens INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE virtual_api_key ADD COLUMN total_output_tokens INTEGER NOT NULL DEFAULT 0",
+    ];
+    for stmt in &migration_stmts {
+        // Ignore "duplicate column name" errors for idempotent migration.
+        match conn.execute_batch(stmt) {
+            Ok(()) => {}
+            Err(e) if e.to_string().contains("duplicate column") => {}
+            Err(e) => return Err(e),
+        }
+    }
+
     Ok(())
 }
 
@@ -323,7 +375,7 @@ pub(crate) fn epoch_to_iso8601(epoch: u64) -> String {
 }
 
 /// Convert days since 1970-01-01 to (year, month, day).
-fn days_to_ymd(days: u64) -> (u64, u64, u64) {
+pub(crate) fn days_to_ymd(days: u64) -> (u64, u64, u64) {
     // Algorithm from http://howardhinnant.github.io/date_algorithms.html
     let z = days + 719468;
     let era = z / 146097;
@@ -347,37 +399,47 @@ pub fn now_iso8601() -> String {
 
 use super::keys::VirtualKeyRow;
 
+/// Parameters for creating a new virtual key.
+pub struct InsertVirtualKeyParams<'a> {
+    pub key_hash: &'a str,
+    pub key_prefix: &'a str,
+    pub description: Option<&'a str>,
+    pub expires_at: Option<&'a str>,
+    pub rpm_limit: Option<u32>,
+    pub tpm_limit: Option<u32>,
+    pub spend_limit: Option<f64>,
+    pub role: &'a str,
+    pub max_budget_usd: Option<f64>,
+    pub budget_duration: Option<&'a str>,
+}
+
 /// Insert a new virtual API key.
-#[allow(clippy::too_many_arguments)]
-pub fn insert_virtual_key(
-    conn: &Connection,
-    key_hash: &str,
-    key_prefix: &str,
-    description: Option<&str>,
-    expires_at: Option<&str>,
-    rpm_limit: Option<u32>,
-    tpm_limit: Option<u32>,
-    spend_limit: Option<f64>,
-) -> rusqlite::Result<i64> {
+pub fn insert_virtual_key(conn: &Connection, p: &InsertVirtualKeyParams) -> rusqlite::Result<i64> {
+    let now = now_iso8601();
     conn.execute(
-        "INSERT INTO virtual_api_key (key_hash, key_prefix, description, created_at, expires_at, rpm_limit, tpm_limit, spend_limit)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        "INSERT INTO virtual_api_key (key_hash, key_prefix, description, created_at, expires_at, \
+         rpm_limit, tpm_limit, spend_limit, role, max_budget_usd, budget_duration, period_start)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
         params![
-            key_hash,
-            key_prefix,
-            description,
-            now_iso8601(),
-            expires_at,
-            rpm_limit.map(|v| v as i64),
-            tpm_limit.map(|v| v as i64),
-            spend_limit,
+            p.key_hash,
+            p.key_prefix,
+            p.description,
+            now,
+            p.expires_at,
+            p.rpm_limit.map(|v| v as i64),
+            p.tpm_limit.map(|v| v as i64),
+            p.spend_limit,
+            p.role,
+            p.max_budget_usd,
+            p.budget_duration,
+            // Set period_start to now if budget_duration is set
+            p.budget_duration.map(|_| &now),
         ],
     )?;
     Ok(conn.last_insert_rowid())
 }
 
-/// List all virtual keys (active, expired, revoked).
-/// Map a SQLite row (from the standard 13-column SELECT) to a VirtualKeyRow.
+/// Map a SQLite row to a VirtualKeyRow.
 fn row_to_virtual_key(row: &rusqlite::Row) -> rusqlite::Result<VirtualKeyRow> {
     Ok(VirtualKeyRow {
         id: row.get(0)?,
@@ -393,18 +455,27 @@ fn row_to_virtual_key(row: &rusqlite::Row) -> rusqlite::Result<VirtualKeyRow> {
         total_spend: row.get::<_, f64>(10).unwrap_or(0.0),
         total_requests: row.get::<_, i64>(11).unwrap_or(0),
         total_tokens: row.get::<_, i64>(12).unwrap_or(0),
+        role: row
+            .get::<_, String>(13)
+            .unwrap_or_else(|_| "developer".into()),
+        max_budget_usd: row.get(14).unwrap_or(None),
+        budget_duration: row.get(15).unwrap_or(None),
+        period_start: row.get(16).unwrap_or(None),
+        period_spend_usd: row.get::<_, f64>(17).unwrap_or(0.0),
+        total_input_tokens: row.get::<_, i64>(18).unwrap_or(0),
+        total_output_tokens: row.get::<_, i64>(19).unwrap_or(0),
     })
 }
 
 const VIRTUAL_KEY_COLUMNS: &str =
     "id, key_hash, key_prefix, description, created_at, expires_at, revoked_at, \
-     rpm_limit, tpm_limit, spend_limit, total_spend, total_requests, total_tokens";
+     rpm_limit, tpm_limit, spend_limit, total_spend, total_requests, total_tokens, \
+     role, max_budget_usd, budget_duration, period_start, period_spend_usd, \
+     total_input_tokens, total_output_tokens";
 
 /// List all virtual keys (active, expired, revoked).
 pub fn list_virtual_keys(conn: &Connection) -> rusqlite::Result<Vec<VirtualKeyRow>> {
-    let sql = format!(
-        "SELECT {VIRTUAL_KEY_COLUMNS} FROM virtual_api_key ORDER BY id DESC"
-    );
+    let sql = format!("SELECT {VIRTUAL_KEY_COLUMNS} FROM virtual_api_key ORDER BY id DESC");
     let mut stmt = conn.prepare(&sql)?;
     let rows = stmt.query_map([], row_to_virtual_key)?;
     rows.collect()
@@ -420,9 +491,7 @@ pub fn revoke_virtual_key(conn: &Connection, id: i64) -> rusqlite::Result<Option
     if updated == 0 {
         return Ok(None);
     }
-    let sql = format!(
-        "SELECT {VIRTUAL_KEY_COLUMNS} FROM virtual_api_key WHERE id = ?1"
-    );
+    let sql = format!("SELECT {VIRTUAL_KEY_COLUMNS} FROM virtual_api_key WHERE id = ?1");
     let mut stmt = conn.prepare(&sql)?;
     stmt.query_row(params![id], |row| Ok(Some(row_to_virtual_key(row)?)))
 }

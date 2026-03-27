@@ -1,5 +1,6 @@
 use crate::admin::state::{AdminEvent, RequestLogEntry, RuntimeConfig, SharedState};
 use crate::backend::{BackendClient, BackendError};
+use crate::cache::{self, CacheBackend, CacheEntry, CacheNamespace};
 use crate::config::{BackendKind, Config, MultiConfig};
 use crate::metrics::Metrics;
 use anyllm_translate::{anthropic, compute_request_warnings, mapping, openai};
@@ -66,6 +67,8 @@ pub struct AppState {
     pub concurrency: Arc<Semaphore>,
     /// Strip `stream_options` from streaming requests for local LLM compat.
     pub omit_stream_options: bool,
+    /// Optional response cache for non-streaming requests.
+    pub cache: Option<Arc<crate::cache::memory::MemoryCache>>,
 }
 
 impl AppState {
@@ -129,6 +132,10 @@ pub fn app_multi_with_shared(config: MultiConfig, shared: Option<SharedState>) -
         }))
     };
 
+    // Build a shared cache instance for all backends.
+    let cache_config = crate::cache::CacheConfig::from_env();
+    let response_cache = Arc::new(crate::cache::memory::MemoryCache::new(&cache_config));
+
     // Build per-backend sub-routers. Keep a map of AppState so the default
     // backend can reuse the same state (same semaphore, same reqwest client).
     let mut backend_states: HashMap<String, (AppState, HandlerMode)> = HashMap::new();
@@ -144,6 +151,7 @@ pub fn app_multi_with_shared(config: MultiConfig, shared: Option<SharedState>) -
             backend_name: name.clone(),
             concurrency: Arc::new(Semaphore::new(super::middleware::MAX_CONCURRENT_REQUESTS)),
             omit_stream_options: bc.omit_stream_options,
+            cache: Some(response_cache.clone()),
         };
 
         let mode = match bc.kind {
@@ -234,26 +242,45 @@ enum HandlerMode {
 
 /// Build the sub-router for a single backend.
 fn backend_router(state: AppState, mode: HandlerMode) -> Router<GlobalState> {
+    // Routes common to all backend modes.
+    let common_routes: Router<AppState> = Router::new()
+        .route("/v1/models", get(models))
+        .route("/v1/files", post(crate::batch::routes::upload_file))
+        .route(
+            "/v1/batches",
+            post(crate::batch::routes::create_batch).get(crate::batch::routes::list_batches),
+        )
+        .route(
+            "/v1/batches/{batch_id}",
+            get(crate::batch::routes::get_batch),
+        );
+
     let api_routes = match mode {
-        HandlerMode::Anthropic => Router::new()
-            .route("/v1/messages", post(anthropic_passthrough))
-            .route("/v1/models", get(models)),
-        HandlerMode::Bedrock => Router::new()
+        HandlerMode::Anthropic => common_routes
+            .route("/v1/messages", post(anthropic_passthrough)),
+        HandlerMode::Bedrock => common_routes
             .route(
                 "/v1/messages",
                 post(super::bedrock_passthrough::bedrock_passthrough),
-            )
-            .route("/v1/models", get(models)),
-        HandlerMode::Translate => Router::new()
+            ),
+        HandlerMode::Translate => common_routes
             .route("/v1/messages", post(messages))
             .route(
                 "/v1/chat/completions",
                 post(super::chat_completions::chat_completions),
             )
-            .route("/v1/models", get(models))
             .route("/v1/messages/count_tokens", post(count_tokens))
-            .route("/v1/messages/batches", post(batches))
-            .route("/v1/embeddings", post(embeddings)),
+            .route("/v1/messages/batches", post(batches_legacy_stub))
+            .route("/v1/embeddings", post(embeddings))
+            .route(
+                "/v1/audio/transcriptions",
+                post(super::audio::audio_transcriptions),
+            )
+            .route("/v1/audio/speech", post(super::audio::audio_speech))
+            .route(
+                "/v1/images/generations",
+                post(super::images::image_generations),
+            ),
     };
 
     api_routes
@@ -331,10 +358,10 @@ async fn models(State(_state): State<AppState>) -> Json<serde_json::Value> {
     Json(MODELS_RESPONSE.clone())
 }
 
-async fn batches() -> impl IntoResponse {
+async fn batches_legacy_stub() -> impl IntoResponse {
     let err = mapping::errors_map::create_anthropic_error(
         anthropic::ErrorType::InvalidRequestError,
-        "Batch processing is not supported by this proxy.".to_string(),
+        "Use /v1/batches instead of /v1/messages/batches.".to_string(),
         None,
     );
     (StatusCode::BAD_REQUEST, Json(err))
@@ -364,6 +391,40 @@ fn backend_error_to_response(error: BackendError) -> Response {
         None,
     );
     (StatusCode::INTERNAL_SERVER_ERROR, Json(err)).into_response()
+}
+
+/// Return the appropriate `x-anyllm-cache` header value.
+pub(crate) fn cache_header_value(bypass: bool) -> axum::http::HeaderValue {
+    if bypass {
+        axum::http::HeaderValue::from_static("bypass")
+    } else {
+        axum::http::HeaderValue::from_static("miss")
+    }
+}
+
+/// Store a serializable response in the cache if caching is enabled.
+pub(crate) async fn try_cache_response<T: serde::Serialize>(
+    cache_key: &Option<String>,
+    cache: &Option<Arc<crate::cache::memory::MemoryCache>>,
+    cache_ttl: Option<u64>,
+    response: &T,
+    model: String,
+) {
+    if let (Some(ref key), Some(ref c)) = (cache_key, cache) {
+        if let Ok(resp_body) = serde_json::to_vec(response).map(bytes::Bytes::from) {
+            let ttl = cache_ttl.unwrap_or(c.default_ttl_secs);
+            c.put(
+                key,
+                CacheEntry {
+                    response_body: resp_body,
+                    model,
+                    created_at: std::time::Instant::now(),
+                },
+                ttl,
+            )
+            .await;
+        }
+    }
 }
 
 /// Inject degradation warnings as `x-anyllm-degradation` header if any features were dropped.
@@ -443,7 +504,9 @@ async fn messages(
 
     let warnings = compute_request_warnings(&body);
 
-    if body.stream == Some(true) {
+    let is_streaming = body.stream == Some(true);
+
+    if is_streaming {
         if state.log_bodies() {
             tracing::debug!(model = %body.model, "streaming request initiated");
         }
@@ -454,6 +517,10 @@ async fn messages(
                 let mut response = sse.into_response();
                 rate_limits.inject_anthropic_response_headers(response.headers_mut());
                 inject_degradation_header(response.headers_mut(), &warnings);
+                response.headers_mut().insert(
+                    "x-anyllm-cache",
+                    axum::http::HeaderValue::from_static("bypass"),
+                );
                 return response;
             }
             Err(e) => {
@@ -462,6 +529,45 @@ async fn messages(
             }
         }
     }
+
+    // Non-streaming: check cache before calling backend.
+    let body_value = serde_json::to_value(&body).unwrap_or_default();
+    let cache_ttl = match cache::parse_cache_ttl(&body_value) {
+        Ok(ttl) => ttl,
+        Err(msg) => {
+            let err = mapping::errors_map::create_anthropic_error(
+                anthropic::ErrorType::InvalidRequestError,
+                msg,
+                None,
+            );
+            return (StatusCode::BAD_REQUEST, Json(err)).into_response();
+        }
+    };
+    let bypass_cache = cache_ttl == Some(0);
+    let cache_key = if !bypass_cache {
+        Some(cache::cache_key_for_request(
+            &body_value,
+            CacheNamespace::Anthropic,
+        ))
+    } else {
+        None
+    };
+
+    // Check cache on non-bypass requests
+    if let (Some(ref key), Some(ref c)) = (&cache_key, &state.cache) {
+        if let Some(entry) = c.get(key).await {
+            tracing::debug!(cache_key = %key, "cache hit for /v1/messages");
+            let mut response = Response::builder()
+                .status(StatusCode::OK)
+                .header("content-type", "application/json")
+                .header("x-anyllm-cache", "hit")
+                .body(axum::body::Body::from(entry.response_body))
+                .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response());
+            inject_degradation_header(response.headers_mut(), &warnings);
+            return response;
+        }
+    }
+
     match &state.backend {
         BackendClient::OpenAI(client)
         | BackendClient::AzureOpenAI(client)
@@ -504,9 +610,14 @@ async fn messages(
                             None,
                         ),
                     );
+
+                    try_cache_response(&cache_key, &state.cache, cache_ttl, &anthropic_resp, original_model).await;
+
+                    let cache_hv = cache_header_value(bypass_cache);
                     let mut response = (StatusCode::OK, Json(anthropic_resp)).into_response();
                     rate_limits.inject_anthropic_response_headers(response.headers_mut());
                     inject_degradation_header(response.headers_mut(), &warnings);
+                    response.headers_mut().insert("x-anyllm-cache", cache_hv);
                     response
                 }
                 Err(e) => {
@@ -563,9 +674,13 @@ async fn messages(
                             None,
                         ),
                     );
+                    try_cache_response(&cache_key, &state.cache, cache_ttl, &anthropic_resp, original_model).await;
+
+                    let cache_hv = cache_header_value(bypass_cache);
                     let mut response = (StatusCode::OK, Json(anthropic_resp)).into_response();
                     rate_limits.inject_anthropic_response_headers(response.headers_mut());
                     inject_degradation_header(response.headers_mut(), &warnings);
+                    response.headers_mut().insert("x-anyllm-cache", cache_hv);
                     response
                 }
                 Err(e) => {

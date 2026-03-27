@@ -146,6 +146,44 @@ impl From<BedrockClientError> for BackendError {
 }
 
 impl BackendClient {
+    /// Forward a raw request to a passthrough endpoint (audio, images, etc.).
+    /// Returns `501 Not Implemented` for Anthropic/Bedrock backends.
+    pub async fn raw_passthrough(
+        &self,
+        path: &str,
+        body: bytes::Bytes,
+        content_type: &str,
+    ) -> Result<(axum::http::StatusCode, axum::http::HeaderMap, bytes::Bytes), BackendError> {
+        match self {
+            Self::OpenAI(c)
+            | Self::AzureOpenAI(c)
+            | Self::Vertex(c)
+            | Self::GeminiOpenAI(c)
+            | Self::OpenAIResponses(c) => {
+                let url = c.passthrough_url(path);
+                c.raw_passthrough(&url, body, content_type)
+                    .await
+                    .map_err(BackendError::OpenAI)
+            }
+            Self::Anthropic(_) | Self::Bedrock(_) => {
+                let err = anyllm_translate::mapping::errors_map::create_anthropic_error(
+                    anyllm_translate::anthropic::ErrorType::InvalidRequestError,
+                    format!(
+                        "{} endpoint is not supported by this backend.",
+                        path.trim_start_matches("/v1/")
+                    ),
+                    None,
+                );
+                let body = serde_json::to_vec(&err).unwrap_or_default();
+                Ok((
+                    axum::http::StatusCode::NOT_IMPLEMENTED,
+                    axum::http::HeaderMap::new(),
+                    bytes::Bytes::from(body),
+                ))
+            }
+        }
+    }
+
     /// Forward a raw embeddings request to the backend. No translation — model names pass through.
     /// Returns `501 Not Implemented` for the Anthropic backend (no embeddings endpoint).
     pub async fn embeddings_passthrough(

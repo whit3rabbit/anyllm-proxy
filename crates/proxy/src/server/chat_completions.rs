@@ -4,6 +4,7 @@
 // the Anthropic pipeline, returns OpenAI-format responses.
 
 use crate::backend::{find_double_newline, BackendClient, BackendError, MAX_SSE_BUFFER_SIZE};
+use crate::cache::{self, CacheBackend, CacheNamespace};
 use anyllm_translate::{
     anthropic, mapping, openai, translate_anthropic_to_openai_response,
     translate_openai_to_anthropic_request, ReverseStreamingTranslator, TranslationWarnings,
@@ -111,15 +112,47 @@ pub(crate) async fn chat_completions(
     let original_model = body.model.clone();
 
     if is_streaming {
-        return chat_completions_stream(
-            state,
-            anthropic_req,
-            ctx,
-            original_model,
-            warnings,
-            permit,
-        )
-        .await;
+        let mut response =
+            chat_completions_stream(state, anthropic_req, ctx, original_model, warnings, permit)
+                .await;
+        response.headers_mut().insert(
+            "x-anyllm-cache",
+            axum::http::HeaderValue::from_static("bypass"),
+        );
+        return response;
+    }
+
+    // Non-streaming path: check cache before calling backend.
+    let body_value = serde_json::to_value(&body).unwrap_or_default();
+    let cache_ttl = match cache::parse_cache_ttl(&body_value) {
+        Ok(ttl) => ttl,
+        Err(msg) => {
+            return openai_error_response(&msg, "invalid_request_error", StatusCode::BAD_REQUEST);
+        }
+    };
+    let bypass_cache = cache_ttl == Some(0);
+    let cache_key = if !bypass_cache {
+        Some(cache::cache_key_for_request(
+            &body_value,
+            CacheNamespace::OpenAI,
+        ))
+    } else {
+        None
+    };
+
+    // Check cache on non-bypass requests
+    if let (Some(ref key), Some(ref c)) = (&cache_key, &state.cache) {
+        if let Some(entry) = c.get(key).await {
+            tracing::debug!(cache_key = %key, "cache hit for /v1/chat/completions");
+            let mut response = Response::builder()
+                .status(StatusCode::OK)
+                .header("content-type", "application/json")
+                .header("x-anyllm-cache", "hit")
+                .body(axum::body::Body::from(entry.response_body))
+                .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response());
+            inject_degradation_header(response.headers_mut(), &warnings);
+            return response;
+        }
     }
 
     // Non-streaming path
@@ -146,10 +179,7 @@ pub(crate) async fn chat_completions(
                     );
                     let oai_response =
                         translate_anthropic_to_openai_response(&anthropic_resp, &original_model);
-                    super::routes::record_vk_tpm(
-                        &vk_ctx,
-                        anthropic_resp.usage.output_tokens,
-                    );
+                    super::routes::record_vk_tpm(&vk_ctx, anthropic_resp.usage.output_tokens);
                     log_request(
                         &state.shared,
                         ctx.log_entry(
@@ -164,9 +194,13 @@ pub(crate) async fn chat_completions(
                             None,
                         ),
                     );
+                    super::routes::try_cache_response(&cache_key, &state.cache, cache_ttl, &oai_response, original_model.clone()).await;
+
+                    let cache_hv = super::routes::cache_header_value(bypass_cache);
                     let mut response = (StatusCode::OK, Json(oai_response)).into_response();
                     rate_limits.inject_anthropic_response_headers(response.headers_mut());
                     inject_degradation_header(response.headers_mut(), &warnings);
+                    response.headers_mut().insert("x-anyllm-cache", cache_hv);
                     response
                 }
                 Err(e) => {
@@ -203,10 +237,7 @@ pub(crate) async fn chat_completions(
                         );
                     let oai_response =
                         translate_anthropic_to_openai_response(&anthropic_resp, &original_model);
-                    super::routes::record_vk_tpm(
-                        &vk_ctx,
-                        anthropic_resp.usage.output_tokens,
-                    );
+                    super::routes::record_vk_tpm(&vk_ctx, anthropic_resp.usage.output_tokens);
                     log_request(
                         &state.shared,
                         ctx.log_entry(
@@ -221,9 +252,14 @@ pub(crate) async fn chat_completions(
                             None,
                         ),
                     );
+
+                    super::routes::try_cache_response(&cache_key, &state.cache, cache_ttl, &oai_response, original_model.clone()).await;
+
+                    let cache_hv = super::routes::cache_header_value(bypass_cache);
                     let mut response = (StatusCode::OK, Json(oai_response)).into_response();
                     rate_limits.inject_anthropic_response_headers(response.headers_mut());
                     inject_degradation_header(response.headers_mut(), &warnings);
+                    response.headers_mut().insert("x-anyllm-cache", cache_hv);
                     response
                 }
                 Err(e) => {
