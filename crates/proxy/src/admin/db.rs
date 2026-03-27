@@ -75,6 +75,9 @@ pub fn init_db(conn: &Connection) -> rusqlite::Result<()> {
         );
         CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp ON audit_log(timestamp);
 
+        // Note: batch file JSONL is stored directly in SQLite. For large batch files
+        // (>10MB), consider external blob storage. Current design prioritizes simplicity
+        // and single-binary deployment over storage efficiency.
         CREATE TABLE IF NOT EXISTS batch_file (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             file_id     TEXT NOT NULL UNIQUE,
@@ -416,6 +419,10 @@ async fn flush_buffer(db: &Arc<Mutex<Connection>>, buf: &mut Vec<RequestLogEntry
     // Run SQLite IO on the blocking threadpool to avoid stalling the tokio executor.
     // On failure, return the entries so they can be re-queued for retry.
     let result = tokio::task::spawn_blocking(move || {
+        // Mutex poisoning recovery: if a prior request panicked while holding the lock,
+        // we recover the inner value rather than permanently locking the database.
+        // This is safe because SQLite transactions provide ACID guarantees -- a panic
+        // mid-transaction means the transaction was rolled back by SQLite.
         let conn = db.lock().unwrap_or_else(|e| e.into_inner());
         if let Err(e) = (|| -> rusqlite::Result<()> {
             let tx = conn.unchecked_transaction()?;
