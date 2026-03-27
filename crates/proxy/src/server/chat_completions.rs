@@ -194,7 +194,14 @@ pub(crate) async fn chat_completions(
                             None,
                         ),
                     );
-                    super::routes::try_cache_response(&cache_key, &state.cache, cache_ttl, &oai_response, original_model.clone()).await;
+                    super::routes::try_cache_response(
+                        &cache_key,
+                        &state.cache,
+                        cache_ttl,
+                        &oai_response,
+                        original_model.clone(),
+                    )
+                    .await;
 
                     let cache_hv = super::routes::cache_header_value(bypass_cache);
                     let mut response = (StatusCode::OK, Json(oai_response)).into_response();
@@ -253,7 +260,14 @@ pub(crate) async fn chat_completions(
                         ),
                     );
 
-                    super::routes::try_cache_response(&cache_key, &state.cache, cache_ttl, &oai_response, original_model.clone()).await;
+                    super::routes::try_cache_response(
+                        &cache_key,
+                        &state.cache,
+                        cache_ttl,
+                        &oai_response,
+                        original_model.clone(),
+                    )
+                    .await;
 
                     let cache_hv = super::routes::cache_header_value(bypass_cache);
                     let mut response = (StatusCode::OK, Json(oai_response)).into_response();

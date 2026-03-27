@@ -256,13 +256,11 @@ fn backend_router(state: AppState, mode: HandlerMode) -> Router<GlobalState> {
         );
 
     let api_routes = match mode {
-        HandlerMode::Anthropic => common_routes
-            .route("/v1/messages", post(anthropic_passthrough)),
-        HandlerMode::Bedrock => common_routes
-            .route(
-                "/v1/messages",
-                post(super::bedrock_passthrough::bedrock_passthrough),
-            ),
+        HandlerMode::Anthropic => common_routes.route("/v1/messages", post(anthropic_passthrough)),
+        HandlerMode::Bedrock => common_routes.route(
+            "/v1/messages",
+            post(super::bedrock_passthrough::bedrock_passthrough),
+        ),
         HandlerMode::Translate => common_routes
             .route("/v1/messages", post(messages))
             .route(
@@ -611,7 +609,14 @@ async fn messages(
                         ),
                     );
 
-                    try_cache_response(&cache_key, &state.cache, cache_ttl, &anthropic_resp, original_model).await;
+                    try_cache_response(
+                        &cache_key,
+                        &state.cache,
+                        cache_ttl,
+                        &anthropic_resp,
+                        original_model,
+                    )
+                    .await;
 
                     let cache_hv = cache_header_value(bypass_cache);
                     let mut response = (StatusCode::OK, Json(anthropic_resp)).into_response();
@@ -674,7 +679,14 @@ async fn messages(
                             None,
                         ),
                     );
-                    try_cache_response(&cache_key, &state.cache, cache_ttl, &anthropic_resp, original_model).await;
+                    try_cache_response(
+                        &cache_key,
+                        &state.cache,
+                        cache_ttl,
+                        &anthropic_resp,
+                        original_model,
+                    )
+                    .await;
 
                     let cache_hv = cache_header_value(bypass_cache);
                     let mut response = (StatusCode::OK, Json(anthropic_resp)).into_response();

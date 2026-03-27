@@ -49,7 +49,6 @@ impl BudgetDuration {
             _ => None,
         }
     }
-
 }
 
 /// Current time as milliseconds since the Unix epoch. Used for rate-limit sliding windows.
