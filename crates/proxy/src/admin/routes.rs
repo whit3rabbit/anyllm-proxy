@@ -190,11 +190,26 @@ async fn get_env() -> Json<serde_json::Value> {
         // Gemini
         "GEMINI_BASE_URL":    plain("GEMINI_BASE_URL"),
         "GEMINI_API_KEY":     secret("GEMINI_API_KEY"),
+        // Azure OpenAI
+        "AZURE_OPENAI_ENDPOINT":    plain("AZURE_OPENAI_ENDPOINT"),
+        "AZURE_OPENAI_DEPLOYMENT":  plain("AZURE_OPENAI_DEPLOYMENT"),
+        "AZURE_OPENAI_API_KEY":     secret("AZURE_OPENAI_API_KEY"),
+        "AZURE_OPENAI_API_VERSION": plain("AZURE_OPENAI_API_VERSION"),
+        // AWS Bedrock
+        "AWS_REGION":               plain("AWS_REGION"),
+        "AWS_ACCESS_KEY_ID":        plain("AWS_ACCESS_KEY_ID"),
+        "AWS_SECRET_ACCESS_KEY":    secret("AWS_SECRET_ACCESS_KEY"),
+        "AWS_SESSION_TOKEN":        secret("AWS_SESSION_TOKEN"),
         // Auth
         "PROXY_API_KEYS":     secret("PROXY_API_KEYS"),
+        "PROXY_OPEN_RELAY":   plain("PROXY_OPEN_RELAY"),
         // TLS
         "TLS_CLIENT_CERT_P12": plain("TLS_CLIENT_CERT_P12"),
         "TLS_CA_CERT":         plain("TLS_CA_CERT"),
+        // Network
+        "IP_ALLOWLIST":        plain("IP_ALLOWLIST"),
+        "TRUST_PROXY_HEADERS": plain("TRUST_PROXY_HEADERS"),
+        "WEBHOOK_URLS":        plain("WEBHOOK_URLS"),
         // Admin
         "ADMIN_PORT":               plain("ADMIN_PORT"),
         "ADMIN_DB_PATH":            plain("ADMIN_DB_PATH"),

@@ -27,10 +27,16 @@ a{color:#4a9eff;text-decoration:none}
 .card-body{margin-top:8px;color:#8b949e;font-size:12px}
 .section-label{color:#8b949e;font-size:11px;text-transform:uppercase;margin-bottom:8px;letter-spacing:0.5px}
 .feed{background:#161b22;border:1px solid #30363d;border-radius:6px;overflow:hidden;max-height:400px;overflow-y:auto}
-.feed-header,.feed-row{display:grid;grid-template-columns:150px 60px 90px 100px 70px 70px;padding:6px 12px;font-size:12px}
+.feed-header,.feed-row{display:grid;grid-template-columns:140px 50px 80px 1fr 65px 55px 55px;padding:6px 12px;font-size:12px}
 .feed-header{background:#1c2128;color:#8b949e;border-bottom:1px solid #30363d;position:sticky;top:0}
-.feed-row{border-bottom:1px solid #21262d}
+.feed-row{border-bottom:1px solid #21262d;cursor:pointer}
 .feed-row:last-child{border-bottom:none}
+.feed-row:hover{background:#1c2128}
+.feed-detail{padding:12px 16px;background:#0d1117;border-bottom:1px solid #21262d;font-size:12px;display:grid;grid-template-columns:120px 1fr;gap:4px 12px}
+.feed-detail .label{color:#8b949e}
+.feed-detail .val{color:#c9d1d9;font-family:monospace;word-break:break-all}
+.feed-detail .error-msg{color:#f85149;grid-column:1/-1;margin-top:4px;padding:6px;background:rgba(248,81,73,0.1);border-radius:4px}
+.streaming-badge{font-size:9px;padding:1px 4px;border-radius:2px;background:rgba(74,158,255,0.2);color:#4a9eff;margin-left:4px}
 .status-2xx{color:#3fb950}.status-4xx{color:#d29922}.status-5xx{color:#f85149}
 .form-group{margin-bottom:16px;padding:12px;background:#161b22;border:1px solid #30363d;border-radius:6px}
 .form-label{font-weight:600;margin-bottom:4px}
@@ -52,14 +58,46 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
 .error{color:#f85149}
 .empty{text-align:center;padding:40px;color:#8b949e}
 .pagination{display:flex;gap:8px;margin-top:12px;align-items:center}
+/* Login overlay */
+.login-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:#0d1117;display:flex;align-items:center;justify-content:center;z-index:1000}
+.login-card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:32px;width:320px}
+.login-title{font-size:18px;font-weight:600;margin-bottom:24px;text-align:center;color:#c9d1d9}
+.login-card input[type="password"]{width:100%;padding:8px 12px;margin-bottom:12px;font-size:14px;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;border-radius:4px}
+.login-card input[type="password"]:focus{outline:none;border-color:#4a9eff}
+.login-card .btn{width:100%;padding:10px;font-size:14px}
+.login-error{color:#f85149;font-size:12px;margin-top:8px;min-height:16px}
+/* Keys tab */
+.keys-grid{width:100%;border-collapse:collapse;font-size:12px}
+.keys-grid th,.keys-grid td{padding:8px 10px;text-align:left;border-bottom:1px solid #21262d}
+.keys-grid th{background:#1c2128;color:#8b949e;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;position:sticky;top:0}
+.keys-grid tr:hover td{background:#161b22}
+.badge-active{background:rgba(63,185,80,0.2);color:#3fb950;font-size:10px;padding:2px 6px;border-radius:3px}
+.badge-revoked{background:rgba(248,81,73,0.2);color:#f85149;font-size:10px;padding:2px 6px;border-radius:3px}
+.badge-expired{background:rgba(210,153,34,0.2);color:#d29922;font-size:10px;padding:2px 6px;border-radius:3px}
+.btn-danger{background:#da3633;border-color:#f85149;color:white}
+.btn-sm{padding:3px 8px;font-size:11px;border-radius:4px}
+.key-result{background:#0d1117;border:1px solid #3fb950;border-radius:6px;padding:12px;margin-bottom:12px;font-family:monospace;font-size:12px;word-break:break-all}
+.key-result-label{color:#3fb950;font-size:11px;margin-bottom:4px;font-weight:600}
 </style>
 </head>
 <body>
+<div id="login-overlay" class="login-overlay" style="display:none">
+  <div class="login-card">
+    <div class="login-title">Proxy Admin</div>
+    <form id="login-form">
+      <input type="password" id="login-token" placeholder="Admin token" autocomplete="current-password">
+      <button type="submit" class="btn btn-primary" id="login-submit">Sign in</button>
+    </form>
+    <div class="login-error" id="login-error"></div>
+  </div>
+</div>
 <div class="nav">
   <div class="nav-item active" data-tab="dashboard">Dashboard</div>
   <div class="nav-item" data-tab="requests">Request Log</div>
   <div class="nav-item" data-tab="settings">Settings</div>
   <div class="nav-item" data-tab="backends">Backends</div>
+  <div class="nav-item" data-tab="keys">Keys</div>
+  <div class="nav-item" data-tab="models">Models</div>
   <div class="nav-right"><span id="ws-status" class="disconnected">Disconnected</span></div>
 </div>
 
@@ -72,9 +110,15 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
     <div class="stat"><div class="stat-label">Total Requests</div><div class="stat-value" id="stat-total">0</div></div>
   </div>
   <div class="backend-cards" id="backend-cards"></div>
-  <div class="section-label">Live Request Feed</div>
+  <div class="section-header">
+    <div class="section-label">Live Request Feed</div>
+    <div class="form-row">
+      <select id="live-filter-status"><option value="">All</option><option value="2">2xx</option><option value="4">4xx</option><option value="5">5xx</option></select>
+      <button class="btn btn-secondary" id="btn-pause-feed">Pause</button>
+    </div>
+  </div>
   <div class="feed" id="live-feed">
-    <div class="feed-header"><div>Time</div><div>Status</div><div>Backend</div><div>Model</div><div>Latency</div><div>Tokens</div></div>
+    <div class="feed-header"><div>Time</div><div>Status</div><div>Backend</div><div>Model</div><div>Latency</div><div>In</div><div>Out</div></div>
   </div>
 </div>
 
@@ -88,7 +132,7 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
     </div>
   </div>
   <div class="feed" id="request-log" style="max-height:600px">
-    <div class="feed-header"><div>Time</div><div>Status</div><div>Backend</div><div>Model</div><div>Latency</div><div>Tokens</div></div>
+    <div class="feed-header"><div>Time</div><div>Status</div><div>Backend</div><div>Model</div><div>Latency</div><div>In</div><div>Out</div></div>
   </div>
   <div class="pagination">
     <button class="btn btn-secondary" id="prev-page">Prev</button>
@@ -118,22 +162,118 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
   <div id="backends-detail"></div>
 </div>
 
+<div id="tab-keys" class="tab">
+  <div class="section-header">
+    <div class="section-label">Virtual API Keys</div>
+    <button class="btn btn-primary" id="btn-create-key">Create Key</button>
+  </div>
+  <div id="key-create-form" style="display:none;background:#161b22;border:1px solid #30363d;border-radius:6px;padding:16px;margin-bottom:16px">
+    <div style="font-weight:600;margin-bottom:12px;color:#c9d1d9">New Virtual Key</div>
+    <div id="key-result-area" style="display:none">
+      <div class="key-result-label">Key created. Copy it now -- it will not be shown again.</div>
+      <div class="key-result" id="key-result-value"></div>
+      <button class="btn btn-secondary btn-sm" id="btn-copy-key" style="margin-bottom:12px">Copy</button>
+    </div>
+    <div class="model-grid" style="grid-template-columns:140px 1fr;gap:8px;align-items:center">
+      <div style="color:#8b949e">Description:</div>
+      <input type="text" id="key-description" placeholder="e.g. team-ml" style="width:100%">
+      <div style="color:#8b949e">Role:</div>
+      <select id="key-role" style="width:100%">
+        <option value="developer">developer</option>
+        <option value="admin">admin</option>
+      </select>
+      <div style="color:#8b949e">RPM Limit:</div>
+      <input type="number" id="key-rpm" placeholder="blank = unlimited" min="1" style="width:100%">
+      <div style="color:#8b949e">TPM Limit:</div>
+      <input type="number" id="key-tpm" placeholder="blank = unlimited" min="1" style="width:100%">
+      <div style="color:#8b949e">Max Budget ($):</div>
+      <input type="number" id="key-budget" placeholder="blank = unlimited" min="0" step="0.01" style="width:100%">
+      <div style="color:#8b949e">Budget Period:</div>
+      <select id="key-budget-period" style="width:100%">
+        <option value="">lifetime</option>
+        <option value="daily">daily</option>
+        <option value="monthly">monthly</option>
+      </select>
+      <div style="color:#8b949e">Expires At:</div>
+      <input type="datetime-local" id="key-expires" style="width:100%">
+    </div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn btn-primary" id="btn-submit-key">Create</button>
+      <button class="btn btn-secondary" id="btn-cancel-key">Cancel</button>
+    </div>
+  </div>
+  <div style="background:#161b22;border:1px solid #30363d;border-radius:6px;overflow:auto">
+    <div id="keys-table-container">
+      <div class="empty" id="keys-empty">Loading...</div>
+    </div>
+  </div>
+</div>
+
+<div id="tab-models" class="tab">
+  <div class="section-header">
+    <div class="section-label">Model Routing</div>
+    <button class="btn btn-primary" id="btn-add-deployment">Add Deployment</button>
+  </div>
+  <div id="model-add-form" style="display:none;background:#161b22;border:1px solid #30363d;border-radius:6px;padding:16px;margin-bottom:16px">
+    <div style="font-weight:600;margin-bottom:12px;color:#c9d1d9">New Deployment</div>
+    <div class="model-grid" style="grid-template-columns:140px 1fr;gap:8px;align-items:center">
+      <div style="color:#8b949e">Model Name:</div>
+      <input type="text" id="model-name" placeholder="e.g. gpt-4o" style="width:100%">
+      <div style="color:#8b949e">Backend:</div>
+      <input type="text" id="model-backend" placeholder="e.g. openai" style="width:100%">
+      <div style="color:#8b949e">Actual Model:</div>
+      <input type="text" id="model-actual" placeholder="e.g. gpt-4o-2024-08-06" style="width:100%">
+      <div style="color:#8b949e">RPM (optional):</div>
+      <input type="number" id="model-rpm" placeholder="blank = unlimited" min="1" style="width:100%">
+      <div style="color:#8b949e">TPM (optional):</div>
+      <input type="number" id="model-tpm" placeholder="blank = unlimited" min="1" style="width:100%">
+      <div style="color:#8b949e">Weight:</div>
+      <input type="number" id="model-weight" value="1" min="1" style="width:100%">
+    </div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn btn-primary" id="btn-submit-model">Add</button>
+      <button class="btn btn-secondary" id="btn-cancel-model">Cancel</button>
+    </div>
+  </div>
+  <div id="models-strategy" style="color:#8b949e;font-size:12px;margin-bottom:8px"></div>
+  <div style="background:#161b22;border:1px solid #30363d;border-radius:6px;overflow:auto">
+    <div id="models-table-container">
+      <div class="empty" id="models-empty">Loading...</div>
+    </div>
+  </div>
+</div>
+
 <script>
 (function() {
   'use strict';
 
-  var TOKEN = localStorage.getItem('admin_token');
+  var TOKEN = sessionStorage.getItem('admin_token');
   if (!TOKEN) {
-    TOKEN = prompt('Enter admin token:');
-    if (TOKEN) {
-      localStorage.setItem('admin_token', TOKEN);
-    }
-  }
-  if (!TOKEN) { document.body.textContent = 'No token provided'; return; }
-  
-  // Clean URL just in case it was used previously
-  if (window.location.search.indexOf('token=') !== -1) {
-    window.history.replaceState({}, '', window.location.pathname);
+    // Show login overlay, hide main UI until authenticated.
+    document.getElementById('login-overlay').style.display = 'flex';
+    document.querySelector('.nav').style.display = 'none';
+    document.querySelectorAll('.tab').forEach(function(t) { t.style.display = 'none'; });
+
+    document.getElementById('login-form').addEventListener('submit', function(e) {
+      e.preventDefault();
+      var candidate = document.getElementById('login-token').value.trim();
+      var errEl = document.getElementById('login-error');
+      if (!candidate) { errEl.textContent = 'Token is required.'; return; }
+      errEl.textContent = '';
+      // Validate by hitting a known admin endpoint.
+      fetch('/admin/api/metrics', {headers: {'Authorization': 'Bearer ' + candidate}})
+        .then(function(r) {
+          if (r.ok) {
+            sessionStorage.setItem('admin_token', candidate);
+            window.location.reload();
+          } else {
+            errEl.textContent = 'Invalid token.';
+          }
+        })
+        .catch(function() { errEl.textContent = 'Request failed. Is the server running?'; });
+    });
+    document.getElementById('login-token').focus();
+    return;
   }
 
   var API = '/admin/api';
@@ -175,16 +315,65 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
     return ms + 'ms';
   }
 
-  function makeFeedRow(r) {
-    var tokens = (r.input_tokens || 0) + (r.output_tokens || 0);
-    return el('div', {className: 'feed-row'}, [
+  function makeFeedRow(r, clickable) {
+    var modelText = r.model_mapped || r.model_requested || '--';
+    var modelChildren = [text(modelText)];
+    if (r.is_streaming) {
+      modelChildren.push(el('span', {className: 'streaming-badge', textContent: 'SSE'}));
+    }
+    var row = el('div', {className: 'feed-row'}, [
       el('div', {textContent: formatTime(r.timestamp)}),
       el('div', {className: statusClass(r.status_code), textContent: String(r.status_code)}),
       el('div', {textContent: r.backend || '--'}),
-      el('div', {textContent: r.model_mapped || r.model_requested || '--', style:{color:'#8b949e'}}),
+      el('div', {style:{color:'#8b949e'}}, modelChildren),
       el('div', {textContent: formatLatency(r.latency_ms)}),
-      el('div', {textContent: tokens ? String(tokens) : '--', style:{color:'#8b949e'}})
+      el('div', {textContent: r.input_tokens ? String(r.input_tokens) : '--', style:{color:'#8b949e'}}),
+      el('div', {textContent: r.output_tokens ? String(r.output_tokens) : '--', style:{color:'#8b949e'}})
     ]);
+    if (clickable && r.request_id) {
+      row.addEventListener('click', function() { toggleRequestDetail(row, r.request_id); });
+    }
+    return row;
+  }
+
+  function toggleRequestDetail(row, requestId) {
+    var next = row.nextElementSibling;
+    if (next && next.classList.contains('feed-detail')) {
+      next.parentNode.removeChild(next);
+      return;
+    }
+    apiFetch('/requests/' + encodeURIComponent(requestId)).then(function(data) {
+      var detail = el('div', {className: 'feed-detail'}, [
+        el('span', {className: 'label', textContent: 'Request ID'}),
+        el('span', {className: 'val', textContent: data.request_id || '--'}),
+        el('span', {className: 'label', textContent: 'Timestamp'}),
+        el('span', {className: 'val', textContent: data.timestamp || '--'}),
+        el('span', {className: 'label', textContent: 'Backend'}),
+        el('span', {className: 'val', textContent: data.backend || '--'}),
+        el('span', {className: 'label', textContent: 'Model Requested'}),
+        el('span', {className: 'val', textContent: data.model_requested || '--'}),
+        el('span', {className: 'label', textContent: 'Model Mapped'}),
+        el('span', {className: 'val', textContent: data.model_mapped || '--'}),
+        el('span', {className: 'label', textContent: 'Status'}),
+        el('span', {className: 'val', textContent: data.status_code != null ? String(data.status_code) : '--'}),
+        el('span', {className: 'label', textContent: 'Latency'}),
+        el('span', {className: 'val', textContent: formatLatency(data.latency_ms)}),
+        el('span', {className: 'label', textContent: 'Streaming'}),
+        el('span', {className: 'val', textContent: data.is_streaming ? 'Yes' : 'No'}),
+        el('span', {className: 'label', textContent: 'Input Tokens'}),
+        el('span', {className: 'val', textContent: data.input_tokens != null ? String(data.input_tokens) : '--'}),
+        el('span', {className: 'label', textContent: 'Output Tokens'}),
+        el('span', {className: 'val', textContent: data.output_tokens != null ? String(data.output_tokens) : '--'})
+      ]);
+      if (data.cost_usd != null) {
+        detail.appendChild(el('span', {className: 'label', textContent: 'Cost'}));
+        detail.appendChild(el('span', {className: 'val', textContent: '$' + data.cost_usd.toFixed(6)}));
+      }
+      if (data.error_message) {
+        detail.appendChild(el('div', {className: 'error-msg', textContent: data.error_message}));
+      }
+      row.parentNode.insertBefore(detail, row.nextSibling);
+    }).catch(function(e) { console.error('Request detail failed:', e); });
   }
 
   // -- Tab switching --
@@ -197,6 +386,8 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
       if (navEl.dataset.tab === 'requests') loadRequests();
       if (navEl.dataset.tab === 'settings') { loadConfig(); loadEnv(); }
       if (navEl.dataset.tab === 'backends') loadBackends();
+      if (navEl.dataset.tab === 'keys') loadKeys();
+      if (navEl.dataset.tab === 'models') loadModels();
     });
   });
 
@@ -237,12 +428,25 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
   var feedRows = [];
   var MAX_FEED = 100;
   var totalRequests = 0;
+  var feedPaused = false;
+  var feedFilter = '';
+
+  document.getElementById('btn-pause-feed').addEventListener('click', function() {
+    feedPaused = !feedPaused;
+    this.textContent = feedPaused ? 'Resume' : 'Pause';
+    this.style.borderColor = feedPaused ? '#d29922' : '#484f58';
+  });
+
+  document.getElementById('live-filter-status').addEventListener('change', function() {
+    feedFilter = this.value;
+    renderFeed();
+  });
 
   function handleEvent(event) {
     if (event.type === 'request_completed') {
       feedRows.unshift(event.data);
       if (feedRows.length > MAX_FEED) feedRows.pop();
-      renderFeed();
+      if (!feedPaused) renderFeed();
       totalRequests++;
       document.getElementById('stat-total').textContent = totalRequests.toLocaleString();
     } else if (event.type === 'metrics_snapshot') {
@@ -253,7 +457,10 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
   function renderFeed() {
     var feed = document.getElementById('live-feed');
     clearChildren(feed, true);
-    feedRows.forEach(function(r) { feed.appendChild(makeFeedRow(r)); });
+    feedRows.forEach(function(r) {
+      if (feedFilter && String(r.status_code).charAt(0) !== feedFilter) return;
+      feed.appendChild(makeFeedRow(r, true));
+    });
   }
 
   function updateDashboardMetrics(data) {
@@ -284,7 +491,15 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
       }
       if (metrics.latency_p50_ms != null) document.getElementById('stat-p50').textContent = formatLatency(metrics.latency_p50_ms);
       if (metrics.latency_p95_ms != null) document.getElementById('stat-p95').textContent = formatLatency(metrics.latency_p95_ms);
-      if (metrics.error_rate != null) document.getElementById('stat-error-rate').textContent = (metrics.error_rate * 100).toFixed(1) + '%';
+      if (metrics.error_rate != null) {
+        var pct = (metrics.error_rate * 100).toFixed(1) + '%';
+        var errEl = document.getElementById('stat-error-rate');
+        errEl.textContent = pct;
+        errEl.style.color = metrics.error_rate > 0.05 ? '#f85149' : '#3fb950';
+      }
+      if (metrics.requests_per_second != null) {
+        document.getElementById('stat-rpm').textContent = (metrics.requests_per_second * 60).toFixed(0);
+      }
     }).catch(function(e) { console.error('Dashboard load failed:', e); });
 
     apiFetch('/backends').then(function(data) {
@@ -293,7 +508,7 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
       (data.backends || []).forEach(function(b) {
         var card = el('div', {className: 'card'}, [
           el('div', {className: 'card-header'}, [el('span', {className: 'card-name', textContent: b.name})]),
-          el('div', {className: 'card-body', textContent: b.big_model + ' / ' + b.small_model + ' | ' + (b.metrics.requests_total||0) + ' reqs'})
+          el('div', {className: 'card-body', textContent: b.big_model + ' / ' + b.small_model + ' | ' + (b.metrics.requests_total||0) + ' reqs | ' + (b.metrics.requests_error||0) + ' errs'})
         ]);
         container.appendChild(card);
       });
@@ -318,7 +533,7 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
       if (requests.length === 0 && currentPage === 0) {
         feed.appendChild(el('div', {className: 'empty', textContent: 'No requests yet'}));
       } else {
-        requests.forEach(function(r) { feed.appendChild(makeFeedRow(r)); });
+        requests.forEach(function(r) { feed.appendChild(makeFeedRow(r, true)); });
       }
       document.getElementById('page-info').textContent = 'Page ' + (currentPage + 1);
     }).catch(function(e) { console.error('Requests load failed:', e); });
@@ -419,10 +634,13 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
     { label: 'OpenAI / Compatible', keys: ['OPENAI_BASE_URL','OPENAI_API_FORMAT','OPENAI_API_KEY'] },
     { label: 'Vertex AI', keys: ['VERTEX_PROJECT','VERTEX_REGION','VERTEX_API_KEY'] },
     { label: 'Gemini', keys: ['GEMINI_BASE_URL','GEMINI_API_KEY'] },
-    { label: 'Auth & TLS', keys: ['PROXY_API_KEYS','TLS_CLIENT_CERT_P12','TLS_CA_CERT'] },
+    { label: 'Azure OpenAI', keys: ['AZURE_OPENAI_ENDPOINT','AZURE_OPENAI_DEPLOYMENT','AZURE_OPENAI_API_KEY','AZURE_OPENAI_API_VERSION'] },
+    { label: 'AWS Bedrock', keys: ['AWS_REGION','AWS_ACCESS_KEY_ID','AWS_SECRET_ACCESS_KEY','AWS_SESSION_TOKEN'] },
+    { label: 'Auth & TLS', keys: ['PROXY_API_KEYS','PROXY_OPEN_RELAY','TLS_CLIENT_CERT_P12','TLS_CA_CERT'] },
+    { label: 'Network', keys: ['IP_ALLOWLIST','TRUST_PROXY_HEADERS','WEBHOOK_URLS'] },
     { label: 'Admin', keys: ['ADMIN_PORT','ADMIN_DB_PATH','ADMIN_LOG_RETENTION_DAYS'] },
   ];
-  var ENV_SECRET_KEYS = {'OPENAI_API_KEY':1,'VERTEX_API_KEY':1,'GEMINI_API_KEY':1,'PROXY_API_KEYS':1};
+  var ENV_SECRET_KEYS = {'OPENAI_API_KEY':1,'VERTEX_API_KEY':1,'GEMINI_API_KEY':1,'PROXY_API_KEYS':1,'AZURE_OPENAI_API_KEY':1,'AWS_SECRET_ACCESS_KEY':1,'AWS_SESSION_TOKEN':1};
 
   function loadEnv() {
     apiFetch('/env').then(function(data) {
@@ -521,6 +739,313 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
       });
     }).catch(function(e) { console.error('Backends load failed:', e); });
   }
+
+  // -- Virtual Keys --
+  function loadKeys() {
+    apiFetch('/keys').then(function(data) {
+      var container = document.getElementById('keys-table-container');
+      clearChildren(container, false);
+      var keys = data.keys || [];
+      if (keys.length === 0) {
+        container.appendChild(el('div', {className: 'empty', textContent: 'No keys yet. Click Create Key to add one.'}));
+        return;
+      }
+      var thead = el('thead', null, [
+        el('tr', null, [
+          el('th', {textContent: 'Prefix'}),
+          el('th', {textContent: 'Description'}),
+          el('th', {textContent: 'Role'}),
+          el('th', {textContent: 'RPM / TPM'}),
+          el('th', {textContent: 'Budget'}),
+          el('th', {textContent: 'Spend'}),
+          el('th', {textContent: 'Requests'}),
+          el('th', {textContent: 'Status'}),
+          el('th', {textContent: 'Actions'})
+        ])
+      ]);
+      var tbody = el('tbody', null, null);
+      keys.forEach(function(k) {
+        var badgeClass = 'badge-' + (k.status || 'active');
+        var budgetText = k.max_budget_usd != null
+          ? ('$' + Number(k.max_budget_usd).toFixed(2) + (k.budget_duration ? ' / ' + k.budget_duration : ''))
+          : '--';
+        var spendText = k.total_spend != null ? ('$' + Number(k.total_spend).toFixed(4)) : '--';
+        var rpmTpm = (k.rpm_limit != null ? k.rpm_limit : '--') + ' / ' + (k.tpm_limit != null ? k.tpm_limit : '--');
+        var actionTd = el('td', null, null);
+        if (k.status === 'active') {
+          var revokeBtn = el('button', {className: 'btn btn-danger btn-sm', textContent: 'Revoke'}, null);
+          revokeBtn.addEventListener('click', (function(id) {
+            return function() { revokeKey(id); };
+          }(k.id)));
+          actionTd.appendChild(revokeBtn);
+        }
+        var spendBtn = el('button', {className: 'btn btn-secondary btn-sm', textContent: 'Spend', style:{marginLeft:'4px'}}, null);
+        spendBtn.addEventListener('click', (function(id, prefix) {
+          return function() { showKeySpend(id, prefix); };
+        }(k.id, k.key_prefix)));
+        actionTd.appendChild(spendBtn);
+        var row = el('tr', null, [
+          el('td', {textContent: k.key_prefix || '--', style:{fontFamily:'monospace'}}),
+          el('td', {textContent: k.description || '--', style:{color:'#8b949e'}}),
+          el('td', {textContent: k.role || 'developer'}),
+          el('td', {textContent: rpmTpm, style:{color:'#8b949e'}}),
+          el('td', {textContent: budgetText, style:{color:'#8b949e'}}),
+          el('td', {textContent: spendText}),
+          el('td', {textContent: String(k.total_requests || 0)}),
+          el('td', null, [el('span', {className: 'badge ' + badgeClass, textContent: k.status || 'active'})]),
+          actionTd
+        ]);
+        tbody.appendChild(row);
+      });
+      var table = el('table', {className: 'keys-grid'}, [thead, tbody]);
+      container.appendChild(table);
+    }).catch(function(e) {
+      var container = document.getElementById('keys-table-container');
+      clearChildren(container, false);
+      container.appendChild(el('div', {className: 'empty error', textContent: 'Failed to load keys: ' + e.message}));
+    });
+  }
+
+  function createKey() {
+    var description = document.getElementById('key-description').value.trim();
+    var role = document.getElementById('key-role').value;
+    var rpmVal = document.getElementById('key-rpm').value;
+    var tpmVal = document.getElementById('key-tpm').value;
+    var budgetVal = document.getElementById('key-budget').value;
+    var budgetPeriod = document.getElementById('key-budget-period').value;
+    var expiresVal = document.getElementById('key-expires').value;
+
+    var body = {};
+    if (description) body.description = description;
+    if (role) body.role = role;
+    body.rpm_limit = rpmVal ? parseInt(rpmVal, 10) : null;
+    body.tpm_limit = tpmVal ? parseInt(tpmVal, 10) : null;
+    body.max_budget_usd = budgetVal ? parseFloat(budgetVal) : null;
+    body.budget_duration = budgetPeriod || null;
+    body.expires_at = expiresVal ? new Date(expiresVal).toISOString() : null;
+
+    var submitBtn = document.getElementById('btn-submit-key');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Creating...';
+
+    function resetSubmitBtn() {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Create';
+    }
+
+    fetch(API + '/keys', {method: 'POST', headers: authHeaders, body: JSON.stringify(body)})
+      .then(function(r) {
+        if (!r.ok) { return r.json().then(function(e) { throw new Error(e.error || ('HTTP ' + r.status)); }); }
+        return r.json();
+      })
+      .then(function(result) {
+        var resultArea = document.getElementById('key-result-area');
+        var resultValue = document.getElementById('key-result-value');
+        resultValue.textContent = result.key;
+        resultArea.style.display = 'block';
+        // Reset form fields but keep the form open so user can copy the key.
+        document.getElementById('key-description').value = '';
+        document.getElementById('key-rpm').value = '';
+        document.getElementById('key-tpm').value = '';
+        document.getElementById('key-budget').value = '';
+        document.getElementById('key-expires').value = '';
+        document.getElementById('key-role').value = 'developer';
+        document.getElementById('key-budget-period').value = '';
+        resetSubmitBtn();
+        loadKeys();
+      })
+      .catch(function(e) {
+        alert('Failed to create key: ' + e.message);
+        resetSubmitBtn();
+      });
+  }
+
+  function revokeKey(id) {
+    if (!confirm('Revoke this key? This cannot be undone.')) return;
+    fetch(API + '/keys/' + id, {method: 'DELETE', headers: authHeaders})
+      .then(function(r) {
+        if (!r.ok) { return r.json().then(function(e) { throw new Error(e.error || ('HTTP ' + r.status)); }); }
+        return r.json();
+      })
+      .then(function() { loadKeys(); })
+      .catch(function(e) { alert('Failed to revoke key: ' + e.message); });
+  }
+
+  function showKeySpend(id, prefix) {
+    apiFetch('/keys/' + id + '/spend').then(function(data) {
+      var lines = [
+        'Key: ' + (prefix || id),
+        'Total cost: $' + Number(data.total_cost_usd || 0).toFixed(4),
+        'Input tokens: ' + (data.total_input_tokens || 0),
+        'Output tokens: ' + (data.total_output_tokens || 0),
+        'Requests: ' + (data.request_count || 0),
+      ];
+      if (data.budget_duration && data.period_cost_usd != null) {
+        lines.push('Period cost (' + data.budget_duration + '): $' + Number(data.period_cost_usd).toFixed(4));
+      }
+      if (data.max_budget_usd != null) {
+        lines.push('Budget limit: $' + Number(data.max_budget_usd).toFixed(2));
+      }
+      alert(lines.join('\n'));
+    }).catch(function(e) { alert('Failed to fetch spend: ' + e.message); });
+  }
+
+  // Keys tab event wiring
+  document.getElementById('btn-create-key').addEventListener('click', function() {
+    var form = document.getElementById('key-create-form');
+    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    document.getElementById('key-result-area').style.display = 'none';
+  });
+
+  document.getElementById('btn-cancel-key').addEventListener('click', function() {
+    document.getElementById('key-create-form').style.display = 'none';
+    document.getElementById('key-result-area').style.display = 'none';
+  });
+
+  document.getElementById('btn-submit-key').addEventListener('click', createKey);
+
+  document.getElementById('btn-copy-key').addEventListener('click', function() {
+    var val = document.getElementById('key-result-value').textContent;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(val).then(function() {
+        document.getElementById('btn-copy-key').textContent = 'Copied!';
+        setTimeout(function() { document.getElementById('btn-copy-key').textContent = 'Copy'; }, 1500);
+      }).catch(function() { alert('Copy failed. Select the key text manually.'); });
+    } else {
+      // Fallback for older browsers.
+      var ta = document.createElement('textarea');
+      ta.value = val;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      document.getElementById('btn-copy-key').textContent = 'Copied!';
+      setTimeout(function() { document.getElementById('btn-copy-key').textContent = 'Copy'; }, 1500);
+    }
+  });
+
+  // -- Model Routing --
+  function loadModels() {
+    apiFetch('/models').then(function(data) {
+      var strategyEl = document.getElementById('models-strategy');
+      var container = document.getElementById('models-table-container');
+      clearChildren(container, false);
+
+      if (data.note) {
+        strategyEl.textContent = '';
+        container.appendChild(el('div', {className: 'empty', textContent: data.note}));
+        return;
+      }
+      strategyEl.textContent = data.strategy ? ('Strategy: ' + data.strategy) : '';
+
+      var models = data.models || [];
+      if (models.length === 0) {
+        container.appendChild(el('div', {className: 'empty', textContent: 'No model deployments configured.'}));
+        return;
+      }
+
+      var thead = el('thead', null, [
+        el('tr', null, [
+          el('th', {textContent: 'Model Name'}),
+          el('th', {textContent: 'Deployments'}),
+          el('th', {textContent: 'Actions'})
+        ])
+      ]);
+      var tbody = el('tbody', null, null);
+      models.forEach(function(m) {
+        var removeBtn = el('button', {className: 'btn btn-danger btn-sm', textContent: 'Remove'}, null);
+        removeBtn.addEventListener('click', (function(name) {
+          return function() { removeModel(name); };
+        }(m.model_name)));
+        var actionTd = el('td', null, [removeBtn]);
+        var row = el('tr', null, [
+          el('td', {textContent: m.model_name, style:{fontFamily:'monospace'}}),
+          el('td', {textContent: String(m.deployments || 0), style:{color:'#8b949e'}}),
+          actionTd
+        ]);
+        tbody.appendChild(row);
+      });
+      var table = el('table', {className: 'keys-grid'}, [thead, tbody]);
+      container.appendChild(table);
+    }).catch(function(e) {
+      var container = document.getElementById('models-table-container');
+      clearChildren(container, false);
+      container.appendChild(el('div', {className: 'empty error', textContent: 'Failed to load models: ' + e.message}));
+    });
+  }
+
+  function addModel() {
+    var modelName = document.getElementById('model-name').value.trim();
+    var backendName = document.getElementById('model-backend').value.trim();
+    var actualModel = document.getElementById('model-actual').value.trim();
+    var rpmVal = document.getElementById('model-rpm').value;
+    var tpmVal = document.getElementById('model-tpm').value;
+    var weightVal = document.getElementById('model-weight').value;
+
+    if (!modelName || !backendName || !actualModel) {
+      alert('Model Name, Backend, and Actual Model are required.');
+      return;
+    }
+
+    var body = {
+      model_name: modelName,
+      backend_name: backendName,
+      actual_model: actualModel,
+      weight: weightVal ? parseInt(weightVal, 10) : 1
+    };
+    if (rpmVal) body.rpm = parseInt(rpmVal, 10);
+    if (tpmVal) body.tpm = parseInt(tpmVal, 10);
+
+    var submitBtn = document.getElementById('btn-submit-model');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Adding...';
+
+    fetch(API + '/models', {method: 'POST', headers: authHeaders, body: JSON.stringify(body)})
+      .then(function(r) {
+        if (!r.ok) { return r.json().then(function(e) { throw new Error(e.error || ('HTTP ' + r.status)); }); }
+        return r.json();
+      })
+      .then(function() {
+        document.getElementById('model-add-form').style.display = 'none';
+        document.getElementById('model-name').value = '';
+        document.getElementById('model-backend').value = '';
+        document.getElementById('model-actual').value = '';
+        document.getElementById('model-rpm').value = '';
+        document.getElementById('model-tpm').value = '';
+        document.getElementById('model-weight').value = '1';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Add';
+        loadModels();
+      })
+      .catch(function(e) {
+        alert('Failed to add deployment: ' + e.message);
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Add';
+      });
+  }
+
+  function removeModel(name) {
+    if (!confirm('Remove model "' + name + '"? This cannot be undone.')) return;
+    fetch(API + '/models/' + encodeURIComponent(name), {method: 'DELETE', headers: authHeaders})
+      .then(function(r) {
+        if (!r.ok) { return r.json().then(function(e) { throw new Error(e.error || ('HTTP ' + r.status)); }); }
+        return r.json();
+      })
+      .then(function() { loadModels(); })
+      .catch(function(e) { alert('Failed to remove model: ' + e.message); });
+  }
+
+  // Models tab event wiring
+  document.getElementById('btn-add-deployment').addEventListener('click', function() {
+    var form = document.getElementById('model-add-form');
+    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+  });
+
+  document.getElementById('btn-cancel-model').addEventListener('click', function() {
+    document.getElementById('model-add-form').style.display = 'none';
+  });
+
+  document.getElementById('btn-submit-model').addEventListener('click', addModel);
 
   // Initial load
   loadDashboard();
