@@ -324,8 +324,8 @@ async fn main() {
         // Admin token: use env var or generate random UUID written to a file.
         let admin_token = std::env::var("ADMIN_TOKEN").unwrap_or_else(|_| {
             let token = uuid::Uuid::new_v4().to_string();
-            let token_path = std::env::var("ADMIN_TOKEN_FILE")
-                .unwrap_or_else(|_| ".admin_token".into());
+            let token_path = resolve_admin_token_path();
+            let token_path = token_path.to_string_lossy().to_string();
             // Write token to file with restrictive permissions instead of stderr,
             // because stderr is captured by container log drivers in production.
             if let Err(e) = write_token_file(&token_path, &token) {
@@ -523,6 +523,15 @@ fn parse_env_file(path: &str) -> Vec<(String, String)> {
     pairs
 }
 
+/// Resolve admin token file path from `ADMIN_TOKEN_PATH` env var,
+/// falling back to `.admin_token` in the current directory.
+fn resolve_admin_token_path() -> std::path::PathBuf {
+    match std::env::var("ADMIN_TOKEN_PATH") {
+        Ok(p) => std::path::PathBuf::from(p),
+        Err(_) => std::path::PathBuf::from(".admin_token"),
+    }
+}
+
 /// Write the admin token to a file with mode 0600 (owner-only read/write).
 /// On Unix, sets permissions atomically at creation to avoid a TOCTOU race
 /// where the file is briefly world-readable before chmod.
@@ -544,8 +553,8 @@ fn write_token_file(path: &str, token: &str) -> std::io::Result<()> {
     let mut file = {
         tracing::warn!(
             path = %path,
-            "non-Unix platform: admin token file may be world-readable. \
-             Set ADMIN_TOKEN env var explicitly in production."
+            "admin token file written without restrictive permissions (non-Unix platform); \
+             secure this file manually or set ADMIN_TOKEN_PATH to a protected location"
         );
         std::fs::File::create(path)?
     };

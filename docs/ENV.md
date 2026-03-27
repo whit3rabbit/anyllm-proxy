@@ -151,15 +151,15 @@ The dashboard binds to `localhost:3001` only (never externally accessible). It s
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `ADMIN_PORT` | `3001` | Port for the admin dashboard. Must differ from `LISTEN_PORT`. |
-| `ADMIN_TOKEN` | (generated) | Bearer token for the admin API. If unset, a random UUID is generated at startup and written to `ADMIN_TOKEN_FILE`. |
-| `ADMIN_TOKEN_FILE` | `.admin_token` | File path where the generated admin token is written. Permissions are set to `0600` on Unix. |
+| `ADMIN_TOKEN` | (generated) | Bearer token for the admin API. If unset, a random UUID is generated at startup and written to `ADMIN_TOKEN_PATH`. |
+| `ADMIN_TOKEN_PATH` | `.admin_token` | File path where the generated admin token is written. Permissions are set to `0600` on Unix. |
 | `ADMIN_DB_PATH` | `admin.db` | SQLite database path for request logging and config overrides (model mappings, log level). Config overrides survive restarts. |
 | `ADMIN_LOG_RETENTION_DAYS` | `7` | Days to retain request log entries before automatic purge. |
 | `DISABLE_ADMIN` | (unset) | Set to `1`, `true`, or `yes` to force-disable the admin server even when `--webui` is passed. Useful in container deployments where the flag might be baked into the entrypoint. |
 
 ### Token security
 
-The admin token is printed to `ADMIN_TOKEN_FILE` (default `.admin_token`) rather than stdout/stderr, because container log drivers capture stderr and persist it in centralized logging systems. On Unix, the file is created with mode `0600`.
+The admin token is printed to `ADMIN_TOKEN_PATH` (default `.admin_token`) rather than stdout/stderr, because container log drivers capture stderr and persist it in centralized logging systems. On Unix, the file is created with mode `0600`.
 
 In production, set `ADMIN_TOKEN` explicitly:
 
