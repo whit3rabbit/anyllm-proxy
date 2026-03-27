@@ -154,7 +154,9 @@ pub struct CacheConfig {
     pub ttl_secs: u64,
     /// Maximum number of entries in the in-memory cache.
     pub max_entries: u64,
-    /// Optional Redis URL for L2 cache. Not yet used (placeholder for future).
+    /// Optional Redis URL. Used by the Redis L2 cache backend (requires `redis` feature)
+    /// and distributed rate limiting. When set, responses are cached in Redis in addition
+    /// to the in-memory L1 cache, and rate limit state is shared across proxy instances.
     pub redis_url: Option<String>,
 }
 
