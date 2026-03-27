@@ -52,9 +52,27 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
 .error{color:#f85149}
 .empty{text-align:center;padding:40px;color:#8b949e}
 .pagination{display:flex;gap:8px;margin-top:12px;align-items:center}
+/* Login overlay */
+.login-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:#0d1117;display:flex;align-items:center;justify-content:center;z-index:1000}
+.login-card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:32px;width:320px}
+.login-title{font-size:18px;font-weight:600;margin-bottom:24px;text-align:center;color:#c9d1d9}
+.login-card input[type="password"]{width:100%;padding:8px 12px;margin-bottom:12px;font-size:14px;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;border-radius:4px}
+.login-card input[type="password"]:focus{outline:none;border-color:#4a9eff}
+.login-card .btn{width:100%;padding:10px;font-size:14px}
+.login-error{color:#f85149;font-size:12px;margin-top:8px;min-height:16px}
 </style>
 </head>
 <body>
+<div id="login-overlay" class="login-overlay" style="display:none">
+  <div class="login-card">
+    <div class="login-title">Proxy Admin</div>
+    <form id="login-form">
+      <input type="password" id="login-token" placeholder="Admin token" autocomplete="current-password">
+      <button type="submit" class="btn btn-primary" id="login-submit">Sign in</button>
+    </form>
+    <div class="login-error" id="login-error"></div>
+  </div>
+</div>
 <div class="nav">
   <div class="nav-item active" data-tab="dashboard">Dashboard</div>
   <div class="nav-item" data-tab="requests">Request Log</div>
@@ -122,18 +140,33 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
 (function() {
   'use strict';
 
-  var TOKEN = localStorage.getItem('admin_token');
+  var TOKEN = sessionStorage.getItem('admin_token');
   if (!TOKEN) {
-    TOKEN = prompt('Enter admin token:');
-    if (TOKEN) {
-      localStorage.setItem('admin_token', TOKEN);
-    }
-  }
-  if (!TOKEN) { document.body.textContent = 'No token provided'; return; }
-  
-  // Clean URL just in case it was used previously
-  if (window.location.search.indexOf('token=') !== -1) {
-    window.history.replaceState({}, '', window.location.pathname);
+    // Show login overlay, hide main UI until authenticated.
+    document.getElementById('login-overlay').style.display = 'flex';
+    document.querySelector('.nav').style.display = 'none';
+    document.querySelectorAll('.tab').forEach(function(t) { t.style.display = 'none'; });
+
+    document.getElementById('login-form').addEventListener('submit', function(e) {
+      e.preventDefault();
+      var candidate = document.getElementById('login-token').value.trim();
+      var errEl = document.getElementById('login-error');
+      if (!candidate) { errEl.textContent = 'Token is required.'; return; }
+      errEl.textContent = '';
+      // Validate by hitting a known admin endpoint.
+      fetch('/admin/api/metrics', {headers: {'Authorization': 'Bearer ' + candidate}})
+        .then(function(r) {
+          if (r.ok) {
+            sessionStorage.setItem('admin_token', candidate);
+            window.location.reload();
+          } else {
+            errEl.textContent = 'Invalid token.';
+          }
+        })
+        .catch(function() { errEl.textContent = 'Request failed. Is the server running?'; });
+    });
+    document.getElementById('login-token').focus();
+    return;
   }
 
   var API = '/admin/api';
