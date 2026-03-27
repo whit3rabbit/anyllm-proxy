@@ -428,6 +428,26 @@ async fn main() {
         .unwrap_or_else(|e| panic!("failed to bind proxy to {proxy_addr}: {e}"));
     tracing::info!("proxy listening on {proxy_addr}");
 
+    // Warn if API keys are configured and listener is on a non-loopback address.
+    let listen_addr = proxy_listener
+        .local_addr()
+        .unwrap_or_else(|e| panic!("failed to get local address from listener: {e}"));
+
+    let has_proxy_keys = std::env::var("PROXY_API_KEYS").is_ok();
+    let has_virtual_keys = admin_parts
+        .as_ref()
+        .map(|(shared, _, _)| !shared.virtual_keys.is_empty())
+        .unwrap_or(false);
+
+    if (has_proxy_keys || has_virtual_keys) && !listen_addr.ip().is_loopback() {
+        tracing::warn!(
+            addr = %listen_addr,
+            "proxy is listening on a non-loopback address without TLS; \
+             API keys will be transmitted in cleartext. \
+             Place a TLS-terminating reverse proxy in front of this service."
+        );
+    }
+
     // Single shutdown channel shared by proxy and (optionally) admin.
     let (shutdown_tx, mut shutdown_rx1) = tokio::sync::watch::channel(false);
 
