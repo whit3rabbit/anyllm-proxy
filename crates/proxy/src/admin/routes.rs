@@ -218,8 +218,10 @@ async fn serve_spa() -> impl IntoResponse {
             // frame-ancestors 'none' prevents clickjacking.
             (
                 "content-security-policy",
-                "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; \
-                 connect-src 'self'; frame-ancestors 'none'",
+                "default-src 'self'; script-src 'self' 'unsafe-inline'; \
+                 style-src 'self' 'unsafe-inline'; \
+                 connect-src 'self' ws: wss:; img-src 'self' data:; \
+                 frame-ancestors 'none'",
             ),
             ("x-frame-options", "DENY"),
             ("referrer-policy", "no-referrer"),
