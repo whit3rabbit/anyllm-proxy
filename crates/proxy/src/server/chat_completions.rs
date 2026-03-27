@@ -156,10 +156,15 @@ pub(crate) async fn chat_completions(
     }
 
     // Resolve model routing (may switch to a different backend).
-    let (mapped_model, effective) = match state.resolve_model_and_state(&original_model) {
+    let (mapped_model, effective, deployment) = match state.resolve_model_and_state(&original_model)
+    {
         Ok(v) => v,
         Err(resp) => return resp,
     };
+    if let Some(ref d) = deployment {
+        d.record_start();
+    }
+    let backend_start = std::time::Instant::now();
 
     // Non-streaming path
     match &effective.backend {
@@ -181,6 +186,9 @@ pub(crate) async fn chat_completions(
 
             match client.chat_completion(&openai_req).await {
                 Ok((openai_resp, _status, rate_limits)) => {
+                    if let Some(ref d) = deployment {
+                        d.record_finish(backend_start.elapsed().as_millis() as u64);
+                    }
                     state.metrics.record_success();
                     // Translate Anthropic response back to OpenAI format
                     let anthropic_resp = mapping::message_map::openai_to_anthropic_response(
@@ -221,6 +229,9 @@ pub(crate) async fn chat_completions(
                     response
                 }
                 Err(e) => {
+                    if let Some(ref d) = deployment {
+                        d.record_finish(backend_start.elapsed().as_millis() as u64);
+                    }
                     state.metrics.record_error();
                     let status = e.status_code();
                     log_request(
@@ -246,6 +257,9 @@ pub(crate) async fn chat_completions(
 
             match client.responses(&responses_req).await {
                 Ok((resp, _status, rate_limits)) => {
+                    if let Some(ref d) = deployment {
+                        d.record_finish(backend_start.elapsed().as_millis() as u64);
+                    }
                     state.metrics.record_success();
                     let anthropic_resp =
                         mapping::responses_message_map::responses_to_anthropic_response(
@@ -287,6 +301,9 @@ pub(crate) async fn chat_completions(
                     response
                 }
                 Err(e) => {
+                    if let Some(ref d) = deployment {
+                        d.record_finish(backend_start.elapsed().as_millis() as u64);
+                    }
                     state.metrics.record_error();
                     let status = e.status_code();
                     log_request(
@@ -326,10 +343,11 @@ async fn chat_completions_stream(
     concurrency_permit: Option<ConcurrencyPermit>,
 ) -> Response {
     // Resolve model routing (may switch to a different backend).
-    let (mapped_model_resolved, effective) = match state.resolve_model_and_state(&original_model) {
-        Ok(v) => v,
-        Err(resp) => return resp,
-    };
+    let (mapped_model_resolved, effective, _deployment) =
+        match state.resolve_model_and_state(&original_model) {
+            Ok(v) => v,
+            Err(resp) => return resp,
+        };
 
     // Translate to OpenAI format for the backend
     let mut openai_req = mapping::message_map::anthropic_to_openai_request(&anthropic_req);
@@ -372,6 +390,7 @@ async fn chat_completions_stream(
             let _permit = concurrency_permit;
 
             tokio::spawn(async move {
+                metrics.record_stream_started();
                 let mut translator = ReverseStreamingTranslator::new(
                     format!("chatcmpl-{}", uuid::Uuid::new_v4().as_simple()),
                     model_for_translator.clone(),
@@ -389,6 +408,7 @@ async fn chat_completions_stream(
                         Err(e) => {
                             tracing::error!("stream read error: {e}");
                             metrics.record_error();
+                            metrics.record_stream_failed();
                             break;
                         }
                     };
@@ -397,6 +417,7 @@ async fn chat_completions_stream(
                     if buffer.len() > MAX_SSE_BUFFER_SIZE {
                         tracing::error!("SSE buffer exceeded maximum size");
                         metrics.record_error();
+                        metrics.record_stream_failed();
                         break;
                     }
 
@@ -425,6 +446,7 @@ async fn chat_completions_stream(
                                                 if let Ok(json) = serde_json::to_string(oai_chunk) {
                                                     let sse_line = format!("data: {}\n\n", json);
                                                     if tx.send(Ok(sse_line)).await.is_err() {
+                                                        metrics.record_stream_client_disconnected();
                                                         return; // Client disconnected
                                                     }
                                                 }
@@ -456,6 +478,7 @@ async fn chat_completions_stream(
                 }
 
                 metrics.record_success();
+                metrics.record_stream_completed();
                 log_request(
                     &log_shared,
                     ctx.log_entry(

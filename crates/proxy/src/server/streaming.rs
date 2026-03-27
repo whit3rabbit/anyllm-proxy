@@ -47,10 +47,17 @@ impl StreamOutcome {
         match self {
             Self::Completed => {
                 metrics.record_success();
+                metrics.record_stream_completed();
                 (200, None)
             }
-            Self::ClientDisconnected => (499, Some("client disconnected".into())),
-            Self::UpstreamError => (502, Some("stream interrupted".into())),
+            Self::ClientDisconnected => {
+                metrics.record_stream_client_disconnected();
+                (499, Some("client disconnected".into()))
+            }
+            Self::UpstreamError => {
+                metrics.record_stream_failed();
+                (502, Some("stream interrupted".into()))
+            }
         }
     }
 }
@@ -183,6 +190,7 @@ pub(crate) async fn messages_stream(
                 // until headers are sent, so the semaphore accurately bounds
                 // concurrent streaming connections.
                 let _permit = permit;
+                metrics.record_stream_started();
                 match client.chat_completion_stream(&openai_req).await {
                     Ok((response, rate_limits)) => {
                         rl_tx.send(Ok(rate_limits)).ok();
@@ -258,6 +266,7 @@ pub(crate) async fn messages_stream(
 
             tokio::spawn(async move {
                 let _permit = permit;
+                metrics.record_stream_started();
                 match client.responses_stream(&responses_req).await {
                     Ok((response, rate_limits)) => {
                         rl_tx.send(Ok(rate_limits)).ok();
