@@ -75,9 +75,9 @@ pub fn init_db(conn: &Connection) -> rusqlite::Result<()> {
         );
         CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp ON audit_log(timestamp);
 
-        // Note: batch file JSONL is stored directly in SQLite. For large batch files
-        // (>10MB), consider external blob storage. Current design prioritizes simplicity
-        // and single-binary deployment over storage efficiency.
+        -- Note: batch file JSONL is stored directly in SQLite. For large batch files
+        -- (>10MB), consider external blob storage. Current design prioritizes simplicity
+        -- and single-binary deployment over storage efficiency.
         CREATE TABLE IF NOT EXISTS batch_file (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             file_id     TEXT NOT NULL UNIQUE,
