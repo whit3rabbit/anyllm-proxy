@@ -17,7 +17,7 @@ pub enum RateLimitFailPolicy {
 impl RateLimitFailPolicy {
     pub fn from_env_str(s: &str) -> Self {
         match s.to_lowercase().as_str() {
-            "closed" => Self::Closed,
+            "closed" | "deny" => Self::Closed,
             _ => Self::Open,
         }
     }
@@ -97,7 +97,7 @@ impl RedisRateLimiter {
                 }
                 RateLimitFailPolicy::Closed => {
                     tracing::error!(error = %e, "Redis RPM check failed, rejecting request (fail-closed)");
-                    Err(1)
+                    Err(60)
                 }
             },
         }
@@ -164,7 +164,7 @@ impl RedisRateLimiter {
                 }
                 RateLimitFailPolicy::Closed => {
                     tracing::error!(error = %e, "Redis TPM check failed, rejecting request (fail-closed)");
-                    Err(1)
+                    Err(60)
                 }
             },
         }
@@ -266,8 +266,24 @@ mod tests {
             RateLimitFailPolicy::Closed
         ));
         assert!(matches!(
+            RateLimitFailPolicy::from_env_str("deny"),
+            RateLimitFailPolicy::Closed
+        ));
+        assert!(matches!(
+            RateLimitFailPolicy::from_env_str("DENY"),
+            RateLimitFailPolicy::Closed
+        ));
+        assert!(matches!(
             RateLimitFailPolicy::from_env_str("unknown"),
             RateLimitFailPolicy::Open
         ));
+    }
+
+    #[test]
+    fn fail_policy_defaults_to_open() {
+        // When RATE_LIMIT_FAIL_POLICY is unset, from_env should return Open.
+        std::env::remove_var("RATE_LIMIT_FAIL_POLICY");
+        let policy = RateLimitFailPolicy::from_env();
+        assert_eq!(policy, RateLimitFailPolicy::Open);
     }
 }

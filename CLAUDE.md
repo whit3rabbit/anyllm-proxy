@@ -91,6 +91,7 @@ OPENAI_API_KEY=sk-... cargo run -p anyllm_proxy
 - `IP_ALLOWLIST`: Comma-separated CIDR ranges for IP allowlisting (e.g., `192.168.1.0/24,10.0.0.0/8`). Bare IPs also accepted. When set, only matching IPs can access the proxy.
 - `TRUST_PROXY_HEADERS`: Set to `true` or `1` to use `X-Forwarded-For` header for client IP when behind a reverse proxy. Only effective when `IP_ALLOWLIST` is set.
 - `WEBHOOK_URLS`: Comma-separated webhook URLs for request completion notifications. Fire-and-forget HTTP POST with `RequestLogEntry` JSON payload.
+- `RATE_LIMIT_FAIL_POLICY`: Behavior when Redis rate limiter is unavailable: `open` (default, allow requests) or `closed`/`deny` (reject with 503 and retry-after 60s).
 
 ### LiteLLM env var aliases
 
