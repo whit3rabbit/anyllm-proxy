@@ -113,7 +113,7 @@ pub(crate) async fn chat_completions(
 
     if is_streaming {
         let mut response =
-            chat_completions_stream(state, anthropic_req, ctx, original_model, warnings, permit)
+            chat_completions_stream(state, anthropic_req, ctx, original_model, warnings, permit, vk_ctx)
                 .await;
         response.headers_mut().insert(
             "x-anyllm-cache",
@@ -198,6 +198,13 @@ pub(crate) async fn chat_completions(
                     let oai_response =
                         translate_anthropic_to_openai_response(&anthropic_resp, &original_model);
                     super::routes::record_vk_tpm(&vk_ctx, anthropic_resp.usage.output_tokens);
+                    crate::cost::record_cost(
+                        &state.shared,
+                        &vk_ctx,
+                        &mapped_model,
+                        anthropic_resp.usage.input_tokens as u64,
+                        anthropic_resp.usage.output_tokens as u64,
+                    );
                     log_request(
                         &state.shared,
                         ctx.log_entry(
@@ -269,6 +276,13 @@ pub(crate) async fn chat_completions(
                     let oai_response =
                         translate_anthropic_to_openai_response(&anthropic_resp, &original_model);
                     super::routes::record_vk_tpm(&vk_ctx, anthropic_resp.usage.output_tokens);
+                    crate::cost::record_cost(
+                        &state.shared,
+                        &vk_ctx,
+                        &mapped_model,
+                        anthropic_resp.usage.input_tokens as u64,
+                        anthropic_resp.usage.output_tokens as u64,
+                    );
                     log_request(
                         &state.shared,
                         ctx.log_entry(
@@ -341,6 +355,7 @@ async fn chat_completions_stream(
     original_model: String,
     warnings: TranslationWarnings,
     concurrency_permit: Option<ConcurrencyPermit>,
+    vk_ctx: Option<crate::server::middleware::VirtualKeyContext>,
 ) -> Response {
     // Resolve model routing (may switch to a different backend).
     let (mapped_model_resolved, effective, _deployment) =
@@ -387,6 +402,7 @@ async fn chat_completions_stream(
             let log_shared = state.shared.clone();
             let log_backend_name = state.backend_name.clone();
             let model_for_translator = original_model.clone();
+            let cost_model = mapped_model.clone();
             let _permit = concurrency_permit;
 
             tokio::spawn(async move {
@@ -477,6 +493,19 @@ async fn chat_completions_stream(
                     let _ = tx.send(Ok("data: [DONE]\n\n".to_string())).await;
                 }
 
+                // Extract token counts from the stream translator for cost tracking.
+                let usage = stream_translator.usage();
+                let tokens = usage.map(|u| (u.input_tokens as u64, u.output_tokens as u64));
+                if let Some((input_t, output_t)) = tokens {
+                    crate::cost::record_cost(
+                        &log_shared,
+                        &vk_ctx,
+                        &cost_model,
+                        input_t,
+                        output_t,
+                    );
+                }
+
                 metrics.record_success();
                 metrics.record_stream_completed();
                 log_request(
@@ -485,7 +514,7 @@ async fn chat_completions_stream(
                         &log_backend_name,
                         Some(mapped_model),
                         200,
-                        None, // Token counts come from usage chunk, hard to capture here
+                        tokens,
                         true,
                         None,
                     ),

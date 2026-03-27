@@ -155,6 +155,7 @@ pub(crate) async fn messages_stream(
     ctx: RequestCtx,
     mapped_model: String,
     concurrency_permit: Option<super::routes::ConcurrencyPermit>,
+    vk_ctx: Option<crate::server::middleware::VirtualKeyContext>,
 ) -> Result<
     (
         RateLimitHeaders,
@@ -220,6 +221,16 @@ pub(crate) async fn messages_stream(
                         }
                         let usage = translator.usage();
                         let tokens = usage.map(|u| (u.input_tokens as u64, u.output_tokens as u64));
+                        // Record cost for virtual key spend tracking.
+                        if let Some((input_t, output_t)) = tokens {
+                            crate::cost::record_cost(
+                                &log_shared,
+                                &vk_ctx,
+                                &mapped_model,
+                                input_t,
+                                output_t,
+                            );
+                        }
                         let (status, err) = outcome.record(&metrics);
                         log_request(
                             &log_shared,

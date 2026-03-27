@@ -679,7 +679,7 @@ async fn messages(
         }
         // Logging deferred until stream completes (inside messages_stream tasks).
         let stream_start = std::time::Instant::now();
-        match messages_stream(effective, body, ctx, mapped_model, permit).await {
+        match messages_stream(effective, body, ctx, mapped_model, permit, vk_ctx.clone()).await {
             Ok((rate_limits, sse)) => {
                 // For streaming, record_finish is approximate (headers sent, not stream end).
                 if let Some(ref d) = deployment {
@@ -783,6 +783,13 @@ async fn messages(
                         );
                     }
                     record_vk_tpm(&vk_ctx, anthropic_resp.usage.output_tokens);
+                    crate::cost::record_cost(
+                        &state.shared,
+                        &vk_ctx,
+                        &mapped_model,
+                        anthropic_resp.usage.input_tokens as u64,
+                        anthropic_resp.usage.output_tokens as u64,
+                    );
                     log_request(
                         &state.shared,
                         ctx.log_entry(
@@ -860,6 +867,13 @@ async fn messages(
                         );
                     }
                     record_vk_tpm(&vk_ctx, anthropic_resp.usage.output_tokens);
+                    crate::cost::record_cost(
+                        &state.shared,
+                        &vk_ctx,
+                        &mapped_model,
+                        anthropic_resp.usage.input_tokens as u64,
+                        anthropic_resp.usage.output_tokens as u64,
+                    );
                     log_request(
                         &state.shared,
                         ctx.log_entry(

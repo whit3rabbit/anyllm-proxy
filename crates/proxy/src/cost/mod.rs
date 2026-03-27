@@ -186,4 +186,90 @@ mod tests {
         let pricing = ModelPricing::load();
         assert!(!pricing.entries.is_empty());
     }
+
+    #[test]
+    fn record_cost_without_shared_state_is_noop() {
+        // When there is no shared state or virtual key context, record_cost
+        // should return the computed cost but not attempt any DB write.
+        let cost = record_cost(&None, &None, "gpt-4o", 1000, 500);
+        // Should compute cost from global pricing (gpt-4o is in the embedded pricing).
+        // Exact value depends on the embedded pricing data, but should be > 0.
+        assert!(cost > 0.0);
+    }
+
+    #[test]
+    fn record_cost_with_shared_state_persists_spend() {
+        // Build a minimal SharedState with an in-memory SQLite DB to verify
+        // that record_cost spawns a blocking task that writes to the DB.
+        use crate::admin::db::{init_db, InsertVirtualKeyParams};
+        use crate::admin::keys::RateLimitState;
+        use crate::server::middleware::VirtualKeyContext;
+        use std::sync::{Arc, Mutex};
+
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        init_db(&conn).unwrap();
+
+        let key_id = crate::admin::db::insert_virtual_key(
+            &conn,
+            &InsertVirtualKeyParams {
+                key_hash: "0000000000000000000000000000000000000000000000000000000000000000",
+                key_prefix: "sk-vktest",
+                description: Some("cost test"),
+                expires_at: None,
+                rpm_limit: None,
+                tpm_limit: None,
+                spend_limit: None,
+                role: "developer",
+                max_budget_usd: Some(100.0),
+                budget_duration: None,
+            },
+        )
+        .unwrap();
+
+        let db = Arc::new(Mutex::new(conn));
+        let (events_tx, _) = tokio::sync::broadcast::channel(1);
+        let (log_tx, _) = tokio::sync::mpsc::channel(1);
+
+        let shared = crate::admin::state::SharedState {
+            db: db.clone(),
+            events_tx,
+            runtime_config: Arc::new(std::sync::RwLock::new(
+                crate::admin::state::RuntimeConfig {
+                    model_mappings: indexmap::IndexMap::new(),
+                    log_level: "info".to_string(),
+                    log_bodies: false,
+                },
+            )),
+            backend_metrics: Arc::new(std::collections::HashMap::new()),
+            log_tx,
+            log_reload: None,
+            config_write_lock: Arc::new(tokio::sync::Mutex::new(())),
+            virtual_keys: Arc::new(dashmap::DashMap::new()),
+            model_router: None,
+        };
+
+        let vk_ctx = VirtualKeyContext {
+            key_id,
+            rate_state: Arc::new(RateLimitState::new()),
+        };
+
+        // record_cost uses tokio::task::spawn_blocking, so we need a runtime.
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let cost = record_cost(&Some(shared), &Some(vk_ctx), "gpt-4o", 1000, 500);
+            assert!(cost > 0.0);
+
+            // Wait for the spawned blocking task to complete.
+            tokio::task::yield_now().await;
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        });
+
+        // Verify the spend was persisted.
+        let conn = db.lock().unwrap();
+        let spend = db::get_key_spend(&conn, key_id).unwrap().unwrap();
+        assert!(spend.total_cost_usd > 0.0);
+        assert_eq!(spend.total_input_tokens, 1000);
+        assert_eq!(spend.total_output_tokens, 500);
+        assert_eq!(spend.request_count, 1);
+    }
 }
