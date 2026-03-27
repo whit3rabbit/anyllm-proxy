@@ -198,7 +198,7 @@ pub(crate) async fn chat_completions(
                     let oai_response =
                         translate_anthropic_to_openai_response(&anthropic_resp, &original_model);
                     super::routes::record_vk_tpm(&vk_ctx, anthropic_resp.usage.output_tokens);
-                    crate::cost::record_cost(
+                    let cost = crate::cost::record_cost(
                         &state.shared,
                         &vk_ctx,
                         &mapped_model,
@@ -207,7 +207,7 @@ pub(crate) async fn chat_completions(
                     );
                     log_request(
                         &state.shared,
-                        ctx.log_entry(
+                        ctx.log_entry_with_attribution(
                             &state.backend_name,
                             Some(mapped_model),
                             200,
@@ -217,6 +217,8 @@ pub(crate) async fn chat_completions(
                             )),
                             false,
                             None,
+                            &vk_ctx,
+                            Some(cost),
                         ),
                     );
                     super::routes::try_cache_response(
@@ -243,13 +245,15 @@ pub(crate) async fn chat_completions(
                     let status = e.status_code();
                     log_request(
                         &state.shared,
-                        ctx.log_entry(
+                        ctx.log_entry_with_attribution(
                             &state.backend_name,
                             Some(mapped_model),
                             status,
                             None,
                             false,
                             Some(e.to_string()),
+                            &vk_ctx,
+                            None,
                         ),
                     );
                     backend_error_to_openai_response(BackendError::from(e))
@@ -276,7 +280,7 @@ pub(crate) async fn chat_completions(
                     let oai_response =
                         translate_anthropic_to_openai_response(&anthropic_resp, &original_model);
                     super::routes::record_vk_tpm(&vk_ctx, anthropic_resp.usage.output_tokens);
-                    crate::cost::record_cost(
+                    let cost = crate::cost::record_cost(
                         &state.shared,
                         &vk_ctx,
                         &mapped_model,
@@ -285,7 +289,7 @@ pub(crate) async fn chat_completions(
                     );
                     log_request(
                         &state.shared,
-                        ctx.log_entry(
+                        ctx.log_entry_with_attribution(
                             &state.backend_name,
                             Some(mapped_model),
                             200,
@@ -295,6 +299,8 @@ pub(crate) async fn chat_completions(
                             )),
                             false,
                             None,
+                            &vk_ctx,
+                            Some(cost),
                         ),
                     );
 
@@ -322,13 +328,15 @@ pub(crate) async fn chat_completions(
                     let status = e.status_code();
                     log_request(
                         &state.shared,
-                        ctx.log_entry(
+                        ctx.log_entry_with_attribution(
                             &state.backend_name,
                             Some(mapped_model),
                             status,
                             None,
                             false,
                             Some(e.to_string()),
+                            &vk_ctx,
+                            None,
                         ),
                     );
                     backend_error_to_openai_response(BackendError::from(e))
@@ -496,27 +504,31 @@ async fn chat_completions_stream(
                 // Extract token counts from the stream translator for cost tracking.
                 let usage = stream_translator.usage();
                 let tokens = usage.map(|u| (u.input_tokens as u64, u.output_tokens as u64));
-                if let Some((input_t, output_t)) = tokens {
-                    crate::cost::record_cost(
+                let cost = if let Some((input_t, output_t)) = tokens {
+                    Some(crate::cost::record_cost(
                         &log_shared,
                         &vk_ctx,
                         &cost_model,
                         input_t,
                         output_t,
-                    );
-                }
+                    ))
+                } else {
+                    None
+                };
 
                 metrics.record_success();
                 metrics.record_stream_completed();
                 log_request(
                     &log_shared,
-                    ctx.log_entry(
+                    ctx.log_entry_with_attribution(
                         &log_backend_name,
                         Some(mapped_model),
                         200,
                         tokens,
                         true,
                         None,
+                        &vk_ctx,
+                        cost,
                     ),
                 );
             });
@@ -539,13 +551,15 @@ async fn chat_completions_stream(
             state.metrics.record_error();
             log_request(
                 &state.shared,
-                ctx.log_entry(
+                ctx.log_entry_with_attribution(
                     &state.backend_name,
                     Some(mapped_model),
                     e.status_code(),
                     None,
                     true,
                     Some(e.to_string()),
+                    &vk_ctx,
+                    None,
                 ),
             );
             backend_error_to_openai_response(BackendError::from(e))

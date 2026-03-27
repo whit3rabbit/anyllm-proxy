@@ -5,6 +5,16 @@ use rusqlite::{params, Connection};
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 
+/// Run an ALTER TABLE ADD COLUMN statement, ignoring "duplicate column" errors
+/// so migrations are idempotent across restarts.
+fn idempotent_add_column(conn: &Connection, stmt: &str) -> rusqlite::Result<()> {
+    match conn.execute_batch(stmt) {
+        Ok(()) => Ok(()),
+        Err(e) if e.to_string().contains("duplicate column") => Ok(()),
+        Err(e) => Err(e),
+    }
+}
+
 /// Initialize the SQLite database: create tables and indexes.
 pub fn init_db(conn: &Connection) -> rusqlite::Result<()> {
     // WAL mode: better read concurrency (proxy reads while admin writes)
@@ -99,13 +109,22 @@ pub fn init_db(conn: &Connection) -> rusqlite::Result<()> {
         "ALTER TABLE virtual_api_key ADD COLUMN total_output_tokens INTEGER NOT NULL DEFAULT 0",
     ];
     for stmt in &migration_stmts {
-        // Ignore "duplicate column name" errors for idempotent migration.
-        match conn.execute_batch(stmt) {
-            Ok(()) => {}
-            Err(e) if e.to_string().contains("duplicate column") => {}
-            Err(e) => return Err(e),
-        }
+        idempotent_add_column(conn, stmt)?;
     }
+
+    // request_log migrations: add key_id and cost_usd for request attribution.
+    let request_log_migrations = [
+        "ALTER TABLE request_log ADD COLUMN key_id INTEGER",
+        "ALTER TABLE request_log ADD COLUMN cost_usd REAL",
+    ];
+    for stmt in &request_log_migrations {
+        idempotent_add_column(conn, stmt)?;
+    }
+
+    // Index on key_id for filtering requests by virtual key.
+    conn.execute_batch(
+        "CREATE INDEX IF NOT EXISTS idx_request_log_key_id ON request_log(key_id);",
+    )?;
 
     Ok(())
 }
@@ -115,8 +134,9 @@ pub fn insert_request_log(conn: &Connection, entry: &RequestLogEntry) -> rusqlit
     conn.execute(
         "INSERT INTO request_log (
             request_id, timestamp, backend, model_requested, model_mapped,
-            status_code, latency_ms, input_tokens, output_tokens, is_streaming, error_message
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            status_code, latency_ms, input_tokens, output_tokens, is_streaming, error_message,
+            key_id, cost_usd
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
         params![
             entry.request_id,
             entry.timestamp,
@@ -129,6 +149,8 @@ pub fn insert_request_log(conn: &Connection, entry: &RequestLogEntry) -> rusqlit
             entry.output_tokens.map(|v| v as i64),
             entry.is_streaming as i32,
             entry.error_message,
+            entry.key_id,
+            entry.cost_usd,
         ],
     )?;
     Ok(())
@@ -142,10 +164,12 @@ pub fn query_request_log(
     backend: Option<&str>,
     since: Option<&str>,
     status_filter: Option<&str>,
+    key_id: Option<i64>,
 ) -> rusqlite::Result<Vec<RequestLogEntry>> {
     let mut sql = String::from(
         "SELECT request_id, timestamp, backend, model_requested, model_mapped,
-                status_code, latency_ms, input_tokens, output_tokens, is_streaming, error_message
+                status_code, latency_ms, input_tokens, output_tokens, is_streaming, error_message,
+                key_id, cost_usd
          FROM request_log WHERE 1=1",
     );
     let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
@@ -170,6 +194,10 @@ pub fn query_request_log(
             }
         }
     }
+    if let Some(kid) = key_id {
+        sql.push_str(" AND key_id = ?");
+        param_values.push(Box::new(kid));
+    }
     sql.push_str(" ORDER BY id DESC LIMIT ? OFFSET ?");
     param_values.push(Box::new(limit));
     param_values.push(Box::new(offset));
@@ -178,23 +206,29 @@ pub fn query_request_log(
         param_values.iter().map(|p| p.as_ref()).collect();
 
     let mut stmt = conn.prepare(&sql)?;
-    let rows = stmt.query_map(params_refs.as_slice(), |row| {
-        Ok(RequestLogEntry {
-            request_id: row.get(0)?,
-            timestamp: row.get(1)?,
-            backend: row.get(2)?,
-            model_requested: row.get(3)?,
-            model_mapped: row.get(4)?,
-            status_code: row.get::<_, i32>(5)? as u16,
-            latency_ms: row.get::<_, i64>(6)? as u64,
-            input_tokens: row.get::<_, Option<i64>>(7)?.map(|v| v as u64),
-            output_tokens: row.get::<_, Option<i64>>(8)?.map(|v| v as u64),
-            is_streaming: row.get::<_, i32>(9)? != 0,
-            error_message: row.get(10)?,
-        })
-    })?;
+    let rows = stmt.query_map(params_refs.as_slice(), row_to_request_log)?;
 
     rows.collect()
+}
+
+/// Map a SQLite row to a RequestLogEntry. Column order must match the SELECT
+/// used in query_request_log and get_request_by_id.
+fn row_to_request_log(row: &rusqlite::Row) -> rusqlite::Result<RequestLogEntry> {
+    Ok(RequestLogEntry {
+        request_id: row.get(0)?,
+        timestamp: row.get(1)?,
+        backend: row.get(2)?,
+        model_requested: row.get(3)?,
+        model_mapped: row.get(4)?,
+        status_code: row.get::<_, i32>(5)? as u16,
+        latency_ms: row.get::<_, i64>(6)? as u64,
+        input_tokens: row.get::<_, Option<i64>>(7)?.map(|v| v as u64),
+        output_tokens: row.get::<_, Option<i64>>(8)?.map(|v| v as u64),
+        is_streaming: row.get::<_, i32>(9)? != 0,
+        error_message: row.get(10)?,
+        key_id: row.get(11)?,
+        cost_usd: row.get(12)?,
+    })
 }
 
 /// Get a single request log entry by request_id.
@@ -204,24 +238,11 @@ pub fn get_request_by_id(
 ) -> rusqlite::Result<Option<RequestLogEntry>> {
     let mut stmt = conn.prepare(
         "SELECT request_id, timestamp, backend, model_requested, model_mapped,
-                status_code, latency_ms, input_tokens, output_tokens, is_streaming, error_message
+                status_code, latency_ms, input_tokens, output_tokens, is_streaming, error_message,
+                key_id, cost_usd
          FROM request_log WHERE request_id = ?1 LIMIT 1",
     )?;
-    let mut rows = stmt.query_map(params![request_id], |row| {
-        Ok(RequestLogEntry {
-            request_id: row.get(0)?,
-            timestamp: row.get(1)?,
-            backend: row.get(2)?,
-            model_requested: row.get(3)?,
-            model_mapped: row.get(4)?,
-            status_code: row.get::<_, i32>(5)? as u16,
-            latency_ms: row.get::<_, i64>(6)? as u64,
-            input_tokens: row.get::<_, Option<i64>>(7)?.map(|v| v as u64),
-            output_tokens: row.get::<_, Option<i64>>(8)?.map(|v| v as u64),
-            is_streaming: row.get::<_, i32>(9)? != 0,
-            error_message: row.get(10)?,
-        })
-    })?;
+    let mut rows = stmt.query_map(params![request_id], row_to_request_log)?;
     rows.next().transpose()
 }
 
@@ -531,6 +552,8 @@ mod tests {
             output_tokens: Some(87),
             is_streaming: false,
             error_message: None,
+            key_id: None,
+            cost_usd: None,
         }
     }
 
@@ -555,7 +578,7 @@ mod tests {
         let entry = sample_entry();
         insert_request_log(&conn, &entry).unwrap();
 
-        let results = query_request_log(&conn, 10, 0, None, None, None).unwrap();
+        let results = query_request_log(&conn, 10, 0, None, None, None, None).unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].request_id, "test-123");
         assert_eq!(results[0].status_code, 200);
@@ -573,7 +596,7 @@ mod tests {
         entry2.backend = "gemini".into();
         insert_request_log(&conn, &entry2).unwrap();
 
-        let results = query_request_log(&conn, 10, 0, Some("gemini"), None, None).unwrap();
+        let results = query_request_log(&conn, 10, 0, Some("gemini"), None, None, None).unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].backend, "gemini");
     }
@@ -588,11 +611,11 @@ mod tests {
         err_entry.status_code = 500;
         insert_request_log(&conn, &err_entry).unwrap();
 
-        let results = query_request_log(&conn, 10, 0, None, None, Some("5xx")).unwrap();
+        let results = query_request_log(&conn, 10, 0, None, None, Some("5xx"), None).unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].status_code, 500);
 
-        let results = query_request_log(&conn, 10, 0, None, None, Some("2xx")).unwrap();
+        let results = query_request_log(&conn, 10, 0, None, None, Some("2xx"), None).unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].status_code, 200);
     }
@@ -606,13 +629,13 @@ mod tests {
             insert_request_log(&conn, &entry).unwrap();
         }
 
-        let page1 = query_request_log(&conn, 2, 0, None, None, None).unwrap();
+        let page1 = query_request_log(&conn, 2, 0, None, None, None, None).unwrap();
         assert_eq!(page1.len(), 2);
 
-        let page2 = query_request_log(&conn, 2, 2, None, None, None).unwrap();
+        let page2 = query_request_log(&conn, 2, 2, None, None, None, None).unwrap();
         assert_eq!(page2.len(), 2);
 
-        let page3 = query_request_log(&conn, 2, 4, None, None, None).unwrap();
+        let page3 = query_request_log(&conn, 2, 4, None, None, None, None).unwrap();
         assert_eq!(page3.len(), 1);
     }
 
@@ -676,7 +699,7 @@ mod tests {
         let purged = purge_old_logs(&conn, 1).unwrap();
         assert_eq!(purged, 1);
 
-        let remaining = query_request_log(&conn, 10, 0, None, None, None).unwrap();
+        let remaining = query_request_log(&conn, 10, 0, None, None, None, None).unwrap();
         assert_eq!(remaining.len(), 1);
         assert_eq!(remaining[0].request_id, "test-123");
     }
@@ -694,5 +717,46 @@ mod tests {
         init_db(&conn).unwrap();
         // Running again should not error.
         init_db(&conn).unwrap();
+    }
+
+    #[test]
+    fn insert_and_query_with_key_id_and_cost() {
+        let conn = in_memory_db();
+        let mut entry = sample_entry();
+        entry.key_id = Some(42);
+        entry.cost_usd = Some(0.0075);
+        insert_request_log(&conn, &entry).unwrap();
+
+        // Query without key_id filter returns all.
+        let results = query_request_log(&conn, 10, 0, None, None, None, None).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].key_id, Some(42));
+        assert!((results[0].cost_usd.unwrap() - 0.0075).abs() < 1e-12);
+
+        // Query with matching key_id filter.
+        let results = query_request_log(&conn, 10, 0, None, None, None, Some(42)).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].request_id, "test-123");
+
+        // Query with non-matching key_id filter.
+        let results = query_request_log(&conn, 10, 0, None, None, None, Some(99)).unwrap();
+        assert!(results.is_empty());
+
+        // get_request_by_id also returns the new fields.
+        let found = get_request_by_id(&conn, "test-123").unwrap().unwrap();
+        assert_eq!(found.key_id, Some(42));
+        assert!((found.cost_usd.unwrap() - 0.0075).abs() < 1e-12);
+    }
+
+    #[test]
+    fn insert_without_attribution_fields() {
+        // Entries without key_id/cost_usd should still work (NULL columns).
+        let conn = in_memory_db();
+        insert_request_log(&conn, &sample_entry()).unwrap();
+
+        let results = query_request_log(&conn, 10, 0, None, None, None, None).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].key_id, None);
+        assert_eq!(results[0].cost_usd, None);
     }
 }

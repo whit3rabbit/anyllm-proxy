@@ -110,6 +110,14 @@ pub struct RequestLogEntry {
     pub is_streaming: bool,
     /// Present only when the request failed; contains the error description.
     pub error_message: Option<String>,
+    /// Database row ID of the virtual key that authenticated this request.
+    /// None when the request used a static API key or open relay.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub key_id: Option<i64>,
+    /// Estimated cost in USD for this request, computed from token usage
+    /// and the model pricing table. None when cost could not be calculated.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cost_usd: Option<f64>,
 }
 
 impl SharedState {

@@ -512,6 +512,7 @@ struct RequestsQuery {
     backend: Option<String>,
     since: Option<String>,
     status: Option<String>,
+    key_id: Option<i64>,
 }
 
 /// GET /admin/api/requests -- paginated request log.
@@ -525,6 +526,7 @@ async fn get_requests(
     let backend = params.backend;
     let since = params.since;
     let status = params.status;
+    let key_id = params.key_id;
     match crate::admin::state::with_db(&shared.db, move |conn| {
         crate::admin::db::query_request_log(
             conn,
@@ -533,6 +535,7 @@ async fn get_requests(
             backend.as_deref(),
             since.as_deref(),
             status.as_deref(),
+            key_id,
         )
     })
     .await

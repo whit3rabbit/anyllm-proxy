@@ -783,7 +783,7 @@ async fn messages(
                         );
                     }
                     record_vk_tpm(&vk_ctx, anthropic_resp.usage.output_tokens);
-                    crate::cost::record_cost(
+                    let cost = crate::cost::record_cost(
                         &state.shared,
                         &vk_ctx,
                         &mapped_model,
@@ -792,7 +792,7 @@ async fn messages(
                     );
                     log_request(
                         &state.shared,
-                        ctx.log_entry(
+                        ctx.log_entry_with_attribution(
                             &state.backend_name,
                             Some(mapped_model),
                             200,
@@ -802,6 +802,8 @@ async fn messages(
                             )),
                             false,
                             None,
+                            &vk_ctx,
+                            Some(cost),
                         ),
                     );
 
@@ -829,13 +831,15 @@ async fn messages(
                     let status = e.status_code();
                     log_request(
                         &state.shared,
-                        ctx.log_entry(
+                        ctx.log_entry_with_attribution(
                             &state.backend_name,
                             Some(mapped_model),
                             status,
                             None,
                             false,
                             Some(e.to_string()),
+                            &vk_ctx,
+                            None,
                         ),
                     );
                     backend_error_to_response(BackendError::from(e))
@@ -867,7 +871,7 @@ async fn messages(
                         );
                     }
                     record_vk_tpm(&vk_ctx, anthropic_resp.usage.output_tokens);
-                    crate::cost::record_cost(
+                    let cost = crate::cost::record_cost(
                         &state.shared,
                         &vk_ctx,
                         &mapped_model,
@@ -876,7 +880,7 @@ async fn messages(
                     );
                     log_request(
                         &state.shared,
-                        ctx.log_entry(
+                        ctx.log_entry_with_attribution(
                             &state.backend_name,
                             Some(mapped_model),
                             200,
@@ -886,6 +890,8 @@ async fn messages(
                             )),
                             false,
                             None,
+                            &vk_ctx,
+                            Some(cost),
                         ),
                     );
                     try_cache_response(
@@ -912,13 +918,15 @@ async fn messages(
                     let status = e.status_code();
                     log_request(
                         &state.shared,
-                        ctx.log_entry(
+                        ctx.log_entry_with_attribution(
                             &state.backend_name,
                             Some(mapped_model),
                             status,
                             None,
                             false,
                             Some(e.to_string()),
+                            &vk_ctx,
+                            None,
                         ),
                     );
                     backend_error_to_response(BackendError::from(e))
@@ -968,7 +976,36 @@ impl RequestCtx {
             output_tokens: tokens.map(|(_, o)| o),
             is_streaming,
             error_message,
+            key_id: None,
+            cost_usd: None,
         }
+    }
+
+    /// Build a log entry with attribution (key_id from virtual key, cost from pricing).
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn log_entry_with_attribution(
+        &self,
+        backend_name: &str,
+        model_mapped: Option<String>,
+        status_code: u16,
+        tokens: Option<(u64, u64)>,
+        is_streaming: bool,
+        error_message: Option<String>,
+        vk_ctx: &Option<super::middleware::VirtualKeyContext>,
+        cost_usd: Option<f64>,
+    ) -> RequestLogEntry {
+        let mut entry = self.log_entry(
+            backend_name,
+            model_mapped,
+            status_code,
+            tokens,
+            is_streaming,
+            error_message,
+        );
+        entry.key_id = vk_ctx.as_ref().map(|ctx| ctx.key_id);
+        // Only store non-zero costs.
+        entry.cost_usd = cost_usd.filter(|&c| c > 0.0);
+        entry
     }
 }
 

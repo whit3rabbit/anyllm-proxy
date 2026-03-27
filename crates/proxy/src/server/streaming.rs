@@ -222,25 +222,29 @@ pub(crate) async fn messages_stream(
                         let usage = translator.usage();
                         let tokens = usage.map(|u| (u.input_tokens as u64, u.output_tokens as u64));
                         // Record cost for virtual key spend tracking.
-                        if let Some((input_t, output_t)) = tokens {
-                            crate::cost::record_cost(
+                        let cost = if let Some((input_t, output_t)) = tokens {
+                            Some(crate::cost::record_cost(
                                 &log_shared,
                                 &vk_ctx,
                                 &mapped_model,
                                 input_t,
                                 output_t,
-                            );
-                        }
+                            ))
+                        } else {
+                            None
+                        };
                         let (status, err) = outcome.record(&metrics);
                         log_request(
                             &log_shared,
-                            ctx.log_entry(
+                            ctx.log_entry_with_attribution(
                                 &log_backend_name,
                                 Some(mapped_model),
                                 status,
                                 tokens,
                                 true,
                                 err,
+                                &vk_ctx,
+                                cost,
                             ),
                         );
                     }
@@ -250,13 +254,15 @@ pub(crate) async fn messages_stream(
                         metrics.record_error();
                         log_request(
                             &log_shared,
-                            ctx.log_entry(
+                            ctx.log_entry_with_attribution(
                                 &log_backend_name,
                                 Some(mapped_model),
                                 status,
                                 None,
                                 true,
                                 Some(err_msg),
+                                &vk_ctx,
+                                None,
                             ),
                         );
                         // Send the error through the oneshot so the caller can
@@ -310,13 +316,15 @@ pub(crate) async fn messages_stream(
                         let (status, err) = outcome.record(&metrics);
                         log_request(
                             &log_shared,
-                            ctx.log_entry(
+                            ctx.log_entry_with_attribution(
                                 &log_backend_name,
                                 Some(mapped_model),
                                 status,
                                 None,
                                 true,
                                 err,
+                                &vk_ctx,
+                                None,
                             ),
                         );
                     }
@@ -326,13 +334,15 @@ pub(crate) async fn messages_stream(
                         metrics.record_error();
                         log_request(
                             &log_shared,
-                            ctx.log_entry(
+                            ctx.log_entry_with_attribution(
                                 &log_backend_name,
                                 Some(mapped_model),
                                 status,
                                 None,
                                 true,
                                 Some(err_msg),
+                                &vk_ctx,
+                                None,
                             ),
                         );
                         let _ = rl_tx.send(Err(crate::backend::BackendError::from(e)));
