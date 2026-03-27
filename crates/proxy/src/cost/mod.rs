@@ -336,13 +336,11 @@ mod tests {
         let shared = crate::admin::state::SharedState {
             db: db.clone(),
             events_tx,
-            runtime_config: Arc::new(std::sync::RwLock::new(
-                crate::admin::state::RuntimeConfig {
-                    model_mappings: indexmap::IndexMap::new(),
-                    log_level: "info".to_string(),
-                    log_bodies: false,
-                },
-            )),
+            runtime_config: Arc::new(std::sync::RwLock::new(crate::admin::state::RuntimeConfig {
+                model_mappings: indexmap::IndexMap::new(),
+                log_level: "info".to_string(),
+                log_bodies: false,
+            })),
             backend_metrics: Arc::new(std::collections::HashMap::new()),
             log_tx,
             log_reload: None,

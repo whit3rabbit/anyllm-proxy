@@ -36,23 +36,17 @@ pub fn compute_env_aliases() -> Vec<(&'static str, String)> {
     overrides
 }
 
-/// Set anyllm-proxy env vars from LiteLLM equivalents when the target is unset.
-///
-/// Convenience wrapper around `compute_env_aliases()` + `set_var`.
-/// Kept for backward compatibility in tests; production code should use
-/// `compute_env_aliases()` and apply overrides in the consolidated block.
-#[allow(dead_code)]
-pub fn apply_env_aliases() {
-    for (key, val) in compute_env_aliases() {
-        // SAFETY: caller must ensure single-threaded context.
-        unsafe { std::env::set_var(key, &val) };
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::sync::Mutex;
+
+    /// Test-only wrapper: apply computed aliases to the environment.
+    fn apply_env_aliases() {
+        for (key, val) in compute_env_aliases() {
+            unsafe { std::env::set_var(key, &val) };
+        }
+    }
 
     // Serial test lock: env var mutations are process-global.
     static ENV_LOCK: Mutex<()> = Mutex::new(());

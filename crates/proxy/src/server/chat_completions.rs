@@ -123,9 +123,16 @@ pub(crate) async fn chat_completions(
     let original_model = body.model.clone();
 
     if is_streaming {
-        let mut response =
-            chat_completions_stream(state, anthropic_req, ctx, original_model, warnings, permit, vk_ctx)
-                .await;
+        let mut response = chat_completions_stream(
+            state,
+            anthropic_req,
+            ctx,
+            original_model,
+            warnings,
+            permit,
+            vk_ctx,
+        )
+        .await;
         response.headers_mut().insert(
             "x-anyllm-cache",
             axum::http::HeaderValue::from_static("bypass"),

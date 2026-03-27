@@ -75,10 +75,7 @@ mod tests {
 
     #[test]
     fn model_multiple_patterns() {
-        let policy = Some(vec![
-            "gpt-4o".to_string(),
-            "claude-*".to_string(),
-        ]);
+        let policy = Some(vec!["gpt-4o".to_string(), "claude-*".to_string()]);
         assert!(is_model_allowed("gpt-4o", &policy));
         assert!(is_model_allowed("claude-sonnet-4-6", &policy));
         assert!(!is_model_allowed("gpt-4o-mini", &policy));
