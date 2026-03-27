@@ -75,6 +75,20 @@ async fn admin_rate_limit_middleware(
     }
     Ok(next.run(req).await)
 }
+/// Reject model names containing path traversal sequences or suspicious characters.
+/// Only alphanumerics plus `-_./: @` are allowed (covers known provider naming
+/// conventions like `gpt-4o`, `us.meta.llama3-2-1b-instruct-v1:0`,
+/// `accounts/fireworks/models/llama-v3p1-8b-instruct`).
+fn is_safe_model_name(name: &str) -> bool {
+    !name.is_empty()
+        && !name.contains("..")
+        && !name.contains('?')
+        && !name.contains('#')
+        && name
+            .chars()
+            .all(|c| c.is_alphanumeric() || "-_./: @".contains(c))
+}
+
 /// Check whether a host string (without port) is a localhost address.
 fn is_localhost_host(host: &str) -> bool {
     matches!(host, "127.0.0.1" | "localhost" | "[::1]" | "::1")
@@ -370,9 +384,27 @@ async fn put_config(
         for (name, settings) in backends {
             if config.model_mappings.contains_key(name) {
                 if let Some(big) = settings.get("big_model").and_then(|v| v.as_str()) {
+                    if !is_safe_model_name(big) {
+                        return (
+                            StatusCode::BAD_REQUEST,
+                            Json(serde_json::json!({
+                                "error": format!("invalid big_model name '{big}': contains disallowed characters")
+                            })),
+                        )
+                            .into_response();
+                    }
                     db_writes.push((format!("{name}.big_model"), big.to_string()));
                 }
                 if let Some(small) = settings.get("small_model").and_then(|v| v.as_str()) {
+                    if !is_safe_model_name(small) {
+                        return (
+                            StatusCode::BAD_REQUEST,
+                            Json(serde_json::json!({
+                                "error": format!("invalid small_model name '{small}': contains disallowed characters")
+                            })),
+                        )
+                            .into_response();
+                    }
                     db_writes.push((format!("{name}.small_model"), small.to_string()));
                 }
             }
@@ -403,6 +435,36 @@ async fn put_config(
             .runtime_config
             .write()
             .unwrap_or_else(|e| e.into_inner());
+
+        // Audit log: capture old values before applying changes
+        for (key, new_value) in &db_writes {
+            let old_value = match key.as_str() {
+                "log_level" => config.log_level.clone(),
+                "log_bodies" => config.log_bodies.to_string(),
+                other => {
+                    if let Some((backend, field)) = other.split_once('.') {
+                        config
+                            .model_mappings
+                            .get(backend)
+                            .map(|m| match field {
+                                "big_model" => m.big_model.clone(),
+                                "small_model" => m.small_model.clone(),
+                                _ => "<unknown>".to_string(),
+                            })
+                            .unwrap_or_else(|| "<unset>".to_string())
+                    } else {
+                        "<unknown>".to_string()
+                    }
+                }
+            };
+            tracing::info!(
+                key = %key,
+                old_value = %old_value,
+                new_value = %new_value,
+                "admin config change"
+            );
+        }
+
         for (key, value) in &db_writes {
             match key.as_str() {
                 "log_level" => {
