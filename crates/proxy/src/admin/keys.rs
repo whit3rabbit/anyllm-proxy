@@ -1,8 +1,11 @@
 // Virtual API key generation, hashing, and rate limit state.
 
+use hmac::{Hmac, Mac};
 use sha2::{Digest, Sha256};
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
+
+type HmacSha256 = Hmac<Sha256>;
 
 /// Role assigned to a virtual API key, controlling access scope.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -59,22 +62,33 @@ pub fn now_ms() -> u64 {
         .as_millis() as u64
 }
 
-/// Generate a new virtual API key.
+/// Generate a new virtual API key, hashed with HMAC-SHA256 using the installation secret.
 /// Returns (raw_key, key_prefix, key_hash_hex).
 /// The raw_key is shown once at creation; key_prefix is for display; key_hash_hex is stored.
-pub fn generate_virtual_key() -> (String, String, String) {
+pub fn generate_virtual_key(hmac_secret: &[u8]) -> (String, String, String) {
     let a = uuid::Uuid::new_v4().as_simple().to_string();
     let b = uuid::Uuid::new_v4().as_simple().to_string();
     let raw_key = format!("sk-vk{}{}", a, b);
     let key_prefix = raw_key[..8].to_string();
-    let key_hash_hex = hash_key(&raw_key);
+    let key_hash_hex = hmac_hash_key(&raw_key, hmac_secret);
     (raw_key, key_prefix, key_hash_hex)
 }
 
 /// SHA-256 hash a key string and return hex-encoded result.
+/// Used for legacy keys created before HMAC was introduced.
 pub fn hash_key(key: &str) -> String {
     let hash: [u8; 32] = Sha256::digest(key.as_bytes()).into();
     bytes_to_hex(&hash)
+}
+
+/// HMAC-SHA256 hash a key with a per-installation secret. Returns hex string.
+/// Used for all newly created keys. The secret binds hashes to this installation,
+/// so a stolen database cannot be used to brute-force keys on a different instance.
+pub fn hmac_hash_key(key: &str, secret: &[u8]) -> String {
+    let mut mac = HmacSha256::new_from_slice(secret).expect("HMAC-SHA256 accepts any key length");
+    mac.update(key.as_bytes());
+    let result = mac.finalize();
+    bytes_to_hex(&result.into_bytes())
 }
 
 /// Convert a hex-encoded hash to raw bytes.
@@ -330,11 +344,12 @@ mod tests {
 
     #[test]
     fn key_generation_format() {
-        let (raw, prefix, hash) = generate_virtual_key();
+        let secret = b"test-secret";
+        let (raw, prefix, hash) = generate_virtual_key(secret);
         assert!(raw.starts_with("sk-vk"));
         assert_eq!(prefix.len(), 8);
         assert!(prefix.starts_with("sk-vk"));
-        assert_eq!(hash.len(), 64); // hex SHA-256
+        assert_eq!(hash.len(), 64); // hex HMAC-SHA256
     }
 
     #[test]
@@ -479,6 +494,30 @@ mod tests {
         // No reset because no duration
         assert!(!check_and_reset_period(&mut meta));
         assert_eq!(meta.period_spend_usd, 5.0);
+    }
+
+    #[test]
+    fn hmac_hash_differs_from_plain_sha256() {
+        let key = "sk-vktest1234";
+        let secret = b"install-secret-abc";
+        let hmac_hash = hmac_hash_key(key, secret);
+        let plain_hash = hash_key(key);
+        assert_ne!(hmac_hash, plain_hash);
+    }
+
+    #[test]
+    fn hmac_hash_differs_with_different_secrets() {
+        let key = "sk-vktest1234";
+        let h1 = hmac_hash_key(key, b"secret-a");
+        let h2 = hmac_hash_key(key, b"secret-b");
+        assert_ne!(h1, h2);
+    }
+
+    #[test]
+    fn hmac_hash_deterministic() {
+        let key = "sk-vktest1234";
+        let secret = b"consistent-secret";
+        assert_eq!(hmac_hash_key(key, secret), hmac_hash_key(key, secret));
     }
 
     #[test]

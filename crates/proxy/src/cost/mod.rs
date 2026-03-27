@@ -346,6 +346,7 @@ mod tests {
             log_reload: None,
             config_write_lock: Arc::new(tokio::sync::Mutex::new(())),
             virtual_keys: Arc::new(dashmap::DashMap::new()),
+            hmac_secret: Arc::new(b"test-secret".to_vec()),
             model_router: None,
         };
 

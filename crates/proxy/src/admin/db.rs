@@ -141,6 +141,44 @@ pub fn init_db(conn: &Connection) -> rusqlite::Result<()> {
     Ok(())
 }
 
+/// Ensure an HMAC secret exists in the settings table. Creates one if missing.
+/// Returns the 32-byte secret used for HMAC-SHA256 key hashing.
+/// The secret is generated from two UUID v4s (uuid is already a dep) to avoid
+/// adding a CSPRNG dependency; the entropy is sufficient for HMAC keying.
+pub fn ensure_hmac_secret(conn: &Connection) -> Vec<u8> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value BLOB NOT NULL);",
+    )
+    .expect("create settings table");
+
+    let existing: Option<Vec<u8>> = conn
+        .query_row(
+            "SELECT value FROM settings WHERE key = 'hmac_secret'",
+            [],
+            |row| row.get(0),
+        )
+        .ok();
+
+    if let Some(secret) = existing {
+        return secret;
+    }
+
+    // Generate 32 random bytes from two UUID v4s.
+    let mut buf = [0u8; 32];
+    let a = uuid::Uuid::new_v4();
+    let b = uuid::Uuid::new_v4();
+    buf[..16].copy_from_slice(a.as_bytes());
+    buf[16..].copy_from_slice(b.as_bytes());
+
+    conn.execute(
+        "INSERT INTO settings (key, value) VALUES ('hmac_secret', ?1)",
+        [&buf[..]],
+    )
+    .expect("insert hmac_secret");
+
+    buf.to_vec()
+}
+
 /// Insert a single request log entry.
 pub fn insert_request_log(conn: &Connection, entry: &RequestLogEntry) -> rusqlite::Result<()> {
     conn.execute(

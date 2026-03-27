@@ -27,6 +27,7 @@ indexmap = { version = "2.13.0", features = ["serde"] }
 bytes = "1.11.1"
 subtle = "2"
 sha2 = "0.10"
+hmac = "0.12"
 rusqlite = { version = "0.32", features = ["bundled"] }
 httpdate = "1"
 dashmap = "6"

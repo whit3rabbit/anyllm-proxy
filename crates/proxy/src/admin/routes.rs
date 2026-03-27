@@ -670,7 +670,8 @@ async fn create_key(
     State(shared): State<SharedState>,
     Json(body): Json<CreateKeyRequest>,
 ) -> axum::response::Response {
-    let (raw_key, key_prefix, key_hash_hex) = super::keys::generate_virtual_key();
+    let (raw_key, key_prefix, key_hash_hex) =
+        super::keys::generate_virtual_key(&shared.hmac_secret);
     let role_str = body.role.as_deref().unwrap_or("developer");
     let role = super::keys::KeyRole::from_str_or_default(role_str);
     let result = super::state::with_db(&shared.db, {

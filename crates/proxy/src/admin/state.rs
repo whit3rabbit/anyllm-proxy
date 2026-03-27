@@ -38,9 +38,13 @@ pub struct SharedState {
     /// Serializes config write operations (Phase 1: SQLite + Phase 2: in-memory)
     /// so concurrent PUT /admin/api/config requests cannot interleave.
     pub config_write_lock: Arc<tokio::sync::Mutex<()>>,
-    /// In-memory cache of active virtual API keys, keyed by SHA-256 hash bytes.
+    /// In-memory cache of active virtual API keys, keyed by hash bytes
+    /// (HMAC-SHA256 for new keys, legacy SHA-256 for pre-HMAC keys).
     /// Populated from SQLite at startup; updated on create/revoke via admin API.
     pub virtual_keys: Arc<DashMap<[u8; 32], VirtualKeyMeta>>,
+    /// Per-installation HMAC secret for keyed hashing of virtual API keys.
+    /// Generated once and persisted in the settings table.
+    pub hmac_secret: Arc<Vec<u8>>,
     /// Model router for dynamic model management. None unless LiteLLM config is active.
     pub model_router: Option<Arc<RwLock<crate::config::model_router::ModelRouter>>>,
 }
@@ -125,6 +129,7 @@ impl SharedState {
     pub fn new_for_test() -> Self {
         let conn = rusqlite::Connection::open_in_memory().expect("in-memory sqlite");
         crate::admin::db::init_db(&conn).expect("init_db");
+        let hmac_secret = crate::admin::db::ensure_hmac_secret(&conn);
         let (events_tx, _) = broadcast::channel(4);
         let (log_tx, _) = tokio::sync::mpsc::channel(4);
         Self {
@@ -140,6 +145,7 @@ impl SharedState {
             log_reload: None,
             config_write_lock: Arc::new(tokio::sync::Mutex::new(())),
             virtual_keys: Arc::new(DashMap::new()),
+            hmac_secret: Arc::new(hmac_secret),
             model_router: None,
         }
     }

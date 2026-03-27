@@ -170,6 +170,7 @@ async fn main() {
         let conn =
             rusqlite::Connection::open(&db_path).expect("failed to open SQLite database for admin");
         admin::db::init_db(&conn).expect("failed to initialize admin database schema");
+        let hmac_secret = Arc::new(admin::db::ensure_hmac_secret(&conn));
 
         // Build initial RuntimeConfig from the loaded multi_config.
         let mut model_mappings = indexmap::IndexMap::new();
@@ -289,8 +290,9 @@ async fn main() {
             }
         }
 
-        // Make virtual keys available to the auth middleware.
+        // Make virtual keys and HMAC secret available to the auth middleware.
         anyllm_proxy::server::middleware::set_virtual_keys(virtual_keys.clone());
+        anyllm_proxy::server::middleware::set_hmac_secret(hmac_secret.clone());
 
         let virtual_keys_pruner = virtual_keys.clone();
         tokio::spawn(async move {
@@ -315,6 +317,7 @@ async fn main() {
             log_reload: Some(log_reload),
             config_write_lock: Arc::new(tokio::sync::Mutex::new(())),
             virtual_keys,
+            hmac_secret,
             model_router: model_router.clone(),
         };
 

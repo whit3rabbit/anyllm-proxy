@@ -16,6 +16,15 @@ use sha2::{Digest, Sha256};
 use std::sync::{Arc, LazyLock, OnceLock};
 use subtle::ConstantTimeEq;
 
+/// Per-installation HMAC secret for virtual key hashing.
+/// Set once during startup alongside the virtual keys DashMap.
+static HMAC_SECRET: OnceLock<Arc<Vec<u8>>> = OnceLock::new();
+
+/// Initialize the global HMAC secret. Called once from main.
+pub fn set_hmac_secret(secret: Arc<Vec<u8>>) {
+    let _ = HMAC_SECRET.set(secret);
+}
+
 /// Build a 429 rate-limit error response with retry-after header.
 fn rate_limit_response(message: &str, retry_after: u64) -> Response {
     let err = create_anthropic_error(
@@ -224,8 +233,16 @@ pub async fn validate_auth(
     }
 
     // Check 2: virtual keys from DashMap (with per-key rate limiting, budget, RBAC)
+    // Dual-mode lookup: try HMAC-SHA256 hash first (new keys), fall back to legacy SHA-256 (old keys).
     if let Some(map) = VIRTUAL_KEYS.get() {
-        if let Some(mut meta) = map.get_mut(&credential_hash) {
+        let hmac_hash: Option<[u8; 32]> = HMAC_SECRET.get().and_then(|secret| {
+            let hex = crate::admin::keys::hmac_hash_key(&credential, secret);
+            crate::admin::keys::hash_from_hex(&hex)
+        });
+        let vk_lookup = hmac_hash
+            .and_then(|h| map.get_mut(&h))
+            .or_else(|| map.get_mut(&credential_hash));
+        if let Some(mut meta) = vk_lookup {
             // RBAC: developer keys cannot access admin endpoints
             if meta.role == KeyRole::Developer {
                 let path = request.uri().path();

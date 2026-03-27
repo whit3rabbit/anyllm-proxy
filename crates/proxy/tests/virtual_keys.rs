@@ -23,6 +23,7 @@ use tower::ServiceExt;
 // ---------------------------------------------------------------------------
 
 static TEST_VK_MAP: OnceLock<Arc<DashMap<[u8; 32], admin::keys::VirtualKeyMeta>>> = OnceLock::new();
+static TEST_HMAC_SECRET: OnceLock<Arc<Vec<u8>>> = OnceLock::new();
 
 fn shared_vk_map() -> Arc<DashMap<[u8; 32], admin::keys::VirtualKeyMeta>> {
     TEST_VK_MAP
@@ -34,10 +35,22 @@ fn shared_vk_map() -> Arc<DashMap<[u8; 32], admin::keys::VirtualKeyMeta>> {
         .clone()
 }
 
+fn shared_hmac_secret() -> Arc<Vec<u8>> {
+    TEST_HMAC_SECRET
+        .get_or_init(|| {
+            // Use a fixed test secret so all tests agree on hash values.
+            let secret = Arc::new(b"test-hmac-secret-for-integration".to_vec());
+            anyllm_proxy::server::middleware::set_hmac_secret(secret.clone());
+            secret
+        })
+        .clone()
+}
+
 /// Build a SharedState whose `virtual_keys` is the shared test map.
 fn shared_state() -> admin::state::SharedState {
     let mut state = admin::state::SharedState::new_for_test();
     state.virtual_keys = shared_vk_map();
+    state.hmac_secret = shared_hmac_secret();
     state
 }
 
@@ -131,7 +144,7 @@ async fn revoke_key_removes_from_dashmap() {
     let id = body["id"].as_i64().unwrap();
     let raw_key = body["key"].as_str().unwrap().to_string();
 
-    let hash = admin::keys::hash_key(&raw_key);
+    let hash = admin::keys::hmac_hash_key(&raw_key, &state.hmac_secret);
     let hash_bytes = admin::keys::hash_from_hex(&hash).unwrap();
     assert!(state.virtual_keys.contains_key(&hash_bytes));
 
@@ -427,7 +440,7 @@ async fn budget_exceeded_returns_429_with_budget_exceeded_type() {
 
     // Manually set the key's period_spend above the limit in the DashMap
     let vk_map = shared_vk_map();
-    let hash = admin::keys::hash_key(&raw_key);
+    let hash = admin::keys::hmac_hash_key(&raw_key, &shared_hmac_secret());
     let hash_bytes = admin::keys::hash_from_hex(&hash).unwrap();
     if let Some(mut meta) = vk_map.get_mut(&hash_bytes) {
         meta.period_spend_usd = 1.0; // Way over the $0.0001 limit
@@ -505,7 +518,7 @@ async fn budget_resets_on_new_period() {
 
     // Manually set the key's spend above limit AND set period_start to yesterday
     let vk_map = shared_vk_map();
-    let hash = admin::keys::hash_key(&raw_key);
+    let hash = admin::keys::hmac_hash_key(&raw_key, &shared_hmac_secret());
     let hash_bytes = admin::keys::hash_from_hex(&hash).unwrap();
     if let Some(mut meta) = vk_map.get_mut(&hash_bytes) {
         meta.period_spend_usd = 1.0; // Over budget
@@ -543,7 +556,7 @@ async fn no_duration_budget_stays_blocked() {
 
     // Set spend above limit; no duration means no reset
     let vk_map = shared_vk_map();
-    let hash = admin::keys::hash_key(&raw_key);
+    let hash = admin::keys::hmac_hash_key(&raw_key, &shared_hmac_secret());
     let hash_bytes = admin::keys::hash_from_hex(&hash).unwrap();
     if let Some(mut meta) = vk_map.get_mut(&hash_bytes) {
         meta.period_spend_usd = 1.0;
@@ -712,7 +725,7 @@ async fn new_key_defaults_to_developer_role() {
 
     // Check that the in-memory meta has developer role
     let vk_map = shared_vk_map();
-    let hash = admin::keys::hash_key(&raw_key);
+    let hash = admin::keys::hmac_hash_key(&raw_key, &shared_hmac_secret());
     let hash_bytes = admin::keys::hash_from_hex(&hash).unwrap();
     let meta = vk_map.get(&hash_bytes).expect("key should exist in map");
     assert_eq!(
