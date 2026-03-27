@@ -34,6 +34,21 @@ impl CallbackConfig {
             })
             .collect();
 
+        // Warn on plaintext HTTP URLs that aren't localhost (security risk in production).
+        for url in &valid_urls {
+            if url.starts_with("http://")
+                && !url.starts_with("http://localhost")
+                && !url.starts_with("http://127.0.0.1")
+                && !url.starts_with("http://[::1]")
+            {
+                tracing::warn!(
+                    url = %url,
+                    "webhook URL uses plaintext HTTP; request metadata (model, tokens, latency) \
+                     will be sent unencrypted. Use HTTPS in production."
+                );
+            }
+        }
+
         if valid_urls.is_empty() {
             return None;
         }
@@ -150,5 +165,20 @@ mod tests {
     fn valid_urls_creates_config() {
         let config = CallbackConfig::new(vec!["https://hook.example.com".to_string()]);
         assert!(config.is_some());
+    }
+
+    #[test]
+    fn http_urls_accepted_not_rejected() {
+        // Plaintext HTTP URLs are accepted (with a warning), not filtered out.
+        // Localhost variants should not warn but should also be accepted.
+        let config = CallbackConfig::new(vec![
+            "http://external.example.com/hook".to_string(),
+            "http://localhost:9999/cb".to_string(),
+            "http://127.0.0.1:8080/cb".to_string(),
+            "http://[::1]:3000/cb".to_string(),
+            "https://secure.example.com/hook".to_string(),
+        ]);
+        let config = config.unwrap();
+        assert_eq!(config.url_count(), 5);
     }
 }
