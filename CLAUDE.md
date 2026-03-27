@@ -87,6 +87,17 @@ OPENAI_API_KEY=sk-... cargo run -p anyllm_proxy
 - `OTEL_EXPORTER_OTLP_ENDPOINT`: OTLP collector endpoint (default: `http://localhost:4318`). Only effective when built with `--features otel`.
 - `OTEL_SERVICE_NAME`: Service name for exported traces. Only effective when built with `--features otel`.
 - `OTEL_TRACES_SAMPLER`: Sampling strategy (default: `parentbased_always_on`). Only effective when built with `--features otel`.
+- `PROXY_CONFIG`: Path to config file. TOML for multi-backend config, or `.yaml`/`.yml` for LiteLLM-compatible config with model_list routing.
+
+### LiteLLM env var aliases
+
+These LiteLLM env var names are accepted as aliases at startup (target takes precedence if already set):
+- `LITELLM_MASTER_KEY` -> `PROXY_API_KEYS`
+- `LITELLM_CONFIG` -> `PROXY_CONFIG`
+- `AZURE_API_KEY` -> `AZURE_OPENAI_API_KEY`
+- `AZURE_API_BASE` -> `AZURE_OPENAI_ENDPOINT`
+- `AZURE_API_VERSION` -> `AZURE_OPENAI_API_VERSION`
+- `AWS_REGION_NAME` -> `AWS_REGION`
 
 ## Architecture
 

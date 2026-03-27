@@ -32,6 +32,45 @@ These are different categories; not every gap is worth closing.
 
 ---
 
+## Migrating from LiteLLM
+
+### Config file
+
+Set `PROXY_CONFIG=config.yaml` (or `LITELLM_CONFIG=config.yaml`) and point it at your existing LiteLLM config. The proxy parses `model_list`, `litellm_settings`, `router_settings`, and `general_settings`.
+
+Supported `model_list` fields: `model_name`, `litellm_params.model` (provider/model format), `api_base`, `api_key`, `rpm`, `tpm`, `api_version`, `aws_access_key_id`, `aws_secret_access_key`, `aws_region_name`. Unknown fields are silently accepted (logged at debug level).
+
+Supported providers in the `model` field: `openai`, `azure`, `vertex_ai`/`vertex`, `gemini`, `anthropic`, `bedrock`. Unknown providers are treated as OpenAI-compatible.
+
+### Environment variables
+
+LiteLLM env var names are accepted as aliases. The proxy checks for LiteLLM names at startup and maps them to anyllm equivalents (only when the target is not already set):
+
+| LiteLLM env var | anyllm-proxy env var |
+|---|---|
+| `LITELLM_MASTER_KEY` | `PROXY_API_KEYS` |
+| `LITELLM_CONFIG` | `PROXY_CONFIG` |
+| `AZURE_API_KEY` | `AZURE_OPENAI_API_KEY` |
+| `AZURE_API_BASE` | `AZURE_OPENAI_ENDPOINT` |
+| `AZURE_API_VERSION` | `AZURE_OPENAI_API_VERSION` |
+| `AWS_REGION_NAME` | `AWS_REGION` |
+
+These env vars are the same in both projects (no alias needed): `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `ANTHROPIC_API_KEY`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `REDIS_URL`.
+
+### Secret references in YAML
+
+Both `os.environ/VAR_NAME` (LiteLLM syntax) and `env:VAR_NAME` (anyllm syntax) are supported in config values.
+
+### What is NOT migrated
+
+- `litellm_settings.callbacks` (Langfuse, DataDog, etc.) are ignored
+- `router_settings.routing_strategy` values beyond simple-shuffle are ignored (round-robin + RPM-aware is always used)
+- `general_settings.database_url` (PostgreSQL) is ignored; anyllm uses SQLite
+- Team/user-level budgets (anyllm tracks per-key only)
+- `litellm_settings.drop_params` is accepted but has no effect (anyllm already drops unsupported params via serde flatten)
+
+---
+
 ## Detailed Gaps
 
 ### 1. Provider/Backend Coverage
@@ -165,7 +204,7 @@ LiteLLM uses a full relational database (configurable backend) for key/user/team
 21. **Distributed rate limiting** -- Redis sorted sets with Lua scripts, fail-open fallback to local
 22. **Redis L2 cache** -- SETEX-based response cache behind `--features redis`
 23. **Semantic caching** -- Qdrant-backed embedding similarity search with collection auto-creation
-24. **LiteLLM config.yaml compatibility** -- Accept LiteLLM config.yaml directly (`PROXY_CONFIG=config.yaml`), parse `model_list` with `provider/model` format, `os.environ/VAR` syntax, env var aliases (`LITELLM_MASTER_KEY`, `AZURE_API_KEY`, `AZURE_API_BASE`, `LITELLM_CONFIG`)
+24. **LiteLLM config.yaml compatibility** -- Accept LiteLLM config.yaml directly (`PROXY_CONFIG=config.yaml`), parse `model_list` with `provider/model` format, `os.environ/VAR` syntax, env var aliases (`LITELLM_MASTER_KEY`, `LITELLM_CONFIG`, `AZURE_API_KEY`, `AZURE_API_BASE`, `AZURE_API_VERSION`, `AWS_REGION_NAME`)
 25. **Model-level routing** -- Round-robin + RPM-aware routing across multiple deployments per model name, cross-backend dispatch, lock-free atomic counters
 
 ## Remaining Gaps

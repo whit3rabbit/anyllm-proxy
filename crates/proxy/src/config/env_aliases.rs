@@ -5,10 +5,16 @@
 // only take effect when the target var is not already set).
 
 const ALIASES: &[(&str, &str)] = &[
+    // Auth
     ("LITELLM_MASTER_KEY", "PROXY_API_KEYS"),
+    // Config file
+    ("LITELLM_CONFIG", "PROXY_CONFIG"),
+    // Azure
     ("AZURE_API_KEY", "AZURE_OPENAI_API_KEY"),
     ("AZURE_API_BASE", "AZURE_OPENAI_ENDPOINT"),
-    ("LITELLM_CONFIG", "PROXY_CONFIG"),
+    ("AZURE_API_VERSION", "AZURE_OPENAI_API_VERSION"),
+    // AWS Bedrock
+    ("AWS_REGION_NAME", "AWS_REGION"),
 ];
 
 /// Set anyllm-proxy env vars from LiteLLM equivalents when the target is unset.

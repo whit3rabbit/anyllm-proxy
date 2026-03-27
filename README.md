@@ -103,6 +103,56 @@ All three backends are live at once:
 
 Point different tools at different paths, or switch in Claude Code by changing `ANTHROPIC_BASE_URL`.
 
+### Coming from LiteLLM? Drop in your config.yaml
+
+anyllm-proxy accepts LiteLLM `config.yaml` files directly. If you already have a LiteLLM deployment, point the proxy at your existing config:
+
+```bash
+PROXY_CONFIG=config.yaml anyllm_proxy --webui
+```
+
+A standard LiteLLM config works as-is:
+
+```yaml
+# config.yaml (LiteLLM format)
+model_list:
+  - model_name: gpt-4o
+    litellm_params:
+      model: azure/gpt-4o-eu
+      api_base: https://my-resource.openai.azure.com/
+      api_key: os.environ/AZURE_API_KEY
+      rpm: 6000
+  - model_name: gpt-4o
+    litellm_params:
+      model: openai/gpt-4o
+      api_key: os.environ/OPENAI_API_KEY
+      rpm: 10000
+  - model_name: claude-3-opus
+    litellm_params:
+      model: anthropic/claude-3-opus-20240229
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+```
+
+Multiple deployments of the same model name are load-balanced with round-robin routing. Deployments at their RPM limit are automatically skipped.
+
+**Env var compatibility:** LiteLLM env var names are accepted as aliases, so you do not need to rename anything:
+
+| LiteLLM env var | anyllm-proxy equivalent | Notes |
+|---|---|---|
+| `LITELLM_MASTER_KEY` | `PROXY_API_KEYS` | Admin/auth key |
+| `LITELLM_CONFIG` | `PROXY_CONFIG` | Config file path |
+| `AZURE_API_KEY` | `AZURE_OPENAI_API_KEY` | Azure auth |
+| `AZURE_API_BASE` | `AZURE_OPENAI_ENDPOINT` | Azure endpoint |
+| `AZURE_API_VERSION` | `AZURE_OPENAI_API_VERSION` | Azure API version |
+| `AWS_REGION_NAME` | `AWS_REGION` | Bedrock region |
+| `OPENAI_API_KEY` | `OPENAI_API_KEY` | Same name |
+| `ANTHROPIC_API_KEY` | `ANTHROPIC_API_KEY` | Same name |
+
+The `os.environ/VAR_NAME` syntax in YAML values is supported alongside anyllm's native `env:VAR_NAME`. See [docs/COMPARISON_LITELLM.md](docs/COMPARISON_LITELLM.md) for a full feature comparison.
+
 ### Multiple separate instances (for isolated deployments)
 
 For cases where you want completely separate proxy processes (different ports, different machines, different Docker containers), keep one `.env` file per deployment:
