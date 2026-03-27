@@ -4,7 +4,7 @@ use crate::admin::auth::validate_admin_token;
 use crate::admin::state::SharedState;
 use crate::admin::ws::ws_handler;
 use axum::{
-    extract::{ConnectInfo, Path, Query, State},
+    extract::{ConnectInfo, DefaultBodyLimit, Path, Query, State},
     http::StatusCode,
     middleware,
     response::IntoResponse,
@@ -199,7 +199,11 @@ pub fn admin_router(shared: SharedState, token: Arc<String>) -> Router {
         .route("/admin", get(serve_spa));
 
     // Merge all routes.
-    public.merge(protected).merge(ws_route).merge(spa_route)
+    public
+        .merge(protected)
+        .merge(ws_route)
+        .merge(spa_route)
+        .layer(DefaultBodyLimit::max(1_048_576))
 }
 
 async fn health() -> Json<serde_json::Value> {
