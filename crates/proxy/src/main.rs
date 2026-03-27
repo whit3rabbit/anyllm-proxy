@@ -52,6 +52,12 @@ async fn main() {
     let (multi_config, model_router) = config::MultiConfig::load();
     let listen_port = multi_config.listen_port;
 
+    // Wire up WEBHOOK_URLS env var (if LiteLLM callbacks weren't already set).
+    if let Some(cb) = anyllm_proxy::callbacks::CallbackConfig::from_env() {
+        anyllm_proxy::server::routes::set_callbacks(cb);
+        tracing::info!("webhook callbacks configured from WEBHOOK_URLS env var");
+    }
+
     tracing::info!(
         backends = ?multi_config.backends.keys().collect::<Vec<_>>(),
         default = %multi_config.default_backend,
@@ -98,10 +104,11 @@ async fn main() {
     // multiple proxy instances share rate limit state.
     #[cfg(feature = "redis")]
     if let Ok(redis_url) = std::env::var("REDIS_URL") {
-        match anyllm_proxy::ratelimit::RedisRateLimiter::new(&redis_url).await {
+        let fail_policy = anyllm_proxy::ratelimit::RateLimitFailPolicy::from_env();
+        match anyllm_proxy::ratelimit::RedisRateLimiter::new(&redis_url, fail_policy).await {
             Ok(limiter) => {
                 anyllm_proxy::ratelimit::set_redis_rate_limiter(limiter);
-                tracing::info!("Redis distributed rate limiting enabled");
+                tracing::info!(?fail_policy, "Redis distributed rate limiting enabled");
             }
             Err(e) => {
                 tracing::error!("Redis connection failed: {e}. Using local-only rate limiting.");
@@ -256,6 +263,20 @@ async fn main() {
         // Make virtual keys available to the auth middleware.
         anyllm_proxy::server::middleware::set_virtual_keys(virtual_keys.clone());
 
+        let virtual_keys_pruner = virtual_keys.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(300));
+            loop {
+                interval.tick().await;
+                let now = anyllm_proxy::admin::keys::now_ms();
+                // Check and prune old rate limit states
+                for entry in virtual_keys_pruner.iter() {
+                    let _ = entry.rate_state.check_rpm(0, now);
+                    let _ = entry.rate_state.check_tpm(0, now);
+                }
+            }
+        });
+
         let shared = admin::state::SharedState {
             db: db.clone(),
             events_tx: events_tx.clone(),
@@ -265,6 +286,7 @@ async fn main() {
             log_reload: Some(log_reload),
             config_write_lock: Arc::new(tokio::sync::Mutex::new(())),
             virtual_keys,
+            model_router: model_router.clone(),
         };
 
         // Admin token: use env var or generate random UUID written to a file.
