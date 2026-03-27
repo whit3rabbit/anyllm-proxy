@@ -40,6 +40,7 @@ moka = { version = "0.12", features = ["future"] }
 serde_yaml = "0.9"
 jsonwebtoken = "9"
 ipnetwork = "0.20"
+zeroize = "1"
 
 [features]
 redis = ["dep:redis"]

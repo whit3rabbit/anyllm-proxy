@@ -9,13 +9,18 @@ use aws_sigv4::http_request::{sign, SignableBody, SignableRequest, SigningSettin
 use aws_sigv4::sign::v4;
 use reqwest::Client;
 use tokio::time::sleep;
+use zeroize::Zeroizing;
 
 /// HTTP client for AWS Bedrock with SigV4 request signing.
+/// Secret fields (secret_access_key, session_token) are wrapped in `Zeroizing`
+/// so they are zeroed from memory when the client is dropped.
 #[derive(Clone)]
 pub struct BedrockClient {
     client: Client,
     region: String,
-    credentials: Credentials,
+    access_key_id: String,
+    secret_access_key: Zeroizing<String>,
+    session_token: Option<Zeroizing<String>>,
     big_model: String,
     small_model: String,
 }
@@ -42,7 +47,8 @@ impl std::fmt::Display for BedrockClientError {
 }
 
 impl BedrockClient {
-    /// Create a new Bedrock client.
+    /// Create a new Bedrock client. Decomposes `Credentials` so that secret
+    /// fields are stored in `Zeroizing<String>` and wiped on drop.
     pub fn new(
         region: String,
         credentials: Credentials,
@@ -51,10 +57,17 @@ impl BedrockClient {
         tls: &TlsConfig,
     ) -> Self {
         let client = build_http_client(tls);
+        let access_key_id = credentials.access_key_id().to_string();
+        let secret_access_key = Zeroizing::new(credentials.secret_access_key().to_string());
+        let session_token = credentials
+            .session_token()
+            .map(|t| Zeroizing::new(t.to_string()));
         Self {
             client,
             region,
-            credentials,
+            access_key_id,
+            secret_access_key,
+            session_token,
             big_model,
             small_model,
         }
@@ -92,8 +105,16 @@ impl BedrockClient {
         body_bytes: &[u8],
         extra_headers: &[(&str, &str)],
     ) -> Result<Vec<(String, String)>, BedrockClientError> {
-        let identity: aws_smithy_runtime_api::client::identity::Identity =
-            self.credentials.clone().into();
+        // Reconstruct Credentials on each call; the struct fields hold the
+        // canonical copies wrapped in Zeroizing for safe drop.
+        let creds = Credentials::new(
+            self.access_key_id.clone(),
+            self.secret_access_key.as_str(),
+            self.session_token.as_deref().map(|s| s.to_string()),
+            None,    // expiration
+            "anyllm", // provider name
+        );
+        let identity: aws_smithy_runtime_api::client::identity::Identity = creds.into();
         let settings = SigningSettings::default();
         let params = v4::SigningParams::builder()
             .identity(&identity)
