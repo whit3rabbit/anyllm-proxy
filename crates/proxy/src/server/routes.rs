@@ -651,6 +651,18 @@ async fn messages(
     };
     state.metrics.record_request();
 
+    // Enforce model allowlist policy for virtual keys.
+    if let Some(ref ctx) = vk_ctx {
+        if !super::policy::is_model_allowed(&body.model, &ctx.allowed_models) {
+            let err = mapping::errors_map::create_anthropic_error(
+                anthropic::ErrorType::PermissionError,
+                format!("Model '{}' is not allowed for this API key.", body.model),
+                None,
+            );
+            return (StatusCode::FORBIDDEN, Json(err)).into_response();
+        }
+    }
+
     if state.log_bodies() {
         tracing::debug!(
             model = %body.model,
@@ -1051,6 +1063,11 @@ static CALLBACKS: std::sync::OnceLock<Arc<crate::callbacks::CallbackConfig>> =
 /// Set the global webhook callback config (called once at startup).
 pub fn set_callbacks(config: Arc<crate::callbacks::CallbackConfig>) {
     let _ = CALLBACKS.set(config);
+}
+
+/// Get a reference to the global webhook callback config, if set.
+pub fn get_callbacks() -> Option<&'static Arc<crate::callbacks::CallbackConfig>> {
+    CALLBACKS.get()
 }
 
 /// Log a completed request to the admin write buffer, broadcast to WebSocket clients,

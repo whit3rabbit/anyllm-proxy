@@ -5,10 +5,99 @@
 
 pub mod db;
 
+use dashmap::DashMap;
 use std::sync::LazyLock;
 
 /// Global pricing data, loaded once from embedded JSON at first access.
 static PRICING: LazyLock<ModelPricing> = LazyLock::new(ModelPricing::load);
+
+/// Tracks the highest alert level sent per key to avoid duplicate alerts.
+/// Key: virtual key DB id, Value: highest threshold level (0-3).
+static ALERT_LEVELS: LazyLock<DashMap<i64, u8>> = LazyLock::new(DashMap::new);
+
+/// Returns the spend alert level: 0=none, 1=80%, 2=95%, 3=100%.
+pub fn spend_threshold_level(spend: f64, budget: f64) -> u8 {
+    if budget <= 0.0 {
+        return 0;
+    }
+    let pct = spend / budget * 100.0;
+    if pct >= 100.0 {
+        3
+    } else if pct >= 95.0 {
+        2
+    } else if pct >= 80.0 {
+        1
+    } else {
+        0
+    }
+}
+
+/// Reset alert tracking for a key (call on budget period rollover).
+pub fn reset_alert_level(key_id: i64) {
+    ALERT_LEVELS.remove(&key_id);
+}
+
+/// Check whether a spend alert should fire and, if so, send it via webhooks.
+///
+/// Only fires when the threshold level increases (dedup). The webhook payload
+/// includes key metadata and the crossed threshold percentage.
+fn maybe_fire_spend_alert(
+    key_id: i64,
+    key_prefix: &str,
+    period_spend_usd: f64,
+    max_budget_usd: f64,
+    budget_duration: Option<&str>,
+) {
+    let level = spend_threshold_level(period_spend_usd, max_budget_usd);
+    if level == 0 {
+        return;
+    }
+
+    // Check and update dedup map atomically.
+    let should_fire = {
+        let mut entry = ALERT_LEVELS.entry(key_id).or_insert(0);
+        if level > *entry {
+            *entry = level;
+            true
+        } else {
+            false
+        }
+    };
+
+    if !should_fire {
+        return;
+    }
+
+    let threshold_pct: u8 = match level {
+        1 => 80,
+        2 => 95,
+        _ => 100,
+    };
+
+    tracing::warn!(
+        key_id,
+        key_prefix,
+        threshold_pct,
+        period_spend_usd,
+        max_budget_usd,
+        "spend threshold crossed"
+    );
+
+    // Fire webhook if configured (uses the global OnceLock from routes).
+    let payload = serde_json::json!({
+        "type": "spend_alert",
+        "key_id": key_id,
+        "key_prefix": key_prefix,
+        "threshold_pct": threshold_pct,
+        "period_spend_usd": period_spend_usd,
+        "max_budget_usd": max_budget_usd,
+        "budget_duration": budget_duration.unwrap_or("lifetime"),
+    });
+
+    if let Some(cb) = crate::server::routes::get_callbacks() {
+        cb.notify_json(&payload);
+    }
+}
 
 /// Access the global model pricing table.
 pub fn pricing() -> &'static ModelPricing {
@@ -95,6 +184,19 @@ pub fn record_cost(
             let conn = db.lock().unwrap_or_else(|e| e.into_inner());
             if let Err(e) = db::accumulate_spend(&conn, key_id, cost, input_tokens, output_tokens) {
                 tracing::error!(error = %e, key_id, "failed to accumulate spend");
+                return;
+            }
+            // Check spend thresholds after accumulation.
+            if let Ok(Some(spend)) = db::get_key_spend(&conn, key_id) {
+                if let Some(budget) = spend.max_budget_usd {
+                    maybe_fire_spend_alert(
+                        key_id,
+                        &spend.key_prefix,
+                        spend.period_cost_usd,
+                        budget,
+                        spend.budget_duration.as_deref(),
+                    );
+                }
             }
         });
     }
@@ -222,6 +324,7 @@ mod tests {
                 role: "developer",
                 max_budget_usd: Some(100.0),
                 budget_duration: None,
+                allowed_models: None,
             },
         )
         .unwrap();
@@ -251,6 +354,7 @@ mod tests {
         let vk_ctx = VirtualKeyContext {
             key_id,
             rate_state: Arc::new(RateLimitState::new()),
+            allowed_models: None,
         };
 
         // record_cost uses tokio::task::spawn_blocking, so we need a runtime.
@@ -271,5 +375,87 @@ mod tests {
         assert_eq!(spend.total_input_tokens, 1000);
         assert_eq!(spend.total_output_tokens, 500);
         assert_eq!(spend.request_count, 1);
+    }
+
+    // -- Spend threshold detection tests --
+
+    #[test]
+    fn spend_threshold_detection() {
+        // Zero budget always returns 0 (no alerting).
+        assert_eq!(spend_threshold_level(50.0, 0.0), 0);
+        assert_eq!(spend_threshold_level(50.0, -10.0), 0);
+
+        // Below 80%
+        assert_eq!(spend_threshold_level(0.0, 100.0), 0);
+        assert_eq!(spend_threshold_level(79.99, 100.0), 0);
+
+        // At and above 80%
+        assert_eq!(spend_threshold_level(80.0, 100.0), 1);
+        assert_eq!(spend_threshold_level(85.0, 100.0), 1);
+        assert_eq!(spend_threshold_level(94.99, 100.0), 1);
+
+        // At and above 95%
+        assert_eq!(spend_threshold_level(95.0, 100.0), 2);
+        assert_eq!(spend_threshold_level(99.99, 100.0), 2);
+
+        // At and above 100%
+        assert_eq!(spend_threshold_level(100.0, 100.0), 3);
+        assert_eq!(spend_threshold_level(150.0, 100.0), 3);
+    }
+
+    #[test]
+    fn spend_threshold_below_80_returns_0() {
+        // Boundary: 79.999...% is still below 80%.
+        assert_eq!(spend_threshold_level(79.999, 100.0), 0);
+        // Small budget, small spend.
+        assert_eq!(spend_threshold_level(0.79, 1.0), 0);
+        // Exactly at the boundary: 80/100 = 80%.
+        assert_eq!(spend_threshold_level(0.80, 1.0), 1);
+    }
+
+    #[test]
+    fn reset_alert_level_clears_map() {
+        // Insert a tracked level.
+        ALERT_LEVELS.insert(-999, 2);
+        assert!(ALERT_LEVELS.contains_key(&-999));
+
+        reset_alert_level(-999);
+        assert!(!ALERT_LEVELS.contains_key(&-999));
+
+        // Resetting a non-existent key is a no-op (should not panic).
+        reset_alert_level(-998);
+    }
+
+    #[test]
+    fn alert_dedup_fires_only_on_increase() {
+        // Use a unique key_id to avoid collisions with other tests.
+        let key_id = -1000;
+        ALERT_LEVELS.remove(&key_id);
+
+        // Simulate crossing 80% threshold.
+        // maybe_fire_spend_alert is not easily testable for webhook firing
+        // (no webhook configured in tests), but we can verify the dedup map.
+        maybe_fire_spend_alert(key_id, "sk-vktest", 80.0, 100.0, Some("monthly"));
+        assert_eq!(*ALERT_LEVELS.get(&key_id).unwrap(), 1);
+
+        // Same level should not update (still 1).
+        maybe_fire_spend_alert(key_id, "sk-vktest", 85.0, 100.0, Some("monthly"));
+        assert_eq!(*ALERT_LEVELS.get(&key_id).unwrap(), 1);
+
+        // Higher level (95%) should update.
+        maybe_fire_spend_alert(key_id, "sk-vktest", 95.0, 100.0, Some("monthly"));
+        assert_eq!(*ALERT_LEVELS.get(&key_id).unwrap(), 2);
+
+        // 100% should update to 3.
+        maybe_fire_spend_alert(key_id, "sk-vktest", 100.0, 100.0, Some("monthly"));
+        assert_eq!(*ALERT_LEVELS.get(&key_id).unwrap(), 3);
+
+        // Reset and verify re-alerting works.
+        reset_alert_level(key_id);
+        maybe_fire_spend_alert(key_id, "sk-vktest", 80.0, 100.0, Some("monthly"));
+        assert_eq!(*ALERT_LEVELS.get(&key_id).unwrap(), 1);
+
+        // Clean up.
+        ALERT_LEVELS.remove(&key_id);
     }
 }

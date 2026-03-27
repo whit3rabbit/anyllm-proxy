@@ -37,6 +37,8 @@ pub struct VirtualKeyContext {
     /// Database row ID for the virtual key (used for cost accumulation).
     pub(crate) key_id: i64,
     pub(crate) rate_state: Arc<RateLimitState>,
+    /// Optional model allowlist from the virtual key policy.
+    pub(crate) allowed_models: Option<Vec<String>>,
 }
 
 /// Controls which authentication paths are active.
@@ -337,6 +339,7 @@ pub async fn validate_auth(
             request.extensions_mut().insert(VirtualKeyContext {
                 key_id: meta.id,
                 rate_state: meta.rate_state.clone(),
+                allowed_models: meta.allowed_models.clone(),
             });
 
             tracing::debug!(

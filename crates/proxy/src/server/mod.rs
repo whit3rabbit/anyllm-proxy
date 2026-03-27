@@ -12,6 +12,8 @@ pub mod middleware;
 pub mod oidc;
 /// Anthropic passthrough handler (no translation, forwards as-is).
 mod passthrough;
+/// Per-key request policy enforcement (model allowlists).
+pub mod policy;
 /// Axum router setup and request handlers for all API endpoints.
 pub mod routes;
 /// SSE response helpers for Anthropic-format streaming.

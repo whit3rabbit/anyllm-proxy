@@ -93,6 +93,7 @@ mod tests {
                 role: "developer",
                 max_budget_usd: Some(100.0),
                 budget_duration: None,
+                allowed_models: None,
             },
         )
         .unwrap();

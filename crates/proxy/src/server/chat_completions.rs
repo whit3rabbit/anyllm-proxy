@@ -87,6 +87,17 @@ pub(crate) async fn chat_completions(
     };
     state.metrics.record_request();
 
+    // Enforce model allowlist policy for virtual keys.
+    if let Some(ref ctx) = vk_ctx {
+        if !crate::server::policy::is_model_allowed(&body.model, &ctx.allowed_models) {
+            return openai_error_response(
+                &format!("Model '{}' is not allowed for this API key.", body.model),
+                "permission_error",
+                axum::http::StatusCode::FORBIDDEN,
+            );
+        }
+    }
+
     // Translate OpenAI request -> Anthropic request
     let mut warnings = TranslationWarnings::default();
     let anthropic_req = match translate_openai_to_anthropic_request(&body, &mut warnings) {

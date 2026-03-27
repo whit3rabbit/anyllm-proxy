@@ -277,6 +277,7 @@ async fn main() {
                                     .and_then(admin::keys::BudgetDuration::parse),
                                 period_start: key_row.period_start.clone(),
                                 period_spend_usd: key_row.period_spend_usd,
+                                allowed_models: key_row.allowed_models.clone(),
                             },
                         );
                     }

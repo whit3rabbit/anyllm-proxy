@@ -64,6 +64,17 @@ pub fn init_db(conn: &Connection) -> rusqlite::Result<()> {
         );
         CREATE INDEX IF NOT EXISTS idx_vak_hash ON virtual_api_key(key_hash);
 
+        CREATE TABLE IF NOT EXISTS audit_log (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp   TEXT NOT NULL,
+            action      TEXT NOT NULL,
+            target_type TEXT NOT NULL,
+            target_id   TEXT,
+            detail      TEXT,
+            source_ip   TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp ON audit_log(timestamp);
+
         CREATE TABLE IF NOT EXISTS batch_file (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             file_id     TEXT NOT NULL UNIQUE,
@@ -107,6 +118,7 @@ pub fn init_db(conn: &Connection) -> rusqlite::Result<()> {
         "ALTER TABLE virtual_api_key ADD COLUMN period_spend_usd REAL NOT NULL DEFAULT 0.0",
         "ALTER TABLE virtual_api_key ADD COLUMN total_input_tokens INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE virtual_api_key ADD COLUMN total_output_tokens INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE virtual_api_key ADD COLUMN allowed_models TEXT",
     ];
     for stmt in &migration_stmts {
         idempotent_add_column(conn, stmt)?;
@@ -432,6 +444,7 @@ pub struct InsertVirtualKeyParams<'a> {
     pub role: &'a str,
     pub max_budget_usd: Option<f64>,
     pub budget_duration: Option<&'a str>,
+    pub allowed_models: Option<String>,
 }
 
 /// Insert a new virtual API key.
@@ -439,8 +452,9 @@ pub fn insert_virtual_key(conn: &Connection, p: &InsertVirtualKeyParams) -> rusq
     let now = now_iso8601();
     conn.execute(
         "INSERT INTO virtual_api_key (key_hash, key_prefix, description, created_at, expires_at, \
-         rpm_limit, tpm_limit, spend_limit, role, max_budget_usd, budget_duration, period_start)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+         rpm_limit, tpm_limit, spend_limit, role, max_budget_usd, budget_duration, period_start, \
+         allowed_models)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
         params![
             p.key_hash,
             p.key_prefix,
@@ -455,6 +469,7 @@ pub fn insert_virtual_key(conn: &Connection, p: &InsertVirtualKeyParams) -> rusq
             p.budget_duration,
             // Set period_start to now if budget_duration is set
             p.budget_duration.map(|_| &now),
+            p.allowed_models,
         ],
     )?;
     Ok(conn.last_insert_rowid())
@@ -485,6 +500,10 @@ fn row_to_virtual_key(row: &rusqlite::Row) -> rusqlite::Result<VirtualKeyRow> {
         period_spend_usd: row.get::<_, f64>(17).unwrap_or(0.0),
         total_input_tokens: row.get::<_, i64>(18).unwrap_or(0),
         total_output_tokens: row.get::<_, i64>(19).unwrap_or(0),
+        allowed_models: row
+            .get::<_, Option<String>>(20)
+            .unwrap_or(None)
+            .and_then(|s| serde_json::from_str(&s).ok()),
     })
 }
 
@@ -492,7 +511,7 @@ const VIRTUAL_KEY_COLUMNS: &str =
     "id, key_hash, key_prefix, description, created_at, expires_at, revoked_at, \
      rpm_limit, tpm_limit, spend_limit, total_spend, total_requests, total_tokens, \
      role, max_budget_usd, budget_duration, period_start, period_spend_usd, \
-     total_input_tokens, total_output_tokens";
+     total_input_tokens, total_output_tokens, allowed_models";
 
 /// List all virtual keys (active, expired, revoked).
 pub fn list_virtual_keys(conn: &Connection) -> rusqlite::Result<Vec<VirtualKeyRow>> {
@@ -526,6 +545,67 @@ pub fn load_active_virtual_keys(conn: &Connection) -> rusqlite::Result<Vec<Virtu
     );
     let mut stmt = conn.prepare(&sql)?;
     let rows = stmt.query_map(params![now], row_to_virtual_key)?;
+    rows.collect()
+}
+
+// --- Audit Log ---
+
+/// A single audit log entry recording an admin mutation.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AuditEntry {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timestamp: Option<String>,
+    pub action: String,
+    pub target_type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_ip: Option<String>,
+}
+
+/// Insert an audit log entry with current UTC timestamp.
+pub fn insert_audit_entry(conn: &Connection, entry: &AuditEntry) -> rusqlite::Result<()> {
+    let ts = chrono_now();
+    conn.execute(
+        "INSERT INTO audit_log (timestamp, action, target_type, target_id, detail, source_ip)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        params![
+            ts,
+            entry.action,
+            entry.target_type,
+            entry.target_id,
+            entry.detail,
+            entry.source_ip,
+        ],
+    )?;
+    Ok(())
+}
+
+/// Query the audit log, returning entries in reverse chronological order.
+pub fn query_audit_log(
+    conn: &Connection,
+    limit: u32,
+    offset: u32,
+) -> rusqlite::Result<Vec<AuditEntry>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, timestamp, action, target_type, target_id, detail, source_ip
+         FROM audit_log ORDER BY id DESC LIMIT ?1 OFFSET ?2",
+    )?;
+    let rows = stmt.query_map(params![limit, offset], |row| {
+        Ok(AuditEntry {
+            id: Some(row.get(0)?),
+            timestamp: Some(row.get(1)?),
+            action: row.get(2)?,
+            target_type: row.get(3)?,
+            target_id: row.get(4)?,
+            detail: row.get(5)?,
+            source_ip: row.get(6)?,
+        })
+    })?;
     rows.collect()
 }
 
@@ -758,5 +838,78 @@ mod tests {
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].key_id, None);
         assert_eq!(results[0].cost_usd, None);
+    }
+
+    #[test]
+    fn audit_log_insert_and_query() {
+        let conn = in_memory_db();
+        let entry1 = AuditEntry {
+            id: None,
+            timestamp: None,
+            action: "key_created".into(),
+            target_type: "virtual_key".into(),
+            target_id: Some("42".into()),
+            detail: Some("description=test key, prefix=sk-vk-abc".into()),
+            source_ip: Some("127.0.0.1".into()),
+        };
+        let entry2 = AuditEntry {
+            id: None,
+            timestamp: None,
+            action: "key_revoked".into(),
+            target_type: "virtual_key".into(),
+            target_id: Some("42".into()),
+            detail: None,
+            source_ip: None,
+        };
+        insert_audit_entry(&conn, &entry1).unwrap();
+        insert_audit_entry(&conn, &entry2).unwrap();
+
+        let results = query_audit_log(&conn, 50, 0).unwrap();
+        assert_eq!(results.len(), 2);
+        // Reverse chronological: most recent first.
+        assert_eq!(results[0].action, "key_revoked");
+        assert_eq!(results[1].action, "key_created");
+        assert!(results[0].id.unwrap() > results[1].id.unwrap());
+        // Timestamps are filled in by the insert function.
+        assert!(results[0].timestamp.is_some());
+        assert_eq!(results[1].target_id.as_deref(), Some("42"));
+        assert_eq!(
+            results[1].detail.as_deref(),
+            Some("description=test key, prefix=sk-vk-abc")
+        );
+        assert_eq!(results[1].source_ip.as_deref(), Some("127.0.0.1"));
+    }
+
+    #[test]
+    fn audit_log_empty_returns_empty_vec() {
+        let conn = in_memory_db();
+        let results = query_audit_log(&conn, 50, 0).unwrap();
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn audit_log_pagination() {
+        let conn = in_memory_db();
+        for i in 0..5 {
+            insert_audit_entry(
+                &conn,
+                &AuditEntry {
+                    id: None,
+                    timestamp: None,
+                    action: format!("action_{i}"),
+                    target_type: "test".into(),
+                    target_id: None,
+                    detail: None,
+                    source_ip: None,
+                },
+            )
+            .unwrap();
+        }
+        let page1 = query_audit_log(&conn, 2, 0).unwrap();
+        assert_eq!(page1.len(), 2);
+        let page2 = query_audit_log(&conn, 2, 2).unwrap();
+        assert_eq!(page2.len(), 2);
+        let page3 = query_audit_log(&conn, 2, 4).unwrap();
+        assert_eq!(page3.len(), 1);
     }
 }

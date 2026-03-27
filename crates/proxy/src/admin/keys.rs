@@ -113,6 +113,9 @@ pub struct VirtualKeyMeta {
     pub period_start: Option<String>,
     /// Accumulated spend in the current period.
     pub period_spend_usd: f64,
+    /// Optional model allowlist. None = all models allowed.
+    /// Supports exact match and prefix wildcard (e.g., `"claude-*"`).
+    pub allowed_models: Option<Vec<String>>,
 }
 
 /// Sliding window rate limit state per virtual key.
@@ -303,6 +306,7 @@ pub struct VirtualKeyRow {
     pub period_spend_usd: f64,
     pub total_input_tokens: i64,
     pub total_output_tokens: i64,
+    pub allowed_models: Option<Vec<String>>,
 }
 
 impl VirtualKeyRow {
@@ -470,6 +474,7 @@ mod tests {
             budget_duration: None, // lifetime, no reset
             period_start: Some("2020-01-01T00:00:00Z".to_string()),
             period_spend_usd: 5.0,
+            allowed_models: None,
         };
         // No reset because no duration
         assert!(!check_and_reset_period(&mut meta));
@@ -490,6 +495,7 @@ mod tests {
             budget_duration: Some(BudgetDuration::Daily),
             period_start: Some("2020-01-01T00:00:00Z".to_string()),
             period_spend_usd: 5.0,
+            allowed_models: None,
         };
         // Period start is in 2020, so it should reset
         assert!(check_and_reset_period(&mut meta));

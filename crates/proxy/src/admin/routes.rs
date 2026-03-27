@@ -99,6 +99,7 @@ pub fn admin_router(shared: SharedState, token: Arc<String>) -> Router {
         )
         .route("/admin/api/models", get(list_models).post(add_model))
         .route("/admin/api/models/{name}", delete(remove_model))
+        .route("/admin/api/audit", get(get_audit_log))
         .with_state(shared.clone())
         .layer(middleware::from_fn_with_state(
             token.clone(),
@@ -361,6 +362,18 @@ async fn put_config(
                 key: key.clone(),
                 value: value.clone(),
             });
+        emit_audit(
+            &shared,
+            crate::admin::db::AuditEntry {
+                id: None,
+                timestamp: None,
+                action: "config_changed".into(),
+                target_type: "config".into(),
+                target_id: Some(key.clone()),
+                detail: Some(format!("value={value}")),
+                source_ip: None,
+            },
+        );
     }
 
     (
@@ -407,6 +420,18 @@ async fn delete_config_override(
     .await
     {
         Some(Ok(true)) => {
+            emit_audit(
+                &shared,
+                crate::admin::db::AuditEntry {
+                    id: None,
+                    timestamp: None,
+                    action: "config_deleted".into(),
+                    target_type: "config".into(),
+                    target_id: Some(key.clone()),
+                    detail: None,
+                    source_ip: None,
+                },
+            );
             (StatusCode::OK, Json(serde_json::json!({"deleted": key}))).into_response()
         }
         Some(Ok(false)) => (
@@ -637,6 +662,7 @@ struct CreateKeyRequest {
     role: Option<String>,
     max_budget_usd: Option<f64>,
     budget_duration: Option<String>,
+    allowed_models: Option<Vec<String>>,
 }
 
 /// POST /admin/api/keys -- create a new virtual API key.
@@ -658,6 +684,10 @@ async fn create_key(
         let role_s = role_str.to_string();
         let max_budget = body.max_budget_usd;
         let budget_dur = body.budget_duration.clone();
+        let allowed_models_json = body
+            .allowed_models
+            .as_ref()
+            .and_then(|v| serde_json::to_string(v).ok());
         move |conn| {
             super::db::insert_virtual_key(
                 conn,
@@ -672,6 +702,7 @@ async fn create_key(
                     role: &role_s,
                     max_budget_usd: max_budget,
                     budget_duration: budget_dur.as_deref(),
+                    allowed_models: allowed_models_json,
                 },
             )
         }
@@ -698,9 +729,26 @@ async fn create_key(
                             .and_then(super::keys::BudgetDuration::parse),
                         period_start: Some(super::db::now_iso8601()),
                         period_spend_usd: 0.0,
+                        allowed_models: body.allowed_models.clone(),
                     },
                 );
             }
+            emit_audit(
+                &shared,
+                crate::admin::db::AuditEntry {
+                    id: None,
+                    timestamp: None,
+                    action: "key_created".into(),
+                    target_type: "virtual_key".into(),
+                    target_id: Some(id.to_string()),
+                    detail: Some(format!(
+                        "description={}, prefix={}",
+                        body.description.as_deref().unwrap_or(""),
+                        key_prefix
+                    )),
+                    source_ip: None,
+                },
+            );
             (
                 StatusCode::CREATED,
                 Json(serde_json::json!({
@@ -716,6 +764,7 @@ async fn create_key(
                     "role": role.as_str(),
                     "max_budget_usd": body.max_budget_usd,
                     "budget_duration": body.budget_duration,
+                    "allowed_models": body.allowed_models,
                 })),
             )
                 .into_response()
@@ -781,6 +830,18 @@ async fn revoke_key(
             if let Some(hash_bytes) = super::keys::hash_from_hex(&row.key_hash) {
                 shared.virtual_keys.remove(&hash_bytes);
             }
+            emit_audit(
+                &shared,
+                crate::admin::db::AuditEntry {
+                    id: None,
+                    timestamp: None,
+                    action: "key_revoked".into(),
+                    target_type: "virtual_key".into(),
+                    target_id: Some(id.to_string()),
+                    detail: None,
+                    source_ip: None,
+                },
+            );
             Json(serde_json::json!({
                 "id": row.id,
                 "revoked_at": row.revoked_at,
@@ -887,6 +948,22 @@ async fn add_model(
         "added model deployment via admin API"
     );
 
+    emit_audit(
+        &shared,
+        crate::admin::db::AuditEntry {
+            id: None,
+            timestamp: None,
+            action: "model_added".into(),
+            target_type: "model".into(),
+            target_id: Some(body.model_name.clone()),
+            detail: Some(format!(
+                "backend={}, actual_model={}",
+                body.backend_name, body.actual_model
+            )),
+            source_ip: None,
+        },
+    );
+
     (
         StatusCode::CREATED,
         Json(serde_json::json!({
@@ -915,6 +992,18 @@ async fn remove_model(
     let mut router = router_lock.write().unwrap_or_else(|e| e.into_inner());
     if router.remove_model(&name) {
         tracing::info!(model_name = %name, "removed model via admin API");
+        emit_audit(
+            &shared,
+            crate::admin::db::AuditEntry {
+                id: None,
+                timestamp: None,
+                action: "model_removed".into(),
+                target_type: "model".into(),
+                target_id: Some(name.clone()),
+                detail: None,
+                source_ip: None,
+            },
+        );
         (
             StatusCode::OK,
             Json(serde_json::json!({"status": "removed", "model_name": name})),
@@ -927,6 +1016,56 @@ async fn remove_model(
         )
             .into_response()
     }
+}
+
+// --- Audit log ---
+
+#[derive(serde::Deserialize)]
+struct AuditQuery {
+    limit: Option<u32>,
+    offset: Option<u32>,
+}
+
+/// GET /admin/api/audit -- paginated audit log.
+async fn get_audit_log(
+    State(shared): State<SharedState>,
+    Query(params): Query<AuditQuery>,
+) -> Json<serde_json::Value> {
+    let limit = params.limit.unwrap_or(50).min(1000);
+    let offset = params.offset.unwrap_or(0);
+    match crate::admin::state::with_db(&shared.db, move |conn| {
+        crate::admin::db::query_audit_log(conn, limit, offset)
+    })
+    .await
+    {
+        Some(Ok(entries)) => Json(serde_json::json!({
+            "entries": entries,
+            "limit": limit,
+            "offset": offset,
+        })),
+        Some(Err(e)) => {
+            tracing::error!(error = %e, "query_audit_log failed");
+            Json(serde_json::json!({
+                "error": "internal database error",
+                "entries": [],
+            }))
+        }
+        None => Json(serde_json::json!({
+            "error": "task panicked",
+            "entries": [],
+        })),
+    }
+}
+
+/// Fire-and-forget audit log write. Failures are logged but never block the caller.
+fn emit_audit(shared: &SharedState, entry: crate::admin::db::AuditEntry) {
+    let db = shared.db.clone();
+    tokio::task::spawn_blocking(move || {
+        let conn = db.lock().unwrap_or_else(|e| e.into_inner());
+        if let Err(e) = crate::admin::db::insert_audit_entry(&conn, &entry) {
+            tracing::warn!(error = %e, action = %entry.action, "failed to write audit log");
+        }
+    });
 }
 
 #[cfg(test)]
