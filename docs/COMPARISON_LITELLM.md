@@ -17,17 +17,18 @@ These are different categories; not every gap is worth closing.
 | `POST /v1/chat/completions` input | Yes (full, streaming + non-streaming) | Yes | **Parity** |
 | `POST /v1/embeddings` | Passthrough (OpenAI/Azure/Vertex/Gemini/vLLM) | Yes | **Parity** |
 | Virtual key management | Yes (SQLite-backed, immediate revocation) | Yes | **Parity** |
-| Per-key rate limiting (RPM/TPM) | Yes (in-memory sliding window) | Yes | **Parity** |
+| Per-key rate limiting (RPM/TPM) | Yes (in-memory + optional Redis distributed) | Yes | **Parity** |
 | OpenTelemetry export | Yes (feature-gated, OTLP/HTTP) | 20+ integrations | Moderate gap |
 | Cost tracking / budget enforcement | Yes (per-key, model pricing DB) | Yes | **Parity** |
 | Response caching | Yes (in-memory moka, optional Redis) | Yes | **Parity** |
 | Batch processing | Yes (OpenAI/Azure delegation) | Yes | **Parity** |
-| Load balancing / fallback chains | Yes (YAML config, 5xx/429 failover) | Full | Near parity |
-| Dynamic model management | Partial | Full | Moderate gap |
-| RBAC | Yes (admin/developer roles) | Yes (+ OIDC) | Near parity |
+| LiteLLM config.yaml compatibility | Yes (model_list, env var aliases) | N/A | **Advantage** |
+| Load balancing / fallback chains | Yes (round-robin + RPM-aware, failover chains) | Full | Near parity |
+| Dynamic model management | Yes (model_list routing, admin API overrides) | Full | Near parity |
+| RBAC | Yes (admin/developer roles, OIDC/JWT) | Yes (+ OIDC) | **Parity** |
 | Audio, image endpoints | Yes (passthrough) | Yes | **Parity** |
-| Semantic caching | Skeleton (qdrant feature flag) | Yes | Moderate gap |
-| Reranking endpoints | No | Yes | Low (out of scope) |
+| Semantic caching | Yes (Qdrant + embeddings, `--features qdrant`) | Yes | **Parity** |
+| Reranking endpoints | Passthrough | Yes | **Parity** |
 
 ---
 
@@ -48,48 +49,50 @@ anyllm-proxy accepts both **Anthropic-format** requests (`POST /v1/messages`) an
 
 `POST /v1/embeddings` is supported as a transparent passthrough: the raw request body is forwarded to the backend and the response is returned unchanged. Supported backends: OpenAI, Azure OpenAI, Vertex AI, Gemini, and vLLM/HuggingFace models. Not mounted for the Anthropic passthrough or Bedrock backends.
 
-Missing endpoints:
-- `POST /v1/completions` — Legacy text completions
-- `POST /v1/rerank` — Reranking (Cohere, etc.)
-
-Newly added passthrough endpoints (no translation, forwarded to backend unchanged):
+Passthrough endpoints (no translation, forwarded to backend unchanged):
 - `POST /v1/images/generations` — DALL-E, Imagen, etc.
 - `POST /v1/audio/transcriptions` — Whisper / speech-to-text
 - `POST /v1/audio/speech` — TTS
 - `POST /v1/files` + `POST /v1/batches` + `GET /v1/batches/{id}` — Batch processing (OpenAI/Azure backends)
 
+Passthrough endpoints (forwarded to backend unchanged):
+- `POST /v1/rerank` — Reranking (Cohere, etc.)
+- `POST /v1/completions` — Legacy text completions
+
 ### 3. Authentication & Authorization
 
 anyllm-proxy supports both static keys (`PROXY_API_KEYS` env var) and dynamic virtual keys managed via the admin API (`POST /admin/api/keys`). Virtual keys are stored in SQLite, cached in memory, and revocation takes effect immediately without restart. Per-key RPM rate limiting is enforced in the auth middleware.
 
-anyllm-proxy now also provides:
+anyllm-proxy also provides:
 - RBAC roles (admin, developer) enforced in auth middleware
 - Per-key budget enforcement with daily/monthly period reset
 - Developer keys blocked from admin endpoints (403)
+- OIDC/JWT authentication (optional, via `OIDC_ISSUER_URL`): validates JWTs against JWKS with background key refresh
 
 LiteLLM additionally provides:
-- OIDC/JWT validation
 - IP allowlisting
 - Read-only role
 
 ### 4. Load Balancing & Routing
 
-anyllm-proxy supports multiple named backends via `PROXY_CONFIG` TOML and backend failover chains via `FALLBACK_CONFIG` YAML. When the primary backend returns 5xx, 429, or connection errors, the proxy silently retries against configured fallback backends. There is no load balancing between multiple instances of the same backend.
+anyllm-proxy supports multiple named backends via `PROXY_CONFIG` TOML, backend failover chains via `FALLBACK_CONFIG` YAML, and LiteLLM-compatible `model_list` routing via `PROXY_CONFIG=config.yaml`. When using a LiteLLM config, multiple deployments of the same model name are load-balanced with round-robin, skipping deployments at their RPM limit. Failover chains retry against configured backends on 5xx, 429, or connection errors.
 
 LiteLLM supports:
 - Random shuffle, least-busy, latency-based, cost-based, and weighted routing
 - Cross-provider fallback chains (retry on a different provider on failure)
 - Redis-backed distributed state for multi-instance deployments
 
+Not yet in anyllm-proxy: latency-based, cost-based, and weighted routing strategies.
+
 ### 5. Caching
 
-anyllm-proxy supports in-memory response caching (moka, configurable TTL and capacity) with optional Redis tier (`--features redis`). Per-request `cache_ttl_secs` override supported. `x-anyllm-cache` header reports hit/miss/bypass. Semantic caching via Qdrant is available as a skeleton behind `--features qdrant`.
+anyllm-proxy supports in-memory response caching (moka, configurable TTL and capacity) with optional Redis L2 tier (`--features redis`, SETEX-based with per-entry TTL). Per-request `cache_ttl_secs` override supported. `x-anyllm-cache` header reports hit/miss/bypass/semantic-hit. Semantic caching via Qdrant (`--features qdrant`) uses embedding-based similarity search: requests are embedded via the backend's embeddings endpoint, stored in Qdrant with cosine similarity, and matched against a configurable threshold (default 0.95). Collection auto-creation on first use.
 
 LiteLLM supports in-memory, Redis, semantic (Qdrant/Redis), S3, and GCS caches with per-request TTL control.
 
 ### 6. Rate Limiting
 
-anyllm-proxy enforces a global concurrency limit (default 100 concurrent requests) and per-key RPM limits via virtual keys (in-memory sliding window, no external dependencies). Upstream 429s are passed through. TPM tracking is recorded per-key for reporting.
+anyllm-proxy enforces a global concurrency limit (default 100 concurrent requests) and per-key RPM/TPM limits via virtual keys (in-memory sliding window). With `--features redis` and `REDIS_URL`, rate limiting is distributed across instances using Redis sorted sets with atomic Lua scripts. On Redis failure, each instance falls back to local-only limiting. Upstream 429s are passed through.
 
 LiteLLM enforces RPM and TPM limits per key, user, and team, with Redis-backed distributed tracking.
 
@@ -114,7 +117,10 @@ Not present in LiteLLM: `x-anyllm-degradation` per-request degradation signaling
 
 ### 9. Model Management
 
-anyllm-proxy maps Haiku requests to `small_model` and Opus/Sonnet to `big_model`. Overrides persist to SQLite via the admin API.
+anyllm-proxy supports two model routing modes:
+
+1. **Simple mapping (TOML/env vars):** Maps Haiku requests to `small_model` and Opus/Sonnet to `big_model`. Overrides persist to SQLite via the admin API.
+2. **LiteLLM model_list (YAML config):** Arbitrary model names routed to specific provider/model combinations. Multiple deployments per model name with per-deployment RPM/TPM limits and round-robin load balancing.
 
 The `/v1/models` response is a hardcoded list of 13 Claude model IDs with no context window or pricing metadata.
 
@@ -134,7 +140,7 @@ LiteLLM uses a full relational database (configurable backend) for key/user/team
 
 ---
 
-## Completed Items (this release)
+## Completed Items
 
 1. **`POST /v1/chat/completions`** -- Accept OpenAI-format input (streaming + non-streaming)
 2. **AWS Bedrock backend** -- SigV4 auth, InvokeModel + InvokeModelWithResponseStream
@@ -144,9 +150,6 @@ LiteLLM uses a full relational database (configurable backend) for key/user/team
 6. **OpenTelemetry export** -- Feature-gated OTLP/HTTP, spans to any collector
 7. **Rust client SDK v0.2.0** -- ClientBuilder, ToolBuilder, typed streaming
 8. **`POST /v1/embeddings` passthrough** -- Transparent forwarding to OpenAI, Azure, Vertex, Gemini, and vLLM/HuggingFace backends; not mounted for Anthropic passthrough or Bedrock
-
-## Completed Items (001-litellm-parity)
-
 9. **Response caching** -- In-memory (moka) with optional Redis tier, per-request TTL, `x-anyllm-cache` header
 10. **Backend fallback chains** -- YAML config, 5xx/429/connection-error failover, `x-anyllm-fallback-exhausted` header
 11. **Batch processing** -- JSONL upload, batch create/poll/list, delegated to OpenAI/Azure backends
@@ -156,11 +159,18 @@ LiteLLM uses a full relational database (configurable backend) for key/user/team
 15. **Audio passthrough** -- Transcription and text-to-speech endpoints
 16. **Image passthrough** -- Image generation endpoint
 17. **Semantic caching skeleton** -- Qdrant-backed, behind `--features qdrant` feature flag
+18. **Reranking passthrough** -- `POST /v1/rerank` forwarded to backend unchanged
+19. **Legacy text completions passthrough** -- `POST /v1/completions` forwarded to backend unchanged
+20. **OIDC/JWT authentication** -- Optional JWT validation via OIDC discovery, JWKS caching with background refresh
+21. **Distributed rate limiting** -- Redis sorted sets with Lua scripts, fail-open fallback to local
+22. **Redis L2 cache** -- SETEX-based response cache behind `--features redis`
+23. **Semantic caching** -- Qdrant-backed embedding similarity search with collection auto-creation
+24. **LiteLLM config.yaml compatibility** -- Accept LiteLLM config.yaml directly (`PROXY_CONFIG=config.yaml`), parse `model_list` with `provider/model` format, `os.environ/VAR` syntax, env var aliases (`LITELLM_MASTER_KEY`, `AZURE_API_KEY`, `AZURE_API_BASE`, `LITELLM_CONFIG`)
+25. **Model-level routing** -- Round-robin + RPM-aware routing across multiple deployments per model name, cross-backend dispatch, lock-free atomic counters
 
 ## Remaining Gaps
 
-- OIDC/JWT authentication
-- Reranking endpoint (`POST /v1/rerank`)
-- Legacy text completions (`POST /v1/completions`)
-- Multi-instance distributed rate limiting (Redis-backed)
-- Full semantic caching implementation (embedding + vector search)
+- **Routing strategies:** Only round-robin + RPM-aware skip. LiteLLM also supports least-busy, latency-based, cost-based, and weighted routing.
+- **Dynamic model addition via API:** Models are defined at startup via config file. LiteLLM supports adding/removing models without restart.
+- **`/v1/models` enrichment:** Does not yet include models from model_list in the response.
+- **LiteLLM callbacks:** `litellm_settings.callbacks` (Langfuse, DataDog, etc.) are not mapped.

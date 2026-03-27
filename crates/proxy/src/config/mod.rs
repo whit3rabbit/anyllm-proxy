@@ -1,3 +1,6 @@
+pub mod env_aliases;
+pub mod litellm;
+pub mod model_router;
 mod tls;
 mod url_validation;
 
@@ -7,6 +10,7 @@ pub use url_validation::{is_private_ip, validate_base_url};
 use indexmap::IndexMap;
 use serde::Deserialize;
 use std::fmt;
+use std::sync::Arc;
 
 /// Path suffix appended to Gemini base URL to reach its OpenAI-compatible endpoint.
 const GEMINI_OPENAI_PATH: &str = "/openai";
@@ -379,6 +383,10 @@ pub fn resolve_env_value(value: &str) -> Result<String, String> {
     if let Some(var_name) = value.strip_prefix("env:") {
         std::env::var(var_name)
             .map_err(|_| format!("env var '{var_name}' referenced in config is not set"))
+    } else if let Some(var_name) = value.strip_prefix("os.environ/") {
+        // LiteLLM-compatible syntax: "os.environ/VAR_NAME"
+        std::env::var(var_name)
+            .map_err(|_| format!("env var '{var_name}' (os.environ/ syntax) is not set"))
     } else {
         Ok(value.to_string())
     }
@@ -462,13 +470,26 @@ struct TomlBackendConfig {
 }
 
 impl MultiConfig {
-    /// Load configuration. If `PROXY_CONFIG` env var is set, parse the TOML file.
-    /// Otherwise, fall back to existing env-var-based single-backend config.
-    pub fn load() -> Self {
+    /// Load configuration.
+    ///
+    /// Detection order:
+    /// 1. `PROXY_CONFIG` with `.yaml`/`.yml` extension: parse as LiteLLM config
+    /// 2. `PROXY_CONFIG` with any other extension: parse as TOML
+    /// 3. No `PROXY_CONFIG`: env-var-based single-backend config
+    ///
+    /// Returns `(MultiConfig, Option<ModelRouter>)`. The router is only set
+    /// for LiteLLM configs (model_list routing).
+    pub fn load() -> (Self, Option<Arc<model_router::ModelRouter>>) {
         if let Ok(path) = std::env::var("PROXY_CONFIG") {
-            Self::from_toml_file(&path)
+            if path.ends_with(".yaml") || path.ends_with(".yml") {
+                let yaml = std::fs::read_to_string(&path)
+                    .unwrap_or_else(|e| panic!("failed to read LiteLLM config '{path}': {e}"));
+                let (mc, router) = litellm::from_litellm_yaml(&yaml);
+                return (mc, Some(router));
+            }
+            (Self::from_toml_file(&path), None)
         } else {
-            Self::from_legacy_env()
+            (Self::from_legacy_env(), None)
         }
     }
 

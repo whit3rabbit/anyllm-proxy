@@ -46,6 +46,16 @@ where
     }
 }
 
+/// Result of resolving a model name through the model router.
+pub(crate) enum ResolvedModel {
+    /// Routed via model_list to a specific backend and actual model name.
+    Routed { backend_name: String, model: String },
+    /// Model is known but all deployments are at their RPM limit.
+    AllAtLimit,
+    /// No model router, or model not in router. Used legacy ModelMapping.
+    Legacy(String),
+}
+
 /// Per-backend state shared across request handlers.
 ///
 /// In single-backend mode, one `AppState` serves all routes. In multi-backend mode,
@@ -69,6 +79,10 @@ pub struct AppState {
     pub omit_stream_options: bool,
     /// Optional response cache for non-streaming requests.
     pub cache: Option<Arc<crate::cache::memory::MemoryCache>>,
+    /// Model-level router for LiteLLM model_list configs. None for TOML/env configs.
+    pub model_router: Option<Arc<crate::config::model_router::ModelRouter>>,
+    /// All backend states, for cross-backend model routing. None unless model_router is set.
+    pub all_backends: Option<Arc<HashMap<String, AppState>>>,
 }
 
 impl AppState {
@@ -82,6 +96,55 @@ impl AppState {
             mapping.map_model(model)
         } else {
             model.to_string()
+        }
+    }
+
+    /// Resolve a model name through the model router (if set) or fall back to ModelMapping.
+    pub(crate) fn resolve_model(&self, model: &str) -> ResolvedModel {
+        if let Some(ref router) = self.model_router {
+            if let Some(routed) = router.route(model) {
+                return ResolvedModel::Routed {
+                    backend_name: routed.backend_name.to_string(),
+                    model: routed.actual_model.to_string(),
+                };
+            }
+            if router.has_model(model) {
+                return ResolvedModel::AllAtLimit;
+            }
+        }
+        ResolvedModel::Legacy(self.map_model(model))
+    }
+
+    /// Resolve model and return (mapped_model, effective AppState).
+    /// If the model routes to a different backend, the returned state is cloned from
+    /// all_backends. Returns Err with a 429 response if all deployments are at limit.
+    #[allow(clippy::result_large_err)]
+    pub(crate) fn resolve_model_and_state(
+        &self,
+        model: &str,
+    ) -> Result<(String, AppState), Response> {
+        match self.resolve_model(model) {
+            ResolvedModel::Routed {
+                backend_name,
+                model: mapped,
+            } => {
+                let effective = self
+                    .all_backends
+                    .as_ref()
+                    .and_then(|m| m.get(&backend_name))
+                    .cloned()
+                    .unwrap_or_else(|| self.clone());
+                Ok((mapped, effective))
+            }
+            ResolvedModel::AllAtLimit => {
+                let err = mapping::errors_map::create_anthropic_error(
+                    anthropic::ErrorType::RateLimitError,
+                    "all deployments for this model are at their RPM limit".to_string(),
+                    None,
+                );
+                Err((StatusCode::TOO_MANY_REQUESTS, Json(err)).into_response())
+            }
+            ResolvedModel::Legacy(mapped) => Ok((mapped, self.clone())),
         }
     }
 
@@ -109,11 +172,15 @@ pub fn app(config: Config) -> Router {
 /// Build the axum router from multi-backend configuration.
 /// Creates nested sub-routers for each configured backend.
 pub fn app_multi(config: MultiConfig) -> Router {
-    app_multi_with_shared(config, None)
+    app_multi_with_shared(config, None, None)
 }
 
-/// Build the axum router with optional shared admin state.
-pub fn app_multi_with_shared(config: MultiConfig, shared: Option<SharedState>) -> Router {
+/// Build the axum router with optional shared admin state and model router.
+pub fn app_multi_with_shared(
+    config: MultiConfig,
+    shared: Option<SharedState>,
+    model_router: Option<Arc<crate::config::model_router::ModelRouter>>,
+) -> Router {
     let mut backend_metrics: HashMap<String, Metrics> = HashMap::new();
     let mut router = Router::new();
 
@@ -152,6 +219,9 @@ pub fn app_multi_with_shared(config: MultiConfig, shared: Option<SharedState>) -
             concurrency: Arc::new(Semaphore::new(super::middleware::MAX_CONCURRENT_REQUESTS)),
             omit_stream_options: bc.omit_stream_options,
             cache: Some(response_cache.clone()),
+            model_router: model_router.clone(),
+            // all_backends is set after the loop (needs all states built first).
+            all_backends: None,
         };
 
         let mode = match bc.kind {
@@ -164,6 +234,24 @@ pub fn app_multi_with_shared(config: MultiConfig, shared: Option<SharedState>) -
 
         // Nest under /{name}/
         router = router.nest(&format!("/{name}"), sub);
+    }
+
+    // If a model router is active, build the all_backends map so handlers can
+    // dispatch to a different backend when the router says so.
+    if model_router.is_some() {
+        let all_map: Arc<HashMap<String, AppState>> = Arc::new(
+            backend_states
+                .iter()
+                .map(|(k, (s, _))| (k.clone(), s.clone()))
+                .collect(),
+        );
+        // Patch each AppState in the map. Since we already built sub-routers with
+        // the old states (all_backends=None), this only affects the default backend
+        // and cross-backend routing lookups via effective_state(). The sub-router
+        // states don't need all_backends because they are only reached by prefix.
+        for (_, (state, _)) in backend_states.iter_mut() {
+            state.all_backends = Some(all_map.clone());
+        }
     }
 
     // Default backend: also serve at un-prefixed /v1/messages for backward compat.
@@ -278,7 +366,9 @@ fn backend_router(state: AppState, mode: HandlerMode) -> Router<GlobalState> {
             .route(
                 "/v1/images/generations",
                 post(super::images::image_generations),
-            ),
+            )
+            .route("/v1/rerank", post(rerank))
+            .route("/v1/completions", post(completions)),
     };
 
     api_routes
@@ -437,28 +527,25 @@ pub(crate) fn inject_degradation_header(
     }
 }
 
-/// Embeddings passthrough: forwards OpenAI-format embedding requests directly to the backend.
-/// No translation needed — embedding model names pass through unchanged.
-/// Returns 501 for the Anthropic passthrough backend (no embeddings endpoint).
-async fn embeddings(
-    State(state): State<AppState>,
-    headers: axum::http::HeaderMap,
+/// Shared passthrough logic: extract content-type, forward to backend, relay response.
+async fn passthrough_to_backend(
+    state: &AppState,
+    headers: &axum::http::HeaderMap,
     body: axum::body::Bytes,
+    path: &str,
 ) -> Response {
     let content_type = headers
         .get(axum::http::header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
-        .unwrap_or("application/json")
-        .to_string();
+        .unwrap_or("application/json");
 
     match state
         .backend
-        .embeddings_passthrough(body, &content_type)
+        .raw_passthrough(path, body, content_type)
         .await
     {
         Ok((status, resp_headers, resp_body)) => {
             let mut response = (status, resp_body).into_response();
-            // Forward content-type from backend response
             for (k, v) in &resp_headers {
                 response.headers_mut().insert(k, v.clone());
             }
@@ -466,6 +553,30 @@ async fn embeddings(
         }
         Err(e) => backend_error_to_response(e),
     }
+}
+
+async fn embeddings(
+    State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
+    body: axum::body::Bytes,
+) -> Response {
+    passthrough_to_backend(&state, &headers, body, "/v1/embeddings").await
+}
+
+async fn rerank(
+    State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
+    body: axum::body::Bytes,
+) -> Response {
+    passthrough_to_backend(&state, &headers, body, "/v1/rerank").await
+}
+
+async fn completions(
+    State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
+    body: axum::body::Bytes,
+) -> Response {
+    passthrough_to_backend(&state, &headers, body, "/v1/completions").await
 }
 
 async fn messages(
@@ -508,9 +619,12 @@ async fn messages(
         if state.log_bodies() {
             tracing::debug!(model = %body.model, "streaming request initiated");
         }
-        let mapped_model = state.map_model(&body.model);
+        let (mapped_model, effective) = match state.resolve_model_and_state(&body.model) {
+            Ok(v) => v,
+            Err(resp) => return resp,
+        };
         // Logging deferred until stream completes (inside messages_stream tasks).
-        match messages_stream(state, body, ctx, mapped_model, permit).await {
+        match messages_stream(effective, body, ctx, mapped_model, permit).await {
             Ok((rate_limits, sse)) => {
                 let mut response = sse.into_response();
                 rate_limits.inject_anthropic_response_headers(response.headers_mut());
@@ -566,17 +680,23 @@ async fn messages(
         }
     }
 
-    match &state.backend {
+    // Resolve model routing (may switch to a different backend).
+    let (mapped_model, effective) = match state.resolve_model_and_state(&body.model) {
+        Ok(v) => v,
+        Err(resp) => return resp,
+    };
+
+    match &effective.backend {
         BackendClient::OpenAI(client)
         | BackendClient::AzureOpenAI(client)
         | BackendClient::Vertex(client)
         | BackendClient::GeminiOpenAI(client) => {
             let mut openai_req = mapping::message_map::anthropic_to_openai_request(&body);
-            inject_gemini_thinking(&body, &state.backend, &mut openai_req);
-            if state.omit_stream_options {
+            inject_gemini_thinking(&body, &effective.backend, &mut openai_req);
+            if effective.omit_stream_options {
                 openai_req.stream_options = None;
             }
-            openai_req.model = state.map_model(&openai_req.model);
+            openai_req.model = mapped_model.clone();
             let mapped_model = openai_req.model.clone();
             let original_model = body.model.clone();
 
@@ -646,7 +766,7 @@ async fn messages(
         BackendClient::OpenAIResponses(client) => {
             let mut responses_req =
                 mapping::responses_message_map::anthropic_to_responses_request(&body);
-            responses_req.model = state.map_model(&responses_req.model);
+            responses_req.model = mapped_model.clone();
             let mapped_model = responses_req.model.clone();
             let original_model = body.model.clone();
 

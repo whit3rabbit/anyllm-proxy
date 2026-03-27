@@ -46,7 +46,10 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer().json())
         .init();
 
-    let multi_config = config::MultiConfig::load();
+    // Apply LiteLLM env var aliases before loading config.
+    config::env_aliases::apply_env_aliases();
+
+    let (multi_config, model_router) = config::MultiConfig::load();
     let listen_port = multi_config.listen_port;
 
     tracing::info!(
@@ -54,6 +57,57 @@ async fn main() {
         default = %multi_config.default_backend,
         "configured backends"
     );
+
+    // OIDC/JWT authentication (optional). When OIDC_ISSUER_URL is set, discover
+    // the OIDC configuration and load JWKS. Tokens that look like JWTs are
+    // validated against the JWKS before falling through to key-based auth.
+    if let Ok(issuer_url) = std::env::var("OIDC_ISSUER_URL") {
+        let audience = std::env::var("OIDC_AUDIENCE").unwrap_or_else(|_| {
+            tracing::warn!(
+                "OIDC_ISSUER_URL is set but OIDC_AUDIENCE is not; using issuer URL as audience"
+            );
+            issuer_url.clone()
+        });
+        match anyllm_proxy::server::oidc::OidcConfig::discover(&issuer_url, &audience).await {
+            Ok(config) => {
+                let config = Arc::new(config);
+                anyllm_proxy::server::middleware::set_oidc_config(config.clone());
+                // Background task: refresh JWKS every 60 minutes.
+                tokio::spawn(async move {
+                    let mut interval = tokio::time::interval(std::time::Duration::from_secs(3600));
+                    interval.tick().await; // skip immediate tick
+                    loop {
+                        interval.tick().await;
+                        if let Err(e) = config.refresh_jwks().await {
+                            tracing::warn!("JWKS refresh failed: {e}");
+                        } else {
+                            tracing::debug!("JWKS refreshed successfully");
+                        }
+                    }
+                });
+                tracing::info!(issuer = %issuer_url, "OIDC/JWT authentication enabled");
+            }
+            Err(e) => {
+                tracing::error!("OIDC discovery failed: {e}. Starting without OIDC auth.");
+            }
+        }
+    }
+
+    // Redis distributed rate limiting (optional, requires --features redis).
+    // When REDIS_URL is set, RPM/TPM checks are performed against Redis so
+    // multiple proxy instances share rate limit state.
+    #[cfg(feature = "redis")]
+    if let Ok(redis_url) = std::env::var("REDIS_URL") {
+        match anyllm_proxy::ratelimit::RedisRateLimiter::new(&redis_url).await {
+            Ok(limiter) => {
+                anyllm_proxy::ratelimit::set_redis_rate_limiter(limiter);
+                tracing::info!("Redis distributed rate limiting enabled");
+            }
+            Err(e) => {
+                tracing::error!("Redis connection failed: {e}. Using local-only rate limiting.");
+            }
+        }
+    }
 
     // Admin web UI is opt-in: pass --webui or --admin to enable.
     // DISABLE_ADMIN=1 overrides the flag (useful in container/scripted environments).
@@ -310,6 +364,7 @@ async fn main() {
     let app = routes::app_multi_with_shared(
         multi_config,
         admin_parts.as_ref().map(|(s, _, _)| s.clone()),
+        model_router,
     );
 
     // --- Start servers ---

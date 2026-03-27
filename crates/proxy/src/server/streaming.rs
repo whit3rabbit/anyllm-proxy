@@ -174,7 +174,7 @@ pub(crate) async fn messages_stream(
             if state.omit_stream_options {
                 openai_req.stream_options = None;
             }
-            openai_req.model = state.map_model(&openai_req.model);
+            openai_req.model = mapped_model.clone();
             let model = body.model.clone();
             let permit = concurrency_permit.clone();
 
@@ -251,7 +251,7 @@ pub(crate) async fn messages_stream(
             let client = client.clone();
             let mut responses_req =
                 mapping::responses_message_map::anthropic_to_responses_request(&body);
-            responses_req.model = state.map_model(&responses_req.model);
+            responses_req.model = mapped_model.clone();
             responses_req.stream = Some(true);
             let model = body.model.clone();
             let permit = concurrency_permit;

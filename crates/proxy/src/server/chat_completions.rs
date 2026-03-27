@@ -155,18 +155,28 @@ pub(crate) async fn chat_completions(
         }
     }
 
+    // Resolve model routing (may switch to a different backend).
+    let (mapped_model, effective) = match state.resolve_model_and_state(&original_model) {
+        Ok(v) => v,
+        Err(resp) => return resp,
+    };
+
     // Non-streaming path
-    match &state.backend {
+    match &effective.backend {
         BackendClient::OpenAI(client)
         | BackendClient::AzureOpenAI(client)
         | BackendClient::Vertex(client)
         | BackendClient::GeminiOpenAI(client) => {
             let mut openai_req = mapping::message_map::anthropic_to_openai_request(&anthropic_req);
-            super::routes::inject_gemini_thinking(&anthropic_req, &state.backend, &mut openai_req);
-            if state.omit_stream_options {
+            super::routes::inject_gemini_thinking(
+                &anthropic_req,
+                &effective.backend,
+                &mut openai_req,
+            );
+            if effective.omit_stream_options {
                 openai_req.stream_options = None;
             }
-            openai_req.model = state.map_model(&openai_req.model);
+            openai_req.model = mapped_model.clone();
             let mapped_model = openai_req.model.clone();
 
             match client.chat_completion(&openai_req).await {
@@ -231,7 +241,7 @@ pub(crate) async fn chat_completions(
         BackendClient::OpenAIResponses(client) => {
             let mut responses_req =
                 mapping::responses_message_map::anthropic_to_responses_request(&anthropic_req);
-            responses_req.model = state.map_model(&responses_req.model);
+            responses_req.model = mapped_model.clone();
             let mapped_model = responses_req.model.clone();
 
             match client.responses(&responses_req).await {
@@ -315,18 +325,24 @@ async fn chat_completions_stream(
     warnings: TranslationWarnings,
     concurrency_permit: Option<ConcurrencyPermit>,
 ) -> Response {
+    // Resolve model routing (may switch to a different backend).
+    let (mapped_model_resolved, effective) = match state.resolve_model_and_state(&original_model) {
+        Ok(v) => v,
+        Err(resp) => return resp,
+    };
+
     // Translate to OpenAI format for the backend
     let mut openai_req = mapping::message_map::anthropic_to_openai_request(&anthropic_req);
-    super::routes::inject_gemini_thinking(&anthropic_req, &state.backend, &mut openai_req);
-    openai_req.model = state.map_model(&openai_req.model);
+    super::routes::inject_gemini_thinking(&anthropic_req, &effective.backend, &mut openai_req);
+    openai_req.model = mapped_model_resolved;
     openai_req.stream = Some(true);
-    if !state.omit_stream_options {
+    if !effective.omit_stream_options {
         openai_req.stream_options = Some(openai::StreamOptions {
             include_usage: true,
         });
     }
 
-    let client = match &state.backend {
+    let client = match &effective.backend {
         BackendClient::OpenAI(c)
         | BackendClient::AzureOpenAI(c)
         | BackendClient::Vertex(c)

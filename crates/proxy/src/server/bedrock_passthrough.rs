@@ -62,8 +62,19 @@ pub(crate) async fn bedrock_passthrough(State(state): State<AppState>, body: Byt
         return (StatusCode::BAD_REQUEST, Json(err)).into_response();
     }
 
-    // Map model name through runtime config
-    let mapped_model = state.map_model(&model_id);
+    // Map model name through model router or runtime config
+    let mapped_model = match state.resolve_model(&model_id) {
+        super::routes::ResolvedModel::Routed { model, .. } => model,
+        super::routes::ResolvedModel::AllAtLimit => {
+            let err = anyllm_translate::mapping::errors_map::create_anthropic_error(
+                anyllm_translate::anthropic::ErrorType::RateLimitError,
+                "all deployments for this model are at their RPM limit".to_string(),
+                None,
+            );
+            return (StatusCode::TOO_MANY_REQUESTS, Json(err)).into_response();
+        }
+        super::routes::ResolvedModel::Legacy(m) => m,
+    };
 
     let is_stream = parsed
         .get("stream")
