@@ -28,8 +28,10 @@ pub(crate) async fn count_tokens(
             // Token counts use o200k_base (GPT-4o) which may differ significantly
             // from the target model's tokenizer, especially for CJK text.
             resp.headers_mut().insert(
-                "x-token-count-warning",
-                axum::http::HeaderValue::from_static("approximate; uses o200k_base tokenizer"),
+                "x-anyllm-token-counter",
+                axum::http::HeaderValue::from_static(
+                    "approximate (tiktoken o200k_base); do not use for billing",
+                ),
             );
             resp
         }

@@ -17,9 +17,7 @@ async fn main() {
                 None
             }
         });
-    let env_file_vars = env_file_path
-        .map(parse_env_file)
-        .unwrap_or_default();
+    let env_file_vars = env_file_path.map(parse_env_file).unwrap_or_default();
 
     // ---- Phase 2: Apply env file vars (needed for RUST_LOG before tracing init) ----
     // SAFETY: single-threaded, before tokio spawns workers.

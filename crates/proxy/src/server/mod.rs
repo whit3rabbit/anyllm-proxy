@@ -8,6 +8,8 @@ mod chat_completions;
 pub mod images;
 /// Auth validation, request ID injection, size limits, concurrency limits, header logging.
 pub mod middleware;
+/// OIDC/JWT authentication (optional, enabled via OIDC_ISSUER_URL).
+pub mod oidc;
 /// Anthropic passthrough handler (no translation, forwards as-is).
 mod passthrough;
 /// Axum router setup and request handlers for all API endpoints.

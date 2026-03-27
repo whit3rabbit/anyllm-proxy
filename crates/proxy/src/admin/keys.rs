@@ -52,7 +52,7 @@ impl BudgetDuration {
 }
 
 /// Current time as milliseconds since the Unix epoch. Used for rate-limit sliding windows.
-pub(crate) fn now_ms() -> u64 {
+pub fn now_ms() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()

@@ -63,9 +63,9 @@ impl ModelPricing {
         }
 
         // 3. No match
-        tracing::warn!(
+        tracing::error!(
             model = model,
-            "no pricing entry found for model, cost set to 0.0"
+            "BILLING LEAK: no pricing entry found for model, cost set to 0.0"
         );
         0.0
     }

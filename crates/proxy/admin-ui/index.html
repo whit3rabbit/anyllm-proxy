@@ -122,9 +122,16 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
 (function() {
   'use strict';
 
-  var TOKEN = new URLSearchParams(window.location.search).get('token') || prompt('Enter admin token:');
+  var TOKEN = localStorage.getItem('admin_token');
+  if (!TOKEN) {
+    TOKEN = prompt('Enter admin token:');
+    if (TOKEN) {
+      localStorage.setItem('admin_token', TOKEN);
+    }
+  }
   if (!TOKEN) { document.body.textContent = 'No token provided'; return; }
-  // Strip token from URL to avoid leaking in browser history/server logs.
+  
+  // Clean URL just in case it was used previously
   if (window.location.search.indexOf('token=') !== -1) {
     window.history.replaceState({}, '', window.location.pathname);
   }

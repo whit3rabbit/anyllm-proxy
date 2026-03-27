@@ -259,7 +259,7 @@ pub mod eventstream {
         // Message CRC is the last 4 bytes
         let payload_end = total_len.saturating_sub(4);
 
-        if payload_start > payload_end || payload_end > total_len {
+        if payload_start > payload_end || payload_end > buf.len() {
             // Malformed frame: skip it
             let _ = buf.split_to(total_len);
             return Some(Vec::new());

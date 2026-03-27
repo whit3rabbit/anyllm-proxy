@@ -23,8 +23,8 @@ These are different categories; not every gap is worth closing.
 | Response caching | Yes (in-memory moka, optional Redis) | Yes | **Parity** |
 | Batch processing | Yes (OpenAI/Azure delegation) | Yes | **Parity** |
 | LiteLLM config.yaml compatibility | Yes (model_list, env var aliases) | N/A | **Advantage** |
-| Load balancing / fallback chains | Yes (round-robin + RPM-aware, failover chains) | Full | Near parity |
-| Dynamic model management | Yes (model_list routing, admin API overrides) | Full | Near parity |
+| Load balancing / fallback chains | Yes (round-robin, least-busy, latency-based, weighted, failover chains) | Full | **Parity** |
+| Dynamic model management | Yes (model_list routing, admin API add/remove at runtime) | Full | **Parity** |
 | RBAC | Yes (admin/developer roles, OIDC/JWT) | Yes (+ OIDC) | **Parity** |
 | Audio, image endpoints | Yes (passthrough) | Yes | **Parity** |
 | Semantic caching | Yes (Qdrant + embeddings, `--features qdrant`) | Yes | **Parity** |
@@ -107,21 +107,21 @@ anyllm-proxy also provides:
 - Per-key budget enforcement with daily/monthly period reset
 - Developer keys blocked from admin endpoints (403)
 - OIDC/JWT authentication (optional, via `OIDC_ISSUER_URL`): validates JWTs against JWKS with background key refresh
+- IP allowlisting (optional, via `IP_ALLOWLIST` env var with CIDR ranges, `X-Forwarded-For` support)
 
 LiteLLM additionally provides:
-- IP allowlisting
 - Read-only role
 
 ### 4. Load Balancing & Routing
 
-anyllm-proxy supports multiple named backends via `PROXY_CONFIG` TOML, backend failover chains via `FALLBACK_CONFIG` YAML, and LiteLLM-compatible `model_list` routing via `PROXY_CONFIG=config.yaml`. When using a LiteLLM config, multiple deployments of the same model name are load-balanced with round-robin, skipping deployments at their RPM limit. Failover chains retry against configured backends on 5xx, 429, or connection errors.
+anyllm-proxy supports multiple named backends via `PROXY_CONFIG` TOML, backend failover chains via `FALLBACK_CONFIG` YAML, and LiteLLM-compatible `model_list` routing via `PROXY_CONFIG=config.yaml`. When using a LiteLLM config, multiple deployments of the same model name are load-balanced with configurable strategy (round-robin, least-busy, latency-based, or weighted), skipping deployments at their RPM limit. Per-deployment in-flight and latency EWMA tracking enables intelligent routing. Failover chains retry against configured backends on 5xx, 429, or connection errors.
 
 LiteLLM supports:
 - Random shuffle, least-busy, latency-based, cost-based, and weighted routing
 - Cross-provider fallback chains (retry on a different provider on failure)
 - Redis-backed distributed state for multi-instance deployments
 
-Not yet in anyllm-proxy: latency-based, cost-based, and weighted routing strategies.
+Not yet in anyllm-proxy: cost-based routing strategy.
 
 ### 5. Caching
 
@@ -159,9 +159,11 @@ Not present in LiteLLM: `x-anyllm-degradation` per-request degradation signaling
 anyllm-proxy supports two model routing modes:
 
 1. **Simple mapping (TOML/env vars):** Maps Haiku requests to `small_model` and Opus/Sonnet to `big_model`. Overrides persist to SQLite via the admin API.
-2. **LiteLLM model_list (YAML config):** Arbitrary model names routed to specific provider/model combinations. Multiple deployments per model name with per-deployment RPM/TPM limits and round-robin load balancing.
+2. **LiteLLM model_list (YAML config):** Arbitrary model names routed to specific provider/model combinations. Multiple deployments per model name with per-deployment RPM/TPM limits and configurable routing strategy.
 
-The `/v1/models` response is a hardcoded list of 13 Claude model IDs with no context window or pricing metadata.
+Dynamic model management via admin API: `POST /admin/api/models` to add deployments, `DELETE /admin/api/models/{name}` to remove, `GET /admin/api/models` to list. Changes take effect immediately without restart.
+
+The `/v1/models` endpoint returns static Claude model IDs merged with models from the model_list config. Models added via admin API are also included.
 
 LiteLLM supports dynamic model addition and removal via API without restart, per-model pricing metadata, and enriched `/models` responses with token limits.
 
@@ -206,10 +208,13 @@ LiteLLM uses a full relational database (configurable backend) for key/user/team
 23. **Semantic caching** -- Qdrant-backed embedding similarity search with collection auto-creation
 24. **LiteLLM config.yaml compatibility** -- Accept LiteLLM config.yaml directly (`PROXY_CONFIG=config.yaml`), parse `model_list` with `provider/model` format, `os.environ/VAR` syntax, env var aliases (`LITELLM_MASTER_KEY`, `LITELLM_CONFIG`, `AZURE_API_KEY`, `AZURE_API_BASE`, `AZURE_API_VERSION`, `AWS_REGION_NAME`)
 25. **Model-level routing** -- Round-robin + RPM-aware routing across multiple deployments per model name, cross-backend dispatch, lock-free atomic counters
+26. **Advanced routing strategies** -- Least-busy (in-flight tracking), latency-based (EWMA), weighted round-robin; parsed from `router_settings.routing_strategy` in LiteLLM config
+27. **Dynamic model management** -- Admin API (`POST/DELETE/GET /admin/api/models`) for runtime add/remove of model deployments without restart
+28. **`/v1/models` enrichment** -- Endpoint merges static Claude models with model_list config entries and dynamically-added models
+29. **IP allowlisting** -- `IP_ALLOWLIST` env var with CIDR ranges, `X-Forwarded-For` support via `TRUST_PROXY_HEADERS`
+30. **Webhook callbacks** -- `litellm_settings.callbacks` webhook URLs and `WEBHOOK_URLS` env var; fire-and-forget POST on request completion
 
 ## Remaining Gaps
 
-- **Routing strategies:** Only round-robin + RPM-aware skip. LiteLLM also supports least-busy, latency-based, cost-based, and weighted routing.
-- **Dynamic model addition via API:** Models are defined at startup via config file. LiteLLM supports adding/removing models without restart.
-- **`/v1/models` enrichment:** Does not yet include models from model_list in the response.
-- **LiteLLM callbacks:** `litellm_settings.callbacks` (Langfuse, DataDog, etc.) are not mapped.
+- **Routing strategies (cost-based):** LiteLLM supports cost-based routing; anyllm-proxy does not yet (round-robin, least-busy, latency-based, and weighted are supported).
+- **LiteLLM named callbacks:** `litellm_settings.callbacks` entries like `"langfuse"` or `"datadog"` are not natively mapped (only webhook URLs are supported). Named integrations are logged as unsupported.

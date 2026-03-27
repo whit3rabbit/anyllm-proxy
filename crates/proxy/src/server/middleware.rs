@@ -339,7 +339,11 @@ pub async fn validate_auth(
                 rate_state: meta.rate_state.clone(),
             });
 
-            tracing::debug!(key_id = meta.id, auth_path = "virtual_key", "authentication successful");
+            tracing::debug!(
+                key_id = meta.id,
+                auth_path = "virtual_key",
+                "authentication successful"
+            );
             return Ok(next.run(request).await);
         }
     }
@@ -528,10 +532,25 @@ mod auth_mode_tests {
 
     #[test]
     fn parse_auth_mode() {
-        assert!(matches!(AuthMode::from_env_str("jwt_only"), AuthMode::JwtOnly));
-        assert!(matches!(AuthMode::from_env_str("keys_only"), AuthMode::KeysOnly));
-        assert!(matches!(AuthMode::from_env_str("jwt_or_keys"), AuthMode::JwtOrKeys));
-        assert!(matches!(AuthMode::from_env_str("JWT_ONLY"), AuthMode::JwtOnly));
-        assert!(matches!(AuthMode::from_env_str("unknown"), AuthMode::JwtOrKeys));
+        assert!(matches!(
+            AuthMode::from_env_str("jwt_only"),
+            AuthMode::JwtOnly
+        ));
+        assert!(matches!(
+            AuthMode::from_env_str("keys_only"),
+            AuthMode::KeysOnly
+        ));
+        assert!(matches!(
+            AuthMode::from_env_str("jwt_or_keys"),
+            AuthMode::JwtOrKeys
+        ));
+        assert!(matches!(
+            AuthMode::from_env_str("JWT_ONLY"),
+            AuthMode::JwtOnly
+        ));
+        assert!(matches!(
+            AuthMode::from_env_str("unknown"),
+            AuthMode::JwtOrKeys
+        ));
     }
 }

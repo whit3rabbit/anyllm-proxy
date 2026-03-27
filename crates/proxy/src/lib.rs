@@ -6,6 +6,8 @@ pub mod backend;
 pub mod batch;
 /// Response caching with in-memory (moka) and optional Redis tier (US1).
 pub mod cache;
+/// Webhook callback support for request completion notifications.
+pub mod callbacks;
 /// Environment-based configuration, TLS client cert setup, URL validation.
 pub mod config;
 /// Per-request cost tracking and model pricing (US4).
@@ -17,5 +19,7 @@ pub mod metrics;
 /// Optional OpenTelemetry OTLP trace export (requires `otel` feature).
 #[cfg(feature = "otel")]
 pub mod otel;
+/// Distributed rate limiting via Redis sorted sets (requires `redis` feature).
+pub mod ratelimit;
 /// Axum HTTP server: routes, middleware (auth, request ID, size/concurrency limits), SSE streaming.
 pub mod server;

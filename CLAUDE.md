@@ -88,6 +88,9 @@ OPENAI_API_KEY=sk-... cargo run -p anyllm_proxy
 - `OTEL_SERVICE_NAME`: Service name for exported traces. Only effective when built with `--features otel`.
 - `OTEL_TRACES_SAMPLER`: Sampling strategy (default: `parentbased_always_on`). Only effective when built with `--features otel`.
 - `PROXY_CONFIG`: Path to config file. TOML for multi-backend config, or `.yaml`/`.yml` for LiteLLM-compatible config with model_list routing.
+- `IP_ALLOWLIST`: Comma-separated CIDR ranges for IP allowlisting (e.g., `192.168.1.0/24,10.0.0.0/8`). Bare IPs also accepted. When set, only matching IPs can access the proxy.
+- `TRUST_PROXY_HEADERS`: Set to `true` or `1` to use `X-Forwarded-For` header for client IP when behind a reverse proxy. Only effective when `IP_ALLOWLIST` is set.
+- `WEBHOOK_URLS`: Comma-separated webhook URLs for request completion notifications. Fire-and-forget HTTP POST with `RequestLogEntry` JSON payload.
 
 ### LiteLLM env var aliases
 
@@ -98,6 +101,7 @@ These LiteLLM env var names are accepted as aliases at startup (target takes pre
 - `AZURE_API_BASE` -> `AZURE_OPENAI_ENDPOINT`
 - `AZURE_API_VERSION` -> `AZURE_OPENAI_API_VERSION`
 - `AWS_REGION_NAME` -> `AWS_REGION`
+- `LITELLM_IP_ALLOWLIST` -> `IP_ALLOWLIST`
 
 ## Architecture
 
@@ -191,6 +195,7 @@ Client (Anthropic format) -> proxy (axum)
 ## Recent Changes
 - 001-litellm-parity: Added Rust stable (1.83+, workspace edition 2021)
 - 20260325-120000-litellm-gap-fill: Added POST /v1/chat/completions (OpenAI format input), Azure OpenAI backend (BACKEND=azure), virtual key management (admin API + DashMap cache), per-key RPM/TPM rate limiting, Rust client v0.2.0 (ClientBuilder + ToolBuilder + messages_stream), optional OpenTelemetry export (--features otel), ReverseStreamingTranslator in translator crate, reverse translation functions openai_to_anthropic_request / anthropic_to_openai_response
+- parity-gaps: Routing strategies (least-busy, latency-based, weighted), dynamic model management admin API, /v1/models enrichment, IP allowlisting (CIDR, X-Forwarded-For), webhook callbacks
 
 ## Active Technologies
 - Rust stable (1.83+, workspace edition 2021) (001-litellm-parity)

@@ -70,7 +70,10 @@ pub struct RedisRateLimiter {
 #[cfg(feature = "redis")]
 impl RedisRateLimiter {
     /// Connect to Redis and create a rate limiter.
-    pub async fn new(redis_url: &str, fail_policy: RateLimitFailPolicy) -> Result<Self, redis::RedisError> {
+    pub async fn new(
+        redis_url: &str,
+        fail_policy: RateLimitFailPolicy,
+    ) -> Result<Self, redis::RedisError> {
         let client = redis::Client::open(redis_url)?;
         let conn = ConnectionManager::new(client).await?;
         Ok(Self { conn, fail_policy })
