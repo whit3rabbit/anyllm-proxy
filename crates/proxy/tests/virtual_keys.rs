@@ -59,6 +59,8 @@ fn shared_state() -> admin::state::SharedState {
 // ---------------------------------------------------------------------------
 
 fn test_admin_router() -> (Router, admin::state::SharedState) {
+    // Raise admin rate limit so parallel tests from 127.0.0.1 don't starve each other.
+    admin::routes::set_admin_rpm(10_000);
     let state = shared_state();
     let token = Arc::new("test-admin-token".to_string());
     let router = admin::routes::admin_router(state.clone(), token);
@@ -412,6 +414,9 @@ async fn create_key_via_admin(
 
 /// Helper: spawn admin + proxy servers, returns (proxy_url, admin_url, admin_port).
 async fn spawn_test_servers(admin_token: &str) -> (String, String, u16) {
+    // Raise admin rate limit so parallel tests from 127.0.0.1 don't starve each other.
+    admin::routes::set_admin_rpm(10_000);
+
     let mock = spawn_mock_backend().await;
     let proxy_url = spawn_proxy_with_shared_vk(openai_config_with_base(&mock)).await;
 

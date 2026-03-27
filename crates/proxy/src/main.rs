@@ -444,7 +444,10 @@ async fn main() {
         if let Some((_, admin_app, admin_listener)) = admin_parts {
             let mut shutdown_rx2 = shutdown_tx.subscribe();
             Some(tokio::spawn(async move {
-                axum::serve(admin_listener, admin_app)
+                axum::serve(
+                    admin_listener,
+                    admin_app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+                )
                     .with_graceful_shutdown(async move {
                         shutdown_rx2.changed().await.ok();
                     })

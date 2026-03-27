@@ -4,14 +4,77 @@ use crate::admin::auth::validate_admin_token;
 use crate::admin::state::SharedState;
 use crate::admin::ws::ws_handler;
 use axum::{
-    extract::{Path, Query, State},
+    extract::{ConnectInfo, Path, Query, State},
     http::StatusCode,
     middleware,
     response::IntoResponse,
     routing::{delete, get, post},
     Json, Router,
 };
-use std::sync::Arc;
+use dashmap::DashMap;
+use std::net::{IpAddr, SocketAddr};
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::{Arc, LazyLock};
+
+/// Per-IP sliding window rate limiter for admin API endpoints.
+/// Tuple is (window_start_epoch_secs, request_count).
+static ADMIN_RATE_LIMIT: LazyLock<DashMap<IpAddr, (u64, u32)>> = LazyLock::new(DashMap::new);
+
+/// Maximum admin API requests per IP per 60-second window.
+/// Default 10; can be overridden at runtime for tests via `set_admin_rpm`.
+static ADMIN_RPM: AtomicU32 = AtomicU32::new(10);
+
+/// Override the admin rate limit (requests per minute per IP).
+/// Intended for integration tests that need a higher limit.
+pub fn set_admin_rpm(rpm: u32) {
+    ADMIN_RPM.store(rpm, Ordering::Relaxed);
+}
+
+/// Clear all rate limit state. Exposed for integration tests.
+pub fn reset_admin_rate_limit() {
+    ADMIN_RATE_LIMIT.clear();
+}
+
+/// Returns true if the request is within the rate limit, false if exceeded.
+fn check_admin_rate_limit(ip: IpAddr) -> bool {
+    let rpm = ADMIN_RPM.load(Ordering::Relaxed);
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let mut entry = ADMIN_RATE_LIMIT.entry(ip).or_insert((now, 0));
+    let (window_start, count) = entry.value_mut();
+    if now - *window_start >= 60 {
+        *window_start = now;
+        *count = 1;
+        true
+    } else if *count < rpm {
+        *count += 1;
+        true
+    } else {
+        false
+    }
+}
+
+/// Axum middleware that enforces per-IP rate limiting on admin API routes.
+/// Returns 429 Too Many Requests when the limit is exceeded.
+async fn admin_rate_limit_middleware(
+    req: axum::extract::Request,
+    next: middleware::Next,
+) -> Result<axum::response::Response, StatusCode> {
+    // Extract client IP from ConnectInfo extension (set by into_make_service_with_connect_info).
+    let ip = req
+        .extensions()
+        .get::<ConnectInfo<SocketAddr>>()
+        .map(|ci| ci.0.ip())
+        .unwrap_or(IpAddr::V4(std::net::Ipv4Addr::LOCALHOST));
+
+    if !check_admin_rate_limit(ip) {
+        tracing::warn!(%ip, "admin API rate limit exceeded");
+        return Err(StatusCode::TOO_MANY_REQUESTS);
+    }
+    Ok(next.run(req).await)
+}
 /// Check whether a host string (without port) is a localhost address.
 fn is_localhost_host(host: &str) -> bool {
     matches!(host, "127.0.0.1" | "localhost" | "[::1]" | "::1")
@@ -105,7 +168,8 @@ pub fn admin_router(shared: SharedState, token: Arc<String>) -> Router {
             token.clone(),
             validate_admin_token,
         ))
-        .layer(middleware::from_fn(reject_cross_origin));
+        .layer(middleware::from_fn(reject_cross_origin))
+        .layer(middleware::from_fn(admin_rate_limit_middleware));
 
     // WebSocket: auth via first message since browsers can't set headers on WS.
     // Origin check applied here too to prevent cross-site WebSocket hijacking.
@@ -1093,6 +1157,8 @@ mod tests {
 
     /// Build a minimal admin router for origin/host tests.
     fn test_router() -> Router {
+        // Raise rate limit so parallel unit tests don't interfere.
+        set_admin_rpm(10_000);
         let shared = crate::admin::state::SharedState::new_for_test();
         let token = Arc::new("test-token".to_string());
         admin_router(shared, token)
@@ -1167,5 +1233,25 @@ mod tests {
             .unwrap();
         let resp = app.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[test]
+    fn admin_rate_limit_enforced() {
+        // Use a unique IP so parallel tests don't interfere.
+        let ip: IpAddr = "198.51.100.1".parse().unwrap();
+        ADMIN_RATE_LIMIT.remove(&ip);
+        // Temporarily set a low limit for this test.
+        let prev = ADMIN_RPM.load(std::sync::atomic::Ordering::Relaxed);
+        ADMIN_RPM.store(3, std::sync::atomic::Ordering::Relaxed);
+
+        assert!(check_admin_rate_limit(ip));
+        assert!(check_admin_rate_limit(ip));
+        assert!(check_admin_rate_limit(ip));
+        // 4th request in the same window should be rejected.
+        assert!(!check_admin_rate_limit(ip));
+
+        // Restore previous limit.
+        ADMIN_RPM.store(prev, std::sync::atomic::Ordering::Relaxed);
+        ADMIN_RATE_LIMIT.remove(&ip);
     }
 }
