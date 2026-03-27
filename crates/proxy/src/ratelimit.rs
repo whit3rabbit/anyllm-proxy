@@ -82,7 +82,7 @@ impl RedisRateLimiter {
     }
 
     /// Check RPM limit. Returns Ok(()) if allowed, Err(retry_after_secs) if exceeded.
-    /// On Redis error, returns Ok(()) to allow the request (fail-open).
+    /// On Redis error, behavior depends on the configured `RateLimitFailPolicy`.
     pub async fn check_rpm(&self, key_hash_hex: &str, limit: u32, now_ms: u64) -> Result<(), u64> {
         let redis_key = format!("anyllm:rl:{key_hash_hex}:rpm");
         match self.check_rpm_inner(&redis_key, limit, now_ms).await {
@@ -149,7 +149,7 @@ impl RedisRateLimiter {
     }
 
     /// Check TPM limit. Returns Ok(()) if allowed, Err(retry_after_secs) if exceeded.
-    /// On Redis error, returns Ok(()) (fail-open).
+    /// On Redis error, behavior depends on the configured `RateLimitFailPolicy`.
     pub async fn check_tpm(&self, key_hash_hex: &str, limit: u32, now_ms: u64) -> Result<(), u64> {
         let redis_key = format!("anyllm:rl:{key_hash_hex}:tpm");
         match self.check_tpm_inner(&redis_key, limit, now_ms).await {
