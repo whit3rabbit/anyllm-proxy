@@ -49,7 +49,12 @@ where
 /// Result of resolving a model name through the model router.
 pub(crate) enum ResolvedModel {
     /// Routed via model_list to a specific backend and actual model name.
-    Routed { backend_name: String, model: String },
+    Routed {
+        backend_name: String,
+        model: String,
+        /// The deployment Arc for recording in-flight/latency stats.
+        deployment: Arc<crate::config::model_router::Deployment>,
+    },
     /// Model is known but all deployments are at their RPM limit.
     AllAtLimit,
     /// No model router, or model not in router. Used legacy ModelMapping.
@@ -80,7 +85,8 @@ pub struct AppState {
     /// Optional response cache for non-streaming requests.
     pub cache: Option<Arc<crate::cache::memory::MemoryCache>>,
     /// Model-level router for LiteLLM model_list configs. None for TOML/env configs.
-    pub model_router: Option<Arc<crate::config::model_router::ModelRouter>>,
+    /// Wrapped in RwLock for dynamic model management via admin API.
+    pub model_router: Option<Arc<RwLock<crate::config::model_router::ModelRouter>>>,
     /// All backend states, for cross-backend model routing. None unless model_router is set.
     pub all_backends: Option<Arc<HashMap<String, AppState>>>,
 }
@@ -101,11 +107,13 @@ impl AppState {
 
     /// Resolve a model name through the model router (if set) or fall back to ModelMapping.
     pub(crate) fn resolve_model(&self, model: &str) -> ResolvedModel {
-        if let Some(ref router) = self.model_router {
+        if let Some(ref router_lock) = self.model_router {
+            let router = router_lock.read().unwrap_or_else(|e| e.into_inner());
             if let Some(routed) = router.route(model) {
                 return ResolvedModel::Routed {
                     backend_name: routed.backend_name.to_string(),
                     model: routed.actual_model.to_string(),
+                    deployment: routed.deployment.clone(),
                 };
             }
             if router.has_model(model) {
@@ -115,18 +123,27 @@ impl AppState {
         ResolvedModel::Legacy(self.map_model(model))
     }
 
-    /// Resolve model and return (mapped_model, effective AppState).
+    /// Resolve model and return (mapped_model, effective AppState, optional deployment).
     /// If the model routes to a different backend, the returned state is cloned from
     /// all_backends. Returns Err with a 429 response if all deployments are at limit.
+    /// The deployment Arc is returned so handlers can call record_start/record_finish.
     #[allow(clippy::result_large_err)]
     pub(crate) fn resolve_model_and_state(
         &self,
         model: &str,
-    ) -> Result<(String, AppState), Response> {
+    ) -> Result<
+        (
+            String,
+            AppState,
+            Option<Arc<crate::config::model_router::Deployment>>,
+        ),
+        Response,
+    > {
         match self.resolve_model(model) {
             ResolvedModel::Routed {
                 backend_name,
                 model: mapped,
+                deployment,
             } => {
                 let effective = self
                     .all_backends
@@ -134,7 +151,7 @@ impl AppState {
                     .and_then(|m| m.get(&backend_name))
                     .cloned()
                     .unwrap_or_else(|| self.clone());
-                Ok((mapped, effective))
+                Ok((mapped, effective, Some(deployment)))
             }
             ResolvedModel::AllAtLimit => {
                 let err = mapping::errors_map::create_anthropic_error(
@@ -144,7 +161,7 @@ impl AppState {
                 );
                 Err((StatusCode::TOO_MANY_REQUESTS, Json(err)).into_response())
             }
-            ResolvedModel::Legacy(mapped) => Ok((mapped, self.clone())),
+            ResolvedModel::Legacy(mapped) => Ok((mapped, self.clone(), None)),
         }
     }
 
@@ -179,7 +196,7 @@ pub fn app_multi(config: MultiConfig) -> Router {
 pub fn app_multi_with_shared(
     config: MultiConfig,
     shared: Option<SharedState>,
-    model_router: Option<Arc<crate::config::model_router::ModelRouter>>,
+    model_router: Option<Arc<RwLock<crate::config::model_router::ModelRouter>>>,
 ) -> Router {
     let mut backend_metrics: HashMap<String, Metrics> = HashMap::new();
     let mut router = Router::new();
@@ -298,13 +315,22 @@ pub fn app_multi_with_shared(
         .layer(axum::middleware::from_fn(super::middleware::validate_auth));
 
     // Health is public (no auth required).
-    Router::new()
+    let mut final_router = Router::new()
         .route("/health", get(health))
         .merge(metrics_route)
         .merge(router)
         .fallback(fallback_not_found)
-        .layer(axum::middleware::from_fn(super::middleware::add_request_id))
-        .with_state(global_state)
+        .layer(axum::middleware::from_fn(super::middleware::add_request_id));
+
+    // Apply IP allowlist middleware before auth if IP_ALLOWLIST is configured.
+    if super::middleware::ip_allowlist_active() {
+        final_router = final_router.layer(axum::middleware::from_fn(
+            super::middleware::check_ip_allowlist,
+        ));
+        tracing::info!("IP allowlist middleware enabled");
+    }
+
+    final_router.with_state(global_state)
 }
 
 /// Return Anthropic-shaped 404 for any unmatched route (PRD US-004).
@@ -415,35 +441,58 @@ pub(crate) struct ConcurrencyPermit(
     #[allow(dead_code)] pub(crate) Arc<tokio::sync::OwnedSemaphorePermit>,
 );
 
-static MODELS_RESPONSE: std::sync::LazyLock<serde_json::Value> = std::sync::LazyLock::new(|| {
-    serde_json::json!({
-        "data": [
+/// Static Claude model entries, merged with model_list models at runtime.
+static STATIC_CLAUDE_MODELS: std::sync::LazyLock<Vec<serde_json::Value>> = std::sync::LazyLock::new(
+    || {
+        vec![
             // Claude 4.x
-            {"id": "claude-opus-4-6",            "display_name": "Claude Opus 4.6",            "created_at": "2025-05-14T00:00:00Z", "type": "model"},
-            {"id": "claude-sonnet-4-6",           "display_name": "Claude Sonnet 4.6",          "created_at": "2025-05-14T00:00:00Z", "type": "model"},
-            {"id": "claude-opus-4-5",             "display_name": "Claude Opus 4.5",            "created_at": "2025-05-14T00:00:00Z", "type": "model"},
-            {"id": "claude-sonnet-4-5",           "display_name": "Claude Sonnet 4.5",          "created_at": "2025-05-14T00:00:00Z", "type": "model"},
-            {"id": "claude-haiku-4-5",            "display_name": "Claude Haiku 4.5",           "created_at": "2025-05-14T00:00:00Z", "type": "model"},
-            {"id": "claude-haiku-4-5-20251001",   "display_name": "Claude Haiku 4.5 (Oct 2025)","created_at": "2025-10-01T00:00:00Z", "type": "model"},
+            serde_json::json!({"id": "claude-opus-4-6",            "object": "model", "created": 1715644800, "owned_by": "anthropic", "display_name": "Claude Opus 4.6"}),
+            serde_json::json!({"id": "claude-sonnet-4-6",          "object": "model", "created": 1715644800, "owned_by": "anthropic", "display_name": "Claude Sonnet 4.6"}),
+            serde_json::json!({"id": "claude-opus-4-5",            "object": "model", "created": 1715644800, "owned_by": "anthropic", "display_name": "Claude Opus 4.5"}),
+            serde_json::json!({"id": "claude-sonnet-4-5",          "object": "model", "created": 1715644800, "owned_by": "anthropic", "display_name": "Claude Sonnet 4.5"}),
+            serde_json::json!({"id": "claude-haiku-4-5",           "object": "model", "created": 1715644800, "owned_by": "anthropic", "display_name": "Claude Haiku 4.5"}),
+            serde_json::json!({"id": "claude-haiku-4-5-20251001",  "object": "model", "created": 1727740800, "owned_by": "anthropic", "display_name": "Claude Haiku 4.5 (Oct 2025)"}),
             // Claude 3.7
-            {"id": "claude-3-7-sonnet-20250219",  "display_name": "Claude 3.7 Sonnet",          "created_at": "2025-02-19T00:00:00Z", "type": "model"},
+            serde_json::json!({"id": "claude-3-7-sonnet-20250219", "object": "model", "created": 1708300800, "owned_by": "anthropic", "display_name": "Claude 3.7 Sonnet"}),
             // Claude 3.5
-            {"id": "claude-3-5-sonnet-20241022",  "display_name": "Claude 3.5 Sonnet (Oct 2024)","created_at": "2024-10-22T00:00:00Z", "type": "model"},
-            {"id": "claude-3-5-sonnet-20240620",  "display_name": "Claude 3.5 Sonnet (Jun 2024)","created_at": "2024-06-20T00:00:00Z", "type": "model"},
-            {"id": "claude-3-5-haiku-20241022",   "display_name": "Claude 3.5 Haiku",           "created_at": "2024-10-22T00:00:00Z", "type": "model"},
+            serde_json::json!({"id": "claude-3-5-sonnet-20241022", "object": "model", "created": 1729555200, "owned_by": "anthropic", "display_name": "Claude 3.5 Sonnet (Oct 2024)"}),
+            serde_json::json!({"id": "claude-3-5-sonnet-20240620", "object": "model", "created": 1718841600, "owned_by": "anthropic", "display_name": "Claude 3.5 Sonnet (Jun 2024)"}),
+            serde_json::json!({"id": "claude-3-5-haiku-20241022",  "object": "model", "created": 1729555200, "owned_by": "anthropic", "display_name": "Claude 3.5 Haiku"}),
             // Claude 3
-            {"id": "claude-3-opus-20240229",      "display_name": "Claude 3 Opus",              "created_at": "2024-02-29T00:00:00Z", "type": "model"},
-            {"id": "claude-3-sonnet-20240229",    "display_name": "Claude 3 Sonnet",            "created_at": "2024-02-29T00:00:00Z", "type": "model"},
-            {"id": "claude-3-haiku-20240307",     "display_name": "Claude 3 Haiku",             "created_at": "2024-03-07T00:00:00Z", "type": "model"},
-        ],
-        "has_more": false,
-        "first_id": "claude-opus-4-6",
-        "last_id": "claude-3-haiku-20240307",
-    })
-});
+            serde_json::json!({"id": "claude-3-opus-20240229",     "object": "model", "created": 1709164800, "owned_by": "anthropic", "display_name": "Claude 3 Opus"}),
+            serde_json::json!({"id": "claude-3-sonnet-20240229",   "object": "model", "created": 1709164800, "owned_by": "anthropic", "display_name": "Claude 3 Sonnet"}),
+            serde_json::json!({"id": "claude-3-haiku-20240307",    "object": "model", "created": 1709769600, "owned_by": "anthropic", "display_name": "Claude 3 Haiku"}),
+        ]
+    },
+);
 
-async fn models(State(_state): State<AppState>) -> Json<serde_json::Value> {
-    Json(MODELS_RESPONSE.clone())
+/// GET /v1/models -- returns static Claude models merged with model_list entries.
+async fn models(State(state): State<AppState>) -> Json<serde_json::Value> {
+    let mut data: Vec<serde_json::Value> = STATIC_CLAUDE_MODELS.clone();
+
+    // Merge models from the model router (LiteLLM model_list config).
+    if let Some(ref router_lock) = state.model_router {
+        let router = router_lock.read().unwrap_or_else(|e| e.into_inner());
+        let static_ids: std::collections::HashSet<String> = data
+            .iter()
+            .filter_map(|m| m["id"].as_str().map(|s| s.to_string()))
+            .collect();
+        for model_name in router.known_models() {
+            if !static_ids.contains(model_name) {
+                data.push(serde_json::json!({
+                    "id": model_name,
+                    "object": "model",
+                    "created": 0,
+                    "owned_by": "organization"
+                }));
+            }
+        }
+    }
+
+    Json(serde_json::json!({
+        "object": "list",
+        "data": data,
+    }))
 }
 
 async fn batches_legacy_stub() -> impl IntoResponse {
@@ -507,6 +556,7 @@ pub(crate) async fn try_cache_response<T: serde::Serialize>(
                     response_body: resp_body,
                     model,
                     created_at: std::time::Instant::now(),
+                    ttl_secs: cache_ttl,
                 },
                 ttl,
             )
@@ -619,13 +669,22 @@ async fn messages(
         if state.log_bodies() {
             tracing::debug!(model = %body.model, "streaming request initiated");
         }
-        let (mapped_model, effective) = match state.resolve_model_and_state(&body.model) {
+        let (mapped_model, effective, deployment) = match state.resolve_model_and_state(&body.model)
+        {
             Ok(v) => v,
             Err(resp) => return resp,
         };
+        if let Some(ref d) = deployment {
+            d.record_start();
+        }
         // Logging deferred until stream completes (inside messages_stream tasks).
+        let stream_start = std::time::Instant::now();
         match messages_stream(effective, body, ctx, mapped_model, permit).await {
             Ok((rate_limits, sse)) => {
+                // For streaming, record_finish is approximate (headers sent, not stream end).
+                if let Some(ref d) = deployment {
+                    d.record_finish(stream_start.elapsed().as_millis() as u64);
+                }
                 let mut response = sse.into_response();
                 rate_limits.inject_anthropic_response_headers(response.headers_mut());
                 inject_degradation_header(response.headers_mut(), &warnings);
@@ -636,6 +695,9 @@ async fn messages(
                 return response;
             }
             Err(e) => {
+                if let Some(ref d) = deployment {
+                    d.record_finish(stream_start.elapsed().as_millis() as u64);
+                }
                 // Pre-stream backend error: return proper HTTP status instead of 200 OK
                 return backend_error_to_response(e);
             }
@@ -681,10 +743,14 @@ async fn messages(
     }
 
     // Resolve model routing (may switch to a different backend).
-    let (mapped_model, effective) = match state.resolve_model_and_state(&body.model) {
+    let (mapped_model, effective, deployment) = match state.resolve_model_and_state(&body.model) {
         Ok(v) => v,
         Err(resp) => return resp,
     };
+    if let Some(ref d) = deployment {
+        d.record_start();
+    }
+    let backend_start = std::time::Instant::now();
 
     match &effective.backend {
         BackendClient::OpenAI(client)
@@ -702,6 +768,9 @@ async fn messages(
 
             match client.chat_completion(&openai_req).await {
                 Ok((openai_resp, _status, rate_limits)) => {
+                    if let Some(ref d) = deployment {
+                        d.record_finish(backend_start.elapsed().as_millis() as u64);
+                    }
                     state.metrics.record_success();
                     let anthropic_resp = mapping::message_map::openai_to_anthropic_response(
                         &openai_resp,
@@ -746,6 +815,9 @@ async fn messages(
                     response
                 }
                 Err(e) => {
+                    if let Some(ref d) = deployment {
+                        d.record_finish(backend_start.elapsed().as_millis() as u64);
+                    }
                     state.metrics.record_error();
                     let status = e.status_code();
                     log_request(
@@ -772,6 +844,9 @@ async fn messages(
 
             match client.responses(&responses_req).await {
                 Ok((resp, _status, rate_limits)) => {
+                    if let Some(ref d) = deployment {
+                        d.record_finish(backend_start.elapsed().as_millis() as u64);
+                    }
                     state.metrics.record_success();
                     let anthropic_resp =
                         mapping::responses_message_map::responses_to_anthropic_response(
@@ -816,6 +891,9 @@ async fn messages(
                     response
                 }
                 Err(e) => {
+                    if let Some(ref d) = deployment {
+                        d.record_finish(backend_start.elapsed().as_millis() as u64);
+                    }
                     state.metrics.record_error();
                     let status = e.status_code();
                     log_request(
@@ -915,8 +993,21 @@ pub(crate) fn record_vk_tpm(
     }
 }
 
-/// Log a completed request to the admin write buffer and broadcast to WebSocket clients.
+/// Global webhook callback config, set once at startup.
+static CALLBACKS: std::sync::OnceLock<Arc<crate::callbacks::CallbackConfig>> =
+    std::sync::OnceLock::new();
+
+/// Set the global webhook callback config (called once at startup).
+pub fn set_callbacks(config: Arc<crate::callbacks::CallbackConfig>) {
+    let _ = CALLBACKS.set(config);
+}
+
+/// Log a completed request to the admin write buffer, broadcast to WebSocket clients,
+/// and fire webhook callbacks if configured.
 pub(crate) fn log_request(shared: &Option<SharedState>, entry: RequestLogEntry) {
+    if let Some(cb) = CALLBACKS.get() {
+        cb.notify(&entry);
+    }
     if let Some(ref shared) = shared {
         let _ = shared
             .events_tx

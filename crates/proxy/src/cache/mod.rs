@@ -9,6 +9,11 @@
 //! - `oai:` for /v1/chat/completions
 
 pub mod memory;
+/// Redis L2 cache backend (requires `redis` feature).
+pub mod redis;
+/// Semantic cache backed by Qdrant vector store (requires `qdrant` feature).
+#[cfg(feature = "qdrant")]
+pub mod semantic;
 
 use bytes::Bytes;
 use sha2::{Digest, Sha256};
@@ -27,6 +32,9 @@ pub struct CacheEntry {
     pub model: String,
     /// When this entry was created (wall-clock, not persisted to Redis).
     pub created_at: Instant,
+    /// Per-entry TTL override in seconds. When set, moka's Expiry trait
+    /// uses this instead of the cache-level default.
+    pub ttl_secs: Option<u64>,
 }
 
 /// Namespace prefix for cache keys, preventing cross-endpoint collisions.
