@@ -53,28 +53,44 @@ pub struct VirtualKeyContext {
 /// Controls which authentication paths are active.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AuthMode {
-    /// Only accept JWT tokens. Static and virtual keys are rejected.
-    JwtOnly,
     /// Only accept static and virtual API keys. JWTs are not checked.
     KeysOnly,
+    /// Only accept JWT tokens. Static and virtual keys are rejected.
+    OidcOnly,
     /// Try JWT first, fall through to keys on failure (default).
-    JwtOrKeys,
+    Both,
 }
 
 impl AuthMode {
+    /// Parse an AUTH_MODE string. Accepts both new names (oidc, oidc-only, keys,
+    /// keys-only, both) and legacy names (jwt_only, keys_only, jwt_or_keys).
     pub fn from_env_str(s: &str) -> Self {
         match s.to_lowercase().as_str() {
-            "jwt_only" => Self::JwtOnly,
-            "keys_only" => Self::KeysOnly,
-            _ => Self::JwtOrKeys,
+            "oidc" | "oidc-only" | "oidc_only" | "jwt_only" => Self::OidcOnly,
+            "keys" | "keys-only" | "keys_only" => Self::KeysOnly,
+            "both" | "jwt_or_keys" => Self::Both,
+            _ => Self::Both,
         }
+    }
+
+    /// Read AUTH_MODE from the environment. Defaults to Both for backward compatibility.
+    pub fn from_env() -> Self {
+        std::env::var("AUTH_MODE")
+            .map(|v| Self::from_env_str(&v))
+            .unwrap_or(Self::Both)
+    }
+
+    pub fn allows_key_auth(&self) -> bool {
+        matches!(self, AuthMode::KeysOnly | AuthMode::Both)
+    }
+
+    pub fn allows_oidc(&self) -> bool {
+        matches!(self, AuthMode::OidcOnly | AuthMode::Both)
     }
 }
 
 static AUTH_MODE: LazyLock<AuthMode> = LazyLock::new(|| {
-    let mode = std::env::var("AUTH_MODE")
-        .map(|v| AuthMode::from_env_str(&v))
-        .unwrap_or(AuthMode::JwtOrKeys);
+    let mode = AuthMode::from_env();
     tracing::info!(?mode, "auth mode configured");
     mode
 });
@@ -176,7 +192,8 @@ pub async fn validate_auth(
     };
 
     // Check 0: OIDC/JWT validation (if configured and mode allows it).
-    if *AUTH_MODE != AuthMode::KeysOnly {
+    let auth_mode = *AUTH_MODE;
+    if auth_mode.allows_oidc() {
         if let Some(oidc) = OIDC_CONFIG.get() {
             if super::oidc::looks_like_jwt(&credential) {
                 match oidc.validate_token(&credential) {
@@ -186,8 +203,8 @@ pub async fn validate_auth(
                         return Ok(next.run(request).await);
                     }
                     Err(e) => {
-                        if *AUTH_MODE == AuthMode::JwtOnly {
-                            tracing::debug!(error = %e, "JWT validation failed (jwt_only mode, no fallback)");
+                        if auth_mode == AuthMode::OidcOnly {
+                            tracing::debug!(error = %e, "JWT validation failed (oidc_only mode, no fallback)");
                             let err = create_anthropic_error(
                                 anthropic::ErrorType::AuthenticationError,
                                 "JWT validation failed.".to_string(),
@@ -198,7 +215,7 @@ pub async fn validate_auth(
                         tracing::debug!(error = %e, "JWT validation failed, trying key-based auth");
                     }
                 }
-            } else if *AUTH_MODE == AuthMode::JwtOnly {
+            } else if auth_mode == AuthMode::OidcOnly {
                 let err = create_anthropic_error(
                     anthropic::ErrorType::AuthenticationError,
                     "JWT required but credential is not a valid JWT format.".to_string(),
@@ -206,8 +223,8 @@ pub async fn validate_auth(
                 );
                 return Err((StatusCode::UNAUTHORIZED, Json(err)).into_response());
             }
-        } else if *AUTH_MODE == AuthMode::JwtOnly {
-            tracing::error!("AUTH_MODE=jwt_only but OIDC_ISSUER_URL is not configured");
+        } else if auth_mode == AuthMode::OidcOnly {
+            tracing::error!("AUTH_MODE=oidc_only but OIDC_ISSUER_URL is not configured");
             let err = create_anthropic_error(
                 anthropic::ErrorType::AuthenticationError,
                 "Server misconfigured: JWT auth required but OIDC not configured.".to_string(),
@@ -551,26 +568,54 @@ mod auth_mode_tests {
     use super::*;
 
     #[test]
-    fn parse_auth_mode() {
-        assert!(matches!(
-            AuthMode::from_env_str("jwt_only"),
-            AuthMode::JwtOnly
-        ));
-        assert!(matches!(
-            AuthMode::from_env_str("keys_only"),
-            AuthMode::KeysOnly
-        ));
-        assert!(matches!(
-            AuthMode::from_env_str("jwt_or_keys"),
-            AuthMode::JwtOrKeys
-        ));
-        assert!(matches!(
-            AuthMode::from_env_str("JWT_ONLY"),
-            AuthMode::JwtOnly
-        ));
-        assert!(matches!(
-            AuthMode::from_env_str("unknown"),
-            AuthMode::JwtOrKeys
-        ));
+    fn parse_auth_mode_new_names() {
+        assert_eq!(AuthMode::from_env_str("oidc"), AuthMode::OidcOnly);
+        assert_eq!(AuthMode::from_env_str("oidc-only"), AuthMode::OidcOnly);
+        assert_eq!(AuthMode::from_env_str("oidc_only"), AuthMode::OidcOnly);
+        assert_eq!(AuthMode::from_env_str("keys"), AuthMode::KeysOnly);
+        assert_eq!(AuthMode::from_env_str("keys-only"), AuthMode::KeysOnly);
+        assert_eq!(AuthMode::from_env_str("keys_only"), AuthMode::KeysOnly);
+        assert_eq!(AuthMode::from_env_str("both"), AuthMode::Both);
+    }
+
+    #[test]
+    fn parse_auth_mode_legacy_names() {
+        assert_eq!(AuthMode::from_env_str("jwt_only"), AuthMode::OidcOnly);
+        assert_eq!(AuthMode::from_env_str("jwt_or_keys"), AuthMode::Both);
+        assert_eq!(AuthMode::from_env_str("JWT_ONLY"), AuthMode::OidcOnly);
+    }
+
+    #[test]
+    fn parse_auth_mode_unknown_defaults_to_both() {
+        assert_eq!(AuthMode::from_env_str("unknown"), AuthMode::Both);
+        assert_eq!(AuthMode::from_env_str(""), AuthMode::Both);
+    }
+
+    #[test]
+    fn auth_mode_oidc_only() {
+        assert!(AuthMode::OidcOnly.allows_oidc());
+        assert!(!AuthMode::OidcOnly.allows_key_auth());
+    }
+
+    #[test]
+    fn auth_mode_keys_only() {
+        assert!(AuthMode::KeysOnly.allows_key_auth());
+        assert!(!AuthMode::KeysOnly.allows_oidc());
+    }
+
+    #[test]
+    fn auth_mode_both_allows_all() {
+        assert!(AuthMode::Both.allows_oidc());
+        assert!(AuthMode::Both.allows_key_auth());
+    }
+
+    #[test]
+    fn auth_mode_from_env_defaults_to_both() {
+        // When AUTH_MODE is not set (or set to something unrecognized),
+        // from_env() returns Both for backward compatibility.
+        // Note: cannot safely manipulate env vars in parallel tests,
+        // so we test via from_env_str which from_env delegates to.
+        let mode = AuthMode::from_env_str("unrecognized_value");
+        assert_eq!(mode, AuthMode::Both);
     }
 }
