@@ -1,7 +1,7 @@
 use crate::admin::state::{AdminEvent, RequestLogEntry, RuntimeConfig, SharedState};
 use crate::backend::{BackendClient, BackendError};
 use crate::cache::{self, CacheBackend, CacheEntry, CacheNamespace};
-use crate::config::{BackendKind, Config, MultiConfig};
+use crate::config::{Config, MultiConfig};
 use crate::metrics::Metrics;
 use anyllm_translate::{anthropic, compute_request_warnings, mapping, openai};
 use axum::{
@@ -228,8 +228,16 @@ pub fn app_multi_with_shared(
         let metrics = Metrics::new();
         backend_metrics.insert(name.clone(), metrics.clone());
 
+        let backend = BackendClient::from_backend_config(bc);
+        let mode = match &backend {
+            BackendClient::GeminiNative(_) => HandlerMode::GeminiNative,
+            BackendClient::Anthropic(_) => HandlerMode::Anthropic,
+            BackendClient::Bedrock(_) => HandlerMode::Bedrock,
+            _ => HandlerMode::Translate,
+        };
+
         let state = AppState {
-            backend: BackendClient::from_backend_config(bc),
+            backend,
             metrics,
             runtime_config: runtime_config.clone(),
             shared: shared.clone(),
@@ -240,12 +248,6 @@ pub fn app_multi_with_shared(
             model_router: model_router.clone(),
             // all_backends is set after the loop (needs all states built first).
             all_backends: None,
-        };
-
-        let mode = match bc.kind {
-            BackendKind::Anthropic => HandlerMode::Anthropic,
-            BackendKind::Bedrock => HandlerMode::Bedrock,
-            _ => HandlerMode::Translate,
         };
         let sub = backend_router(state.clone(), mode);
         backend_states.insert(name.clone(), (state, mode));
@@ -351,6 +353,8 @@ enum HandlerMode {
     Anthropic,
     /// Bedrock (SigV4 signing, event stream decoding, Anthropic format).
     Bedrock,
+    /// Gemini native generateContent (no OpenAI translation layer).
+    GeminiNative,
     /// Translation (Anthropic -> OpenAI -> backend -> OpenAI -> Anthropic).
     Translate,
 }
@@ -375,6 +379,10 @@ fn backend_router(state: AppState, mode: HandlerMode) -> Router<GlobalState> {
         HandlerMode::Bedrock => common_routes.route(
             "/v1/messages",
             post(super::bedrock_passthrough::bedrock_passthrough),
+        ),
+        HandlerMode::GeminiNative => common_routes.route(
+            "/v1/messages",
+            post(super::gemini_native::gemini_native_handler),
         ),
         HandlerMode::Translate => common_routes
             .route("/v1/messages", post(messages))
@@ -512,7 +520,7 @@ async fn health() -> impl IntoResponse {
 }
 
 /// Convert a BackendError into an Anthropic error Response.
-fn backend_error_to_response(error: BackendError) -> Response {
+pub(super) fn backend_error_to_response(error: BackendError) -> Response {
     if let Some((message, status)) = error.api_error_details() {
         let anthropic_err = mapping::errors_map::status_to_anthropic_error(status, message, None);
         let http_status = StatusCode::from_u16(

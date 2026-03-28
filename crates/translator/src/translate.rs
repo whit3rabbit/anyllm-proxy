@@ -6,10 +6,12 @@
 use crate::anthropic::{MessageCreateRequest, MessageResponse};
 use crate::config::TranslationConfig;
 use crate::error::TranslateError;
+use crate::gemini::request::GenerateContentRequest;
+use crate::gemini::response::GenerateContentResponse;
 pub use crate::mapping::warnings::TranslationWarnings;
 use crate::mapping::{
-    message_map, responses_message_map, responses_streaming_map, reverse_message_map,
-    reverse_streaming_map, streaming_map,
+    gemini_message_map, gemini_streaming_map, message_map, responses_message_map,
+    responses_streaming_map, reverse_message_map, reverse_streaming_map, streaming_map,
 };
 use crate::openai::responses::{ResponsesRequest, ResponsesResponse};
 use crate::openai::{ChatCompletionRequest, ChatCompletionResponse};
@@ -110,6 +112,39 @@ pub fn new_responses_stream_translator(
     model: String,
 ) -> responses_streaming_map::ResponsesStreamingTranslator {
     responses_streaming_map::ResponsesStreamingTranslator::new(model)
+}
+
+/// Translate an Anthropic request to a Gemini native `GenerateContentRequest`.
+///
+/// Applies model mapping from config to the resulting request's model selection.
+/// The returned request is ready to POST to `models/{model}:generateContent`.
+pub fn translate_request_gemini(
+    req: &MessageCreateRequest,
+    config: &TranslationConfig,
+) -> Result<(GenerateContentRequest, String), TranslateError> {
+    let gemini_req = gemini_message_map::anthropic_to_gemini_request(req);
+    let model = config.map_model(&req.model)?;
+    Ok((gemini_req, model))
+}
+
+/// Translate a Gemini native `GenerateContentResponse` back to an Anthropic response.
+///
+/// `model` is the Anthropic model name from the original request.
+pub fn translate_response_gemini(
+    resp: &GenerateContentResponse,
+    model: &str,
+) -> MessageResponse {
+    gemini_message_map::gemini_to_anthropic_response(resp, model)
+}
+
+/// Create a new Gemini streaming translator.
+///
+/// The returned translator is stateful: feed full `GenerateContentResponse`
+/// objects via `process_response()`, then call `finish()` for final events.
+pub fn new_gemini_stream_translator(
+    model: String,
+) -> gemini_streaming_map::GeminiStreamingTranslator {
+    gemini_streaming_map::GeminiStreamingTranslator::new(model)
 }
 
 #[cfg(test)]

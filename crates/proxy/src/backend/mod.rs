@@ -244,7 +244,29 @@ impl BackendClient {
             },
             BackendKind::AzureOpenAI => Self::AzureOpenAI(OpenAIClient::new(config)),
             BackendKind::Vertex => Self::Vertex(OpenAIClient::new(config)),
-            BackendKind::Gemini => Self::GeminiOpenAI(OpenAIClient::new(config)),
+            BackendKind::Gemini => {
+                let native = std::env::var("GEMINI_API_FORMAT")
+                    .map(|v| v.to_lowercase() == "native")
+                    .unwrap_or(false);
+                if native {
+                    let base_url = std::env::var("GEMINI_BASE_URL").unwrap_or_else(|_| {
+                        "https://generativelanguage.googleapis.com/v1beta".to_string()
+                    });
+                    let api_key = match &config.backend_auth {
+                        crate::config::BackendAuth::GoogleApiKey(k) => k.clone(),
+                        _ => config.openai_api_key.clone(),
+                    };
+                    Self::GeminiNative(GeminiNativeClient::new(
+                        base_url,
+                        api_key,
+                        config.model_mapping.big_model.clone(),
+                        config.model_mapping.small_model.clone(),
+                        &config.tls,
+                    ))
+                } else {
+                    Self::GeminiOpenAI(OpenAIClient::new(config))
+                }
+            }
             BackendKind::Anthropic => Self::Anthropic(AnthropicClient::new(
                 &config.openai_base_url,
                 &config.openai_api_key,
@@ -281,7 +303,32 @@ impl BackendClient {
             },
             BackendKind::AzureOpenAI => Self::AzureOpenAI(OpenAIClient::new(&legacy)),
             BackendKind::Vertex => Self::Vertex(OpenAIClient::new(&legacy)),
-            BackendKind::Gemini => Self::GeminiOpenAI(OpenAIClient::new(&legacy)),
+            BackendKind::Gemini => {
+                let native = std::env::var("GEMINI_API_FORMAT")
+                    .map(|v| v.to_lowercase() == "native")
+                    .unwrap_or(false);
+                if native {
+                    // bc.base_url has GEMINI_OPENAI_PATH ("/openai") appended; strip it.
+                    let raw_base = bc
+                        .base_url
+                        .trim_end_matches('/')
+                        .trim_end_matches("/openai")
+                        .to_string();
+                    let api_key = match &bc.backend_auth {
+                        crate::config::BackendAuth::GoogleApiKey(k) => k.clone(),
+                        _ => bc.api_key.clone(),
+                    };
+                    Self::GeminiNative(GeminiNativeClient::new(
+                        raw_base,
+                        api_key,
+                        bc.model_mapping.big_model.clone(),
+                        bc.model_mapping.small_model.clone(),
+                        &bc.tls,
+                    ))
+                } else {
+                    Self::GeminiOpenAI(OpenAIClient::new(&legacy))
+                }
+            }
             BackendKind::Anthropic => Self::Anthropic(AnthropicClient::from_backend_config(bc)),
             BackendKind::Bedrock => Self::Bedrock(BedrockClient::new(
                 bc.base_url.clone(), // region is stored in base_url for Bedrock

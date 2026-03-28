@@ -12,7 +12,7 @@ use tokio_stream::wrappers::ReceiverStream;
 use super::routes::{log_request, AppState, RequestCtx};
 
 /// Send translated stream events over the SSE channel. Returns false if client disconnected.
-async fn send_events(
+pub(super) async fn send_events(
     tx: &mpsc::Sender<Result<Event, std::convert::Infallible>>,
     events: &[anthropic::StreamEvent],
 ) -> bool {
@@ -32,7 +32,7 @@ async fn send_events(
 }
 
 /// Why the SSE stream ended.
-enum StreamOutcome {
+pub(super) enum StreamOutcome {
     /// Backend stream completed normally.
     Completed,
     /// Downstream client disconnected before the stream finished.
@@ -63,7 +63,7 @@ impl StreamOutcome {
 }
 
 /// Read SSE bytes from a response, parse frames, and call `on_data` for each data line.
-async fn read_sse_frames<F>(
+pub(super) async fn read_sse_frames<F>(
     response: reqwest::Response,
     tx: &mpsc::Sender<Result<Event, std::convert::Infallible>>,
     metrics: &Metrics,
