@@ -8,6 +8,7 @@ pub mod langfuse;
 pub use langfuse::LangfuseClient;
 
 /// A named (non-URL) callback integration.
+#[derive(Clone)]
 pub enum NamedIntegration {
     Langfuse(std::sync::Arc<LangfuseClient>),
 }

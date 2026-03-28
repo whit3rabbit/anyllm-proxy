@@ -80,10 +80,23 @@ async fn main() {
     }
     let listen_port = multi_config.listen_port;
 
-    // Wire up WEBHOOK_URLS env var (if LiteLLM callbacks weren't already set).
-    if let Some(cb) = anyllm_proxy::callbacks::CallbackConfig::from_env() {
-        anyllm_proxy::server::routes::set_callbacks(cb);
-        tracing::info!("webhook callbacks configured from WEBHOOK_URLS env var");
+    // Wire up WEBHOOK_URLS and Langfuse env vars (if not already set from LiteLLM config).
+    if anyllm_proxy::server::routes::get_callbacks().is_none() {
+        let urls: Vec<String> = std::env::var("WEBHOOK_URLS")
+            .unwrap_or_default()
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+        let mut named = vec![];
+        if let Some(lf) = anyllm_proxy::integrations::LangfuseClient::from_env() {
+            tracing::info!("langfuse integration enabled from environment variables");
+            named.push(anyllm_proxy::integrations::NamedIntegration::Langfuse(lf));
+        }
+        if let Some(cb) = anyllm_proxy::callbacks::CallbackConfig::with_named(urls, named) {
+            anyllm_proxy::server::routes::set_callbacks(cb);
+            tracing::info!("callbacks configured from environment");
+        }
     }
 
     tracing::info!(

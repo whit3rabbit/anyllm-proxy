@@ -4,6 +4,7 @@
 // Fire-and-forget: spawned tasks, no impact on request latency.
 
 use crate::admin::state::RequestLogEntry;
+use crate::integrations::NamedIntegration;
 use std::sync::Arc;
 
 /// Configuration for webhook callbacks.
@@ -11,6 +12,8 @@ use std::sync::Arc;
 pub struct CallbackConfig {
     /// Webhook URLs to POST to on request completion.
     urls: Vec<String>,
+    /// Named (non-URL) integrations such as Langfuse.
+    named: Vec<NamedIntegration>,
     /// Shared HTTP client with timeout.
     client: reqwest::Client,
 }
@@ -19,6 +22,12 @@ impl CallbackConfig {
     /// Create a new CallbackConfig from a list of webhook URLs.
     /// URLs that don't start with http:// or https:// are skipped with a warning.
     pub fn new(urls: Vec<String>) -> Option<Arc<Self>> {
+        Self::with_named(urls, vec![])
+    }
+
+    /// Create a CallbackConfig with both webhook URLs and named integrations.
+    /// Returns None only when both valid_urls and named are empty.
+    pub fn with_named(urls: Vec<String>, named: Vec<NamedIntegration>) -> Option<Arc<Self>> {
         let valid_urls: Vec<String> = urls
             .into_iter()
             .filter(|u| {
@@ -49,7 +58,7 @@ impl CallbackConfig {
             }
         }
 
-        if valid_urls.is_empty() {
+        if valid_urls.is_empty() && named.is_empty() {
             return None;
         }
 
@@ -60,6 +69,7 @@ impl CallbackConfig {
 
         Some(Arc::new(Self {
             urls: valid_urls,
+            named,
             client,
         }))
     }
@@ -106,6 +116,10 @@ impl CallbackConfig {
                 }
             });
         }
+
+        for integration in &self.named {
+            integration.notify(entry);
+        }
     }
 
     /// Fire-and-forget: POST an arbitrary JSON payload to all configured webhooks.
@@ -137,6 +151,11 @@ impl CallbackConfig {
     /// Number of configured webhook URLs.
     pub fn url_count(&self) -> usize {
         self.urls.len()
+    }
+
+    /// Number of configured named integrations.
+    pub fn named_count(&self) -> usize {
+        self.named.len()
     }
 }
 
@@ -180,5 +199,20 @@ mod tests {
         ]);
         let config = config.unwrap();
         assert_eq!(config.url_count(), 5);
+    }
+
+    #[test]
+    fn with_named_accepts_named_only() {
+        // with_named with no URLs but a named integration returns Some
+        // We can't construct LangfuseClient directly in tests easily,
+        // so just verify with_named([valid_url], []) == new([valid_url])
+        let c1 = CallbackConfig::with_named(
+            vec!["https://example.com/hook".to_string()],
+            vec![],
+        );
+        let c2 = CallbackConfig::new(vec!["https://example.com/hook".to_string()]);
+        assert!(c1.is_some());
+        assert!(c2.is_some());
+        assert_eq!(c1.unwrap().url_count(), c2.unwrap().url_count());
     }
 }

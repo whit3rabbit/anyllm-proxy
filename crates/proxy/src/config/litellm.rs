@@ -152,8 +152,10 @@ fn hash_string(s: &str) -> u64 {
 pub struct LiteLLMParsed {
     pub multi_config: MultiConfig,
     pub router: ModelRouter,
-    /// Webhook callback URLs from litellm_settings.callbacks.
+    /// Webhook callback URLs from litellm_settings.callbacks (non-named entries).
     pub callback_urls: Vec<String>,
+    /// True when "langfuse" appears in litellm_settings.callbacks.
+    pub langfuse_requested: bool,
     /// Resolved `general_settings.master_key`, if present.
     /// Caller should apply as PROXY_API_KEYS if that var is not already set.
     pub master_key: Option<String>,
@@ -310,16 +312,22 @@ pub fn parse_litellm_yaml(yaml: &str) -> LiteLLMParsed {
 
     let router = ModelRouter::with_strategy(routes, strategy);
 
-    let callback_urls = config
+    let callbacks = config
         .litellm_settings
         .as_ref()
         .map(|s| s.callbacks.clone())
         .unwrap_or_default();
+    let langfuse_requested = callbacks.iter().any(|c| c.eq_ignore_ascii_case("langfuse"));
+    let callback_urls: Vec<String> = callbacks
+        .into_iter()
+        .filter(|c| !c.eq_ignore_ascii_case("langfuse"))
+        .collect();
 
     LiteLLMParsed {
         multi_config: multi,
         router,
         callback_urls,
+        langfuse_requested,
         master_key,
     }
 }
@@ -711,6 +719,40 @@ router_settings:
         let (_, router) = from_litellm_yaml(yaml);
         assert_eq!(router.strategy(), RoutingStrategy::Weighted);
         assert!(router.has_model("gpt-4o"));
+    }
+
+    #[test]
+    fn langfuse_callback_sets_flag() {
+        let yaml = r#"
+model_list:
+  - model_name: gpt-4o
+    litellm_params:
+      model: openai/gpt-4o
+      api_key: sk-test
+litellm_settings:
+  callbacks:
+    - langfuse
+"#;
+        let parsed = parse_litellm_yaml(yaml);
+        assert!(parsed.langfuse_requested);
+        assert!(parsed.callback_urls.is_empty()); // "langfuse" filtered out
+    }
+
+    #[test]
+    fn webhook_url_not_flagged_as_langfuse() {
+        let yaml = r#"
+model_list:
+  - model_name: gpt-4o
+    litellm_params:
+      model: openai/gpt-4o
+      api_key: sk-test
+litellm_settings:
+  callbacks:
+    - https://my-webhook.example.com/hook
+"#;
+        let parsed = parse_litellm_yaml(yaml);
+        assert!(!parsed.langfuse_requested);
+        assert_eq!(parsed.callback_urls.len(), 1);
     }
 
     #[test]

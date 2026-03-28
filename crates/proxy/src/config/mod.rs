@@ -496,12 +496,24 @@ impl MultiConfig {
                     .unwrap_or_else(|e| panic!("failed to read LiteLLM config '{path}': {e}"));
                 let parsed = litellm::parse_litellm_yaml(&yaml);
 
-                // Wire up webhook callbacks from litellm_settings.callbacks.
-                if !parsed.callback_urls.is_empty() {
-                    if let Some(cb) = crate::callbacks::CallbackConfig::new(parsed.callback_urls) {
-                        crate::server::routes::set_callbacks(cb);
-                        tracing::info!("webhook callbacks configured from litellm_settings");
+                // Wire up webhook callbacks and named integrations from litellm_settings.callbacks.
+                let mut named = vec![];
+                if parsed.langfuse_requested {
+                    match crate::integrations::LangfuseClient::from_env() {
+                        Some(lf) => {
+                            tracing::info!("langfuse integration enabled");
+                            named.push(crate::integrations::NamedIntegration::Langfuse(lf));
+                        }
+                        None => tracing::warn!(
+                            "langfuse in litellm_settings.callbacks but LANGFUSE_PUBLIC_KEY/SECRET not set"
+                        ),
                     }
+                }
+                if let Some(cb) =
+                    crate::callbacks::CallbackConfig::with_named(parsed.callback_urls, named)
+                {
+                    crate::server::routes::set_callbacks(cb);
+                    tracing::info!("callbacks configured from litellm_settings");
                 }
 
                 return LoadResult {
