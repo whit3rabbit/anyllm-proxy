@@ -312,7 +312,19 @@ pub(crate) async fn messages_stream(
                             let events = translator.finish();
                             send_events(&tx, &events).await;
                         }
-                        // Responses API translator does not expose usage yet.
+                        let usage = translator.usage();
+                        let tokens = usage.map(|u| (u.input_tokens as u64, u.output_tokens as u64));
+                        let cost = if let Some((input_t, output_t)) = tokens {
+                            Some(crate::cost::record_cost(
+                                &log_shared,
+                                &vk_ctx,
+                                &mapped_model,
+                                input_t,
+                                output_t,
+                            ))
+                        } else {
+                            None
+                        };
                         let (status, err) = outcome.record(&metrics);
                         log_request(
                             &log_shared,
@@ -320,11 +332,11 @@ pub(crate) async fn messages_stream(
                                 &log_backend_name,
                                 Some(mapped_model),
                                 status,
-                                None,
+                                tokens,
                                 true,
                                 err,
                                 &vk_ctx,
-                                None,
+                                cost,
                             ),
                         );
                     }

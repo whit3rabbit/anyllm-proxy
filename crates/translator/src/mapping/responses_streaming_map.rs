@@ -345,6 +345,16 @@ impl ResponsesStreamingTranslator {
         }]
     }
 
+    /// Return accumulated usage if any tokens were counted, None otherwise.
+    /// Only populated after a `response.completed` event has been processed.
+    pub fn usage(&self) -> Option<&anthropic::Usage> {
+        if self.usage.input_tokens > 0 || self.usage.output_tokens > 0 {
+            Some(&self.usage)
+        } else {
+            None
+        }
+    }
+
     fn make_message_start(&self) -> anthropic::StreamEvent {
         anthropic::StreamEvent::MessageStart {
             message: anthropic::streaming::MessageStartData {
@@ -565,5 +575,29 @@ mod tests {
 
         let events = t.finish();
         assert!(events.is_empty());
+    }
+
+    #[test]
+    fn translator_usage_returns_none_before_any_events() {
+        let t = ResponsesStreamingTranslator::new("gpt-4o".into());
+        assert!(t.usage().is_none());
+    }
+
+    #[test]
+    fn translator_usage_returns_tokens_after_completed_event() {
+        let mut t = ResponsesStreamingTranslator::new("gpt-4o".into());
+        let completed = make_event(
+            "response.completed",
+            json!({
+                "response": {
+                    "status": "completed",
+                    "usage": {"input_tokens": 42, "output_tokens": 17, "total_tokens": 59}
+                }
+            }),
+        );
+        t.process_event(&completed);
+        let usage = t.usage().expect("usage should be Some after completed event");
+        assert_eq!(usage.input_tokens, 42);
+        assert_eq!(usage.output_tokens, 17);
     }
 }
