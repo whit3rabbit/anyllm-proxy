@@ -79,10 +79,11 @@ impl LangfuseClient {
 pub(crate) fn build_generation_payload(entry: &RequestLogEntry) -> serde_json::Value {
     let end_time = &entry.timestamp;
     let start_time = iso8601_to_epoch(end_time)
-        .map(|epoch| {
-            // Integer truncation: sub-second requests produce start_time == end_time.
-            // Langfuse accepts this; use latency_ms in metadata for precise duration.
-            crate::admin::db::epoch_to_iso8601(epoch.saturating_sub(entry.latency_ms / 1000))
+        .map(|epoch_secs| {
+            // Compute start in milliseconds for sub-second precision.
+            let end_ms = epoch_secs.saturating_mul(1000);
+            let start_ms = end_ms.saturating_sub(entry.latency_ms);
+            crate::admin::db::epoch_to_iso8601_ms(start_ms)
         })
         .unwrap_or_else(|| end_time.clone());
 
@@ -355,5 +356,30 @@ mod tests {
         let body = &payload["batch"][0]["body"];
         assert_eq!(body["level"], "ERROR");
         assert_eq!(body["metadata"]["error"], "internal error");
+    }
+
+    #[test]
+    fn build_payload_starttime_has_ms_precision_for_subsecond_latency() {
+        let entry = RequestLogEntry {
+            request_id: "req-ms".to_string(),
+            timestamp: "2026-03-27T10:00:01Z".to_string(),
+            backend: "openai".to_string(),
+            model_requested: Some("gpt-4o".to_string()),
+            model_mapped: None,
+            status_code: 200,
+            latency_ms: 500,
+            input_tokens: None,
+            output_tokens: None,
+            is_streaming: false,
+            error_message: None,
+            key_id: None,
+            cost_usd: None,
+        };
+        let payload = build_generation_payload(&entry);
+        let body = &payload["batch"][0]["body"];
+        let start = body["startTime"].as_str().unwrap();
+        let end = body["endTime"].as_str().unwrap();
+        assert_ne!(start, end, "sub-second latency should produce different start/end times");
+        assert!(start.contains('.'), "startTime should have ms precision: {start}");
     }
 }

@@ -482,6 +482,17 @@ pub(crate) fn epoch_to_iso8601(epoch: u64) -> String {
     )
 }
 
+/// Convert unix epoch milliseconds to ISO 8601 string with millisecond precision.
+/// Format: "2026-03-27T10:15:30.500Z"
+pub(crate) fn epoch_to_iso8601_ms(epoch_ms: u64) -> String {
+    let secs = epoch_ms / 1000;
+    let ms = epoch_ms % 1000;
+    let base = epoch_to_iso8601(secs);
+    // epoch_to_iso8601 returns "YYYY-MM-DDTHH:MM:SSZ"; strip the Z, append .mmmZ
+    let without_z = base.trim_end_matches('Z');
+    format!("{}.{:03}Z", without_z, ms)
+}
+
 /// Convert days since 1970-01-01 to (year, month, day).
 pub(crate) fn days_to_ymd(days: u64) -> (u64, u64, u64) {
     // Algorithm from http://howardhinnant.github.io/date_algorithms.html
@@ -864,6 +875,15 @@ mod tests {
         // 2026-03-22T00:00:00Z = 1774070400 (approximate)
         let result = epoch_to_iso8601(0);
         assert_eq!(result, "1970-01-01T00:00:00Z");
+    }
+
+    #[test]
+    fn epoch_to_iso8601_ms_formats_fractional_seconds() {
+        assert_eq!(epoch_to_iso8601_ms(500), "1970-01-01T00:00:00.500Z");
+        assert_eq!(epoch_to_iso8601_ms(1000), "1970-01-01T00:00:01.000Z");
+        assert_eq!(epoch_to_iso8601_ms(1001), "1970-01-01T00:00:01.001Z");
+        let result = epoch_to_iso8601_ms(1774070400000);
+        assert!(result.ends_with(".000Z"), "got: {result}");
     }
 
     #[test]
