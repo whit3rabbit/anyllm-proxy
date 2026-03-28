@@ -530,10 +530,9 @@ pub async fn check_ip_allowlist(request: Request<Body>, next: Next) -> Result<Re
             .get("x-forwarded-for")
             .and_then(|v| v.to_str().ok())
             .and_then(|s| {
-                s.split(',')
+                s.rsplit(',')
                     .map(|p| p.trim())
-                    .filter(|p| !p.is_empty())
-                    .last()
+                    .find(|p| !p.is_empty())
             })
             .and_then(|s| s.parse::<std::net::IpAddr>().ok())
     } else {
