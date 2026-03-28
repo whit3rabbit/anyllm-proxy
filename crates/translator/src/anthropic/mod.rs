@@ -1,3 +1,5 @@
+/// Anthropic Message Batches API request/response types.
+pub mod batch;
 /// Anthropic error response types (`ErrorResponse`, `ErrorType`, `ErrorDetail`).
 pub mod errors;
 /// Anthropic Messages API request and response types.
