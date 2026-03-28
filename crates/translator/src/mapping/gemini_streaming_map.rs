@@ -22,6 +22,10 @@ pub struct GeminiStreamingTranslator {
     prev_text_len: usize,
     /// Number of tool calls already processed.
     prev_tool_count: usize,
+    /// Whether a thinking content block is currently open.
+    thought_block_open: bool,
+    /// Length of thought text already emitted as deltas.
+    prev_thought_len: usize,
     usage: anthropic::Usage,
     finished: bool,
 }
@@ -36,6 +40,8 @@ impl GeminiStreamingTranslator {
             text_block_open: false,
             prev_text_len: 0,
             prev_tool_count: 0,
+            thought_block_open: false,
+            prev_thought_len: 0,
             usage: anthropic::Usage::default(),
             finished: false,
         }
@@ -62,16 +68,51 @@ impl GeminiStreamingTranslator {
             None => return events,
         };
 
-        // Collect full accumulated text from all text parts
+        // Separate thought parts (thinking models) from answer parts.
+        let mut current_thought = String::new();
         let mut current_text = String::new();
         for part in &candidate.content.parts {
-            if let Some(ref t) = part.text {
+            if part.thought == Some(true) {
+                if let Some(ref t) = part.text {
+                    current_thought.push_str(t);
+                }
+            } else if let Some(ref t) = part.text {
                 current_text.push_str(t);
             }
         }
 
-        // Text delta: diff against what we already emitted
+        // Thought delta: diff against what we already emitted.
+        if current_thought.len() > self.prev_thought_len {
+            if !self.thought_block_open {
+                events.push(anthropic::StreamEvent::ContentBlockStart {
+                    index: self.content_block_index,
+                    content_block: anthropic::ContentBlock::Thinking {
+                        thinking: String::new(),
+                        signature: None,
+                    },
+                });
+                self.thought_block_open = true;
+            }
+            let delta_thought = &current_thought[self.prev_thought_len..];
+            events.push(anthropic::StreamEvent::ContentBlockDelta {
+                index: self.content_block_index,
+                delta: anthropic::streaming::Delta::ThinkingDelta {
+                    thinking: delta_thought.to_string(),
+                },
+            });
+            self.prev_thought_len = current_thought.len();
+        }
+
+        // Text delta: diff against what we already emitted.
         if current_text.len() > self.prev_text_len {
+            // Close the thought block before opening the text block.
+            if self.thought_block_open {
+                events.push(anthropic::StreamEvent::ContentBlockStop {
+                    index: self.content_block_index,
+                });
+                self.thought_block_open = false;
+                self.content_block_index += 1;
+            }
             if !self.text_block_open {
                 events.push(anthropic::StreamEvent::ContentBlockStart {
                     index: self.content_block_index,
@@ -162,6 +203,15 @@ impl GeminiStreamingTranslator {
             return Vec::new();
         }
         let mut events = Vec::new();
+
+        // Close any open thought block
+        if self.thought_block_open {
+            events.push(anthropic::StreamEvent::ContentBlockStop {
+                index: self.content_block_index,
+            });
+            self.thought_block_open = false;
+            self.content_block_index += 1;
+        }
 
         // Close any open text block
         if self.text_block_open {
@@ -816,5 +866,152 @@ mod tests {
             let json = serde_json::to_string(event);
             assert!(json.is_ok(), "event should serialize: {:?}", event);
         }
+    }
+
+    // --- Thinking / extended thinking tests ---
+
+    fn make_thought_response(
+        thought: &str,
+        text: &str,
+        finish_reason: Option<FinishReason>,
+    ) -> GenerateContentResponse {
+        let thought_part = Part {
+            thought: Some(true),
+            text: Some(thought.into()),
+            ..Default::default()
+        };
+        GenerateContentResponse {
+            candidates: vec![Candidate {
+                content: Content {
+                    role: Some("model".into()),
+                    parts: if text.is_empty() {
+                        vec![thought_part]
+                    } else {
+                        vec![thought_part, Part::text(text)]
+                    },
+                },
+                finish_reason,
+                safety_ratings: None,
+            }],
+            usage_metadata: None,
+            model_version: None,
+        }
+    }
+
+    #[test]
+    fn streaming_thought_emits_thinking_delta() {
+        let mut t = GeminiStreamingTranslator::new("gemini-2.5-pro".into());
+        let resp = make_thought_response("Reasoning here", "", None);
+        let events = t.process_response(&resp);
+
+        let thinking_starts: Vec<_> = events
+            .iter()
+            .filter(|e| {
+                matches!(
+                    e,
+                    anthropic::StreamEvent::ContentBlockStart {
+                        content_block: anthropic::ContentBlock::Thinking { .. },
+                        ..
+                    }
+                )
+            })
+            .collect();
+        assert_eq!(thinking_starts.len(), 1, "should open one thinking block");
+
+        let thinking_deltas: Vec<_> = events
+            .iter()
+            .filter(|e| {
+                matches!(
+                    e,
+                    anthropic::StreamEvent::ContentBlockDelta {
+                        delta: anthropic::streaming::Delta::ThinkingDelta { .. },
+                        ..
+                    }
+                )
+            })
+            .collect();
+        assert_eq!(thinking_deltas.len(), 1);
+        if let anthropic::StreamEvent::ContentBlockDelta {
+            delta: anthropic::streaming::Delta::ThinkingDelta { thinking },
+            ..
+        } = &thinking_deltas[0]
+        {
+            assert_eq!(thinking, "Reasoning here");
+        }
+    }
+
+    #[test]
+    fn streaming_thought_block_closed_before_text_block() {
+        let mut t = GeminiStreamingTranslator::new("gemini-2.5-pro".into());
+        let resp = make_thought_response("thought", "answer", Some(FinishReason::STOP));
+        let events = t.process_response(&resp);
+
+        // Find sequence: ContentBlockStop for thought, then ContentBlockStart for text.
+        let mut saw_thought_stop = false;
+        let mut saw_text_start_after_stop = false;
+        for e in &events {
+            match e {
+                anthropic::StreamEvent::ContentBlockStop { index: 0 } => {
+                    saw_thought_stop = true;
+                }
+                anthropic::StreamEvent::ContentBlockStart {
+                    content_block: anthropic::ContentBlock::Text { .. },
+                    ..
+                } if saw_thought_stop => {
+                    saw_text_start_after_stop = true;
+                }
+                _ => {}
+            }
+        }
+        assert!(saw_thought_stop, "thinking block should be closed");
+        assert!(saw_text_start_after_stop, "text block should start after thinking stop");
+
+        // No thinking block should remain open at message_stop.
+        assert!(t.is_finished());
+        assert!(!t.thought_block_open);
+    }
+
+    #[test]
+    fn streaming_incremental_thought_diffs() {
+        let mut t = GeminiStreamingTranslator::new("gemini-2.5-pro".into());
+
+        // First chunk: partial thought
+        let resp1 = make_thought_response("Step 1", "", None);
+        let events1 = t.process_response(&resp1);
+        let delta1: Vec<_> = events1
+            .iter()
+            .filter_map(|e| {
+                if let anthropic::StreamEvent::ContentBlockDelta {
+                    delta: anthropic::streaming::Delta::ThinkingDelta { thinking },
+                    ..
+                } = e
+                {
+                    Some(thinking.as_str())
+                } else {
+                    None
+                }
+            })
+            .collect();
+        assert_eq!(delta1, vec!["Step 1"]);
+
+        // Second chunk: more thought added
+        let resp2 = make_thought_response("Step 1 Step 2", "", Some(FinishReason::STOP));
+        let events2 = t.process_response(&resp2);
+        let delta2: Vec<_> = events2
+            .iter()
+            .filter_map(|e| {
+                if let anthropic::StreamEvent::ContentBlockDelta {
+                    delta: anthropic::streaming::Delta::ThinkingDelta { thinking },
+                    ..
+                } = e
+                {
+                    Some(thinking.as_str())
+                } else {
+                    None
+                }
+            })
+            .collect();
+        // Only the NEW portion should appear as a delta
+        assert_eq!(delta2, vec![" Step 2"]);
     }
 }
