@@ -129,10 +129,15 @@ pub fn is_private_ip(ip: IpAddr) -> bool {
                 || v4 == std::net::Ipv4Addr::new(169, 254, 169, 254)
         }
         IpAddr::V6(v6) => {
-            v6.is_loopback() || v6.is_unspecified()
-            // Check IPv4-mapped IPv6 addresses (::ffff:192.168.x.x) recursively;
-            // attackers can bypass IPv4 checks using the mapped representation.
-            || matches!(v6.to_ipv4_mapped(), Some(v4) if is_private_ip(IpAddr::V4(v4)))
+            let seg0 = v6.segments()[0];
+            v6.is_loopback()
+                || v6.is_unspecified()
+                // Unique Local Addresses (fc00::/7): covers fc00:: through fdff::
+                || (seg0 & 0xfe00) == 0xfc00
+                // Link-Local addresses (fe80::/10): covers fe80:: through febf::
+                || (seg0 & 0xffc0) == 0xfe80
+                // IPv4-mapped (::ffff:x.x.x.x): check recursively against IPv4 rules
+                || matches!(v6.to_ipv4_mapped(), Some(v4) if is_private_ip(IpAddr::V4(v4)))
         }
     }
 }
@@ -188,6 +193,22 @@ mod tests {
     #[test]
     fn public_ipv6() {
         assert!(!is_private_ip("2001:4860:4860::8888".parse().unwrap()));
+    }
+
+    #[test]
+    fn private_ipv6_ula() {
+        // fc00::/7 covers fc00:: through fdff::
+        assert!(is_private_ip("fc00::1".parse().unwrap()));
+        assert!(is_private_ip("fd12:3456:789a:1::1".parse().unwrap()));
+        assert!(is_private_ip("fdff:ffff:ffff:ffff::1".parse().unwrap()));
+    }
+
+    #[test]
+    fn private_ipv6_link_local() {
+        // fe80::/10 covers fe80:: through febf::
+        assert!(is_private_ip("fe80::1".parse().unwrap()));
+        assert!(is_private_ip("fe80::dead:beef".parse().unwrap()));
+        assert!(is_private_ip("febf::1".parse().unwrap()));
     }
 
     #[test]
