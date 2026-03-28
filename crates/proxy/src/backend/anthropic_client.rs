@@ -64,11 +64,13 @@ impl AnthropicClient {
     }
 
     /// Forward a non-streaming request. Returns raw response body and rate limit headers.
+    /// `extra_headers` are forwarded as-is (e.g., `x-claude-code-session-id`, `anthropic-beta`).
     pub async fn forward(
         &self,
         body: bytes::Bytes,
+        extra_headers: &[(String, String)],
     ) -> Result<(bytes::Bytes, RateLimitHeaders), AnthropicClientError> {
-        let response = self.send_with_retry(body, false).await?;
+        let response = self.send_with_retry(body, false, extra_headers).await?;
         let rate_limits = RateLimitHeaders::from_anthropic_headers(response.headers());
         let resp_body = response
             .bytes()
@@ -78,11 +80,13 @@ impl AnthropicClient {
     }
 
     /// Forward a streaming request. Returns the raw response for SSE piping.
+    /// `extra_headers` are forwarded as-is (e.g., `x-claude-code-session-id`, `anthropic-beta`).
     pub async fn forward_stream(
         &self,
         body: bytes::Bytes,
+        extra_headers: &[(String, String)],
     ) -> Result<(reqwest::Response, RateLimitHeaders), AnthropicClientError> {
-        let response = self.send_with_retry(body, true).await?;
+        let response = self.send_with_retry(body, true, extra_headers).await?;
         let rate_limits = RateLimitHeaders::from_anthropic_headers(response.headers());
         Ok((response, rate_limits))
     }
@@ -92,6 +96,7 @@ impl AnthropicClient {
         &self,
         body: bytes::Bytes,
         stream: bool,
+        extra_headers: &[(String, String)],
     ) -> Result<reqwest::Response, AnthropicClientError> {
         let content_type = "application/json";
         for attempt in 0..=super::MAX_RETRIES {
@@ -108,6 +113,10 @@ impl AnthropicClient {
             } else {
                 rb
             };
+            // Forward client-supplied headers (session ID, beta flags, etc.).
+            let rb = extra_headers
+                .iter()
+                .fold(rb, |rb, (k, v)| rb.header(k.as_str(), v.as_str()));
 
             let response = rb
                 .send()

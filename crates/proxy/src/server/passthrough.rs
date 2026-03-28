@@ -12,7 +12,11 @@ use axum::{
 
 use super::routes::AppState;
 
-pub(crate) async fn anthropic_passthrough(State(state): State<AppState>, body: Bytes) -> Response {
+pub(crate) async fn anthropic_passthrough(
+    State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
+    body: Bytes,
+) -> Response {
     state.metrics.record_request();
 
     let client = match &state.backend {
@@ -27,6 +31,20 @@ pub(crate) async fn anthropic_passthrough(State(state): State<AppState>, body: B
         }
     };
 
+    // Collect client headers that Anthropic understands and should be forwarded upstream.
+    // x-claude-code-session-id: session correlation for proxies (Claude Code v2.1.86+)
+    // anthropic-beta: enables beta API features; must reach the upstream to take effect
+    let extra_headers: Vec<(String, String)> =
+        ["x-claude-code-session-id", "anthropic-beta"]
+            .iter()
+            .filter_map(|name| {
+                headers
+                    .get(*name)
+                    .and_then(|v| v.to_str().ok())
+                    .map(|v| (name.to_string(), v.to_string()))
+            })
+            .collect();
+
     // Peek at just the `stream` field instead of parsing the full body.
     // Full deserialization would be wasteful for image-heavy requests
     // (up to 32MB) when we only need one boolean to choose the handler.
@@ -40,7 +58,7 @@ pub(crate) async fn anthropic_passthrough(State(state): State<AppState>, body: B
         .unwrap_or(false);
 
     if is_stream {
-        match client.forward_stream(body).await {
+        match client.forward_stream(body, &extra_headers).await {
             Ok((response, rate_limits)) => {
                 state.metrics.record_success();
                 // Pipe the raw SSE stream through to the client
@@ -59,7 +77,7 @@ pub(crate) async fn anthropic_passthrough(State(state): State<AppState>, body: B
             }
         }
     } else {
-        match client.forward(body).await {
+        match client.forward(body, &extra_headers).await {
             Ok((resp_body, rate_limits)) => {
                 state.metrics.record_success();
                 let mut resp = (

@@ -25,6 +25,8 @@ pub struct RateLimitHeaders {
     pub tokens_reset: Option<String>,
     /// Seconds to wait before retrying (from `retry-after` header on 429s).
     pub retry_after: Option<String>,
+    /// Anthropic organization ID from `anthropic-organization-id` response header.
+    pub organization_id: Option<String>,
 }
 
 /// Extract a header value as a trimmed string.
@@ -46,6 +48,7 @@ impl RateLimitHeaders {
             tokens_remaining: header_str(headers, "x-ratelimit-remaining-tokens"),
             tokens_reset: header_str(headers, "x-ratelimit-reset-tokens"),
             retry_after: header_str(headers, "retry-after"),
+            organization_id: None,
         }
     }
 
@@ -60,6 +63,7 @@ impl RateLimitHeaders {
             tokens_remaining: header_str(headers, "anthropic-ratelimit-tokens-remaining"),
             tokens_reset: header_str(headers, "anthropic-ratelimit-tokens-reset"),
             retry_after: header_str(headers, "retry-after"),
+            organization_id: header_str(headers, "anthropic-organization-id"),
         }
     }
 
@@ -91,6 +95,7 @@ impl RateLimitHeaders {
         let tok_reset = convert_reset_duration(&self.tokens_reset, "tokens_reset");
         set_if_some(map, "anthropic-ratelimit-tokens-reset", &tok_reset);
         set_if_some(map, "retry-after", &self.retry_after);
+        set_if_some(map, "anthropic-organization-id", &self.organization_id);
         map.insert(
             http_types::HeaderName::from_static("anthropic-version"),
             http_types::HeaderValue::from_static("2023-06-01"),
@@ -409,5 +414,33 @@ mod tests {
         assert_eq!(rl.requests_remaining.as_deref(), Some("99"));
         assert_eq!(rl.requests_reset.as_deref(), Some("2025-01-01T00:00:00Z"));
         assert_eq!(rl.retry_after.as_deref(), Some("5"));
+        assert!(rl.organization_id.is_none());
+    }
+
+    #[test]
+    fn from_anthropic_headers_parses_organization_id() {
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert(
+            "anthropic-organization-id",
+            "org-abc123".parse().unwrap(),
+        );
+        let rl = RateLimitHeaders::from_anthropic_headers(&headers);
+        assert_eq!(rl.organization_id.as_deref(), Some("org-abc123"));
+    }
+
+    #[test]
+    fn inject_anthropic_response_headers_sets_organization_id() {
+        let rl = RateLimitHeaders {
+            organization_id: Some("org-xyz".into()),
+            ..Default::default()
+        };
+        let mut map = reqwest::header::HeaderMap::new();
+        rl.inject_anthropic_response_headers(&mut map);
+        assert_eq!(
+            map.get("anthropic-organization-id").unwrap(),
+            "org-xyz"
+        );
+        // version header still present
+        assert_eq!(map.get("anthropic-version").unwrap(), "2023-06-01");
     }
 }
