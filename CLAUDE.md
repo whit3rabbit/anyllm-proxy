@@ -12,7 +12,7 @@ All implementation phases are complete.
 
 **Working (verified):**
 - Build: `cargo build` clean, `cargo clippy -- -D warnings` clean
-- Tests: ~555 tests passing, 8 ignored (live API)
+- Tests: ~906 tests passing, 8 ignored (live API)
 - Full Anthropic Messages API translation: non-streaming, streaming SSE, tool calling, file/document blocks
 - `POST /v1/chat/completions` input: accepts OpenAI Chat Completions format, returns OpenAI format (unblocks all OpenAI-native clients)
 - Azure OpenAI backend: `BACKEND=azure` with deployment-scoped URL and `api-key` header
@@ -21,7 +21,20 @@ All implementation phases are complete.
 - Rust client library v0.2.0: `ClientBuilder`, `ToolBuilder`, `messages_stream()` returning `impl Stream`
 - Optional OpenTelemetry export: `--features otel` enables OTLP span export; zero overhead when feature is off
 - Proxy middleware: health, auth (env-var keys + virtual keys), request ID, size limits, concurrency limits, retry with backoff
-- Compatibility endpoints: /v1/models, count_tokens (approximate via tiktoken), batches (stub)
+- Compatibility endpoints: /v1/models, count_tokens (approximate via tiktoken)
+- Anthropic batch API: `/v1/messages/batches` (create, get, list, cancel, results) translated to/from OpenAI batch format
+- Gemini native path: direct `generateContent` API, non-streaming + streaming SSE with full-response diffing
+- Strict tool calling: sets `strict: true` on the forced tool when `tool_choice: {type: "tool", name: "X"}`
+- Langfuse integration: native tracing when `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` set, or via config `callbacks: ["langfuse"]`
+- CSRF protection: admin state-mutating endpoints require `X-CSRF-Token` header (double-submit cookie pattern)
+- Per-entry cache TTL: `MemoryCache` enforces per-entry TTL via moka `Expiry` trait
+- Configurable Redis fail policy: `RATE_LIMIT_FAIL_POLICY=open|closed` (default: open)
+- Cost tracking: `record_cost()` wired into all paths; `key_id` + `cost_usd` in request log
+- Audit log: admin config mutations recorded in SQLite `audit_log` table
+- Spend alerts: webhook notifications at 80% / 95% / 100% of key budget
+- Model allowlist: per-key policy with exact match and `prefix/*` wildcard
+- Admin UI: login form (sessionStorage), virtual keys tab, models tab, request detail view, cost column, feed pause + filter
+- Security hardening: plaintext HTTP startup warning, 1MB admin body limit, CSP header, model name validation
 - Model mapping and lossy-translation warnings
 - `POST /v1/embeddings` passthrough: forwards directly to the backend with no translation; works with OpenAI, Vertex, Gemini (`gemini-embedding-exp-03-07`), and vLLM/HuggingFace models. Not mounted for the Anthropic passthrough backend.
 - `x-anyllm-degradation` response header: set when features are silently dropped during translation (e.g., `top_k`, `thinking_config`, `cache_control`, `document_blocks`, `stop_sequences_truncated`)
@@ -31,14 +44,13 @@ All implementation phases are complete.
 - AWS Bedrock backend: wired up via `BACKEND=bedrock` with SigV4 signing and Event Stream decoding; not tested against live API. Run with `AWS_REGION=... AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... cargo test --test live_bedrock -- --ignored --test-threads=1`
 - Azure OpenAI backend: wired up via `BACKEND=azure`; not tested against live API. Run with `AZURE_OPENAI_API_KEY=... cargo test --test live_azure -- --ignored --test-threads=1`
 - Live API integration tests exist (`crates/proxy/tests/live_api.rs`) but are `#[ignore]` by default; run with `OPENAI_API_KEY=sk-... cargo test --test live_api -- --ignored --test-threads=1`
-- Metrics endpoint exists (GET /metrics returns JSON counters) but streaming requests only track total count, not success/error
 
 ## Build and Test
 
 ```bash
 cargo build                          # build everything
 cargo build --features otel          # with OpenTelemetry support
-cargo test                           # run all tests (~555 tests, 8 ignored)
+cargo test                           # run all tests (~906 tests, 8 ignored)
 cargo test -p anyllm_client     # client crate only
 cargo test -p anyllm_translate  # translator crate only
 cargo test -p anyllm_proxy      # proxy crate only
@@ -139,7 +151,7 @@ Pure translation logic, no IO. Key modules:
 ### `crates/proxy` (bin: `anyllm_proxy`)
 HTTP proxy built on axum + reqwest:
 - **`config/`**: Env-based configuration (`mod.rs`), TLS client cert setup (`tls.rs`), URL validation (`url_validation.rs`)
-- **`server/routes.rs`**: Axum router (POST /v1/messages, POST /v1/chat/completions, GET /health, GET /metrics, GET /v1/models, stubs for count_tokens and batches); `record_vk_tpm` for post-response TPM recording
+- **`server/routes.rs`**: Axum router (POST /v1/messages, POST /v1/chat/completions, GET /health, GET /metrics, GET /v1/models, stub for count_tokens, POST /v1/messages/batches and related batch endpoints); `record_vk_tpm` for post-response TPM recording
 - **`server/chat_completions.rs`**: Handler for POST /v1/chat/completions (OpenAI format in, OpenAI format out); uses `ReverseStreamingTranslator` for streaming
 - **`server/middleware.rs`**: Auth validation (env-var keys + virtual key DashMap), RPM/TPM pre-check, request ID injection, 32MB size limit, concurrency limit, `VirtualKeyContext` extension for TPM recording
 - **`server/sse.rs`**: SSE response helpers for Anthropic-format streaming
@@ -197,6 +209,7 @@ Client (Anthropic format) -> proxy (axum)
 - 001-litellm-parity: Added Rust stable (1.83+, workspace edition 2021)
 - 20260325-120000-litellm-gap-fill: Added POST /v1/chat/completions (OpenAI format input), Azure OpenAI backend (BACKEND=azure), virtual key management (admin API + DashMap cache), per-key RPM/TPM rate limiting, Rust client v0.2.0 (ClientBuilder + ToolBuilder + messages_stream), optional OpenTelemetry export (--features otel), ReverseStreamingTranslator in translator crate, reverse translation functions openai_to_anthropic_request / anthropic_to_openai_response
 - parity-gaps: Routing strategies (least-busy, latency-based, weighted), dynamic model management admin API, /v1/models enrichment, IP allowlisting (CIDR, X-Forwarded-For), webhook callbacks
+- 20260327: Gemini native generateContent path; Anthropic batch API (/v1/messages/batches); strict tool calling; Langfuse integration; CSRF protection; per-entry cache TTL; Redis fail policy; cost tracking + audit log + spend alerts + model allowlist; admin UI overhaul; security hardening; jsonwebtoken CVE fix
 
 ## Active Technologies
 - Rust stable (1.83+, workspace edition 2021) (001-litellm-parity)
