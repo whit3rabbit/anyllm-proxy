@@ -373,6 +373,18 @@ pub fn purge_old_logs(conn: &Connection, retention_days: u32) -> rusqlite::Resul
     Ok(changed)
 }
 
+/// Count request log entries with a timestamp >= `since_epoch` (Unix seconds).
+/// Used to compute requests-per-second for the metrics dashboard.
+pub fn count_requests_since(conn: &Connection, since_epoch: u64) -> rusqlite::Result<u64> {
+    let since_iso = epoch_to_iso8601(since_epoch);
+    let count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM request_log WHERE timestamp >= ?1",
+        rusqlite::params![since_iso],
+        |row| row.get(0),
+    )?;
+    Ok(count.max(0) as u64)
+}
+
 /// Spawn the write buffer background task. Returns the sender for proxy handlers.
 /// Flushes every 100ms or 100 rows, whichever comes first.
 pub fn spawn_write_buffer(db: Arc<Mutex<Connection>>) -> mpsc::Sender<RequestLogEntry> {
@@ -1051,5 +1063,32 @@ mod tests {
         let results =
             query_request_log(&conn, 10, 0, None, None, Some("garbage"), None).unwrap();
         assert_eq!(results.len(), 1);
+    }
+
+    #[test]
+    fn count_requests_since_returns_zero_on_empty_log() {
+        let conn = in_memory_db();
+        let count = count_requests_since(&conn, 0).unwrap();
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn count_requests_since_counts_recent_entries() {
+        let conn = in_memory_db();
+
+        // Insert a recent entry (sample_entry uses current time).
+        let recent = sample_entry();
+        insert_request_log(&conn, &recent).unwrap();
+
+        // Insert an old entry.
+        let mut old = sample_entry();
+        old.request_id = "old-req".to_string();
+        old.timestamp = "2020-01-01T00:00:00Z".to_string();
+        insert_request_log(&conn, &old).unwrap();
+
+        // Count since 2025-01-01 should include only the recent entry.
+        let since_2025: u64 = 1735689600; // 2025-01-01T00:00:00Z
+        let count = count_requests_since(&conn, since_2025).unwrap();
+        assert_eq!(count, 1);
     }
 }

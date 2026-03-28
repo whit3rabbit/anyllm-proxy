@@ -400,12 +400,28 @@ async fn main() {
                     backends.insert(name.clone(), snap);
                 }
                 let error_rate = aggregate.error_rate();
+                // Count requests in the last 60 seconds for RPS.
+                let rps = {
+                    let db = snapshot_shared.db.clone();
+                    let now_secs = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs();
+                    let since = now_secs.saturating_sub(60);
+                    tokio::task::spawn_blocking(move || {
+                        let conn = db.lock().unwrap_or_else(|e| e.into_inner());
+                        admin::db::count_requests_since(&conn, since).unwrap_or(0)
+                    })
+                    .await
+                    .unwrap_or(0) as f64
+                        / 60.0
+                };
                 let snapshot = admin::state::MetricsSnapshotData {
                     backends,
                     latency_p50_ms: None, // Computed on demand by REST endpoint
                     latency_p95_ms: None,
                     latency_p99_ms: None,
-                    requests_per_second: 0.0, // TODO: compute from recent request log
+                    requests_per_second: rps,
                     error_rate,
                 };
                 let _ = snapshot_shared
