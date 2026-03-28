@@ -198,9 +198,18 @@ pub fn record_cost(
     if let (Some(shared), Some(ctx)) = (shared, vk_ctx) {
         let db = shared.db.clone();
         let key_id = ctx.key_id;
+        let period_reset = ctx.period_reset.clone();
         // Spawn a blocking task so the response is not delayed by the DB write.
         tokio::task::spawn_blocking(move || {
             let conn = db.lock().unwrap_or_else(|e| e.into_inner());
+            // If the budget period rolled over during auth, reset SQLite first so that
+            // accumulate_spend starts from 0 instead of adding to the stale old-period total.
+            if let Some(ref new_period_start) = period_reset {
+                if let Err(e) = db::reset_period_spend(&conn, key_id, new_period_start) {
+                    tracing::error!(error = %e, key_id, "failed to reset period spend");
+                }
+                reset_alert_level(key_id);
+            }
             if let Err(e) = db::accumulate_spend(&conn, key_id, cost, input_tokens, output_tokens) {
                 tracing::error!(error = %e, key_id, "failed to accumulate spend");
                 return;
@@ -373,6 +382,7 @@ mod tests {
             key_id,
             rate_state: Arc::new(RateLimitState::new()),
             allowed_models: None,
+            period_reset: None,
         };
 
         // record_cost uses tokio::task::spawn_blocking, so we need a runtime.

@@ -27,6 +27,21 @@ pub fn accumulate_spend(
     Ok(())
 }
 
+/// Atomically reset the period budget in SQLite when a new budget period begins.
+/// Called when `check_and_reset_period` triggers a rollover; must run before
+/// `accumulate_spend` so the running total starts from zero for the new period.
+pub fn reset_period_spend(
+    conn: &Connection,
+    key_id: i64,
+    new_period_start: &str,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE virtual_api_key SET period_spend_usd = 0.0, period_start = ?1 WHERE id = ?2",
+        params![new_period_start, key_id],
+    )?;
+    Ok(())
+}
+
 /// Per-key spend summary returned by the admin endpoint.
 #[derive(Debug, serde::Serialize)]
 pub struct KeySpend {
@@ -125,5 +140,45 @@ mod tests {
         let conn = test_db();
         let result = get_key_spend(&conn, 9999).unwrap();
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn reset_period_spend_zeroes_and_updates_start() {
+        let conn = test_db();
+        let id = crate::admin::db::insert_virtual_key(
+            &conn,
+            &crate::admin::db::InsertVirtualKeyParams {
+                key_hash: "aabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccdd",
+                key_prefix: "sk-vkaabb",
+                description: Some("period-reset-test"),
+                expires_at: None,
+                rpm_limit: None,
+                tpm_limit: None,
+                spend_limit: None,
+                role: "developer",
+                max_budget_usd: Some(10.0),
+                budget_duration: Some("monthly"),
+                allowed_models: None,
+            },
+        )
+        .unwrap();
+
+        // Accumulate spend in the old period
+        accumulate_spend(&conn, id, 7.50, 1000, 500).unwrap();
+        let spend = get_key_spend(&conn, id).unwrap().unwrap();
+        assert!((spend.period_cost_usd - 7.50).abs() < 1e-10);
+
+        // Simulate period rollover
+        reset_period_spend(&conn, id, "2026-04-01T00:00:00Z").unwrap();
+        let spend = get_key_spend(&conn, id).unwrap().unwrap();
+        assert!((spend.period_cost_usd - 0.0).abs() < 1e-10);
+        assert_eq!(spend.period_start.as_deref(), Some("2026-04-01T00:00:00Z"));
+
+        // Accumulate in the new period: must be 1.25, NOT 7.50 + 1.25
+        accumulate_spend(&conn, id, 1.25, 200, 100).unwrap();
+        let spend = get_key_spend(&conn, id).unwrap().unwrap();
+        assert!((spend.period_cost_usd - 1.25).abs() < 1e-10);
+        // total_spend is cumulative across periods
+        assert!((spend.total_cost_usd - 8.75).abs() < 1e-10);
     }
 }
