@@ -128,6 +128,109 @@ pub fn openai_tool_choice_to_anthropic(tc: &openai::ChatToolChoice) -> anthropic
     }
 }
 
+/// Normalize a JSON Schema for OpenAI strict mode.
+///
+/// OpenAI strict mode requires:
+/// - All properties of object schemas listed in `required`.
+/// - `additionalProperties: false` on all object schemas.
+///
+/// Applied recursively to nested object schemas.
+/// Non-object schemas are returned unchanged.
+pub fn normalize_schema_for_strict(mut schema: serde_json::Value) -> serde_json::Value {
+    if schema.get("type").and_then(|t| t.as_str()) != Some("object") {
+        return schema;
+    }
+
+    let Some(obj) = schema.as_object_mut() else {
+        return schema;
+    };
+
+    // Set additionalProperties: false.
+    obj.insert(
+        "additionalProperties".to_string(),
+        serde_json::Value::Bool(false),
+    );
+
+    // Collect all property keys.
+    let prop_keys: Vec<String> = obj
+        .get("properties")
+        .and_then(|p| p.as_object())
+        .map(|p| p.keys().cloned().collect())
+        .unwrap_or_default();
+
+    if !prop_keys.is_empty() {
+        // Merge with any existing required array.
+        let existing: std::collections::HashSet<String> = obj
+            .get("required")
+            .and_then(|r| r.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let mut merged: Vec<String> = prop_keys
+            .into_iter()
+            .chain(existing)
+            .collect();
+        merged.sort();
+        merged.dedup();
+
+        obj.insert(
+            "required".to_string(),
+            serde_json::Value::Array(
+                merged.into_iter().map(serde_json::Value::String).collect(),
+            ),
+        );
+
+        // Recurse into nested object properties.
+        if let Some(props) = obj.get_mut("properties").and_then(|p| p.as_object_mut()) {
+            for prop_val in props.values_mut() {
+                if prop_val.get("type").and_then(|t| t.as_str()) == Some("object") {
+                    *prop_val = normalize_schema_for_strict(prop_val.clone());
+                }
+            }
+        }
+    }
+
+    serde_json::Value::Object(obj.clone())
+}
+
+/// Apply strict mode to the single tool that is being forced via tool_choice.
+///
+/// Finds the tool whose function name matches `forced_name`, sets `strict: true`
+/// on its function object, and normalizes its parameter schema.
+///
+/// All other tools are left unchanged.
+pub fn apply_strict_to_forced_tool(tools: &mut Vec<serde_json::Value>, forced_name: &str) {
+    for tool in tools.iter_mut() {
+        let Some(function) = tool.get_mut("function") else {
+            continue;
+        };
+        let name_matches = function
+            .get("name")
+            .and_then(|n| n.as_str())
+            == Some(forced_name);
+
+        if name_matches {
+            if let Some(obj) = function.as_object_mut() {
+                obj.insert("strict".to_string(), serde_json::Value::Bool(true));
+
+                // Normalize parameter schema in place.
+                if let Some(params) = obj.get("parameters").cloned() {
+                    obj.insert(
+                        "parameters".to_string(),
+                        normalize_schema_for_strict(params),
+                    );
+                }
+            }
+            // Tool names are unique; stop after the first match.
+            break;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -507,5 +610,125 @@ mod tests {
         });
         let result = sanitize_schema_for_gemini(schema.clone());
         assert_eq!(result, schema);
+    }
+}
+
+#[cfg(test)]
+mod strict_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn normalize_adds_required_and_disables_additional_props() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "age": {"type": "integer"}
+            }
+        });
+        let normalized = normalize_schema_for_strict(schema);
+        let required = normalized["required"].as_array().unwrap();
+        assert!(required.iter().any(|v| v == "name"), "name should be required");
+        assert!(required.iter().any(|v| v == "age"), "age should be required");
+        assert_eq!(normalized["additionalProperties"], json!(false));
+    }
+
+    #[test]
+    fn normalize_nested_object_properties() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "address": {
+                    "type": "object",
+                    "properties": {
+                        "street": {"type": "string"}
+                    }
+                }
+            }
+        });
+        let normalized = normalize_schema_for_strict(schema);
+        // Nested object must also have required and additionalProperties.
+        let nested = &normalized["properties"]["address"];
+        assert_eq!(nested["additionalProperties"], json!(false));
+        let nested_required = nested["required"].as_array().unwrap();
+        assert!(nested_required.iter().any(|v| v == "street"));
+    }
+
+    #[test]
+    fn normalize_preserves_existing_required() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "x": {"type": "string"},
+                "y": {"type": "string"}
+            },
+            "required": ["x"]
+        });
+        // Should merge existing required with all properties.
+        let normalized = normalize_schema_for_strict(schema);
+        let required = normalized["required"].as_array().unwrap();
+        assert!(required.iter().any(|v| v == "x"));
+        assert!(required.iter().any(|v| v == "y"));
+    }
+
+    #[test]
+    fn normalize_non_object_schema_unchanged() {
+        let schema = json!({"type": "string"});
+        let normalized = normalize_schema_for_strict(schema.clone());
+        assert_eq!(normalized, schema);
+    }
+
+    #[test]
+    fn apply_strict_to_forced_tool_sets_strict_flag() {
+        let mut tools: Vec<serde_json::Value> = vec![
+            serde_json::json!({
+                "type": "function",
+                "function": {
+                    "name": "get_weather",
+                    "description": "Get weather",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"location": {"type": "string"}},
+                        "required": ["location"]
+                    }
+                }
+            }),
+            serde_json::json!({
+                "type": "function",
+                "function": {
+                    "name": "send_email",
+                    "description": "Send email",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"to": {"type": "string"}, "body": {"type": "string"}}
+                    }
+                }
+            }),
+        ];
+
+        apply_strict_to_forced_tool(&mut tools, "send_email");
+
+        // Only send_email should have strict: true.
+        let send_email = &tools[1]["function"];
+        assert_eq!(send_email["strict"], serde_json::json!(true));
+        assert_eq!(
+            send_email["parameters"]["additionalProperties"],
+            serde_json::json!(false)
+        );
+
+        // get_weather should be unchanged (no strict flag).
+        let get_weather = &tools[0]["function"];
+        assert!(get_weather.get("strict").map(|v| v.is_null() || v == &serde_json::json!(false)).unwrap_or(true));
+    }
+
+    #[test]
+    fn apply_strict_no_match_does_not_panic() {
+        let mut tools: Vec<serde_json::Value> = vec![serde_json::json!({
+            "type": "function",
+            "function": {"name": "foo", "parameters": {"type": "string"}}
+        })];
+        // Should not panic when tool name is not found.
+        apply_strict_to_forced_tool(&mut tools, "nonexistent");
     }
 }
