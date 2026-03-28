@@ -15,6 +15,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use tokio::sync::Semaphore;
 
+use crate::batch::anthropic_batch;
 use super::passthrough::anthropic_passthrough;
 use super::streaming::messages_stream;
 use super::token_counting::count_tokens;
@@ -382,7 +383,18 @@ fn backend_router(state: AppState, mode: HandlerMode) -> Router<GlobalState> {
                 post(super::chat_completions::chat_completions),
             )
             .route("/v1/messages/count_tokens", post(count_tokens))
-            .route("/v1/messages/batches", post(batches_legacy_stub))
+            .route(
+                "/v1/messages/batches",
+                post(anthropic_batch::create_anthropic_batch),
+            )
+            .route(
+                "/v1/messages/batches/{id}",
+                get(anthropic_batch::get_anthropic_batch),
+            )
+            .route(
+                "/v1/messages/batches/{id}/results",
+                get(anthropic_batch::get_anthropic_batch_results),
+            )
             .route("/v1/embeddings", post(embeddings))
             .route(
                 "/v1/audio/transcriptions",
@@ -493,15 +505,6 @@ async fn models(State(state): State<AppState>) -> Json<serde_json::Value> {
         "object": "list",
         "data": data,
     }))
-}
-
-async fn batches_legacy_stub() -> impl IntoResponse {
-    let err = mapping::errors_map::create_anthropic_error(
-        anthropic::ErrorType::InvalidRequestError,
-        "Use /v1/batches instead of /v1/messages/batches.".to_string(),
-        None,
-    );
-    (StatusCode::BAD_REQUEST, Json(err))
 }
 
 async fn health() -> impl IntoResponse {

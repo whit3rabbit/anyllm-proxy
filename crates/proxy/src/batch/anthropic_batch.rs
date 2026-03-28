@@ -8,7 +8,7 @@
 use super::db;
 use super::openai_batch_client::{openai_batch_to_message_batch, OpenAIBatchClient};
 use crate::backend::BackendClient;
-use crate::server::routes::AppState;
+use crate::server::routes::{AnthropicJson, AppState};
 use anyllm_translate::anthropic::batch::CreateBatchRequest;
 use anyllm_translate::anthropic::errors::ErrorType;
 use anyllm_translate::mapping::batch_map::{
@@ -35,7 +35,7 @@ fn extract_openai_credentials(backend: &BackendClient) -> Option<(String, String
 /// POST /v1/messages/batches
 pub async fn create_anthropic_batch(
     State(state): State<AppState>,
-    Json(req): Json<CreateBatchRequest>,
+    AnthropicJson(req): AnthropicJson<CreateBatchRequest>,
 ) -> Response {
     if req.requests.is_empty() {
         return error_response(
