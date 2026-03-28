@@ -196,6 +196,27 @@ pub(crate) async fn chat_completions(
                 &effective.backend,
                 &mut openai_req,
             );
+            // Gemini/Vertex rejects standard JSON Schema keywords; sanitize tool schemas.
+            if matches!(
+                effective.backend,
+                BackendClient::GeminiOpenAI(_) | BackendClient::Vertex(_)
+            ) {
+                if let Some(tools) = openai_req.tools.take() {
+                    openai_req.tools = Some(
+                        tools
+                            .into_iter()
+                            .map(|mut t| {
+                                if let Some(params) = t.function.parameters.take() {
+                                    t.function.parameters = Some(
+                                        mapping::tools_map::sanitize_schema_for_gemini(params),
+                                    );
+                                }
+                                t
+                            })
+                            .collect(),
+                    );
+                }
+            }
             if effective.omit_stream_options {
                 openai_req.stream_options = None;
             }
@@ -393,6 +414,27 @@ async fn chat_completions_stream(
     // Translate to OpenAI format for the backend
     let mut openai_req = mapping::message_map::anthropic_to_openai_request(&anthropic_req);
     super::routes::inject_gemini_thinking(&anthropic_req, &effective.backend, &mut openai_req);
+    // Gemini/Vertex rejects standard JSON Schema keywords; sanitize tool schemas.
+    if matches!(
+        effective.backend,
+        BackendClient::GeminiOpenAI(_) | BackendClient::Vertex(_)
+    ) {
+        if let Some(tools) = openai_req.tools.take() {
+            openai_req.tools = Some(
+                tools
+                    .into_iter()
+                    .map(|mut t| {
+                        if let Some(params) = t.function.parameters.take() {
+                            t.function.parameters = Some(
+                                mapping::tools_map::sanitize_schema_for_gemini(params),
+                            );
+                        }
+                        t
+                    })
+                    .collect(),
+            );
+        }
+    }
     openai_req.model = mapped_model_resolved;
     openai_req.stream = Some(true);
     if !effective.omit_stream_options {
