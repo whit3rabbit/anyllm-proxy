@@ -50,6 +50,10 @@ pub struct Part {
     pub function_call: Option<FunctionCallData>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub function_response: Option<FunctionResponseData>,
+    /// True for thought parts produced by thinking models (e.g., Gemini 2.5 Pro/Flash).
+    /// Never set in requests; only appears in model responses.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thought: Option<bool>,
 }
 
 impl Part {
@@ -149,6 +153,21 @@ pub struct GenerationConfig {
     pub response_mime_type: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub response_schema: Option<serde_json::Value>,
+    /// Configures extended thinking for supported models (e.g., Gemini 2.5 Pro/Flash).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thinking_config: Option<ThinkingConfig>,
+}
+
+/// Configures extended thinking for Gemini 2.5 thinking models.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ThinkingConfig {
+    /// Token budget for the thinking phase. Maps from Anthropic `budget_tokens`.
+    pub thinking_budget: u32,
+    /// Whether to include thought parts in the response. Set to `true` to
+    /// surface thinking content as `ContentBlock::Thinking` in the translation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub include_thoughts: Option<bool>,
 }
 
 /// Wrapper for function declarations provided to the model.
