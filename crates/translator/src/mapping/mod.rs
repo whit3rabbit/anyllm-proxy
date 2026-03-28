@@ -2,6 +2,10 @@
 pub mod batch_map;
 /// HTTP status and error shape translation between APIs.
 pub mod errors_map;
+/// Anthropic Messages API <-> Gemini generateContent API message mapping.
+pub mod gemini_message_map;
+/// Gemini streaming: full-response diffing -> Anthropic SSE delta events.
+pub mod gemini_streaming_map;
 /// Message and content block translation (system prompt, text, images, documents).
 pub mod message_map;
 /// Anthropic to/from OpenAI Responses API request and response mapping.
