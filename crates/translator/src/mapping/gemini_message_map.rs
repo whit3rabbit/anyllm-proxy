@@ -17,9 +17,10 @@ use crate::util::ids::{generate_message_id, generate_tool_use_id};
 
 /// Convert an Anthropic `MessageCreateRequest` into a Gemini `GenerateContentRequest`.
 ///
-/// Drops unsupported Anthropic features (thinking, document blocks, cache_control)
-/// and merges consecutive same-role messages to satisfy Gemini's strict alternation
-/// requirement.
+/// Maps `thinking_config` to `generationConfig.thinkingConfig` for Gemini 2.5
+/// thinking models. Drops unsupported features (thinking content blocks in prior
+/// messages, document blocks, cache_control) and merges consecutive same-role
+/// messages to satisfy Gemini's strict alternation requirement.
 pub fn anthropic_to_gemini_request(
     req: &anthropic::MessageCreateRequest,
 ) -> gemini::GenerateContentRequest {
@@ -90,12 +91,22 @@ pub fn anthropic_to_gemini_request(
 
     // Generation config
     let generation_config = {
+        let thinking_config =
+            if let Some(anthropic::ThinkingConfig::Enabled { budget_tokens }) = &req.thinking {
+                Some(gemini::ThinkingConfig {
+                    thinking_budget: *budget_tokens,
+                    include_thoughts: Some(true),
+                })
+            } else {
+                None
+            };
         let gc = gemini::GenerationConfig {
             max_output_tokens: Some(req.max_tokens),
             temperature: req.temperature,
             top_p: req.top_p,
             top_k: req.top_k,
             stop_sequences: req.stop_sequences.clone(),
+            thinking_config,
             ..Default::default()
         };
         Some(gc)
@@ -308,6 +319,13 @@ pub fn gemini_to_anthropic_response(
 
 /// Convert a single Gemini Part to an Anthropic ContentBlock, or None if not mappable.
 fn gemini_part_to_content_block(part: &gemini::Part) -> Option<anthropic::ContentBlock> {
+    // Thought parts from thinking models map to Anthropic thinking blocks.
+    if part.thought == Some(true) {
+        return part.text.as_ref().map(|text| anthropic::ContentBlock::Thinking {
+            thinking: text.clone(),
+            signature: None,
+        });
+    }
     if let Some(text) = &part.text {
         return Some(anthropic::ContentBlock::Text { text: text.clone() });
     }
@@ -1011,5 +1029,75 @@ mod tests {
         let msg = gemini_to_anthropic_response(&resp, "test");
         assert_eq!(msg.usage.input_tokens, 0);
         assert_eq!(msg.usage.output_tokens, 0);
+    }
+
+    // -----------------------------------------------------------------------
+    // Thinking config tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn thinking_config_enabled_sets_gemini_thinking_config() {
+        let mut req = make_request(vec![user_text("think hard")]);
+        req.thinking = Some(anthropic::ThinkingConfig::Enabled { budget_tokens: 8192 });
+        let gem = anthropic_to_gemini_request(&req);
+        let gc = gem.generation_config.unwrap();
+        let tc = gc.thinking_config.expect("thinkingConfig should be set");
+        assert_eq!(tc.thinking_budget, 8192);
+        assert_eq!(tc.include_thoughts, Some(true));
+    }
+
+    #[test]
+    fn thinking_config_disabled_no_thinking_config() {
+        let mut req = make_request(vec![user_text("hi")]);
+        req.thinking = Some(anthropic::ThinkingConfig::Disabled);
+        let gem = anthropic_to_gemini_request(&req);
+        let gc = gem.generation_config.unwrap();
+        assert!(gc.thinking_config.is_none(), "disabled should not set thinkingConfig");
+    }
+
+    #[test]
+    fn thinking_config_absent_no_thinking_config() {
+        let req = make_request(vec![user_text("hi")]);
+        let gem = anthropic_to_gemini_request(&req);
+        let gc = gem.generation_config.unwrap();
+        assert!(gc.thinking_config.is_none());
+    }
+
+    #[test]
+    fn gemini_thought_parts_become_thinking_blocks() {
+        let thought_part = gemini::Part {
+            thought: Some(true),
+            text: Some("Let me reason...".into()),
+            ..Default::default()
+        };
+        let resp = make_gemini_response(
+            vec![thought_part, gemini::Part::text("Answer")],
+            Some(gemini_resp::FinishReason::STOP),
+        );
+        let msg = gemini_to_anthropic_response(&resp, "gemini-2.5-pro");
+        assert_eq!(msg.content.len(), 2);
+        match &msg.content[0] {
+            anthropic::ContentBlock::Thinking { thinking, .. } => {
+                assert_eq!(thinking, "Let me reason...")
+            }
+            _ => panic!("expected Thinking block first"),
+        }
+        match &msg.content[1] {
+            anthropic::ContentBlock::Text { text } => assert_eq!(text, "Answer"),
+            _ => panic!("expected Text block second"),
+        }
+    }
+
+    #[test]
+    fn gemini_thought_only_no_text() {
+        let thought_part = gemini::Part {
+            thought: Some(true),
+            text: Some("Only thinking".into()),
+            ..Default::default()
+        };
+        let resp = make_gemini_response(vec![thought_part], Some(gemini_resp::FinishReason::STOP));
+        let msg = gemini_to_anthropic_response(&resp, "gemini-2.5-pro");
+        assert_eq!(msg.content.len(), 1);
+        assert!(matches!(&msg.content[0], anthropic::ContentBlock::Thinking { .. }));
     }
 }
