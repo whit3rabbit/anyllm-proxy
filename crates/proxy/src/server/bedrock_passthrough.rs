@@ -206,30 +206,27 @@ async fn bedrock_stream(
     resp
 }
 
-/// Extract the Anthropic SSE event type from a JSON string without a full parse.
-/// Looks for `"type":"<value>"` and returns the value. Falls back to "message".
-fn detect_event_type(json: &str) -> &str {
-    // Avoid serde_json::from_str on every streaming event. The "type" field
-    // is always near the start of Anthropic event JSON.
-    if let Some(pos) = json.find("\"type\":") {
-        let rest = &json[pos + 7..]; // skip `"type":`
-        let rest = rest.trim_start();
-        if let Some(inner) = rest.strip_prefix('"') {
-            if let Some(end) = inner.find('"') {
-                return match &inner[..end] {
-                    "message_start" => "message_start",
-                    "content_block_start" => "content_block_start",
-                    "content_block_delta" => "content_block_delta",
-                    "content_block_stop" => "content_block_stop",
-                    "message_delta" => "message_delta",
-                    "message_stop" => "message_stop",
-                    "ping" => "ping",
-                    _ => "message",
-                };
-            }
-        }
+/// Extract the Anthropic SSE event type from a JSON string.
+/// Parses only the top-level `type` field via serde_json to avoid brittle
+/// substring matching that fails on whitespace-formatted JSON or nested fields.
+/// Falls back to "message" on any parse failure or unrecognized event type.
+fn detect_event_type(json: &str) -> &'static str {
+    #[derive(serde::Deserialize)]
+    struct EventType<'a> {
+        #[serde(rename = "type")]
+        event_type: &'a str,
     }
-    "message"
+    let parsed: Result<EventType<'_>, _> = serde_json::from_str(json);
+    match parsed.as_ref().map(|e| e.event_type) {
+        Ok("message_start") => "message_start",
+        Ok("content_block_start") => "content_block_start",
+        Ok("content_block_delta") => "content_block_delta",
+        Ok("content_block_stop") => "content_block_stop",
+        Ok("message_delta") => "message_delta",
+        Ok("message_stop") => "message_stop",
+        Ok("ping") => "ping",
+        _ => "message",
+    }
 }
 
 /// Convert a BedrockClientError into a Response.
@@ -260,5 +257,45 @@ fn bedrock_error_to_response(error: BedrockClientError) -> Response {
             );
             (StatusCode::INTERNAL_SERVER_ERROR, Json(err)).into_response()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::detect_event_type;
+
+    #[test]
+    fn detect_message_start() {
+        assert_eq!(detect_event_type(r#"{"type":"message_start","message":{"id":"msg-1"}}"#), "message_start");
+    }
+
+    #[test]
+    fn detect_content_block_delta() {
+        assert_eq!(
+            detect_event_type(r#"{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hi"}}"#),
+            "content_block_delta"
+        );
+    }
+
+    #[test]
+    fn detect_falls_back_for_unknown_type() {
+        assert_eq!(detect_event_type(r#"{"type":"some_future_event"}"#), "message");
+    }
+
+    #[test]
+    fn detect_falls_back_on_malformed_json() {
+        assert_eq!(detect_event_type("not json at all"), "message");
+    }
+
+    #[test]
+    fn detect_handles_spaced_json() {
+        assert_eq!(detect_event_type(r#"{ "type" : "message_stop" }"#), "message_stop");
+    }
+
+    #[test]
+    fn detect_ignores_nested_type_field() {
+        // Top-level type is content_block_delta; nested delta.type is text_delta.
+        let json = r#"{"type":"content_block_delta","delta":{"type":"text_delta","text":"hi"}}"#;
+        assert_eq!(detect_event_type(json), "content_block_delta");
     }
 }
