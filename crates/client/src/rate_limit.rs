@@ -440,7 +440,6 @@ mod tests {
             map.get("anthropic-organization-id").unwrap(),
             "org-xyz"
         );
-        // version header still present
         assert_eq!(map.get("anthropic-version").unwrap(), "2023-06-01");
     }
 }

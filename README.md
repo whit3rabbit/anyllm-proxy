@@ -396,7 +396,7 @@ Spans are exported via OTLP HTTP (protobuf). Standard OpenTelemetry SDK environm
 
 ## Using as a Library
 
-The translation engine is available as standalone Rust crates. See [library-integration.md](docs/library-integration.md) for full examples.
+The translation engine is available as standalone Rust crates.
 
 ```
 crates/translator  (lib, IO-free pure translation)
@@ -410,37 +410,46 @@ crates/proxy       (bin, full proxy server)
 |---|---|---|
 | **Pure translation** | `anyllm_translate` | Stateless type conversion between Anthropic and OpenAI formats. No IO, no HTTP. Bring your own transport. |
 | **HTTP client** | `anyllm_client` | `client.messages(req).await` -- send Anthropic requests, get Anthropic responses. Handles translation, HTTP, retry, and streaming internally. |
-| **Embedded middleware** | `anyllm_translate` with `middleware` feature | Drop-in Tower Layer or axum Router that adds `/v1/messages` to an existing server. |
+| **Embedded middleware** | `anyllm_translate` with `middleware` feature | Drop-in axum Router that adds `/v1/messages` to an existing server. |
 | **Full proxy** | `anyllm_proxy` | Multi-backend routing, admin UI, metrics, auth. Everything in this README. |
 
-### Pure Translation (no IO)
+### Adding as a dependency
 
-```rust
-use anyllm_translate::{TranslationConfig, translate_request, translate_response};
-use anyllm_translate::anthropic::MessageCreateRequest;
+```toml
+[dependencies]
+# HTTP client (includes translation)
+anyllm_client = { git = "https://github.com/whit3rabbit/anyllm-proxy" }
 
-let config = TranslationConfig::builder()
-    .model_map("haiku", "gpt-4o-mini")
-    .model_map("sonnet", "gpt-4o")
-    .build();
+# Translation only (no HTTP, no async)
+anyllm_translate = { git = "https://github.com/whit3rabbit/anyllm-proxy" }
 
-let anthropic_req: MessageCreateRequest = serde_json::from_str(&body)?;
-let openai_req = translate_request(&anthropic_req, &config)?;
-// ... send with your own HTTP client ...
-let anthropic_resp = translate_response(&openai_resp, &anthropic_req.model);
-```
-
-For streaming:
-
-```rust
-use anyllm_translate::new_stream_translator;
-
-let mut translator = new_stream_translator(model);
-let events = translator.process_chunk(&chunk);
-let final_events = translator.finish();
+# With axum middleware support
+anyllm_translate = { git = "https://github.com/whit3rabbit/anyllm-proxy", features = ["middleware"] }
 ```
 
 ### HTTP Client (translation + transport)
+
+The simplest path. Send Anthropic requests, get Anthropic responses. Translation, retry, and SSE streaming are handled internally.
+
+```rust
+use anyllm_client::{Client, ClientError};
+use anyllm_translate::anthropic::MessageCreateRequest;
+
+let client = Client::builder()
+    .base_url("https://api.openai.com/v1/chat/completions")
+    .api_key("sk-...")
+    .build()?;
+
+let req: MessageCreateRequest = serde_json::from_str(r#"{
+    "model": "claude-sonnet-4-6",
+    "max_tokens": 256,
+    "messages": [{"role": "user", "content": "Hello"}]
+}"#)?;
+
+let response = client.messages(&req).await?;
+```
+
+For custom TLS, SSRF protection, or per-model mapping, use `ClientConfig::builder()`:
 
 ```rust
 use anyllm_client::{Client, ClientConfig, Auth};
@@ -452,15 +461,106 @@ let client = Client::new(
         .auth(Auth::Bearer("sk-...".into()))
         .translation(
             TranslationConfig::builder()
-                .model_map("sonnet", "gpt-4o")
+                .model_map("claude-sonnet-4-6", "gpt-4o")
+                .model_map("claude-haiku-4-5", "gpt-4o-mini")
                 .build()
         )
         .build()
 );
-
-let response = client.messages(&anthropic_request).await?;
-let (stream, rate_limits) = client.messages_stream(&anthropic_request).await?;
 ```
+
+**Error handling:**
+
+```rust
+match client.messages(&req).await {
+    Ok(resp) => { /* ... */ }
+    Err(ClientError::ApiError { status, body, .. }) => eprintln!("HTTP {status}: {body}"),
+    Err(ClientError::Transport(e)) => eprintln!("network: {e}"),
+    Err(ClientError::Translation(e)) => eprintln!("translation: {e}"),
+    Err(e) => eprintln!("{e}"),
+}
+```
+
+**Streaming:**
+
+```rust
+use anyllm_translate::anthropic::{Delta, StreamEvent};
+use futures::StreamExt;
+
+let (mut stream, _rate_limits) = client.messages_stream(&req).await?;
+while let Some(event) = stream.next().await {
+    if let StreamEvent::ContentBlockDelta { delta: Delta::TextDelta { text }, .. } = event? {
+        print!("{text}");
+    }
+}
+```
+
+**Tool calling:**
+
+```rust
+use anyllm_client::{ToolBuilder, ToolChoiceBuilder};
+use serde_json::json;
+
+let tool = ToolBuilder::new("get_weather")
+    .description("Get the current weather for a location")
+    .input_schema(json!({
+        "type": "object",
+        "properties": {"location": {"type": "string"}},
+        "required": ["location"]
+    }))
+    .build();
+// Attach tool to MessageCreateRequest via serde_json, then call client.messages().
+```
+
+Runnable examples: `cargo run --example basic -p anyllm_client`, `streaming`, `tools`.
+
+### Pure Translation (no IO)
+
+Use when you want to bring your own HTTP client or embed translation in a non-async context.
+
+```rust
+use anyllm_translate::{TranslationConfig, translate_request, translate_response};
+use anyllm_translate::anthropic::MessageCreateRequest;
+
+let config = TranslationConfig::builder()
+    .model_map("claude-sonnet-4-6", "gpt-4o")
+    .build();
+
+let anthropic_req: MessageCreateRequest = serde_json::from_str(&body)?;
+let openai_req = translate_request(&anthropic_req, &config)?;
+// ... send openai_req with your HTTP client ...
+let anthropic_resp = translate_response(&openai_resp, &anthropic_req.model);
+```
+
+**Streaming (OpenAI chunks → Anthropic SSE events):**
+
+```rust
+use anyllm_translate::new_stream_translator;
+
+let mut translator = new_stream_translator(model);
+// Feed each OpenAI chunk as it arrives:
+let events = translator.process_chunk(&chunk);
+// After the stream ends:
+let final_events = translator.finish();
+```
+
+**Reverse direction (OpenAI ← Anthropic), for serving OpenAI-native clients:**
+
+```rust
+use anyllm_translate::{
+    translate_openai_to_anthropic_request,
+    translate_anthropic_to_openai_response,
+    new_reverse_stream_translator,
+    TranslationWarnings,
+};
+
+let mut warnings = TranslationWarnings::default();
+let anthropic_req = translate_openai_to_anthropic_request(&openai_req, &mut warnings)?;
+// ... forward to Anthropic API ...
+let openai_resp = translate_anthropic_to_openai_response(&anthropic_resp, "gpt-4o");
+```
+
+Runnable examples: `cargo run --example translate_request -p anyllm_translate`, `reverse_translation`.
 
 ### Embedded Middleware (for existing axum apps)
 
@@ -476,6 +576,8 @@ let app = Router::new()
     .merge(anthropic_compat_router(config))
     .route("/my-other-endpoint", get(handler));
 ```
+
+For cross-language bindings (FFI, WASM, PyO3), see [docs/library-integration.md](docs/library-integration.md).
 
 ---
 

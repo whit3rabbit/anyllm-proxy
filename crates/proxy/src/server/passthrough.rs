@@ -31,17 +31,17 @@ pub(crate) async fn anthropic_passthrough(
         }
     };
 
-    // Collect client headers that Anthropic understands and should be forwarded upstream.
-    // x-claude-code-session-id: session correlation for proxies (Claude Code v2.1.86+)
-    // anthropic-beta: enables beta API features; must reach the upstream to take effect
-    let extra_headers: Vec<(String, String)> =
+    // Collect Anthropic-specific client headers to forward upstream.
+    // anthropic-beta enables beta features; must reach upstream to take effect.
+    // x-claude-code-session-id allows upstream and intermediary proxies to correlate sessions.
+    let extra_headers: Vec<(&str, &str)> =
         ["x-claude-code-session-id", "anthropic-beta"]
             .iter()
-            .filter_map(|name| {
+            .filter_map(|&name| {
                 headers
-                    .get(*name)
+                    .get(name)
                     .and_then(|v| v.to_str().ok())
-                    .map(|v| (name.to_string(), v.to_string()))
+                    .map(|v| (name, v))
             })
             .collect();
 
