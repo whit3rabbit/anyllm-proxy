@@ -13,6 +13,7 @@ use axum::{
     response::{IntoResponse, Json, Response},
 };
 use serde::Deserialize;
+use std::io::{BufReader, Cursor};
 
 /// POST /v1/files - Upload a JSONL batch file via multipart/form-data.
 ///
@@ -24,7 +25,7 @@ pub async fn upload_file(State(state): State<AppState>, mut multipart: Multipart
     };
 
     let mut purpose: Option<String> = None;
-    let mut file_data: Option<Vec<u8>> = None;
+    let mut file_data: Option<bytes::Bytes> = None;
     let mut filename: Option<String> = None;
 
     while let Ok(Some(field)) = multipart.next_field().await {
@@ -35,7 +36,7 @@ pub async fn upload_file(State(state): State<AppState>, mut multipart: Multipart
             }
             "file" => {
                 filename = field.file_name().map(|s| s.to_string());
-                file_data = field.bytes().await.ok().map(|b| b.to_vec());
+                file_data = field.bytes().await.ok();
             }
             _ => {}
         }
@@ -61,7 +62,7 @@ pub async fn upload_file(State(state): State<AppState>, mut multipart: Multipart
     };
 
     // Validate JSONL structure
-    let validated = match validate_jsonl(&data) {
+    let validated = match validate_jsonl(BufReader::new(Cursor::new(data.as_ref()))) {
         Ok(v) => v,
         Err(e) => {
             return bad_request(&format!("Invalid JSONL: {e}"));
@@ -75,6 +76,7 @@ pub async fn upload_file(State(state): State<AppState>, mut multipart: Multipart
     // Insert into SQLite on the blocking threadpool
     let file_id_clone = file_id.clone();
     let filename_clone = filename.clone();
+    let data_ref = data.as_ref().to_vec();
     let result = tokio::task::spawn_blocking(move || {
         let conn = db.lock().unwrap_or_else(|e| e.into_inner());
         db::init_batch_tables(&conn)?;
@@ -86,7 +88,7 @@ pub async fn upload_file(State(state): State<AppState>, mut multipart: Multipart
             filename_clone.as_deref(),
             byte_size,
             line_count,
-            &data,
+            &data_ref,
         )
     })
     .await;

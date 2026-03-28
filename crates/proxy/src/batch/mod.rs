@@ -109,22 +109,32 @@ pub struct ValidatedJsonl {
 ///
 /// Each line must be valid JSON with a unique `custom_id` (string, max 64 chars)
 /// and a `body` object containing a `model` field. Max 50,000 lines, 100 MB.
-pub fn validate_jsonl(data: &[u8]) -> Result<ValidatedJsonl, String> {
-    if data.len() > MAX_FILE_SIZE {
-        return Err(format!(
-            "File size {} bytes exceeds maximum of {} bytes",
-            data.len(),
-            MAX_FILE_SIZE
-        ));
-    }
-
-    let text = std::str::from_utf8(data).map_err(|e| format!("Invalid UTF-8: {e}"))?;
-
+///
+/// Takes a `BufRead` to read line-by-line without requiring a contiguous UTF-8
+/// string for the entire file.
+pub fn validate_jsonl(mut reader: impl std::io::BufRead) -> Result<ValidatedJsonl, String> {
     let mut seen_ids = HashSet::new();
     let mut line_count = 0usize;
+    let mut bytes_read = 0usize;
+    let mut line_buf = String::new();
 
-    for (idx, line) in text.lines().enumerate() {
-        let line = line.trim();
+    loop {
+        line_buf.clear();
+        let n = reader
+            .read_line(&mut line_buf)
+            .map_err(|e| format!("Read error: {e}"))?;
+        if n == 0 {
+            break; // EOF
+        }
+        bytes_read += n;
+        if bytes_read > MAX_FILE_SIZE {
+            return Err(format!(
+                "File exceeds maximum size of {} bytes",
+                MAX_FILE_SIZE
+            ));
+        }
+
+        let line = line_buf.trim();
         if line.is_empty() {
             continue;
         }
@@ -135,40 +145,36 @@ pub fn validate_jsonl(data: &[u8]) -> Result<ValidatedJsonl, String> {
         }
 
         let parsed: serde_json::Value = serde_json::from_str(line)
-            .map_err(|e| format!("Line {}: invalid JSON: {e}", idx + 1))?;
+            .map_err(|e| format!("Line {line_count}: invalid JSON: {e}"))?;
 
         let obj = parsed
             .as_object()
-            .ok_or_else(|| format!("Line {}: expected JSON object", idx + 1))?;
+            .ok_or_else(|| format!("Line {line_count}: expected JSON object"))?;
 
-        // Validate custom_id
         let custom_id = obj
             .get("custom_id")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| format!("Line {}: missing or non-string 'custom_id'", idx + 1))?;
+            .ok_or_else(|| format!("Line {line_count}: missing or non-string 'custom_id'"))?;
 
         if custom_id.len() > MAX_CUSTOM_ID_LEN {
             return Err(format!(
-                "Line {}: custom_id exceeds maximum length of {MAX_CUSTOM_ID_LEN} characters",
-                idx + 1
+                "Line {line_count}: custom_id exceeds maximum length of {MAX_CUSTOM_ID_LEN} characters"
             ));
         }
 
         if !seen_ids.insert(custom_id.to_string()) {
             return Err(format!(
-                "Line {}: duplicate custom_id '{custom_id}'",
-                idx + 1
+                "Line {line_count}: duplicate custom_id '{custom_id}'"
             ));
         }
 
-        // Validate body.model
         let body = obj
             .get("body")
             .and_then(|v| v.as_object())
-            .ok_or_else(|| format!("Line {}: missing or non-object 'body'", idx + 1))?;
+            .ok_or_else(|| format!("Line {line_count}: missing or non-object 'body'"))?;
 
         if !body.contains_key("model") {
-            return Err(format!("Line {}: body missing 'model' field", idx + 1));
+            return Err(format!("Line {line_count}: body missing 'model' field"));
         }
     }
 
@@ -182,12 +188,21 @@ pub fn validate_jsonl(data: &[u8]) -> Result<ValidatedJsonl, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::{BufReader, Cursor};
+
+    fn check(data: &str) -> Result<ValidatedJsonl, String> {
+        validate_jsonl(BufReader::new(Cursor::new(data.as_bytes())))
+    }
+
+    fn check_bytes(data: &[u8]) -> Result<ValidatedJsonl, String> {
+        validate_jsonl(BufReader::new(Cursor::new(data)))
+    }
 
     #[test]
     fn valid_jsonl() {
         let data = r#"{"custom_id": "req-1", "body": {"model": "gpt-4o", "messages": []}}
 {"custom_id": "req-2", "body": {"model": "gpt-4o", "messages": []}}"#;
-        let result = validate_jsonl(data.as_bytes());
+        let result = check(data);
         assert!(result.is_ok());
         assert_eq!(result.unwrap().line_count, 2);
     }
@@ -195,7 +210,7 @@ mod tests {
     #[test]
     fn missing_custom_id() {
         let data = r#"{"body": {"model": "gpt-4o"}}"#;
-        let result = validate_jsonl(data.as_bytes());
+        let result = check(data);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("custom_id"));
     }
@@ -203,7 +218,7 @@ mod tests {
     #[test]
     fn missing_body_model() {
         let data = r#"{"custom_id": "req-1", "body": {"messages": []}}"#;
-        let result = validate_jsonl(data.as_bytes());
+        let result = check(data);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("model"));
     }
@@ -212,7 +227,7 @@ mod tests {
     fn duplicate_custom_id() {
         let data = r#"{"custom_id": "req-1", "body": {"model": "gpt-4o"}}
 {"custom_id": "req-1", "body": {"model": "gpt-4o"}}"#;
-        let result = validate_jsonl(data.as_bytes());
+        let result = check(data);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("duplicate"));
     }
@@ -221,14 +236,14 @@ mod tests {
     fn oversized_custom_id() {
         let long_id = "a".repeat(65);
         let data = format!(r#"{{"custom_id": "{long_id}", "body": {{"model": "gpt-4o"}}}}"#);
-        let result = validate_jsonl(data.as_bytes());
+        let result = check(&data);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("maximum length"));
     }
 
     #[test]
     fn empty_file() {
-        let result = validate_jsonl(b"");
+        let result = check_bytes(b"");
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("empty"));
     }
@@ -236,7 +251,7 @@ mod tests {
     #[test]
     fn invalid_json_line() {
         let data = b"not json at all";
-        let result = validate_jsonl(data);
+        let result = check_bytes(data);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("invalid JSON"));
     }
@@ -246,7 +261,7 @@ mod tests {
         let data = r#"{"custom_id": "req-1", "body": {"model": "gpt-4o"}}
 
 {"custom_id": "req-2", "body": {"model": "gpt-4o"}}"#;
-        let result = validate_jsonl(data.as_bytes());
+        let result = check(data);
         assert!(result.is_ok());
         assert_eq!(result.unwrap().line_count, 2);
     }
