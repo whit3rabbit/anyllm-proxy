@@ -516,12 +516,19 @@ pub fn ip_allowlist_active() -> bool {
 pub async fn check_ip_allowlist(request: Request<Body>, next: Next) -> Result<Response, Response> {
     // Extract client IP from X-Forwarded-For (if trusted) or connection info.
     let client_ip = if *TRUST_PROXY_HEADERS {
+        // Take the *rightmost* IP: a trusted reverse proxy appends the real client IP.
+        // The leftmost value is attacker-controlled and must not be trusted.
         request
             .headers()
             .get("x-forwarded-for")
             .and_then(|v| v.to_str().ok())
-            .and_then(|s| s.split(',').next())
-            .and_then(|s| s.trim().parse::<std::net::IpAddr>().ok())
+            .and_then(|s| {
+                s.split(',')
+                    .map(|p| p.trim())
+                    .filter(|p| !p.is_empty())
+                    .last()
+            })
+            .and_then(|s| s.parse::<std::net::IpAddr>().ok())
     } else {
         None
     };
@@ -568,6 +575,34 @@ mod ip_tests {
         // We cannot test this directly since LazyLock is static, but the function
         // logic is: None => true.
         assert!(is_ip_allowed("127.0.0.1".parse().unwrap()) || true);
+    }
+
+    #[test]
+    fn xff_rightmost_prevents_spoofing() {
+        // Attacker sends X-Forwarded-For: 127.0.0.1; trusted proxy appends real IP.
+        // Must resolve to rightmost value (203.0.113.5), not the attacker-controlled leftmost.
+        let header = "127.0.0.1, 203.0.113.5";
+        let resolved: std::net::IpAddr = header
+            .split(',')
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .last()
+            .and_then(|s| s.parse().ok())
+            .unwrap();
+        assert_eq!(resolved, "203.0.113.5".parse::<std::net::IpAddr>().unwrap());
+    }
+
+    #[test]
+    fn xff_single_ip_resolves() {
+        let header = "10.0.1.5";
+        let resolved: std::net::IpAddr = header
+            .split(',')
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .last()
+            .and_then(|s| s.parse().ok())
+            .unwrap();
+        assert_eq!(resolved, "10.0.1.5".parse::<std::net::IpAddr>().unwrap());
     }
 }
 
