@@ -80,6 +80,8 @@ pub(crate) fn build_generation_payload(entry: &RequestLogEntry) -> serde_json::V
     let end_time = &entry.timestamp;
     let start_time = iso8601_to_epoch(end_time)
         .map(|epoch| {
+            // Integer truncation: sub-second requests produce start_time == end_time.
+            // Langfuse accepts this; use latency_ms in metadata for precise duration.
             crate::admin::db::epoch_to_iso8601(epoch.saturating_sub(entry.latency_ms / 1000))
         })
         .unwrap_or_else(|| end_time.clone());
@@ -192,7 +194,7 @@ fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
     let d = day;
     let era = y.div_euclid(400);
     let yoe = y - era * 400; // [0, 399]
-    let doy = (153 * (m + if m > 2 { -3 } else { 9 }) / 5) + d - 1; // [0, 365]
+    let doy = (153 * (m + if m > 2 { -3 } else { 9 }) + 2) / 5 + d - 1; // [0, 365]
     let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy; // [0, 146096]
     era * 146097 + doe - 719468
 }
@@ -284,6 +286,12 @@ mod tests {
         let epoch = iso8601_to_epoch("2026-03-27T10:00:00Z").unwrap();
         assert!(epoch > 1_735_689_600); // > 2025-01-01
         assert!(epoch < 1_900_000_000); // < 2030
+    }
+
+    #[test]
+    fn iso8601_to_epoch_february() {
+        // 1970-02-28T00:00:00Z = 58 days * 86400 = 5_011_200
+        assert_eq!(iso8601_to_epoch("1970-02-28T00:00:00Z"), Some(5_011_200));
     }
 
     #[test]
