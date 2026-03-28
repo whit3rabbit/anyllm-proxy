@@ -28,6 +28,7 @@ These are different categories; not every gap is worth closing.
 | RBAC | Yes (admin/developer roles, OIDC/JWT) | Yes (+ OIDC) | **Parity** |
 | IP allowlisting | Yes (CIDR ranges, X-Forwarded-For) | Partial | **Advantage** |
 | Spend alerts (budget threshold webhooks) | Yes (80%/95%/100%, fire-and-forget) | No | **Advantage** |
+| Langfuse integration (`litellm_settings.callbacks: [langfuse]`) | Yes (`LANGFUSE_PUBLIC_KEY` + `LANGFUSE_SECRET_KEY`) | Yes (native) | **Parity** |
 | Audit log | Yes (admin API, SQLite) | Yes | **Parity** |
 | Audio, image endpoints | Yes (passthrough) | Yes | **Parity** |
 | Semantic caching | Yes (Qdrant + embeddings, `--features qdrant`) | Yes | **Parity** |
@@ -154,6 +155,7 @@ anyllm-proxy provides:
 - `x-anyllm-degradation` response header for lossy translation warnings
 - `tracing` crate output (stdout, `RUST_LOG`)
 - Optional OpenTelemetry OTLP export (`--features otel`): spans exported to any OTEL-compatible collector (Datadog, Honeycomb, Jaeger, Tempo, etc.) via `OTEL_EXPORTER_OTLP_ENDPOINT`
+- Langfuse integration (optional, via `LANGFUSE_PUBLIC_KEY` + `LANGFUSE_SECRET_KEY`): sends `generation-create` events on request completion; activated by `litellm_settings.callbacks: [langfuse]` or env vars directly
 
 LiteLLM integrates with 20+ external observability platforms: Langfuse, Langsmith, OpenTelemetry (Honeycomb, Traceloop, OTEL collectors), Datadog, Sentry, Arize, and others. It also supports structured log export to DynamoDB, S3, GCS, and SQS.
 
@@ -221,7 +223,8 @@ LiteLLM uses a full relational database (configurable backend) for key/user/team
 33. **Cost-based routing** -- `CostBased` routing strategy; selects the deployment with the lowest combined input+output cost per token using the bundled `model_pricing.json`; falls back to round-robin for deployments with unknown pricing; parsed from `router_settings.routing_strategy: cost-based` in LiteLLM config
 31. **Spend alerts** -- fire-and-forget webhook POST at 80%, 95%, and 100% budget thresholds; deduped per key per period (alerts only escalate, never repeat the same threshold); payload includes `type=spend_alert`, `threshold_pct`, `period_spend_usd`, `max_budget_usd`
 32. **`LITELLM_IP_ALLOWLIST` env alias** -- maps to `IP_ALLOWLIST` at startup; same behavior as other LiteLLM aliases (target takes precedence if already set)
+34. **Langfuse named callback** -- `"langfuse"` in `litellm_settings.callbacks` activates native Langfuse integration; sends `generation-create` events to `/api/public/ingestion` via Basic auth (`LANGFUSE_PUBLIC_KEY:LANGFUSE_SECRET_KEY`); also activated by env vars alone (no config file required); `LANGFUSE_HOST` overrides default `https://cloud.langfuse.com`
 
 ## Remaining Gaps
 
-- **LiteLLM named callbacks:** `litellm_settings.callbacks` entries like `"langfuse"` or `"datadog"` are not natively mapped (only webhook URLs are supported). Named integrations are logged as unsupported.
+- **LiteLLM named callbacks (partial):** `"langfuse"` in `litellm_settings.callbacks` is natively supported via `LANGFUSE_PUBLIC_KEY` + `LANGFUSE_SECRET_KEY`. Other named integrations (`"datadog"`, `"langsmith"`, etc.) are logged as unsupported; use `WEBHOOK_URLS` with a compatible endpoint instead.
