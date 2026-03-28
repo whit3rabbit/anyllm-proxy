@@ -78,10 +78,8 @@ impl LangfuseClient {
 /// Build the Langfuse batch ingestion payload for a single generation.
 pub(crate) fn build_generation_payload(entry: &RequestLogEntry) -> serde_json::Value {
     let end_time = &entry.timestamp;
-    let start_time = iso8601_to_epoch(end_time)
-        .map(|epoch_secs| {
-            // Compute start in milliseconds for sub-second precision.
-            let end_ms = epoch_secs.saturating_mul(1000);
+    let start_time = iso8601_to_epoch_ms(end_time)
+        .map(|end_ms| {
             let start_ms = end_ms.saturating_sub(entry.latency_ms);
             crate::admin::db::epoch_to_iso8601_ms(start_ms)
         })
@@ -184,6 +182,33 @@ pub(crate) fn iso8601_to_epoch(s: &str) -> Option<u64> {
     let days = days_from_civil(year, month, day);
     let total = days * 86400 + hour * 3600 + min * 60 + sec;
     u64::try_from(total).ok()
+}
+
+/// Parse ISO 8601 UTC timestamp to Unix epoch milliseconds, retaining sub-second precision.
+/// Handles "2026-03-27T10:15:30Z" (returns seconds * 1000) and
+/// "2026-03-27T10:15:30.750Z" (retains the fractional ms component).
+pub(crate) fn iso8601_to_epoch_ms(s: &str) -> Option<u64> {
+    let epoch_secs = iso8601_to_epoch(s)?;
+    let base_ms = epoch_secs.saturating_mul(1000);
+
+    // Look for fractional seconds: '.' at position 19 (after "...SS.").
+    if s.len() > 20 && s.as_bytes().get(19) == Some(&b'.') {
+        let frac_start = 20;
+        let frac_end = s[frac_start..]
+            .find(|c: char| !c.is_ascii_digit())
+            .map(|i| frac_start + i)
+            .unwrap_or(s.len());
+        let frac_str = &s[frac_start..frac_end];
+        if !frac_str.is_empty() {
+            let ms_digits = match frac_str.len() {
+                1 => frac_str.parse::<u64>().ok()?.saturating_mul(100),
+                2 => frac_str.parse::<u64>().ok()?.saturating_mul(10),
+                _ => frac_str[..3].parse::<u64>().ok()?,
+            };
+            return Some(base_ms + ms_digits);
+        }
+    }
+    Some(base_ms)
 }
 
 /// Days from 1970-01-01 to the given date (may be negative for dates before epoch).
@@ -299,6 +324,28 @@ mod tests {
     fn iso8601_to_epoch_returns_none_on_short_string() {
         assert!(iso8601_to_epoch("not-a-date").is_none());
         assert!(iso8601_to_epoch("").is_none());
+    }
+
+    #[test]
+    fn iso8601_to_epoch_ms_retains_milliseconds() {
+        let ms = iso8601_to_epoch_ms("2026-03-27T10:15:30.750Z").unwrap();
+        let base_ms = iso8601_to_epoch("2026-03-27T10:15:30Z").unwrap() * 1000;
+        assert_eq!(ms, base_ms + 750);
+    }
+
+    #[test]
+    fn iso8601_to_epoch_ms_no_fractional() {
+        let ms = iso8601_to_epoch_ms("2026-03-27T10:15:30Z").unwrap();
+        let secs_ms = iso8601_to_epoch("2026-03-27T10:15:30Z").unwrap() * 1000;
+        assert_eq!(ms, secs_ms);
+    }
+
+    #[test]
+    fn iso8601_to_epoch_ms_microsecond_input() {
+        // 6-digit fractional: should truncate to ms
+        let ms = iso8601_to_epoch_ms("2026-03-27T10:15:30.123456Z").unwrap();
+        let base_ms = iso8601_to_epoch("2026-03-27T10:15:30Z").unwrap() * 1000;
+        assert_eq!(ms, base_ms + 123);
     }
 
     #[test]
