@@ -109,8 +109,7 @@ pub struct RequestLogEntry {
     pub latency_ms: u64,
     pub input_tokens: Option<u64>,
     pub output_tokens: Option<u64>,
-    /// Whether the request used SSE streaming. Streaming requests only
-    /// track total count in metrics, not per-request success/error.
+    /// Whether the request used SSE streaming.
     pub is_streaming: bool,
     /// Present only when the request failed; contains the error description.
     pub error_message: Option<String>,
