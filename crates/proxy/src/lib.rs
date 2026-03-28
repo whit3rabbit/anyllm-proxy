@@ -8,6 +8,8 @@ pub mod batch;
 pub mod cache;
 /// Webhook callback support for request completion notifications.
 pub mod callbacks;
+/// Named integration registry (Langfuse, etc.).
+pub mod integrations;
 /// Environment-based configuration, TLS client cert setup, URL validation.
 pub mod config;
 /// Per-request cost tracking and model pricing (US4).
