@@ -203,7 +203,7 @@ pub fn normalize_schema_for_strict(mut schema: serde_json::Value) -> serde_json:
 /// on its function object, and normalizes its parameter schema.
 ///
 /// All other tools are left unchanged.
-pub fn apply_strict_to_forced_tool(tools: &mut Vec<serde_json::Value>, forced_name: &str) {
+pub fn apply_strict_to_forced_tool(tools: &mut [serde_json::Value], forced_name: &str) {
     for tool in tools.iter_mut() {
         let Some(function) = tool.get_mut("function") else {
             continue;

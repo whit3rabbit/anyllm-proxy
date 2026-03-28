@@ -202,7 +202,39 @@ pub fn anthropic_to_openai_request(
         }
     }
 
+    // When a specific tool is forced, enable OpenAI strict structured outputs for it.
+    // This guarantees the returned JSON exactly matches the schema.
+    if let Some(forced_name) = req.tool_choice.as_ref().and_then(extract_forced_tool_name) {
+        if let Some(ref mut tools) = oai_req.tools {
+            apply_strict_mode_to_tool(tools, &forced_name);
+        }
+    }
+
     oai_req
+}
+
+/// Extract the forced tool name from an Anthropic ToolChoice, if any.
+fn extract_forced_tool_name(tc: &anthropic::ToolChoice) -> Option<String> {
+    match tc {
+        anthropic::ToolChoice::Tool { name } => Some(name.clone()),
+        _ => None,
+    }
+}
+
+/// Set strict=true and normalize the parameter schema for the named tool.
+/// Other tools in the vec are left unchanged.
+fn apply_strict_mode_to_tool(tools: &mut [openai::ChatTool], forced_name: &str) {
+    for tool in tools.iter_mut() {
+        if tool.function.name == forced_name {
+            tool.function.strict = Some(true);
+            if let Some(params) = tool.function.parameters.take() {
+                tool.function.parameters =
+                    Some(tools_map::normalize_schema_for_strict(params));
+            }
+            // Tool names are unique; stop after the first match.
+            break;
+        }
+    }
 }
 
 /// Returns true if the model name matches an OpenAI o-series reasoning model
@@ -2291,5 +2323,45 @@ mod tests {
             val.contains("thinking_config"),
             "missing thinking_config in: {val}"
         );
+    }
+
+    #[test]
+    fn forced_tool_choice_enables_strict_mode_in_openai_request() {
+        let anthropic_req: anthropic::MessageCreateRequest =
+            serde_json::from_value(serde_json::json!({
+                "model": "claude-3-5-sonnet-20241022",
+                "max_tokens": 100,
+                "messages": [{"role": "user", "content": "Extract the data"}],
+                "tools": [{
+                    "name": "extract_data",
+                    "description": "Extract structured data",
+                    "input_schema": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string"},
+                            "value": {"type": "integer"}
+                        }
+                    }
+                }],
+                "tool_choice": {"type": "tool", "name": "extract_data"}
+            }))
+            .unwrap();
+
+        let openai_req = anthropic_to_openai_request(&anthropic_req);
+
+        let tools = openai_req.tools.expect("tools should be present");
+        assert_eq!(tools.len(), 1);
+
+        // The tool should have strict: true.
+        assert_eq!(tools[0].function.strict, Some(true));
+
+        // The schema should have additionalProperties: false.
+        let params = tools[0].function.parameters.as_ref().expect("parameters should be present");
+        assert_eq!(params["additionalProperties"], serde_json::json!(false));
+
+        // required should include both properties.
+        let required = params["required"].as_array().expect("required should be present");
+        assert!(required.iter().any(|v| v == "name"));
+        assert!(required.iter().any(|v| v == "value"));
     }
 }
