@@ -1,6 +1,7 @@
 // Batch processing types and JSONL validation.
 // Implements OpenAI-compatible batch file upload and job management.
 
+pub mod anthropic_batch;
 pub mod db;
 pub mod openai_batch_client;
 pub mod routes;

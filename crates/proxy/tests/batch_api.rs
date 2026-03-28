@@ -222,3 +222,19 @@ async fn unsupported_backend_returns_501() {
         .unwrap();
     assert_eq!(resp.status(), 501);
 }
+
+#[tokio::test]
+async fn anthropic_batch_rejects_empty_requests() {
+    let base = spawn_test_server_with_shared().await;
+    let client = Client::new();
+
+    let resp = client
+        .post(format!("{base}/v1/messages/batches"))
+        .header("x-api-key", "test")
+        .header("content-type", "application/json")
+        .body(serde_json::to_string(&serde_json::json!({"requests": []})).unwrap())
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 400);
+}

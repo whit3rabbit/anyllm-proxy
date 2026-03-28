@@ -94,6 +94,26 @@ impl OpenAIClient {
         }
     }
 
+    /// Returns the API key/token for use in batch API calls.
+    pub fn api_key(&self) -> String {
+        match &self.auth {
+            BackendAuth::BearerToken(k) => k.clone(),
+            BackendAuth::AzureApiKey(k) => k.clone(),
+            BackendAuth::GoogleApiKey(k) => k.clone(),
+        }
+    }
+
+    /// Returns the base URL for batch API calls.
+    ///
+    /// For Gemini/Vertex the openai_base_url ends in /openai — strip that since the
+    /// batch endpoint is not on the OpenAI-compat path.
+    pub fn base_url_for_batch(&self) -> String {
+        self.base_url
+            .trim_end_matches("/openai")
+            .trim_end_matches('/')
+            .to_string()
+    }
+
     /// Fallback error for unparseable error responses. The backend may return
     /// HTML error pages (e.g., Cloudflare 502) that don't match ErrorResponse.
     fn fallback_error(status: u16) -> openai::errors::ErrorResponse {

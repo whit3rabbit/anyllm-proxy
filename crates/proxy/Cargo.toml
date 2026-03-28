@@ -11,7 +11,7 @@ anyllm_translate = { path = "../translator", version = "0.1.0" }
 anyllm_client = { path = "../client", version = "0.2.0" }
 axum = { version = "0.8", features = ["ws", "multipart"] }
 tokio = { version = "1", features = ["full"] }
-reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "native-tls", "http2"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "native-tls", "http2", "multipart"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 futures = "0.3"
