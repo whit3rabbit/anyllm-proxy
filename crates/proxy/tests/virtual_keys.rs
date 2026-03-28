@@ -1,5 +1,8 @@
 // Integration tests for virtual key admin API (T038), rate limiting (T051),
 // budget enforcement (US5), and RBAC (US6).
+//
+// Admin routes require CSRF double-submit cookie protection on POST/PUT/DELETE.
+// Tests inject a fixed test token via X-CSRF-Token header + Cookie to satisfy the middleware.
 
 use anyllm_proxy::admin;
 use anyllm_proxy::config::{BackendAuth, BackendKind, Config, ModelMapping, OpenAIApiFormat};
@@ -58,6 +61,13 @@ fn shared_state() -> admin::state::SharedState {
 // Admin API CRUD tests (T038)
 // ---------------------------------------------------------------------------
 
+/// CSRF token used by unit-level tests (oneshot). Must match the cookie value below.
+const TEST_CSRF_TOKEN: &str =
+    "0000000000000000000000000000000000000000000000000000000000000001";
+/// Cookie header value that satisfies the CSRF double-submit check for the token above.
+const TEST_CSRF_COOKIE: &str =
+    "csrf_token=0000000000000000000000000000000000000000000000000000000000000001";
+
 fn test_admin_router() -> (Router, admin::state::SharedState) {
     // Raise admin rate limit so parallel tests from 127.0.0.1 don't starve each other.
     admin::routes::set_admin_rpm(10_000);
@@ -74,6 +84,8 @@ async fn create_key_returns_201_with_raw_key() {
         .header("host", "localhost:9090")
         .header("authorization", "Bearer test-admin-token")
         .header("content-type", "application/json")
+        .header("x-csrf-token", TEST_CSRF_TOKEN)
+        .header("cookie", TEST_CSRF_COOKIE)
         .body(Body::from(
             serde_json::to_string(&json!({"description": "test key", "rpm_limit": 60})).unwrap(),
         ))
@@ -101,6 +113,8 @@ async fn list_keys_returns_created_keys() {
         .header("host", "localhost:9090")
         .header("authorization", "Bearer test-admin-token")
         .header("content-type", "application/json")
+        .header("x-csrf-token", TEST_CSRF_TOKEN)
+        .header("cookie", TEST_CSRF_COOKIE)
         .body(Body::from(
             serde_json::to_string(&json!({"description": "list-test"})).unwrap(),
         ))
@@ -132,6 +146,8 @@ async fn revoke_key_removes_from_dashmap() {
         .header("host", "localhost:9090")
         .header("authorization", "Bearer test-admin-token")
         .header("content-type", "application/json")
+        .header("x-csrf-token", TEST_CSRF_TOKEN)
+        .header("cookie", TEST_CSRF_COOKIE)
         .body(Body::from(
             serde_json::to_string(&json!({"description": "revoke-test"})).unwrap(),
         ))
@@ -153,6 +169,8 @@ async fn revoke_key_removes_from_dashmap() {
     let revoke_req = Request::delete(format!("/admin/api/keys/{id}"))
         .header("host", "localhost:9090")
         .header("authorization", "Bearer test-admin-token")
+        .header("x-csrf-token", TEST_CSRF_TOKEN)
+        .header("cookie", TEST_CSRF_COOKIE)
         .body(Body::empty())
         .unwrap();
     let resp = app.clone().oneshot(revoke_req).await.unwrap();
@@ -173,6 +191,8 @@ async fn revoke_nonexistent_key_returns_404() {
     let req = Request::delete("/admin/api/keys/9999")
         .header("host", "localhost:9090")
         .header("authorization", "Bearer test-admin-token")
+        .header("x-csrf-token", TEST_CSRF_TOKEN)
+        .header("cookie", TEST_CSRF_COOKIE)
         .body(Body::empty())
         .unwrap();
     let resp = app.oneshot(req).await.unwrap();
@@ -273,6 +293,8 @@ async fn virtual_key_auth_and_revocation_lifecycle() {
         .post(format!("{admin_url}/admin/api/keys"))
         .header("host", format!("localhost:{admin_port}"))
         .header("authorization", "Bearer admin-token")
+        .header("x-csrf-token", TEST_CSRF_TOKEN)
+        .header("cookie", TEST_CSRF_COOKIE)
         .json(&json!({"description": "lifecycle-test"}))
         .send()
         .await
@@ -301,6 +323,8 @@ async fn virtual_key_auth_and_revocation_lifecycle() {
         .delete(format!("{admin_url}/admin/api/keys/{key_id}"))
         .header("host", format!("localhost:{admin_port}"))
         .header("authorization", "Bearer admin-token")
+        .header("x-csrf-token", TEST_CSRF_TOKEN)
+        .header("cookie", TEST_CSRF_COOKIE)
         .send()
         .await
         .unwrap();
@@ -344,6 +368,8 @@ async fn rpm_limit_returns_429_after_exceeded() {
         .post(format!("{admin_url}/admin/api/keys"))
         .header("host", format!("localhost:{admin_port}"))
         .header("authorization", "Bearer admin-token2")
+        .header("x-csrf-token", TEST_CSRF_TOKEN)
+        .header("cookie", TEST_CSRF_COOKIE)
         .json(&json!({"description": "rate-limit-test", "rpm_limit": 2}))
         .send()
         .await
@@ -401,6 +427,8 @@ async fn create_key_via_admin(
         .post(format!("{admin_url}/admin/api/keys"))
         .header("host", format!("localhost:{admin_port}"))
         .header("authorization", format!("Bearer {admin_token}"))
+        .header("x-csrf-token", TEST_CSRF_TOKEN)
+        .header("cookie", TEST_CSRF_COOKIE)
         .json(&body)
         .send()
         .await

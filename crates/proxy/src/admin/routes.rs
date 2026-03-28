@@ -1,6 +1,7 @@
 // Admin server routes. Served on a separate localhost-only listener.
 
-use crate::admin::auth::validate_admin_token;
+use crate::admin::auth::{extract_csrf_cookie, generate_csrf_token, validate_admin_token,
+    validate_csrf_tokens};
 use crate::admin::state::SharedState;
 use crate::admin::ws::ws_handler;
 use axum::{
@@ -149,11 +150,82 @@ async fn reject_cross_origin(
     Ok(next.run(req).await)
 }
 
+/// Middleware that validates CSRF tokens for state-mutating HTTP methods.
+///
+/// Skips validation for GET, HEAD, OPTIONS.
+/// For POST, PUT, DELETE: requires X-CSRF-Token header to match the csrf_token cookie.
+/// Returns 403 with a descriptive error if the token is missing or mismatched.
+/// Applied inside validate_admin_token so unauthenticated requests are rejected first.
+pub async fn validate_csrf(
+    req: axum::extract::Request,
+    next: middleware::Next,
+) -> axum::response::Response {
+    let method = req.method().clone();
+
+    if matches!(
+        method,
+        axum::http::Method::POST | axum::http::Method::PUT | axum::http::Method::DELETE
+    ) {
+        let headers = req.headers();
+
+        let header_token = headers
+            .get("x-csrf-token")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("");
+
+        let cookie_token = headers
+            .get("cookie")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|s| extract_csrf_cookie(s))
+            .unwrap_or_default();
+
+        if !validate_csrf_tokens(header_token, &cookie_token) {
+            let body = serde_json::json!({
+                "type": "error",
+                "error": {
+                    "type": "permission_error",
+                    "message": "CSRF token missing or invalid. Fetch a token from GET /admin/csrf-token."
+                }
+            });
+            return (StatusCode::FORBIDDEN, axum::Json(body)).into_response();
+        }
+    }
+
+    next.run(req).await
+}
+
+/// GET /admin/csrf-token
+///
+/// Returns a fresh CSRF token as JSON and sets it in a non-httpOnly cookie
+/// so the admin SPA can read it and include it in subsequent POST/PUT/DELETE headers.
+/// This route is public (no auth) so the token can be fetched before login.
+async fn get_csrf_token() -> axum::response::Response {
+    let token = generate_csrf_token();
+    let body = serde_json::json!({"csrf_token": token});
+    axum::http::Response::builder()
+        .status(StatusCode::OK)
+        .header("content-type", "application/json")
+        // SameSite=Strict prevents the cookie being sent on cross-site requests.
+        // Not httpOnly so the admin SPA JS can read and send it back as a header.
+        .header(
+            "set-cookie",
+            format!("csrf_token={token}; Path=/admin; SameSite=Strict; Max-Age=86400"),
+        )
+        .body(axum::body::Body::from(
+            serde_json::to_string(&body).unwrap(),
+        ))
+        .unwrap()
+        .into_response()
+}
+
 /// Build the admin router.
 /// Token is used for auth middleware on all routes except /admin/health.
 pub fn admin_router(shared: SharedState, token: Arc<String>) -> Router {
     // Public routes (no auth).
-    let public = Router::new().route("/admin/health", get(health));
+    // /admin/csrf-token is public so the SPA can fetch a token before and after login.
+    let public = Router::new()
+        .route("/admin/health", get(health))
+        .route("/admin/csrf-token", get(get_csrf_token));
 
     // Protected routes (require admin token + localhost origin check).
     let protected = Router::new()
@@ -178,6 +250,8 @@ pub fn admin_router(shared: SharedState, token: Arc<String>) -> Router {
         .route("/admin/api/models/{name}", delete(remove_model))
         .route("/admin/api/audit", get(get_audit_log))
         .with_state(shared.clone())
+        // Innermost: CSRF check runs after auth succeeds.
+        .layer(middleware::from_fn(validate_csrf))
         .layer(middleware::from_fn_with_state(
             token.clone(),
             validate_admin_token,
@@ -1321,5 +1395,112 @@ mod tests {
         // Restore previous limit.
         ADMIN_RPM.store(prev, std::sync::atomic::Ordering::Relaxed);
         ADMIN_RATE_LIMIT.remove(&ip);
+    }
+
+    /// POST to a protected admin route without CSRF token returns 403.
+    #[tokio::test]
+    async fn post_without_csrf_returns_403() {
+        let app = test_router();
+        let req = Request::post("/admin/api/keys")
+            .header("host", "localhost:9090")
+            .header("authorization", "Bearer test-token")
+            .header("content-type", "application/json")
+            .body(Body::from(r#"{"description":"test"}"#))
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+    }
+
+    /// POST with matching CSRF header and cookie succeeds (auth passes, handler runs).
+    #[tokio::test]
+    async fn post_with_valid_csrf_passes_middleware() {
+        let app = test_router();
+        let token = "a".repeat(64);
+        let req = Request::post("/admin/api/keys")
+            .header("host", "localhost:9090")
+            .header("authorization", "Bearer test-token")
+            .header("content-type", "application/json")
+            .header("x-csrf-token", &token)
+            .header("cookie", format!("csrf_token={token}"))
+            .body(Body::from(r#"{"description":"test"}"#))
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        // 403 would mean CSRF rejected; any other status means CSRF passed.
+        assert_ne!(resp.status(), StatusCode::FORBIDDEN);
+    }
+
+    /// DELETE without CSRF token returns 403.
+    #[tokio::test]
+    async fn delete_without_csrf_returns_403() {
+        let app = test_router();
+        let req = Request::delete("/admin/api/keys/1")
+            .header("host", "localhost:9090")
+            .header("authorization", "Bearer test-token")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+    }
+
+    /// GET /admin/csrf-token returns 200 with JSON body and Set-Cookie header.
+    #[tokio::test]
+    async fn get_csrf_token_sets_cookie() {
+        let app = test_router();
+        let req = Request::get("/admin/csrf-token")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let set_cookie = resp
+            .headers()
+            .get("set-cookie")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("");
+        assert!(
+            set_cookie.contains("csrf_token="),
+            "Set-Cookie must include csrf_token"
+        );
+        assert!(
+            set_cookie.contains("SameSite=Strict"),
+            "cookie must be SameSite=Strict"
+        );
+        // Not httpOnly so JS can read it.
+        assert!(
+            !set_cookie.to_lowercase().contains("httponly"),
+            "csrf_token cookie must not be httpOnly"
+        );
+    }
+
+    /// GET /admin/csrf-token returns JSON with csrf_token field.
+    #[tokio::test]
+    async fn get_csrf_token_returns_json() {
+        let app = test_router();
+        let req = Request::get("/admin/csrf-token")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let body_bytes = axum::body::to_bytes(resp.into_body(), 1 << 16)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        let token = body["csrf_token"].as_str().unwrap();
+        assert_eq!(token.len(), 64);
+    }
+
+    /// GET requests to protected routes do NOT require CSRF token.
+    #[tokio::test]
+    async fn get_request_does_not_require_csrf() {
+        let app = test_router();
+        let req = Request::get("/admin/api/config")
+            .header("host", "localhost:9090")
+            .header("authorization", "Bearer test-token")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        // CSRF should not reject GET; any non-403 means CSRF passed.
+        assert_ne!(resp.status(), StatusCode::FORBIDDEN);
     }
 }
