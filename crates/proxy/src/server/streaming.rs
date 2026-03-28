@@ -179,6 +179,28 @@ pub(crate) async fn messages_stream(
             let client = client.clone();
             let mut openai_req = mapping::message_map::anthropic_to_openai_request(&body);
             super::routes::inject_gemini_thinking(&body, &state.backend, &mut openai_req);
+            // Strip Gemini-incompatible JSON Schema keywords from tool parameters.
+            if matches!(
+                state.backend,
+                crate::backend::BackendClient::GeminiOpenAI(_)
+                    | crate::backend::BackendClient::Vertex(_)
+            ) {
+                if let Some(tools) = openai_req.tools.take() {
+                    openai_req.tools = Some(
+                        tools
+                            .into_iter()
+                            .map(|mut t| {
+                                if let Some(params) = t.function.parameters.take() {
+                                    t.function.parameters = Some(
+                                        anyllm_translate::mapping::tools_map::sanitize_schema_for_gemini(params),
+                                    );
+                                }
+                                t
+                            })
+                            .collect(),
+                    );
+                }
+            }
             if state.omit_stream_options {
                 openai_req.stream_options = None;
             }

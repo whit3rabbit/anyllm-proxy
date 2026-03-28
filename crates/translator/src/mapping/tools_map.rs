@@ -45,6 +45,46 @@ pub fn openai_tools_to_anthropic(tools: &[openai::ChatTool]) -> Vec<anthropic::T
         .collect()
 }
 
+/// JSON Schema keys that Gemini's function-calling API rejects.
+/// Gemini supports only the OpenAPI 3.0 subset of JSON Schema.
+const GEMINI_DISALLOWED_SCHEMA_KEYS: &[&str] = &[
+    "$schema",
+    "anyOf",
+    "oneOf",
+    "allOf",
+    "not",
+    "default",
+    "const",
+    "$defs",
+    "definitions",
+    "additionalProperties",
+    "$ref",
+    "if",
+    "then",
+    "else",
+];
+
+/// Recursively strip JSON Schema fields that Gemini rejects.
+/// Applied to tool `parameters` when the backend is Gemini or Vertex.
+pub fn sanitize_schema_for_gemini(schema: serde_json::Value) -> serde_json::Value {
+    match schema {
+        serde_json::Value::Object(mut map) => {
+            for key in GEMINI_DISALLOWED_SCHEMA_KEYS {
+                map.remove(*key);
+            }
+            let sanitized: serde_json::Map<String, serde_json::Value> = map
+                .into_iter()
+                .map(|(k, v)| (k, sanitize_schema_for_gemini(v)))
+                .collect();
+            serde_json::Value::Object(sanitized)
+        }
+        serde_json::Value::Array(arr) => {
+            serde_json::Value::Array(arr.into_iter().map(sanitize_schema_for_gemini).collect())
+        }
+        other => other,
+    }
+}
+
 /// Convert Anthropic tool_choice to OpenAI tool_choice.
 ///
 /// Anthropic: <https://docs.anthropic.com/en/api/messages>
@@ -416,5 +456,56 @@ mod tests {
         for (orig, rt) in tools.iter().zip(back.iter()) {
             assert_eq!(orig.name, rt.name);
         }
+    }
+
+    // --- Gemini schema sanitization ---
+
+    #[test]
+    fn sanitize_strips_disallowed_top_level_fields() {
+        let schema = serde_json::json!({
+            "$schema": "http://json-schema.org/draft-07/schema",
+            "type": "object",
+            "default": {},
+            "additionalProperties": false,
+            "$defs": {"myType": {"type": "string"}}
+        });
+        let result = sanitize_schema_for_gemini(schema);
+        assert!(result.get("$schema").is_none());
+        assert!(result.get("default").is_none());
+        assert!(result.get("$defs").is_none());
+        assert!(result.get("additionalProperties").is_none());
+        assert_eq!(result["type"], "object");
+    }
+
+    #[test]
+    fn sanitize_strips_disallowed_nested_fields() {
+        let schema = serde_json::json!({
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "default": "unnamed", "const": "fixed"},
+                "count": {"anyOf": [{"type": "integer"}, {"type": "null"}]}
+            }
+        });
+        let result = sanitize_schema_for_gemini(schema);
+        let name_prop = &result["properties"]["name"];
+        assert!(name_prop.get("default").is_none());
+        assert!(name_prop.get("const").is_none());
+        assert_eq!(name_prop["type"], "string");
+        let count_prop = &result["properties"]["count"];
+        assert!(count_prop.get("anyOf").is_none());
+    }
+
+    #[test]
+    fn sanitize_leaves_valid_schema_unchanged() {
+        let schema = serde_json::json!({
+            "type": "object",
+            "properties": {
+                "city": {"type": "string"},
+                "unit": {"type": "string", "enum": ["celsius", "fahrenheit"]}
+            },
+            "required": ["city"]
+        });
+        let result = sanitize_schema_for_gemini(schema.clone());
+        assert_eq!(result, schema);
     }
 }
