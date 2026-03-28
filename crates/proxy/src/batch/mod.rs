@@ -115,6 +115,7 @@ pub struct ValidatedJsonl {
 pub fn validate_jsonl(mut reader: impl std::io::BufRead) -> Result<ValidatedJsonl, String> {
     let mut seen_ids = HashSet::new();
     let mut line_count = 0usize;
+    let mut raw_line_num = 0usize;
     let mut bytes_read = 0usize;
     let mut line_buf = String::new();
 
@@ -126,6 +127,7 @@ pub fn validate_jsonl(mut reader: impl std::io::BufRead) -> Result<ValidatedJson
         if n == 0 {
             break; // EOF
         }
+        raw_line_num += 1;
         bytes_read += n;
         if bytes_read > MAX_FILE_SIZE {
             return Err(format!(
@@ -145,36 +147,36 @@ pub fn validate_jsonl(mut reader: impl std::io::BufRead) -> Result<ValidatedJson
         }
 
         let parsed: serde_json::Value = serde_json::from_str(line)
-            .map_err(|e| format!("Line {line_count}: invalid JSON: {e}"))?;
+            .map_err(|e| format!("Line {raw_line_num}: invalid JSON: {e}"))?;
 
         let obj = parsed
             .as_object()
-            .ok_or_else(|| format!("Line {line_count}: expected JSON object"))?;
+            .ok_or_else(|| format!("Line {raw_line_num}: expected JSON object"))?;
 
         let custom_id = obj
             .get("custom_id")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| format!("Line {line_count}: missing or non-string 'custom_id'"))?;
+            .ok_or_else(|| format!("Line {raw_line_num}: missing or non-string 'custom_id'"))?;
 
         if custom_id.len() > MAX_CUSTOM_ID_LEN {
             return Err(format!(
-                "Line {line_count}: custom_id exceeds maximum length of {MAX_CUSTOM_ID_LEN} characters"
+                "Line {raw_line_num}: custom_id exceeds maximum length of {MAX_CUSTOM_ID_LEN} characters"
             ));
         }
 
         if !seen_ids.insert(custom_id.to_string()) {
             return Err(format!(
-                "Line {line_count}: duplicate custom_id '{custom_id}'"
+                "Line {raw_line_num}: duplicate custom_id '{custom_id}'"
             ));
         }
 
         let body = obj
             .get("body")
             .and_then(|v| v.as_object())
-            .ok_or_else(|| format!("Line {line_count}: missing or non-object 'body'"))?;
+            .ok_or_else(|| format!("Line {raw_line_num}: missing or non-object 'body'"))?;
 
         if !body.contains_key("model") {
-            return Err(format!("Line {line_count}: body missing 'model' field"));
+            return Err(format!("Line {raw_line_num}: body missing 'model' field"));
         }
     }
 
@@ -264,5 +266,14 @@ mod tests {
         let result = check(data);
         assert!(result.is_ok());
         assert_eq!(result.unwrap().line_count, 2);
+    }
+
+    #[test]
+    fn error_reports_absolute_line_number_with_blank_lines() {
+        // Blank line at position 1, bad JSON at position 2.
+        // Should report "Line 2", not "Line 1".
+        let data = "\n{\"custom_id\": \"ok\", \"body\": INVALID}";
+        let err = check(data).unwrap_err();
+        assert!(err.contains("Line 2"), "expected 'Line 2' in: {err}");
     }
 }
