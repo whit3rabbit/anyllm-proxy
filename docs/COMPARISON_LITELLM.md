@@ -23,9 +23,12 @@ These are different categories; not every gap is worth closing.
 | Response caching | Yes (in-memory moka, optional Redis) | Yes | **Parity** |
 | Batch processing | Yes (OpenAI/Azure delegation) | Yes | **Parity** |
 | LiteLLM config.yaml compatibility | Yes (model_list, env var aliases) | N/A | **Advantage** |
-| Load balancing / fallback chains | Yes (round-robin, least-busy, latency-based, weighted, failover chains) | Full | **Parity** |
+| Load balancing / fallback chains | Yes (round-robin, least-busy, latency-based, weighted, cost-based, failover chains) | Full | **Parity** |
 | Dynamic model management | Yes (model_list routing, admin API add/remove at runtime) | Full | **Parity** |
 | RBAC | Yes (admin/developer roles, OIDC/JWT) | Yes (+ OIDC) | **Parity** |
+| IP allowlisting | Yes (CIDR ranges, X-Forwarded-For) | Partial | **Advantage** |
+| Spend alerts (budget threshold webhooks) | Yes (80%/95%/100%, fire-and-forget) | No | **Advantage** |
+| Audit log | Yes (admin API, SQLite) | Yes | **Parity** |
 | Audio, image endpoints | Yes (passthrough) | Yes | **Parity** |
 | Semantic caching | Yes (Qdrant + embeddings, `--features qdrant`) | Yes | **Parity** |
 | Reranking endpoints | Passthrough | Yes | **Parity** |
@@ -54,6 +57,7 @@ LiteLLM env var names are accepted as aliases. The proxy checks for LiteLLM name
 | `AZURE_API_BASE` | `AZURE_OPENAI_ENDPOINT` |
 | `AZURE_API_VERSION` | `AZURE_OPENAI_API_VERSION` |
 | `AWS_REGION_NAME` | `AWS_REGION` |
+| `LITELLM_IP_ALLOWLIST` | `IP_ALLOWLIST` |
 
 These env vars are the same in both projects (no alias needed): `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `ANTHROPIC_API_KEY`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `REDIS_URL`.
 
@@ -64,7 +68,7 @@ Both `os.environ/VAR_NAME` (LiteLLM syntax) and `env:VAR_NAME` (anyllm syntax) a
 ### What is NOT migrated
 
 - `litellm_settings.callbacks` (Langfuse, DataDog, etc.) are ignored
-- `router_settings.routing_strategy` values beyond simple-shuffle are ignored (round-robin + RPM-aware is always used)
+- `router_settings.routing_strategy` values not in `{simple-shuffle, round-robin, least-busy, latency-based-routing, latency-based, usage-based-routing, usage-based, weighted, cost-based}` fall back to round-robin with a warning
 - `general_settings.database_url` (PostgreSQL) is ignored; anyllm uses SQLite
 - Team/user-level budgets (anyllm tracks per-key only)
 - `litellm_settings.drop_params` is accepted but has no effect (anyllm already drops unsupported params via serde flatten)
@@ -106,7 +110,7 @@ anyllm-proxy also provides:
 - RBAC roles (admin, developer) enforced in auth middleware
 - Per-key budget enforcement with daily/monthly period reset
 - Developer keys blocked from admin endpoints (403)
-- OIDC/JWT authentication (optional, via `OIDC_ISSUER_URL`): validates JWTs against JWKS with background key refresh
+- OIDC/JWT authentication (optional, via `OIDC_ISSUER_URL`): validates JWTs against JWKS; keys refreshed every 60 minutes via background task
 - IP allowlisting (optional, via `IP_ALLOWLIST` env var with CIDR ranges, `X-Forwarded-For` support)
 
 LiteLLM additionally provides:
@@ -121,7 +125,7 @@ LiteLLM supports:
 - Cross-provider fallback chains (retry on a different provider on failure)
 - Redis-backed distributed state for multi-instance deployments
 
-Not yet in anyllm-proxy: cost-based routing strategy.
+All five LiteLLM routing strategies are now supported in anyllm-proxy.
 
 ### 5. Caching
 
@@ -131,20 +135,21 @@ LiteLLM supports in-memory, Redis, semantic (Qdrant/Redis), S3, and GCS caches w
 
 ### 6. Rate Limiting
 
-anyllm-proxy enforces a global concurrency limit (default 100 concurrent requests) and per-key RPM/TPM limits via virtual keys (in-memory sliding window). With `--features redis` and `REDIS_URL`, rate limiting is distributed across instances using Redis sorted sets with atomic Lua scripts. On Redis failure, each instance falls back to local-only limiting. Upstream 429s are passed through.
+anyllm-proxy enforces a global concurrency limit (default 100 concurrent requests) and per-key RPM/TPM limits via virtual keys (in-memory sliding window). With `--features redis` and `REDIS_URL`, rate limiting is distributed across instances using Redis sorted sets with atomic Lua scripts. Redis failure behavior is configurable via `RATE_LIMIT_FAIL_POLICY`: `open` (default, allow requests) or `closed`/`deny` (reject with 503 and `retry-after: 60`). Upstream 429s are passed through.
 
 LiteLLM enforces RPM and TPM limits per key, user, and team, with Redis-backed distributed tracking.
 
 ### 7. Cost Tracking & Budget Management
 
-anyllm-proxy computes per-request USD cost from a bundled model pricing database (`assets/model_pricing.json`) and aggregates spend per virtual key. `x-anyllm-cost-usd` response header reports estimated cost. Admin API exposes per-key spend (`GET /admin/api/keys/{id}/spend`). Budget enforcement rejects requests when period spend exceeds `max_budget_usd` (daily/monthly reset).
+anyllm-proxy computes per-request USD cost from a bundled model pricing database (`assets/model_pricing.json`) and aggregates spend per virtual key. `x-anyllm-cost-usd` response header reports estimated cost. Admin API exposes per-key spend (`GET /admin/api/keys/{id}/spend`). Budget enforcement rejects requests with HTTP 429 (`budget_exceeded`) when `period_spend_usd >= max_budget_usd` (daily/monthly period reset). Spend alerts send fire-and-forget webhook POSTs at 80%, 95%, and 100% of the budget limit; alerts are deduped per key per period (only escalate, never repeat the same threshold).
 
 LiteLLM computes per-request USD cost from a built-in model pricing database and aggregates spend per key, user, and team with configurable hard caps.
 
 ### 8. Observability & Logging
 
 anyllm-proxy provides:
-- SQLite request log (7-day retention, latency percentiles via admin API)
+- SQLite request log (retention configurable via `ADMIN_LOG_RETENTION_DAYS`, latency percentiles via admin API)
+- Admin audit log (`GET /admin/api/audit`): paginated log of key CRUD, config changes, and model add/remove events
 - Request count metrics (`GET /metrics`)
 - `x-anyllm-degradation` response header for lossy translation warnings
 - `tracing` crate output (stdout, `RUST_LOG`)
@@ -202,7 +207,7 @@ LiteLLM uses a full relational database (configurable backend) for key/user/team
 17. **Semantic caching skeleton** -- Qdrant-backed, behind `--features qdrant` feature flag
 18. **Reranking passthrough** -- `POST /v1/rerank` forwarded to backend unchanged
 19. **Legacy text completions passthrough** -- `POST /v1/completions` forwarded to backend unchanged
-20. **OIDC/JWT authentication** -- Optional JWT validation via OIDC discovery, JWKS caching with background refresh
+20. **OIDC/JWT authentication** -- Optional JWT validation via OIDC discovery, JWKS fetched at startup with 60-minute background refresh via tokio::spawn
 21. **Distributed rate limiting** -- Redis sorted sets with Lua scripts, fail-open fallback to local
 22. **Redis L2 cache** -- SETEX-based response cache behind `--features redis`
 23. **Semantic caching** -- Qdrant-backed embedding similarity search with collection auto-creation
@@ -213,8 +218,10 @@ LiteLLM uses a full relational database (configurable backend) for key/user/team
 28. **`/v1/models` enrichment** -- Endpoint merges static Claude models with model_list config entries and dynamically-added models
 29. **IP allowlisting** -- `IP_ALLOWLIST` env var with CIDR ranges, `X-Forwarded-For` support via `TRUST_PROXY_HEADERS`
 30. **Webhook callbacks** -- `litellm_settings.callbacks` webhook URLs and `WEBHOOK_URLS` env var; fire-and-forget POST on request completion
+33. **Cost-based routing** -- `CostBased` routing strategy; selects the deployment with the lowest combined input+output cost per token using the bundled `model_pricing.json`; falls back to round-robin for deployments with unknown pricing; parsed from `router_settings.routing_strategy: cost-based` in LiteLLM config
+31. **Spend alerts** -- fire-and-forget webhook POST at 80%, 95%, and 100% budget thresholds; deduped per key per period (alerts only escalate, never repeat the same threshold); payload includes `type=spend_alert`, `threshold_pct`, `period_spend_usd`, `max_budget_usd`
+32. **`LITELLM_IP_ALLOWLIST` env alias** -- maps to `IP_ALLOWLIST` at startup; same behavior as other LiteLLM aliases (target takes precedence if already set)
 
 ## Remaining Gaps
 
-- **Routing strategies (cost-based):** LiteLLM supports cost-based routing; anyllm-proxy does not yet (round-robin, least-busy, latency-based, and weighted are supported).
 - **LiteLLM named callbacks:** `litellm_settings.callbacks` entries like `"langfuse"` or `"datadog"` are not natively mapped (only webhook URLs are supported). Named integrations are logged as unsupported.

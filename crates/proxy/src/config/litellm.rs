@@ -82,6 +82,7 @@ fn parse_routing_strategy(s: &str) -> RoutingStrategy {
         "latency-based-routing" | "latency-based" => RoutingStrategy::LatencyBased,
         "usage-based-routing" | "usage-based" => RoutingStrategy::LeastBusy,
         "weighted" => RoutingStrategy::Weighted,
+        "cost-based" => RoutingStrategy::CostBased,
         other => {
             tracing::warn!(
                 strategy = %other,
@@ -658,6 +659,22 @@ router_settings:
 "#;
         let (_, router) = from_litellm_yaml(yaml);
         assert_eq!(router.strategy(), RoutingStrategy::LatencyBased);
+    }
+
+    #[test]
+    fn routing_strategy_cost_based() {
+        let yaml = r#"
+model_list:
+  - model_name: gpt-4o
+    litellm_params:
+      model: openai/gpt-4o
+      api_key: sk-test
+
+router_settings:
+  routing_strategy: cost-based
+"#;
+        let (_, router) = from_litellm_yaml(yaml);
+        assert_eq!(router.strategy(), RoutingStrategy::CostBased);
     }
 
     #[test]

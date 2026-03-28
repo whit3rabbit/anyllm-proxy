@@ -125,6 +125,25 @@ impl ModelPricing {
         Self { entries }
     }
 
+    /// Return (input_cost_per_token, output_cost_per_token) for a model, or None if unknown.
+    ///
+    /// Same lookup order as cost_for_usage (exact then longest-prefix) but does not log
+    /// on miss, so it is safe to call during routing decisions.
+    pub fn price_for_model(&self, model: &str) -> Option<(f64, f64)> {
+        if let Some(entry) = self.entries.iter().find(|e| e.model_pattern == model) {
+            return Some((entry.input_cost_per_token, entry.output_cost_per_token));
+        }
+        let mut best: Option<&ModelPricingEntry> = None;
+        let mut best_len: usize = 0;
+        for entry in &self.entries {
+            if model.starts_with(&entry.model_pattern) && entry.model_pattern.len() > best_len {
+                best = Some(entry);
+                best_len = entry.model_pattern.len();
+            }
+        }
+        best.map(|e| (e.input_cost_per_token, e.output_cost_per_token))
+    }
+
     /// Calculate cost for a usage record.
     ///
     /// Matching strategy: exact match first, then longest prefix match.

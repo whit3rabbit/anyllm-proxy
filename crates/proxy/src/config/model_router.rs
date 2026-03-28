@@ -6,7 +6,7 @@
 ///
 /// Supports multiple routing strategies: round-robin (default),
 /// least-busy (lowest in-flight), latency-based (lowest EWMA),
-/// and weighted round-robin.
+/// weighted round-robin, and cost-based (lowest price-per-token).
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -23,6 +23,9 @@ pub enum RoutingStrategy {
     LatencyBased,
     /// Weighted round-robin using per-deployment weight field.
     Weighted,
+    /// Pick deployment with lowest cost per token from the bundled model pricing table.
+    /// Falls back to round-robin if none of the deployments have known pricing.
+    CostBased,
 }
 
 /// A single backend deployment that can serve a model name.
@@ -203,6 +206,7 @@ impl ModelRouter {
             RoutingStrategy::LeastBusy => self.route_least_busy(model_name),
             RoutingStrategy::LatencyBased => self.route_latency_based(model_name),
             RoutingStrategy::Weighted => self.route_weighted(model_name),
+            RoutingStrategy::CostBased => self.route_cost_based(model_name),
         }
     }
 
@@ -333,6 +337,50 @@ impl ModelRouter {
             }
         }
         None
+    }
+
+    /// Pick deployment with the lowest combined cost per token (input + output).
+    ///
+    /// Uses the global model pricing table. Deployments with unknown pricing are
+    /// treated as having infinite cost and are skipped in favour of priced ones.
+    /// If no deployment has known pricing, falls back to round-robin.
+    fn route_cost_based(&self, model_name: &str) -> Option<RoutedDeployment<'_>> {
+        let deployments = self.routes.get(model_name)?;
+        if deployments.is_empty() {
+            return None;
+        }
+
+        let pricing = crate::cost::pricing();
+        let mut best: Option<(usize, f64)> = None;
+        let mut any_priced = false;
+
+        for (i, d) in deployments.iter().enumerate() {
+            if !d.under_rpm_limit() {
+                continue;
+            }
+            if let Some((input, output)) = pricing.price_for_model(&d.actual_model) {
+                any_priced = true;
+                let score = input + output;
+                if best.is_none() || score < best.unwrap().1 {
+                    best = Some((i, score));
+                }
+            }
+        }
+
+        // No deployment has known pricing; fall back to round-robin.
+        if !any_priced {
+            return self.route_round_robin(model_name);
+        }
+
+        best.map(|(idx, _)| {
+            let d = &deployments[idx];
+            d.record_request();
+            RoutedDeployment {
+                backend_name: &d.backend_name,
+                actual_model: &d.actual_model,
+                deployment: d,
+            }
+        })
     }
 
     /// Check if a model name exists in the routing table.
@@ -669,6 +717,57 @@ mod tests {
         d.record_start(); // increment to avoid underflow
         d.record_finish(200);
         assert_eq!(d.latency_ms(), 130);
+    }
+
+    // ---- Cost-based strategy tests ----
+
+    #[test]
+    fn cost_based_picks_cheapest_model() {
+        // gpt-4o-mini is cheaper than gpt-4o (both are in the bundled pricing table).
+        let deps = make_deployments(&[("expensive", "gpt-4o", None), ("cheap", "gpt-4o-mini", None)]);
+        let mut routes = HashMap::new();
+        routes.insert("my-model".to_string(), deps);
+        let router = ModelRouter::with_strategy(routes, RoutingStrategy::CostBased);
+
+        // Should always pick the cheaper deployment.
+        for _ in 0..5 {
+            let r = router.route("my-model").unwrap();
+            assert_eq!(r.backend_name, "cheap");
+        }
+    }
+
+    #[test]
+    fn cost_based_skips_rpm_limited() {
+        let deps = make_deployments(&[
+            ("cheap-limited", "gpt-4o-mini", Some(1)),
+            ("expensive-open", "gpt-4o", None),
+        ]);
+        let mut routes = HashMap::new();
+        routes.insert("m".to_string(), deps);
+        let router = ModelRouter::with_strategy(routes, RoutingStrategy::CostBased);
+
+        // First request: cheap-limited is available and cheapest.
+        let r0 = router.route("m").unwrap();
+        assert_eq!(r0.backend_name, "cheap-limited");
+        // cheap-limited now at RPM limit; must use expensive-open.
+        let r1 = router.route("m").unwrap();
+        assert_eq!(r1.backend_name, "expensive-open");
+    }
+
+    #[test]
+    fn cost_based_falls_back_to_round_robin_for_unknown_models() {
+        // Unknown model names have no pricing entry; should fall back to round-robin.
+        let deps = make_deployments(&[("a", "no-such-model-xyz", None), ("b", "no-such-model-xyz", None)]);
+        let mut routes = HashMap::new();
+        routes.insert("m".to_string(), deps);
+        let router = ModelRouter::with_strategy(routes, RoutingStrategy::CostBased);
+
+        // Should not panic and should return some deployment.
+        let r0 = router.route("m").unwrap();
+        let r1 = router.route("m").unwrap();
+        // Round-robin order: a, b.
+        assert_eq!(r0.backend_name, "a");
+        assert_eq!(r1.backend_name, "b");
     }
 
     // ---- Mutation method tests ----
