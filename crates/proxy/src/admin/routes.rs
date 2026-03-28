@@ -176,7 +176,7 @@ pub async fn validate_csrf(
         let cookie_token = headers
             .get("cookie")
             .and_then(|v| v.to_str().ok())
-            .and_then(|s| extract_csrf_cookie(s))
+            .and_then(extract_csrf_cookie)
             .unwrap_or_default();
 
         if !validate_csrf_tokens(header_token, &cookie_token) {

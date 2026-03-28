@@ -54,7 +54,7 @@ impl OpenAIBatchClient {
 
         let resp = self
             .client
-            .post(&self.files_url())
+            .post(self.files_url())
             .header("Authorization", format!("Bearer {}", self.api_key))
             .multipart(form)
             .send()
@@ -84,7 +84,7 @@ impl OpenAIBatchClient {
 
         let resp = self
             .client
-            .post(&self.batches_url())
+            .post(self.batches_url())
             .header("Authorization", format!("Bearer {}", self.api_key))
             .header("Content-Type", "application/json")
             .json(&body)
@@ -111,7 +111,7 @@ impl OpenAIBatchClient {
     ) -> Result<serde_json::Value, String> {
         let resp = self
             .client
-            .get(&self.batch_url(openai_batch_id))
+            .get(self.batch_url(openai_batch_id))
             .header("Authorization", format!("Bearer {}", self.api_key))
             .send()
             .await
@@ -132,7 +132,7 @@ impl OpenAIBatchClient {
     pub async fn get_file_content(&self, file_id: &str) -> Result<String, String> {
         let resp = self
             .client
-            .get(&self.file_content_url(file_id))
+            .get(self.file_content_url(file_id))
             .header("Authorization", format!("Bearer {}", self.api_key))
             .send()
             .await

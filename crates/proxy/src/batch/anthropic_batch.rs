@@ -33,7 +33,7 @@ fn extract_openai_credentials(backend: &BackendClient) -> Option<(String, String
 }
 
 /// POST /v1/messages/batches
-pub async fn create_anthropic_batch(
+pub(crate) async fn create_anthropic_batch(
     State(state): State<AppState>,
     AnthropicJson(req): AnthropicJson<CreateBatchRequest>,
 ) -> Response {
@@ -167,7 +167,7 @@ pub async fn create_anthropic_batch(
 }
 
 /// GET /v1/messages/batches/{id}
-pub async fn get_anthropic_batch(
+pub(crate) async fn get_anthropic_batch(
     State(state): State<AppState>,
     Path(batch_id): Path<String>,
 ) -> Response {
@@ -244,7 +244,7 @@ pub async fn get_anthropic_batch(
 /// GET /v1/messages/batches/{id}/results
 ///
 /// Downloads the OpenAI output JSONL and streams Anthropic-format result lines.
-pub async fn get_anthropic_batch_results(
+pub(crate) async fn get_anthropic_batch_results(
     State(state): State<AppState>,
     Path(batch_id): Path<String>,
 ) -> Response {
