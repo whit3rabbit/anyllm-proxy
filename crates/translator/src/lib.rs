@@ -41,6 +41,8 @@ pub mod anthropic;
 pub mod config;
 /// Error types for translation failures.
 pub mod error;
+/// Gemini native generateContent API types (request, response).
+pub mod gemini;
 /// Stateless conversion functions between Anthropic and OpenAI API formats.
 pub mod mapping;
 /// HTTP middleware for request/response translation (requires `middleware` feature).
