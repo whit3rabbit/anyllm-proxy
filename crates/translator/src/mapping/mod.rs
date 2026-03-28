@@ -1,3 +1,5 @@
+/// Anthropic batch JSONL <-> OpenAI batch JSONL translation functions.
+pub mod batch_map;
 /// HTTP status and error shape translation between APIs.
 pub mod errors_map;
 /// Message and content block translation (system prompt, text, images, documents).

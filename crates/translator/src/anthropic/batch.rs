@@ -2,7 +2,7 @@
 // Anthropic Message Batches API types.
 // See https://docs.anthropic.com/en/api/creating-message-batches
 
-use crate::anthropic::errors::{ErrorDetail, ErrorType};
+use crate::anthropic::errors::ErrorDetail;
 use crate::anthropic::messages::{MessageCreateRequest, MessageResponse};
 use serde::{Deserialize, Serialize};
 
@@ -74,10 +74,6 @@ pub struct BatchResultItem {
     pub custom_id: String,
     pub result: BatchResultVariant,
 }
-
-// Suppress unused import warning: ErrorType is re-exported for consumers of this module.
-#[allow(unused_imports)]
-pub use crate::anthropic::errors::ErrorType as BatchErrorType;
 
 #[cfg(test)]
 mod tests {
