@@ -2,6 +2,7 @@
 // Implements OpenAI-compatible batch file upload and job management.
 
 pub mod db;
+pub mod openai_batch_client;
 pub mod routes;
 
 use serde::{Deserialize, Serialize};
