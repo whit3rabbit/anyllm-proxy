@@ -384,7 +384,7 @@ pub(crate) async fn messages_stream(
                 }
             });
         }
-        BackendClient::Anthropic(_) | BackendClient::Bedrock(_) => {
+        BackendClient::Anthropic(_) | BackendClient::Bedrock(_) | BackendClient::GeminiNative(_) => {
             drop(rl_tx);
             let _ = tx
                 .send(Ok(Event::default().data(

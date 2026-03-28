@@ -969,8 +969,8 @@ async fn messages(
                 }
             }
         }
-        BackendClient::Anthropic(_) | BackendClient::Bedrock(_) => {
-            // These backends are handled by separate handlers (passthrough / Bedrock).
+        BackendClient::Anthropic(_) | BackendClient::Bedrock(_) | BackendClient::GeminiNative(_) => {
+            // These backends are handled by separate handlers (passthrough / Bedrock / Gemini native).
             // If we reach here, something is misconfigured.
             let err = mapping::errors_map::create_anthropic_error(
                 anthropic::ErrorType::ApiError,

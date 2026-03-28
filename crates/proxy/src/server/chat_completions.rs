@@ -382,7 +382,7 @@ pub(crate) async fn chat_completions(
                 }
             }
         }
-        BackendClient::Anthropic(_) | BackendClient::Bedrock(_) => openai_error_response(
+        BackendClient::Anthropic(_) | BackendClient::Bedrock(_) | BackendClient::GeminiNative(_) => openai_error_response(
             "This backend does not support /v1/chat/completions. Use /v1/messages instead.",
             "invalid_request_error",
             StatusCode::BAD_REQUEST,
@@ -449,7 +449,7 @@ async fn chat_completions_stream(
         | BackendClient::Vertex(c)
         | BackendClient::GeminiOpenAI(c)
         | BackendClient::OpenAIResponses(c) => c.clone(),
-        BackendClient::Anthropic(_) | BackendClient::Bedrock(_) => {
+        BackendClient::Anthropic(_) | BackendClient::Bedrock(_) | BackendClient::GeminiNative(_) => {
             return openai_error_response(
                 "This backend does not support /v1/chat/completions. Use /v1/messages instead.",
                 "invalid_request_error",

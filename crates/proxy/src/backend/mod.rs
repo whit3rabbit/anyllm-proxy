@@ -2,12 +2,15 @@
 pub mod anthropic_client;
 /// AWS Bedrock client with SigV4 request signing.
 pub mod bedrock_client;
+/// Gemini native generateContent client (no OpenAI translation layer).
+pub mod gemini_client;
 /// reqwest client for OpenAI-compatible Chat Completions and Responses APIs with retry/backoff.
 pub mod openai_client;
 
 use crate::config::{BackendAuth, BackendConfig, BackendKind, Config, OpenAIApiFormat, TlsConfig};
 use anthropic_client::{AnthropicClient, AnthropicClientError};
 use bedrock_client::{BedrockClient, BedrockClientError};
+use gemini_client::{GeminiClientError, GeminiNativeClient};
 use openai_client::{OpenAIClient, OpenAIClientError};
 
 // Re-export from the client crate so existing code paths (streaming, routes, etc.) keep working.
@@ -71,6 +74,8 @@ pub enum BackendClient {
     Anthropic(AnthropicClient),
     /// AWS Bedrock: sends Anthropic-format requests with SigV4 signing.
     Bedrock(BedrockClient),
+    /// Gemini native: sends generateContent requests directly (no OpenAI translation).
+    GeminiNative(GeminiNativeClient),
 }
 
 /// Unified error type for all backend clients.
@@ -79,6 +84,7 @@ pub enum BackendError {
     OpenAI(OpenAIClientError),
     Anthropic(AnthropicClientError),
     Bedrock(BedrockClientError),
+    Gemini(GeminiClientError),
 }
 
 impl BackendError {
@@ -87,6 +93,7 @@ impl BackendError {
         match self {
             Self::OpenAI(OpenAIClientError::ApiError { status, .. }) => Some(*status),
             Self::Bedrock(BedrockClientError::ApiError { status, .. }) => Some(*status),
+            Self::Gemini(GeminiClientError::ApiError { status, .. }) => Some(*status),
             _ => None,
         }
     }
@@ -102,6 +109,7 @@ impl BackendError {
             Self::OpenAI(e) => e.to_string(),
             Self::Anthropic(e) => e.to_string(),
             Self::Bedrock(e) => e.to_string(),
+            Self::Gemini(e) => e.to_string(),
         }
     }
 
@@ -123,6 +131,7 @@ impl std::fmt::Display for BackendError {
             Self::OpenAI(e) => write!(f, "{e}"),
             Self::Anthropic(e) => write!(f, "{e}"),
             Self::Bedrock(e) => write!(f, "{e}"),
+            Self::Gemini(e) => write!(f, "{e}"),
         }
     }
 }
@@ -142,6 +151,12 @@ impl From<AnthropicClientError> for BackendError {
 impl From<BedrockClientError> for BackendError {
     fn from(e: BedrockClientError) -> Self {
         Self::Bedrock(e)
+    }
+}
+
+impl From<GeminiClientError> for BackendError {
+    fn from(e: GeminiClientError) -> Self {
+        Self::Gemini(e)
     }
 }
 
@@ -165,7 +180,7 @@ impl BackendClient {
                     .await
                     .map_err(BackendError::OpenAI)
             }
-            Self::Anthropic(_) | Self::Bedrock(_) => {
+            Self::Anthropic(_) | Self::Bedrock(_) | Self::GeminiNative(_) => {
                 let err = anyllm_translate::mapping::errors_map::create_anthropic_error(
                     anyllm_translate::anthropic::ErrorType::InvalidRequestError,
                     format!(
@@ -200,8 +215,8 @@ impl BackendClient {
                 .embeddings_passthrough(body, content_type)
                 .await
                 .map_err(BackendError::OpenAI),
-            Self::Anthropic(_) | Self::Bedrock(_) => {
-                // Anthropic and Bedrock have no embeddings API.
+            Self::Anthropic(_) | Self::Bedrock(_) | Self::GeminiNative(_) => {
+                // Anthropic, Bedrock, and Gemini native have no embeddings passthrough.
                 let err = anyllm_translate::mapping::errors_map::create_anthropic_error(
                     anyllm_translate::anthropic::ErrorType::InvalidRequestError,
                     "Embeddings are not supported by this backend.".to_string(),
