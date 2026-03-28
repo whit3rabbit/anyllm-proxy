@@ -477,6 +477,27 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
     }
   }
 
+  // -- CSRF token --
+  // Fetched once on load and stored here. The admin SPA reads the cookie value
+  // returned by GET /admin/csrf-token and echoes it in X-CSRF-Token on mutating requests.
+  var _csrfToken = '';
+
+  function fetchCsrfToken() {
+    return fetch('/admin/csrf-token')
+      .then(function(r) {
+        if (r.ok) return r.json();
+      })
+      .then(function(data) {
+        if (data && data.csrf_token) _csrfToken = data.csrf_token;
+      })
+      .catch(function(e) { console.warn('Failed to fetch CSRF token:', e); });
+  }
+
+  // Returns authHeaders extended with X-CSRF-Token for POST/PUT/DELETE requests.
+  function mutatingHeaders() {
+    return Object.assign({}, authHeaders, {'X-CSRF-Token': _csrfToken});
+  }
+
   // -- API fetch --
   function apiFetch(path) {
     return fetch(API + path, {headers: authHeaders}).then(function(r) { return r.json(); });
@@ -615,7 +636,7 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
       }
     });
 
-    fetch(API + '/config', {method:'PUT', headers: authHeaders, body: JSON.stringify(body)})
+    fetch(API + '/config', {method:'PUT', headers: mutatingHeaders(), body: JSON.stringify(body)})
       .then(function(r) { return r.json(); })
       .then(function(result) {
         alert('Updated ' + (result.updated || 0) + ' settings');
@@ -833,7 +854,7 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
       submitBtn.textContent = 'Create';
     }
 
-    fetch(API + '/keys', {method: 'POST', headers: authHeaders, body: JSON.stringify(body)})
+    fetch(API + '/keys', {method: 'POST', headers: mutatingHeaders(), body: JSON.stringify(body)})
       .then(function(r) {
         if (!r.ok) { return r.json().then(function(e) { throw new Error(e.error || ('HTTP ' + r.status)); }); }
         return r.json();
@@ -862,7 +883,7 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
 
   function revokeKey(id) {
     if (!confirm('Revoke this key? This cannot be undone.')) return;
-    fetch(API + '/keys/' + id, {method: 'DELETE', headers: authHeaders})
+    fetch(API + '/keys/' + id, {method: 'DELETE', headers: mutatingHeaders()})
       .then(function(r) {
         if (!r.ok) { return r.json().then(function(e) { throw new Error(e.error || ('HTTP ' + r.status)); }); }
         return r.json();
@@ -1000,7 +1021,7 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
     submitBtn.disabled = true;
     submitBtn.textContent = 'Adding...';
 
-    fetch(API + '/models', {method: 'POST', headers: authHeaders, body: JSON.stringify(body)})
+    fetch(API + '/models', {method: 'POST', headers: mutatingHeaders(), body: JSON.stringify(body)})
       .then(function(r) {
         if (!r.ok) { return r.json().then(function(e) { throw new Error(e.error || ('HTTP ' + r.status)); }); }
         return r.json();
@@ -1026,7 +1047,7 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
 
   function removeModel(name) {
     if (!confirm('Remove model "' + name + '"? This cannot be undone.')) return;
-    fetch(API + '/models/' + encodeURIComponent(name), {method: 'DELETE', headers: authHeaders})
+    fetch(API + '/models/' + encodeURIComponent(name), {method: 'DELETE', headers: mutatingHeaders()})
       .then(function(r) {
         if (!r.ok) { return r.json().then(function(e) { throw new Error(e.error || ('HTTP ' + r.status)); }); }
         return r.json();
@@ -1047,8 +1068,8 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
 
   document.getElementById('btn-submit-model').addEventListener('click', addModel);
 
-  // Initial load
-  loadDashboard();
+  // Initial load: fetch CSRF token first so all subsequent mutating requests are protected.
+  fetchCsrfToken().then(function() { loadDashboard(); });
 })();
 </script>
 </body>
