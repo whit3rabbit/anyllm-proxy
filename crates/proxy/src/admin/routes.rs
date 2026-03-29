@@ -36,9 +36,8 @@ pub fn reset_admin_rate_limit() {
     ADMIN_RATE_LIMIT.clear();
 }
 
-/// Returns true if the request is within the rate limit, false if exceeded.
-fn check_admin_rate_limit(ip: IpAddr) -> bool {
-    let rpm = ADMIN_RPM.load(Ordering::Relaxed);
+/// Inner rate-limit check with an explicit rpm; avoids touching the global ADMIN_RPM in tests.
+fn check_admin_rate_limit_with_rpm(ip: IpAddr, rpm: u32) -> bool {
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
@@ -55,6 +54,11 @@ fn check_admin_rate_limit(ip: IpAddr) -> bool {
     } else {
         false
     }
+}
+
+/// Returns true if the request is within the rate limit, false if exceeded.
+fn check_admin_rate_limit(ip: IpAddr) -> bool {
+    check_admin_rate_limit_with_rpm(ip, ADMIN_RPM.load(Ordering::Relaxed))
 }
 
 /// Axum middleware that enforces per-IP rate limiting on admin API routes.
@@ -1379,21 +1383,17 @@ mod tests {
 
     #[test]
     fn admin_rate_limit_enforced() {
-        // Use a unique IP so parallel tests don't interfere.
+        // Use a unique IP and pass rpm directly to avoid mutating ADMIN_RPM,
+        // which would race with test_router() calling set_admin_rpm(10_000).
         let ip: IpAddr = "198.51.100.1".parse().unwrap();
         ADMIN_RATE_LIMIT.remove(&ip);
-        // Temporarily set a low limit for this test.
-        let prev = ADMIN_RPM.load(std::sync::atomic::Ordering::Relaxed);
-        ADMIN_RPM.store(3, std::sync::atomic::Ordering::Relaxed);
 
-        assert!(check_admin_rate_limit(ip));
-        assert!(check_admin_rate_limit(ip));
-        assert!(check_admin_rate_limit(ip));
+        assert!(check_admin_rate_limit_with_rpm(ip, 3));
+        assert!(check_admin_rate_limit_with_rpm(ip, 3));
+        assert!(check_admin_rate_limit_with_rpm(ip, 3));
         // 4th request in the same window should be rejected.
-        assert!(!check_admin_rate_limit(ip));
+        assert!(!check_admin_rate_limit_with_rpm(ip, 3));
 
-        // Restore previous limit.
-        ADMIN_RPM.store(prev, std::sync::atomic::Ordering::Relaxed);
         ADMIN_RATE_LIMIT.remove(&ip);
     }
 
