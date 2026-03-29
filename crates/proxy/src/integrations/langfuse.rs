@@ -166,7 +166,7 @@ pub(crate) fn base64_encode(input: &[u8]) -> String {
 
 /// Parse ISO 8601 UTC timestamp ("2026-03-27T10:15:30Z") to Unix epoch seconds.
 /// Returns None on parse failure.
-pub(crate) fn iso8601_to_epoch(s: &str) -> Option<u64> {
+pub fn iso8601_to_epoch(s: &str) -> Option<u64> {
     if s.len() < 20 {
         return None;
     }

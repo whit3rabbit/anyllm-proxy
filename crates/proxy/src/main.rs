@@ -279,7 +279,10 @@ async fn main() {
                             admin::keys::VirtualKeyMeta {
                                 id: key_row.id,
                                 description: key_row.description.clone(),
-                                expires_at: None,
+                                expires_at: key_row.expires_at.as_deref().and_then(|s| {
+                                anyllm_proxy::integrations::langfuse::iso8601_to_epoch(s)
+                                    .and_then(|e| i64::try_from(e).ok())
+                            }),
                                 rpm_limit: key_row.rpm_limit,
                                 tpm_limit: key_row.tpm_limit,
                                 rate_state: Arc::new(admin::keys::RateLimitState::new()),

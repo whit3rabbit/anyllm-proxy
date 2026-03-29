@@ -78,6 +78,21 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
 .btn-sm{padding:3px 8px;font-size:11px;border-radius:4px}
 .key-result{background:#0d1117;border:1px solid #3fb950;border-radius:6px;padding:12px;margin-bottom:12px;font-family:monospace;font-size:12px;word-break:break-all}
 .key-result-label{color:#3fb950;font-size:11px;margin-bottom:4px;font-weight:600}
+/* Budget progress bar */
+.budget-bar{height:6px;border-radius:3px;background:#30363d;margin-top:4px;overflow:hidden;min-width:60px}
+.budget-bar-fill{height:100%;border-radius:3px;background:#3fb950;transition:width 0.3s}
+.budget-bar-fill.warn{background:#d29922}.budget-bar-fill.danger{background:#f85149}
+/* Tag chips (allowed_models) */
+.tag-input-area{display:flex;flex-wrap:wrap;gap:4px;padding:4px;background:#0d1117;border:1px solid #30363d;border-radius:4px;min-height:34px;align-items:center;cursor:text}
+.tag-input-area:focus-within{border-color:#4a9eff}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;background:rgba(74,158,255,0.15);border:1px solid rgba(74,158,255,0.3);border-radius:12px;font-size:11px;color:#4a9eff}
+.chip-remove{cursor:pointer;color:#8b949e;font-size:13px;line-height:1}
+.chip-remove:hover{color:#f85149}
+.tag-input-bare{background:none;border:none;outline:none;color:#c9d1d9;font-size:13px;min-width:80px;padding:2px 4px;flex:1}
+/* Modal overlay */
+.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:100}
+.modal{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:20px;width:460px;max-width:95vw;max-height:90vh;overflow-y:auto}
+.modal-title{font-weight:600;font-size:15px;margin-bottom:16px;color:#c9d1d9}
 </style>
 </head>
 <body>
@@ -96,8 +111,9 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
   <div class="nav-item" data-tab="requests">Request Log</div>
   <div class="nav-item" data-tab="settings">Settings</div>
   <div class="nav-item" data-tab="backends">Backends</div>
-  <div class="nav-item" data-tab="keys">Keys</div>
+  <div class="nav-item" data-tab="keys">Access Control</div>
   <div class="nav-item" data-tab="models">Models</div>
+  <div class="nav-item" data-tab="audit">Audit</div>
   <div class="nav-right"><span id="ws-status" class="disconnected">Disconnected</span></div>
 </div>
 
@@ -108,6 +124,12 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
     <div class="stat"><div class="stat-label">P50 Latency</div><div class="stat-value" id="stat-p50">--</div></div>
     <div class="stat"><div class="stat-label">P95 Latency</div><div class="stat-value" id="stat-p95">--</div></div>
     <div class="stat"><div class="stat-label">Total Requests</div><div class="stat-value" id="stat-total">0</div></div>
+  </div>
+  <div class="stats-row" style="margin-bottom:16px">
+    <div class="stat"><div class="stat-label">Streams Started</div><div class="stat-value" id="stat-streams-started">0</div></div>
+    <div class="stat"><div class="stat-label">Completed</div><div class="stat-value" id="stat-streams-completed" style="color:#3fb950">0</div></div>
+    <div class="stat"><div class="stat-label">Failed</div><div class="stat-value" id="stat-streams-failed" style="color:#f85149">0</div></div>
+    <div class="stat"><div class="stat-label">Client Disconnects</div><div class="stat-value" id="stat-streams-disconnected" style="color:#d29922">0</div></div>
   </div>
   <div class="backend-cards" id="backend-cards"></div>
   <div class="section-header">
@@ -125,14 +147,17 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
 <div id="tab-requests" class="tab">
   <div class="section-header">
     <div class="section-label">Request Log</div>
-    <div class="form-row">
+    <div class="form-row" style="flex-wrap:wrap;gap:6px">
       <select id="filter-backend"><option value="">All backends</option></select>
       <select id="filter-status"><option value="">All statuses</option><option value="2xx">2xx</option><option value="4xx">4xx</option><option value="5xx">5xx</option></select>
+      <select id="filter-key"><option value="">All keys</option></select>
+      <input type="datetime-local" id="filter-since" title="Since" style="font-size:12px;padding:5px 8px">
+      <input type="datetime-local" id="filter-until" title="Until" style="font-size:12px;padding:5px 8px">
       <button class="btn btn-secondary" id="btn-refresh">Refresh</button>
     </div>
   </div>
   <div class="feed" id="request-log" style="max-height:600px">
-    <div class="feed-header"><div>Time</div><div>Status</div><div>Backend</div><div>Model</div><div>Latency</div><div>In</div><div>Out</div></div>
+    <div class="feed-header" style="grid-template-columns:130px 50px 80px 80px 1fr 65px 55px 55px"><div>Time</div><div>Status</div><div>Backend</div><div>Key</div><div>Model</div><div>Latency</div><div>In</div><div>Out</div></div>
   </div>
   <div class="pagination">
     <button class="btn btn-secondary" id="prev-page">Prev</button>
@@ -196,10 +221,50 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
       </select>
       <div style="color:#8b949e">Expires At:</div>
       <input type="datetime-local" id="key-expires" style="width:100%">
+      <div style="color:#8b949e;align-self:start;padding-top:6px">Allowed Models:</div>
+      <div>
+        <div id="key-allowlist-area" class="tag-input-area" onclick="document.getElementById('key-allowlist-input').focus()"></div>
+        <input type="text" id="key-allowlist-input" class="tag-input-bare" placeholder="e.g. gpt-4o or claude-* then Enter" style="display:block;width:100%;margin-top:4px;background:#0d1117;border:1px solid #30363d;border-radius:4px;padding:5px 8px;color:#c9d1d9">
+        <div style="color:#8b949e;font-size:11px;margin-top:3px">Press Enter to add. Supports exact names and prefix/* wildcards. Blank = all models allowed.</div>
+      </div>
     </div>
     <div style="display:flex;gap:8px;margin-top:12px">
       <button class="btn btn-primary" id="btn-submit-key">Create</button>
       <button class="btn btn-secondary" id="btn-cancel-key">Cancel</button>
+    </div>
+  </div>
+  <!-- Edit key modal -->
+  <div id="key-edit-modal" style="display:none" class="modal-backdrop">
+    <div class="modal">
+      <div class="modal-title">Edit Key</div>
+      <div style="font-size:11px;color:#8b949e;margin-bottom:12px">Role is immutable. Revoke and recreate to change role.</div>
+      <div class="model-grid" style="grid-template-columns:140px 1fr;gap:8px;align-items:center">
+        <div style="color:#8b949e">Description:</div>
+        <input type="text" id="edit-key-description" style="width:100%">
+        <div style="color:#8b949e">RPM Limit:</div>
+        <input type="number" id="edit-key-rpm" placeholder="blank = unlimited" min="1" style="width:100%">
+        <div style="color:#8b949e">TPM Limit:</div>
+        <input type="number" id="edit-key-tpm" placeholder="blank = unlimited" min="1" style="width:100%">
+        <div style="color:#8b949e">Max Budget ($):</div>
+        <input type="number" id="edit-key-budget" placeholder="blank = unlimited" min="0" step="0.01" style="width:100%">
+        <div style="color:#8b949e">Budget Period:</div>
+        <select id="edit-key-budget-period" style="width:100%">
+          <option value="">lifetime</option>
+          <option value="daily">daily</option>
+          <option value="monthly">monthly</option>
+        </select>
+        <div style="color:#8b949e">Expires At:</div>
+        <input type="datetime-local" id="edit-key-expires" style="width:100%">
+        <div style="color:#8b949e;align-self:start;padding-top:6px">Allowed Models:</div>
+        <div>
+          <div id="edit-key-allowlist-area" class="tag-input-area" onclick="document.getElementById('edit-key-allowlist-input').focus()"></div>
+          <input type="text" id="edit-key-allowlist-input" class="tag-input-bare" placeholder="model name then Enter" style="display:block;width:100%;margin-top:4px;background:#0d1117;border:1px solid #30363d;border-radius:4px;padding:5px 8px;color:#c9d1d9">
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:16px">
+        <button class="btn btn-primary" id="btn-submit-edit-key">Save</button>
+        <button class="btn btn-secondary" id="btn-cancel-edit-key">Cancel</button>
+      </div>
     </div>
   </div>
   <div style="background:#161b22;border:1px solid #30363d;border-radius:6px;overflow:auto">
@@ -240,6 +305,39 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
     <div id="models-table-container">
       <div class="empty" id="models-empty">Loading...</div>
     </div>
+  </div>
+</div>
+
+<div id="tab-audit" class="tab">
+  <div class="section-header">
+    <div class="section-label">Audit Log</div>
+    <div class="form-row" style="flex-wrap:wrap;gap:6px">
+      <select id="audit-filter-action">
+        <option value="">All actions</option>
+        <option value="key_created">key_created</option>
+        <option value="key_updated">key_updated</option>
+        <option value="key_revoked">key_revoked</option>
+        <option value="config_changed">config_changed</option>
+      </select>
+      <select id="audit-filter-target">
+        <option value="">All targets</option>
+        <option value="virtual_key">virtual_key</option>
+        <option value="config">config</option>
+      </select>
+      <input type="datetime-local" id="audit-filter-since" title="Since" style="font-size:12px;padding:5px 8px">
+      <input type="datetime-local" id="audit-filter-until" title="Until" style="font-size:12px;padding:5px 8px">
+      <button class="btn btn-secondary" id="btn-audit-refresh">Refresh</button>
+    </div>
+  </div>
+  <div style="background:#161b22;border:1px solid #30363d;border-radius:6px;overflow:auto">
+    <div id="audit-table-container">
+      <div class="empty" id="audit-empty">Loading...</div>
+    </div>
+  </div>
+  <div class="pagination">
+    <button class="btn btn-secondary" id="audit-prev-page">Prev</button>
+    <span id="audit-page-info">Page 1</span>
+    <button class="btn btn-secondary" id="audit-next-page">Next</button>
   </div>
 </div>
 
@@ -383,11 +481,12 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
       document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
       navEl.classList.add('active');
       document.getElementById('tab-' + navEl.dataset.tab).classList.add('active');
-      if (navEl.dataset.tab === 'requests') loadRequests();
+      if (navEl.dataset.tab === 'requests') { populateKeyFilter(); loadRequests(); }
       if (navEl.dataset.tab === 'settings') { loadConfig(); loadEnv(); }
       if (navEl.dataset.tab === 'backends') loadBackends();
       if (navEl.dataset.tab === 'keys') loadKeys();
       if (navEl.dataset.tab === 'models') loadModels();
+      if (navEl.dataset.tab === 'audit') loadAudit();
     });
   });
 
@@ -475,6 +574,12 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
     if (data.requests_per_second != null) {
       document.getElementById('stat-rpm').textContent = (data.requests_per_second * 60).toFixed(0);
     }
+    // Streaming metrics (from metrics_snapshot total or loadDashboard)
+    var t = data.total || data;
+    if (t.streams_started != null) document.getElementById('stat-streams-started').textContent = t.streams_started.toLocaleString();
+    if (t.streams_completed != null) document.getElementById('stat-streams-completed').textContent = t.streams_completed.toLocaleString();
+    if (t.streams_failed != null) document.getElementById('stat-streams-failed').textContent = t.streams_failed.toLocaleString();
+    if (t.streams_client_disconnected != null) document.getElementById('stat-streams-disconnected').textContent = t.streams_client_disconnected.toLocaleString();
   }
 
   // -- CSRF token --
@@ -518,9 +623,8 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
         errEl.textContent = pct;
         errEl.style.color = metrics.error_rate > 0.05 ? '#f85149' : '#3fb950';
       }
-      if (metrics.requests_per_second != null) {
-        document.getElementById('stat-rpm').textContent = (metrics.requests_per_second * 60).toFixed(0);
-      }
+      // Streaming metrics from the total aggregate
+      updateDashboardMetrics(metrics);
     }).catch(function(e) { console.error('Dashboard load failed:', e); });
 
     apiFetch('/backends').then(function(data) {
@@ -539,13 +643,39 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
   // -- Request Log --
   var currentPage = 0;
   var PAGE_SIZE = 50;
+  // Key map: id -> prefix+description for display
+  var keyMap = {};
+
+  function populateKeyFilter() {
+    return apiFetch('/keys').then(function(data) {
+      var sel = document.getElementById('filter-key');
+      var cur = sel.value;
+      while (sel.options.length > 1) sel.remove(1);
+      keyMap = {};
+      (data.keys || []).forEach(function(k) {
+        var label = k.key_prefix + (k.description ? ' - ' + k.description : '');
+        keyMap[k.id] = label;
+        var opt = document.createElement('option');
+        opt.value = k.id;
+        opt.textContent = label + ' (' + (k.status || 'active') + ')';
+        sel.appendChild(opt);
+      });
+      if (cur) sel.value = cur;
+    }).catch(function() {});
+  }
 
   function loadRequests() {
     var backend = document.getElementById('filter-backend').value;
     var status = document.getElementById('filter-status').value;
+    var keyId = document.getElementById('filter-key').value;
+    var since = document.getElementById('filter-since').value;
+    var until = document.getElementById('filter-until').value;
     var path = '/requests?limit=' + PAGE_SIZE + '&offset=' + (currentPage * PAGE_SIZE);
     if (backend) path += '&backend=' + encodeURIComponent(backend);
     if (status) path += '&status=' + encodeURIComponent(status);
+    if (keyId) path += '&key_id=' + encodeURIComponent(keyId);
+    if (since) path += '&since=' + encodeURIComponent(new Date(since).toISOString());
+    if (until) path += '&until=' + encodeURIComponent(new Date(until).toISOString());
 
     apiFetch(path).then(function(data) {
       var feed = document.getElementById('request-log');
@@ -554,13 +684,36 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
       if (requests.length === 0 && currentPage === 0) {
         feed.appendChild(el('div', {className: 'empty', textContent: 'No requests yet'}));
       } else {
-        requests.forEach(function(r) { feed.appendChild(makeFeedRow(r, true)); });
+        requests.forEach(function(r) { feed.appendChild(makeRequestRow(r)); });
       }
       document.getElementById('page-info').textContent = 'Page ' + (currentPage + 1);
     }).catch(function(e) { console.error('Requests load failed:', e); });
   }
 
-  document.getElementById('btn-refresh').addEventListener('click', loadRequests);
+  function makeRequestRow(r) {
+    var modelText = r.model_mapped || r.model_requested || '--';
+    var modelChildren = [text(modelText)];
+    if (r.is_streaming) {
+      modelChildren.push(el('span', {className: 'streaming-badge', textContent: 'SSE'}));
+    }
+    var keyLabel = r.key_id != null ? (keyMap[r.key_id] || ('id:' + r.key_id)) : '--';
+    var row = el('div', {className: 'feed-row', style:{gridTemplateColumns:'130px 50px 80px 80px 1fr 65px 55px 55px'}}, [
+      el('div', {textContent: formatTime(r.timestamp)}),
+      el('div', {className: statusClass(r.status_code), textContent: String(r.status_code)}),
+      el('div', {textContent: r.backend || '--'}),
+      el('div', {textContent: keyLabel, style:{color:'#8b949e',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}),
+      el('div', {style:{color:'#8b949e'}}, modelChildren),
+      el('div', {textContent: formatLatency(r.latency_ms)}),
+      el('div', {textContent: r.input_tokens ? String(r.input_tokens) : '--', style:{color:'#8b949e'}}),
+      el('div', {textContent: r.output_tokens ? String(r.output_tokens) : '--', style:{color:'#8b949e'}})
+    ]);
+    if (r.request_id) {
+      row.addEventListener('click', function() { toggleRequestDetail(row, r.request_id); });
+    }
+    return row;
+  }
+
+  document.getElementById('btn-refresh').addEventListener('click', function() { currentPage = 0; loadRequests(); });
   document.getElementById('prev-page').addEventListener('click', function() { currentPage = Math.max(0, currentPage - 1); loadRequests(); });
   document.getElementById('next-page').addEventListener('click', function() { currentPage++; loadRequests(); });
 
@@ -573,6 +726,15 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
       var form = document.getElementById('settings-form');
       clearChildren(form, false);
 
+      var overrideKeys = data.overridden_keys || [];
+      function overrideBadge(key) {
+        // Returns a badge element if this config key is overridden, null otherwise.
+        if (overrideKeys.indexOf(key) !== -1) {
+          return el('span', {className: 'badge badge-override', textContent: 'overridden', style:{marginLeft:'6px'}});
+        }
+        return null;
+      }
+
       // Log level
       var levels = ['error','warn','info','debug','trace'];
       var logSelect = el('select', {id: 'cfg-log-level'});
@@ -581,8 +743,11 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
         if (l === data.log_level) opt.selected = true;
         logSelect.appendChild(opt);
       });
+      var logLabelChildren = [text('Log Level')];
+      var logBadge = overrideBadge('log_level');
+      if (logBadge) logLabelChildren.push(logBadge);
       var logGroup = el('div', {className: 'form-group'}, [
-        el('div', {className: 'form-label', textContent: 'Log Level'}),
+        el('div', {className: 'form-label'}, logLabelChildren),
         el('div', {className: 'form-hint', textContent: 'RUST_LOG equivalent'}),
         logSelect
       ]);
@@ -595,8 +760,11 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
       if (!data.log_bodies) offOpt.selected = true; else onOpt.selected = true;
       bodiesSelect.appendChild(offOpt);
       bodiesSelect.appendChild(onOpt);
+      var bodiesLabelChildren = [text('Log Bodies')];
+      var bodiesBadge = overrideBadge('log_bodies');
+      if (bodiesBadge) bodiesLabelChildren.push(bodiesBadge);
       var bodiesGroup = el('div', {className: 'form-group'}, [
-        el('div', {className: 'form-label', textContent: 'Log Bodies'}),
+        el('div', {className: 'form-label'}, bodiesLabelChildren),
         el('div', {className: 'form-hint', textContent: 'LOG_BODIES. Privacy-sensitive.'}),
         bodiesSelect
       ]);
@@ -607,14 +775,15 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
         var mapping = data.backends[name];
         var bigInput = el('input', {id: 'cfg-' + name + '-big', value: mapping.big_model || ''});
         var smallInput = el('input', {id: 'cfg-' + name + '-small', value: mapping.small_model || ''});
-        var grid = el('div', {className: 'model-grid'}, [
-          el('div', {className: 'label', textContent: 'BIG_MODEL:'}), bigInput,
-          el('div', {className: 'label', textContent: 'SMALL_MODEL:'}), smallInput
-        ]);
-        var group = el('div', {className: 'form-group'}, [
-          el('div', {className: 'form-label', textContent: name, style:{color:'#4a9eff'}}),
-          grid
-        ]);
+        var bigBadge = overrideBadge(name + '.big_model');
+        var smallBadge = overrideBadge(name + '.small_model');
+        var bigLabel = bigBadge ? el('div', {className: 'label'}, [text('BIG_MODEL:'), bigBadge]) : el('div', {className: 'label', textContent: 'BIG_MODEL:'});
+        var smallLabel = smallBadge ? el('div', {className: 'label'}, [text('SMALL_MODEL:'), smallBadge]) : el('div', {className: 'label', textContent: 'SMALL_MODEL:'});
+        var grid = el('div', {className: 'model-grid'}, [bigLabel, bigInput, smallLabel, smallInput]);
+        var nameBadge = (overrideKeys.some(function(k) { return k.startsWith(name + '.'); }))
+          ? el('span', {className: 'badge badge-override', textContent: 'overridden', style:{marginLeft:'6px'}}) : null;
+        var nameEl = el('div', {className: 'form-label'}, [el('span', {style:{color:'#4a9eff'}, textContent: name})].concat(nameBadge ? [nameBadge] : []));
+        var group = el('div', {className: 'form-group'}, [nameEl, grid]);
         form.appendChild(group);
       });
     }).catch(function(e) { console.error('Config load failed:', e); });
@@ -658,7 +827,7 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
     { label: 'Azure OpenAI', keys: ['AZURE_OPENAI_ENDPOINT','AZURE_OPENAI_DEPLOYMENT','AZURE_OPENAI_API_KEY','AZURE_OPENAI_API_VERSION'] },
     { label: 'AWS Bedrock', keys: ['AWS_REGION','AWS_ACCESS_KEY_ID','AWS_SECRET_ACCESS_KEY','AWS_SESSION_TOKEN'] },
     { label: 'Auth & TLS', keys: ['PROXY_API_KEYS','PROXY_OPEN_RELAY','TLS_CLIENT_CERT_P12','TLS_CA_CERT'] },
-    { label: 'Network', keys: ['IP_ALLOWLIST','TRUST_PROXY_HEADERS','WEBHOOK_URLS'] },
+    { label: 'Network', keys: ['IP_ALLOWLIST','TRUST_PROXY_HEADERS','WEBHOOK_URLS','RATE_LIMIT_FAIL_POLICY'] },
     { label: 'Admin', keys: ['ADMIN_PORT','ADMIN_DB_PATH','ADMIN_LOG_RETENTION_DAYS'] },
   ];
   var ENV_SECRET_KEYS = {'OPENAI_API_KEY':1,'VERTEX_API_KEY':1,'GEMINI_API_KEY':1,'PROXY_API_KEYS':1,'AZURE_OPENAI_API_KEY':1,'AWS_SECRET_ACCESS_KEY':1,'AWS_SESSION_TOKEN':1};
@@ -687,6 +856,26 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
       if (!container.children.length) {
         container.appendChild(el('div', {style:{color:'#8b949e',fontSize:'12px'}, textContent: 'No environment variables set (using defaults).'}));
       }
+
+      // Security summary box
+      var secDiv = document.getElementById('settings-security');
+      if (!secDiv) {
+        secDiv = el('div', {id: 'settings-security', style:{marginTop:'20px'}});
+        var parentEl = document.getElementById('readonly-config').parentNode;
+        parentEl.insertBefore(secDiv, document.getElementById('readonly-config'));
+      }
+      clearChildren(secDiv, false);
+      secDiv.appendChild(el('div', {className: 'section-label', style:{marginBottom:'8px'}, textContent: 'Security'}));
+      var secCard = el('div', {className: 'readonly-section'});
+      var ipVal = data['IP_ALLOWLIST'] || null;
+      var failPolicy = data['RATE_LIMIT_FAIL_POLICY'] || 'open (default)';
+      secCard.appendChild(el('div', {className: 'model-grid', style:{marginTop:'0'}}, [
+        el('div', {className: 'label', textContent: 'IP Allowlist:'}),
+        el('div', {textContent: ipVal || 'not set (all IPs allowed)', style:{fontFamily:'monospace',fontSize:'12px',color: ipVal ? '#c9d1d9' : '#8b949e'}}),
+        el('div', {className: 'label', textContent: 'Rate Limit Fail Policy:'}),
+        el('div', {textContent: failPolicy, style:{fontFamily:'monospace',fontSize:'12px'}})
+      ]));
+      secDiv.appendChild(secCard);
     }).catch(function(e) {
       var container = document.getElementById('readonly-config');
       container.textContent = 'Failed to load environment variables.';
@@ -777,9 +966,9 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
           el('th', {textContent: 'Description'}),
           el('th', {textContent: 'Role'}),
           el('th', {textContent: 'RPM / TPM'}),
-          el('th', {textContent: 'Budget'}),
-          el('th', {textContent: 'Spend'}),
+          el('th', {textContent: 'Budget / Spend'}),
           el('th', {textContent: 'Requests'}),
+          el('th', {textContent: 'Allowed Models'}),
           el('th', {textContent: 'Status'}),
           el('th', {textContent: 'Actions'})
         ])
@@ -787,14 +976,66 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
       var tbody = el('tbody', null, null);
       keys.forEach(function(k) {
         var badgeClass = 'badge-' + (k.status || 'active');
-        var budgetText = k.max_budget_usd != null
-          ? ('$' + Number(k.max_budget_usd).toFixed(2) + (k.budget_duration ? ' / ' + k.budget_duration : ''))
-          : '--';
-        var spendText = k.total_spend != null ? ('$' + Number(k.total_spend).toFixed(4)) : '--';
         var rpmTpm = (k.rpm_limit != null ? k.rpm_limit : '--') + ' / ' + (k.tpm_limit != null ? k.tpm_limit : '--');
+
+        // Budget + spend cell with optional progress bar
+        var budgetCell;
+        if (k.max_budget_usd != null) {
+          var periodSpend = k.period_spend_usd || 0;
+          var pct = Math.min(100, (periodSpend / k.max_budget_usd) * 100);
+          var barClass = pct >= 95 ? 'danger' : (pct >= 80 ? 'warn' : '');
+          var budgetLabel = '$' + Number(k.max_budget_usd).toFixed(2) + (k.budget_duration ? ' / ' + k.budget_duration : '');
+          var spendLabel = '$' + Number(periodSpend).toFixed(4) + ' used';
+          budgetCell = el('td', null, [
+            el('div', {textContent: budgetLabel, style:{color:'#8b949e',fontSize:'11px'}}),
+            el('div', {textContent: spendLabel, style:{fontSize:'11px'}}),
+            el('div', {className: 'budget-bar'}, [
+              el('div', {className: 'budget-bar-fill ' + barClass, style:{width: pct.toFixed(1) + '%'}})
+            ])
+          ]);
+        } else {
+          var spendAny = k.total_spend != null ? ('$' + Number(k.total_spend).toFixed(4)) : '--';
+          budgetCell = el('td', {textContent: spendAny, style:{color:'#8b949e'}});
+        }
+
+        // Allowed models chips
+        var modelsCell;
+        if (k.allowed_models && k.allowed_models.length > 0) {
+          var chips = k.allowed_models.map(function(m) {
+            return el('span', {className: 'chip', style:{marginBottom:'2px'}, textContent: m});
+          });
+          modelsCell = el('td', {style:{maxWidth:'160px'}}, chips);
+        } else {
+          modelsCell = el('td', {textContent: 'all', style:{color:'#8b949e',fontSize:'11px'}});
+        }
+
+        // Prefix as link → filter requests
+        var prefixLink = el('a', {textContent: k.key_prefix || '--', style:{fontFamily:'monospace',cursor:'pointer',color:'#4a9eff'}});
+        prefixLink.addEventListener('click', (function(kid) {
+          return function() {
+            // Switch to Request Log tab with this key pre-filtered
+            document.querySelectorAll('.nav-item').forEach(function(n) { n.classList.remove('active'); });
+            document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+            var reqNav = document.querySelector('.nav-item[data-tab="requests"]');
+            if (reqNav) reqNav.classList.add('active');
+            document.getElementById('tab-requests').classList.add('active');
+            populateKeyFilter().then(function() {
+              var sel = document.getElementById('filter-key');
+              sel.value = String(kid);
+              currentPage = 0;
+              loadRequests();
+            });
+          };
+        }(k.id)));
+
         var actionTd = el('td', null, null);
         if (k.status === 'active') {
-          var revokeBtn = el('button', {className: 'btn btn-danger btn-sm', textContent: 'Revoke'}, null);
+          var editBtn = el('button', {className: 'btn btn-secondary btn-sm', textContent: 'Edit'}, null);
+          editBtn.addEventListener('click', (function(key) {
+            return function() { openEditModal(key); };
+          }(k)));
+          actionTd.appendChild(editBtn);
+          var revokeBtn = el('button', {className: 'btn btn-danger btn-sm', textContent: 'Revoke', style:{marginLeft:'4px'}}, null);
           revokeBtn.addEventListener('click', (function(id) {
             return function() { revokeKey(id); };
           }(k.id)));
@@ -806,13 +1047,13 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
         }(k.id, k.key_prefix)));
         actionTd.appendChild(spendBtn);
         var row = el('tr', null, [
-          el('td', {textContent: k.key_prefix || '--', style:{fontFamily:'monospace'}}),
+          el('td', null, [prefixLink]),
           el('td', {textContent: k.description || '--', style:{color:'#8b949e'}}),
           el('td', {textContent: k.role || 'developer'}),
           el('td', {textContent: rpmTpm, style:{color:'#8b949e'}}),
-          el('td', {textContent: budgetText, style:{color:'#8b949e'}}),
-          el('td', {textContent: spendText}),
+          budgetCell,
           el('td', {textContent: String(k.total_requests || 0)}),
+          modelsCell,
           el('td', null, [el('span', {className: 'badge ' + badgeClass, textContent: k.status || 'active'})]),
           actionTd
         ]);
@@ -826,6 +1067,43 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
       container.appendChild(el('div', {className: 'empty error', textContent: 'Failed to load keys: ' + e.message}));
     });
   }
+
+  // -- Tag input (allowed_models) helpers --
+  var createAllowlist = [];
+  var editAllowlist = [];
+
+  function renderChips(areaId, chips) {
+    var area = document.getElementById(areaId);
+    clearChildren(area, false);
+    chips.forEach(function(model, idx) {
+      var chip = el('span', {className: 'chip'}, [
+        text(model),
+        el('span', {className: 'chip-remove', textContent: '\u00d7'})
+      ]);
+      chip.querySelector('.chip-remove').addEventListener('click', (function(i, arr, aid) {
+        return function(e) { e.stopPropagation(); arr.splice(i, 1); renderChips(aid, arr); };
+      }(idx, chips, areaId)));
+      area.appendChild(chip);
+    });
+  }
+
+  function wireTagInput(inputId, areaId, chipArray) {
+    var input = document.getElementById(inputId);
+    input.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ',') {
+        e.preventDefault();
+        var val = input.value.trim().replace(/,$/, '');
+        if (val && chipArray.indexOf(val) === -1) {
+          chipArray.push(val);
+          renderChips(areaId, chipArray);
+        }
+        input.value = '';
+      }
+    });
+  }
+
+  // Wire up create form allowlist input
+  wireTagInput('key-allowlist-input', 'key-allowlist-area', createAllowlist);
 
   function createKey() {
     var description = document.getElementById('key-description').value.trim();
@@ -844,6 +1122,7 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
     body.max_budget_usd = budgetVal ? parseFloat(budgetVal) : null;
     body.budget_duration = budgetPeriod || null;
     body.expires_at = expiresVal ? new Date(expiresVal).toISOString() : null;
+    body.allowed_models = createAllowlist.length > 0 ? createAllowlist.slice() : null;
 
     var submitBtn = document.getElementById('btn-submit-key');
     submitBtn.disabled = true;
@@ -872,6 +1151,9 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
         document.getElementById('key-expires').value = '';
         document.getElementById('key-role').value = 'developer';
         document.getElementById('key-budget-period').value = '';
+        document.getElementById('key-allowlist-input').value = '';
+        createAllowlist.length = 0;
+        renderChips('key-allowlist-area', createAllowlist);
         resetSubmitBtn();
         loadKeys();
       })
@@ -910,6 +1192,134 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
       alert(lines.join('\n'));
     }).catch(function(e) { alert('Failed to fetch spend: ' + e.message); });
   }
+
+  // -- Edit key modal --
+  var editKeyId = null;
+  var editOriginalBudgetDuration = null;
+
+  // Wire up edit modal allowlist input
+  wireTagInput('edit-key-allowlist-input', 'edit-key-allowlist-area', editAllowlist);
+
+  function openEditModal(k) {
+    editKeyId = k.id;
+    editOriginalBudgetDuration = k.budget_duration || '';
+    document.getElementById('edit-key-description').value = k.description || '';
+    document.getElementById('edit-key-rpm').value = k.rpm_limit != null ? k.rpm_limit : '';
+    document.getElementById('edit-key-tpm').value = k.tpm_limit != null ? k.tpm_limit : '';
+    document.getElementById('edit-key-budget').value = k.max_budget_usd != null ? k.max_budget_usd : '';
+    document.getElementById('edit-key-budget-period').value = k.budget_duration || '';
+    document.getElementById('edit-key-expires').value = k.expires_at
+      ? (function(s) { var d = new Date(s); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0,16); }(k.expires_at))
+      : '';
+    editAllowlist.length = 0;
+    if (k.allowed_models && k.allowed_models.length > 0) {
+      k.allowed_models.forEach(function(m) { editAllowlist.push(m); });
+    }
+    renderChips('edit-key-allowlist-area', editAllowlist);
+    document.getElementById('key-edit-modal').style.display = 'flex';
+  }
+
+  function submitEditKey() {
+    if (!editKeyId) return;
+    var rpmVal = document.getElementById('edit-key-rpm').value;
+    var tpmVal = document.getElementById('edit-key-tpm').value;
+    var budgetVal = document.getElementById('edit-key-budget').value;
+    var expiresVal = document.getElementById('edit-key-expires').value;
+    var newBudgetDuration = document.getElementById('edit-key-budget-period').value || '';
+    var body = {
+      description: document.getElementById('edit-key-description').value.trim() || null,
+      rpm_limit: rpmVal ? parseInt(rpmVal, 10) : null,
+      tpm_limit: tpmVal ? parseInt(tpmVal, 10) : null,
+      max_budget_usd: budgetVal ? parseFloat(budgetVal) : null,
+      expires_at: expiresVal ? new Date(expiresVal).toISOString() : null,
+      allowed_models: editAllowlist.length > 0 ? editAllowlist.slice() : null
+    };
+    // Only send budget_duration if it changed, to avoid unnecessary period reset.
+    if (newBudgetDuration !== editOriginalBudgetDuration) {
+      body.budget_duration = newBudgetDuration || null;
+    }
+    var saveBtn = document.getElementById('btn-submit-edit-key');
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving...';
+    fetch(API + '/keys/' + editKeyId, {method: 'PUT', headers: mutatingHeaders(), body: JSON.stringify(body)})
+      .then(function(r) {
+        if (!r.ok) { return r.json().then(function(e) { throw new Error(e.error || ('HTTP ' + r.status)); }); }
+        return r.json();
+      })
+      .then(function() {
+        document.getElementById('key-edit-modal').style.display = 'none';
+        editKeyId = null;
+        loadKeys();
+      })
+      .catch(function(e) { alert('Failed to update key: ' + e.message); })
+      .finally(function() { saveBtn.disabled = false; saveBtn.textContent = 'Save'; });
+  }
+
+  document.getElementById('btn-submit-edit-key').addEventListener('click', submitEditKey);
+  document.getElementById('btn-cancel-edit-key').addEventListener('click', function() {
+    document.getElementById('key-edit-modal').style.display = 'none';
+    editKeyId = null;
+  });
+  // Close modal on backdrop click
+  document.getElementById('key-edit-modal').addEventListener('click', function(e) {
+    if (e.target === this) { this.style.display = 'none'; editKeyId = null; }
+  });
+
+  // -- Audit Log --
+  var auditPage = 0;
+  var AUDIT_PAGE_SIZE = 50;
+
+  function loadAudit() {
+    var action = document.getElementById('audit-filter-action').value;
+    var target = document.getElementById('audit-filter-target').value;
+    var since = document.getElementById('audit-filter-since').value;
+    var until = document.getElementById('audit-filter-until').value;
+    var path = '/audit?limit=' + AUDIT_PAGE_SIZE + '&offset=' + (auditPage * AUDIT_PAGE_SIZE);
+    if (action) path += '&action=' + encodeURIComponent(action);
+    if (target) path += '&target_type=' + encodeURIComponent(target);
+    if (since) path += '&since=' + encodeURIComponent(new Date(since).toISOString());
+    if (until) path += '&until=' + encodeURIComponent(new Date(until).toISOString());
+
+    apiFetch(path).then(function(data) {
+      var container = document.getElementById('audit-table-container');
+      clearChildren(container, false);
+      var entries = data.entries || [];
+      document.getElementById('audit-page-info').textContent = 'Page ' + (auditPage + 1);
+      if (entries.length === 0 && auditPage === 0) {
+        container.appendChild(el('div', {className: 'empty', textContent: 'No audit entries yet.'}));
+        return;
+      }
+      var thead = el('thead', null, [
+        el('tr', null, [
+          el('th', {textContent: 'Timestamp'}),
+          el('th', {textContent: 'Action'}),
+          el('th', {textContent: 'Target'}),
+          el('th', {textContent: 'Detail'}),
+          el('th', {textContent: 'Source IP'})
+        ])
+      ]);
+      var tbody = el('tbody', null, null);
+      entries.forEach(function(e) {
+        var targetText = e.target_type + (e.target_id ? ' #' + e.target_id : '');
+        tbody.appendChild(el('tr', null, [
+          el('td', {textContent: e.timestamp || '--', style:{fontFamily:'monospace',fontSize:'11px',color:'#8b949e'}}),
+          el('td', {textContent: e.action || '--', style:{fontFamily:'monospace',color:'#4a9eff'}}),
+          el('td', {textContent: targetText, style:{color:'#8b949e'}}),
+          el('td', {textContent: e.detail || '--', style:{color:'#c9d1d9',maxWidth:'300px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}),
+          el('td', {textContent: e.source_ip || '--', style:{color:'#8b949e',fontFamily:'monospace',fontSize:'11px'}})
+        ]));
+      });
+      container.appendChild(el('table', {className: 'keys-grid'}, [thead, tbody]));
+    }).catch(function(e) {
+      var container = document.getElementById('audit-table-container');
+      clearChildren(container, false);
+      container.appendChild(el('div', {className: 'empty error', textContent: 'Failed to load audit log: ' + e.message}));
+    });
+  }
+
+  document.getElementById('btn-audit-refresh').addEventListener('click', function() { auditPage = 0; loadAudit(); });
+  document.getElementById('audit-prev-page').addEventListener('click', function() { auditPage = Math.max(0, auditPage - 1); loadAudit(); });
+  document.getElementById('audit-next-page').addEventListener('click', function() { auditPage++; loadAudit(); });
 
   // Keys tab event wiring
   document.getElementById('btn-create-key').addEventListener('click', function() {

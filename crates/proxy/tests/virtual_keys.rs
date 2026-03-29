@@ -200,6 +200,184 @@ async fn revoke_nonexistent_key_returns_404() {
 }
 
 // ---------------------------------------------------------------------------
+// Update key (PUT /admin/api/keys/{id}) tests
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn update_key_returns_200_with_updated_fields() {
+    let (app, _state) = test_admin_router();
+
+    // Create a key first.
+    let create_req = Request::post("/admin/api/keys")
+        .header("host", "localhost:9090")
+        .header("authorization", "Bearer test-admin-token")
+        .header("content-type", "application/json")
+        .header("x-csrf-token", TEST_CSRF_TOKEN)
+        .header("cookie", TEST_CSRF_COOKIE)
+        .body(Body::from(
+            serde_json::to_string(&json!({"description": "update-test", "rpm_limit": 10})).unwrap(),
+        ))
+        .unwrap();
+    let resp = app.clone().oneshot(create_req).await.unwrap();
+    assert_eq!(resp.status(), 201);
+    let body: serde_json::Value = serde_json::from_slice(
+        &axum::body::to_bytes(resp.into_body(), 1 << 20)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    let id = body["id"].as_i64().unwrap();
+
+    // Update description and rpm_limit.
+    let update_req = Request::put(format!("/admin/api/keys/{id}"))
+        .header("host", "localhost:9090")
+        .header("authorization", "Bearer test-admin-token")
+        .header("content-type", "application/json")
+        .header("x-csrf-token", TEST_CSRF_TOKEN)
+        .header("cookie", TEST_CSRF_COOKIE)
+        .body(Body::from(
+            serde_json::to_string(&json!({
+                "description": "updated-desc",
+                "rpm_limit": 200,
+                "allowed_models": ["gpt-4o", "claude-*"]
+            }))
+            .unwrap(),
+        ))
+        .unwrap();
+    let resp = app.clone().oneshot(update_req).await.unwrap();
+    assert_eq!(resp.status(), 200);
+    let body: serde_json::Value = serde_json::from_slice(
+        &axum::body::to_bytes(resp.into_body(), 1 << 20)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(body["description"], "updated-desc");
+    assert_eq!(body["rpm_limit"], 200);
+    let models = body["allowed_models"].as_array().unwrap();
+    assert_eq!(models.len(), 2);
+    assert_eq!(models[0], "gpt-4o");
+    assert_eq!(models[1], "claude-*");
+}
+
+#[tokio::test]
+async fn update_nonexistent_key_returns_404() {
+    let (app, _state) = test_admin_router();
+    let req = Request::put("/admin/api/keys/99999")
+        .header("host", "localhost:9090")
+        .header("authorization", "Bearer test-admin-token")
+        .header("content-type", "application/json")
+        .header("x-csrf-token", TEST_CSRF_TOKEN)
+        .header("cookie", TEST_CSRF_COOKIE)
+        .body(Body::from(
+            serde_json::to_string(&json!({"description": "no-such-key"})).unwrap(),
+        ))
+        .unwrap();
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), 404);
+}
+
+#[tokio::test]
+async fn update_revoked_key_returns_404() {
+    let (app, _state) = test_admin_router();
+
+    // Create then revoke.
+    let create_req = Request::post("/admin/api/keys")
+        .header("host", "localhost:9090")
+        .header("authorization", "Bearer test-admin-token")
+        .header("content-type", "application/json")
+        .header("x-csrf-token", TEST_CSRF_TOKEN)
+        .header("cookie", TEST_CSRF_COOKIE)
+        .body(Body::from(
+            serde_json::to_string(&json!({"description": "revoke-then-update"})).unwrap(),
+        ))
+        .unwrap();
+    let resp = app.clone().oneshot(create_req).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(
+        &axum::body::to_bytes(resp.into_body(), 1 << 20)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    let id = body["id"].as_i64().unwrap();
+
+    let revoke_req = Request::delete(format!("/admin/api/keys/{id}"))
+        .header("host", "localhost:9090")
+        .header("authorization", "Bearer test-admin-token")
+        .header("x-csrf-token", TEST_CSRF_TOKEN)
+        .header("cookie", TEST_CSRF_COOKIE)
+        .body(Body::empty())
+        .unwrap();
+    let resp = app.clone().oneshot(revoke_req).await.unwrap();
+    assert_eq!(resp.status(), 200);
+
+    // Update should fail with 404.
+    let update_req = Request::put(format!("/admin/api/keys/{id}"))
+        .header("host", "localhost:9090")
+        .header("authorization", "Bearer test-admin-token")
+        .header("content-type", "application/json")
+        .header("x-csrf-token", TEST_CSRF_TOKEN)
+        .header("cookie", TEST_CSRF_COOKIE)
+        .body(Body::from(
+            serde_json::to_string(&json!({"description": "should-fail"})).unwrap(),
+        ))
+        .unwrap();
+    let resp = app.oneshot(update_req).await.unwrap();
+    assert_eq!(resp.status(), 404);
+}
+
+#[tokio::test]
+async fn update_key_refreshes_dashmap() {
+    let (app, state) = test_admin_router();
+
+    // Create key.
+    let create_req = Request::post("/admin/api/keys")
+        .header("host", "localhost:9090")
+        .header("authorization", "Bearer test-admin-token")
+        .header("content-type", "application/json")
+        .header("x-csrf-token", TEST_CSRF_TOKEN)
+        .header("cookie", TEST_CSRF_COOKIE)
+        .body(Body::from(
+            serde_json::to_string(&json!({"description": "dashmap-update-test", "rpm_limit": 10}))
+                .unwrap(),
+        ))
+        .unwrap();
+    let resp = app.clone().oneshot(create_req).await.unwrap();
+    assert_eq!(resp.status(), 201);
+    let body: serde_json::Value = serde_json::from_slice(
+        &axum::body::to_bytes(resp.into_body(), 1 << 20)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    let id = body["id"].as_i64().unwrap();
+    let raw_key = body["key"].as_str().unwrap().to_string();
+
+    // Update rpm_limit via PUT.
+    let update_req = Request::put(format!("/admin/api/keys/{id}"))
+        .header("host", "localhost:9090")
+        .header("authorization", "Bearer test-admin-token")
+        .header("content-type", "application/json")
+        .header("x-csrf-token", TEST_CSRF_TOKEN)
+        .header("cookie", TEST_CSRF_COOKIE)
+        .body(Body::from(
+            serde_json::to_string(&json!({"rpm_limit": 500})).unwrap(),
+        ))
+        .unwrap();
+    let resp = app.oneshot(update_req).await.unwrap();
+    assert_eq!(resp.status(), 200);
+
+    // Verify DashMap entry was updated.
+    let hash = admin::keys::hmac_hash_key(&raw_key, &state.hmac_secret);
+    let hash_bytes = admin::keys::hash_from_hex(&hash).unwrap();
+    let meta = state
+        .virtual_keys
+        .get(&hash_bytes)
+        .expect("key should exist in DashMap");
+    assert_eq!(meta.rpm_limit, Some(500));
+}
+
+// ---------------------------------------------------------------------------
 // Helpers for proxy-level tests
 // ---------------------------------------------------------------------------
 

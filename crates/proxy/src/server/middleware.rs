@@ -264,6 +264,27 @@ pub async fn validate_auth(
             .and_then(|h| map.get_mut(&h))
             .or_else(|| map.get_mut(&credential_hash));
         if let Some(mut meta) = vk_lookup {
+            // Reject expired virtual keys at auth time (lazy eviction).
+            if let Some(exp) = meta.expires_at {
+                let now_secs = (now_ms() / 1000) as i64;
+                if now_secs >= exp {
+                    drop(meta);
+                    // Remove expired key from cache so future lookups skip it.
+                    if let Some(h) = hmac_hash {
+                        map.remove(&h);
+                    } else {
+                        map.remove(&credential_hash);
+                    }
+                    let err_body = serde_json::json!({
+                        "error": {
+                            "type": "authentication_error",
+                            "message": "Virtual key has expired."
+                        }
+                    });
+                    return Err((StatusCode::UNAUTHORIZED, Json(err_body)).into_response());
+                }
+            }
+
             // RBAC: developer keys cannot access admin endpoints
             if meta.role == KeyRole::Developer {
                 let path = request.uri().path();

@@ -9,7 +9,7 @@ use axum::{
     http::StatusCode,
     middleware,
     response::IntoResponse,
-    routing::{delete, get, post},
+    routing::{delete, get, post, put},
     Json, Router,
 };
 use dashmap::DashMap;
@@ -211,6 +211,9 @@ async fn get_csrf_token() -> axum::response::Response {
         .header("content-type", "application/json")
         // SameSite=Strict prevents the cookie being sent on cross-site requests.
         // Not httpOnly so the admin SPA JS can read and send it back as a header.
+        // Secure flag intentionally omitted: admin binds to 127.0.0.1 over plain HTTP,
+        // so setting Secure would prevent the browser from sending the cookie at all.
+        // If TLS is added to the admin server, Secure must be added here.
         .header(
             "set-cookie",
             format!("csrf_token={token}; Path=/admin; SameSite=Strict; Max-Age=86400"),
@@ -245,7 +248,7 @@ pub fn admin_router(shared: SharedState, token: Arc<String>) -> Router {
         .route("/admin/api/requests/{id}", get(get_request_by_id))
         .route("/admin/api/backends", get(get_backends))
         .route("/admin/api/keys", post(create_key).get(list_keys))
-        .route("/admin/api/keys/{id}", delete(revoke_key))
+        .route("/admin/api/keys/{id}", put(update_key).delete(revoke_key))
         .route(
             "/admin/api/keys/{id}/spend",
             get(super::spend::get_key_spend),
@@ -368,10 +371,11 @@ async fn get_env() -> Json<serde_json::Value> {
         // TLS
         "TLS_CLIENT_CERT_P12": plain("TLS_CLIENT_CERT_P12"),
         "TLS_CA_CERT":         plain("TLS_CA_CERT"),
-        // Network
-        "IP_ALLOWLIST":        plain("IP_ALLOWLIST"),
-        "TRUST_PROXY_HEADERS": plain("TRUST_PROXY_HEADERS"),
-        "WEBHOOK_URLS":        plain("WEBHOOK_URLS"),
+        // Network / security
+        "IP_ALLOWLIST":           plain("IP_ALLOWLIST"),
+        "TRUST_PROXY_HEADERS":    plain("TRUST_PROXY_HEADERS"),
+        "WEBHOOK_URLS":           plain("WEBHOOK_URLS"),
+        "RATE_LIMIT_FAIL_POLICY": plain("RATE_LIMIT_FAIL_POLICY"),
         // Admin
         "ADMIN_PORT":               plain("ADMIN_PORT"),
         "ADMIN_DB_PATH":            plain("ADMIN_DB_PATH"),
@@ -692,6 +696,10 @@ async fn get_metrics(State(shared): State<SharedState>) -> Json<serde_json::Valu
         aggregate.requests_total += snap.requests_total;
         aggregate.requests_success += snap.requests_success;
         aggregate.requests_error += snap.requests_error;
+        aggregate.streams_started += snap.streams_started;
+        aggregate.streams_completed += snap.streams_completed;
+        aggregate.streams_failed += snap.streams_failed;
+        aggregate.streams_client_disconnected += snap.streams_client_disconnected;
         backends.insert(
             name.clone(),
             serde_json::to_value(&snap).unwrap_or_default(),
@@ -708,6 +716,10 @@ async fn get_metrics(State(shared): State<SharedState>) -> Json<serde_json::Valu
             "requests_total": aggregate.requests_total,
             "requests_success": aggregate.requests_success,
             "requests_error": aggregate.requests_error,
+            "streams_started": aggregate.streams_started,
+            "streams_completed": aggregate.streams_completed,
+            "streams_failed": aggregate.streams_failed,
+            "streams_client_disconnected": aggregate.streams_client_disconnected,
         },
         "latency_p50_ms": p50,
         "latency_p95_ms": p95,
@@ -761,6 +773,7 @@ struct RequestsQuery {
     offset: Option<u32>,
     backend: Option<String>,
     since: Option<String>,
+    until: Option<String>,
     status: Option<String>,
     key_id: Option<i64>,
 }
@@ -775,6 +788,7 @@ async fn get_requests(
 
     let backend = params.backend;
     let since = params.since;
+    let until = params.until;
     let status = params.status;
     let key_id = params.key_id;
     match crate::admin::state::with_db(&shared.db, move |conn| {
@@ -784,6 +798,7 @@ async fn get_requests(
             offset,
             backend.as_deref(),
             since.as_deref(),
+            until.as_deref(),
             status.as_deref(),
             key_id,
         )
@@ -943,7 +958,10 @@ async fn create_key(
                     super::keys::VirtualKeyMeta {
                         id,
                         description: body.description.clone(),
-                        expires_at: None,
+                        expires_at: body.expires_at.as_deref().and_then(|s| {
+                            crate::integrations::langfuse::iso8601_to_epoch(s)
+                                .and_then(|e| i64::try_from(e).ok())
+                        }),
                         rpm_limit: body.rpm_limit,
                         tpm_limit: body.tpm_limit,
                         rate_state: std::sync::Arc::new(super::keys::RateLimitState::new()),
@@ -1029,6 +1047,7 @@ async fn list_keys(State(shared): State<SharedState>) -> axum::response::Respons
                         "max_budget_usd": k.max_budget_usd,
                         "budget_duration": k.budget_duration,
                         "period_spend_usd": k.period_spend_usd,
+                        "allowed_models": k.allowed_models,
                     })
                 })
                 .collect();
@@ -1037,6 +1056,121 @@ async fn list_keys(State(shared): State<SharedState>) -> axum::response::Respons
         _ => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({"error": "Failed to list keys"})),
+        )
+            .into_response(),
+    }
+}
+
+/// Request body for PUT /admin/api/keys/{id}.
+/// All fields are optional: absent = clear (set to NULL); role is immutable after creation.
+#[derive(serde::Deserialize)]
+struct UpdateKeyRequest {
+    description: Option<String>,
+    expires_at: Option<String>,
+    rpm_limit: Option<u32>,
+    tpm_limit: Option<u32>,
+    max_budget_usd: Option<f64>,
+    budget_duration: Option<String>,
+    allowed_models: Option<Vec<String>>,
+}
+
+/// PUT /admin/api/keys/{id} -- update an existing virtual key (except role).
+async fn update_key(
+    State(shared): State<SharedState>,
+    Path(id): Path<i64>,
+    Json(body): Json<UpdateKeyRequest>,
+) -> axum::response::Response {
+    let allowed_models_json = body
+        .allowed_models
+        .as_ref()
+        .and_then(|v| serde_json::to_string(v).ok());
+    let desc = body.description.clone();
+    let exp = body.expires_at.clone();
+    let rpm = body.rpm_limit;
+    let tpm = body.tpm_limit;
+    let max_budget = body.max_budget_usd;
+    let budget_dur = body.budget_duration.clone();
+
+    let result = super::state::with_db(&shared.db, move |conn| {
+        super::db::update_virtual_key(
+            conn,
+            id,
+            &super::db::UpdateVirtualKeyParams {
+                description: desc.as_deref(),
+                expires_at: exp.as_deref(),
+                rpm_limit: rpm,
+                tpm_limit: tpm,
+                max_budget_usd: max_budget,
+                budget_duration: budget_dur.as_deref(),
+                allowed_models: allowed_models_json,
+            },
+        )
+    })
+    .await;
+
+    match result {
+        Some(Ok(Some(row))) => {
+            // Refresh the DashMap entry so in-flight auth sees updated limits.
+            if let Some(hash_bytes) = super::keys::hash_from_hex(&row.key_hash) {
+                shared.virtual_keys.entry(hash_bytes).and_modify(|meta| {
+                    meta.description = body.description.clone();
+                    meta.expires_at = body.expires_at.as_deref().and_then(|s| {
+                        crate::integrations::langfuse::iso8601_to_epoch(s)
+                            .and_then(|e| i64::try_from(e).ok())
+                    });
+                    meta.rpm_limit = body.rpm_limit;
+                    meta.tpm_limit = body.tpm_limit;
+                    meta.max_budget_usd = body.max_budget_usd;
+                    if body.budget_duration.is_some() {
+                        meta.budget_duration = body
+                            .budget_duration
+                            .as_deref()
+                            .and_then(super::keys::BudgetDuration::parse);
+                        // Reset spend period to match db-layer reset.
+                        meta.period_start = None;
+                        meta.period_spend_usd = 0.0;
+                    }
+                    meta.allowed_models = body.allowed_models.clone();
+                });
+            }
+            emit_audit(
+                &shared,
+                crate::admin::db::AuditEntry {
+                    id: None,
+                    timestamp: None,
+                    action: "key_updated".into(),
+                    target_type: "virtual_key".into(),
+                    target_id: Some(id.to_string()),
+                    detail: Some(format!("prefix={}", row.key_prefix)),
+                    source_ip: None,
+                },
+            );
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({
+                    "id": row.id,
+                    "key_prefix": row.key_prefix,
+                    "description": row.description,
+                    "expires_at": row.expires_at,
+                    "rpm_limit": row.rpm_limit,
+                    "tpm_limit": row.tpm_limit,
+                    "role": row.role,
+                    "max_budget_usd": row.max_budget_usd,
+                    "budget_duration": row.budget_duration,
+                    "allowed_models": row.allowed_models,
+                    "status": row.status(),
+                })),
+            )
+                .into_response()
+        }
+        Some(Ok(None)) => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": "Key not found or already revoked"})),
+        )
+            .into_response(),
+        _ => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": "Failed to update key"})),
         )
             .into_response(),
     }
@@ -1250,6 +1384,10 @@ async fn remove_model(
 struct AuditQuery {
     limit: Option<u32>,
     offset: Option<u32>,
+    action: Option<String>,
+    target_type: Option<String>,
+    since: Option<String>,
+    until: Option<String>,
 }
 
 /// GET /admin/api/audit -- paginated audit log.
@@ -1259,8 +1397,20 @@ async fn get_audit_log(
 ) -> Json<serde_json::Value> {
     let limit = params.limit.unwrap_or(50).min(1000);
     let offset = params.offset.unwrap_or(0);
+    let action = params.action;
+    let target_type = params.target_type;
+    let since = params.since;
+    let until = params.until;
     match crate::admin::state::with_db(&shared.db, move |conn| {
-        crate::admin::db::query_audit_log(conn, limit, offset)
+        crate::admin::db::query_audit_log(
+            conn,
+            limit,
+            offset,
+            action.as_deref(),
+            target_type.as_deref(),
+            since.as_deref(),
+            until.as_deref(),
+        )
     })
     .await
     {

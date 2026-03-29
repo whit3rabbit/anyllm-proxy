@@ -246,12 +246,14 @@ impl StatusFilter {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn query_request_log(
     conn: &Connection,
     limit: u32,
     offset: u32,
     backend: Option<&str>,
     since: Option<&str>,
+    until: Option<&str>,
     status_filter: Option<&str>,
     key_id: Option<i64>,
 ) -> rusqlite::Result<Vec<RequestLogEntry>> {
@@ -270,6 +272,10 @@ pub fn query_request_log(
     if let Some(s) = since {
         sql.push_str(" AND timestamp >= ?");
         param_values.push(Box::new(s.to_string()));
+    }
+    if let Some(u) = until {
+        sql.push_str(" AND timestamp <= ?");
+        param_values.push(Box::new(u.to_string()));
     }
     if let Some(sf) = status_filter {
         if let Some(parsed) = StatusFilter::parse(sf) {
@@ -634,6 +640,56 @@ pub fn revoke_virtual_key(conn: &Connection, id: i64) -> rusqlite::Result<Option
     stmt.query_row(params![id], |row| Ok(Some(row_to_virtual_key(row)?)))
 }
 
+/// Parameters for updating an existing virtual key (all fields are optional; None = clear).
+pub struct UpdateVirtualKeyParams<'a> {
+    pub description: Option<&'a str>,
+    pub expires_at: Option<&'a str>,
+    pub rpm_limit: Option<u32>,
+    pub tpm_limit: Option<u32>,
+    pub max_budget_usd: Option<f64>,
+    pub budget_duration: Option<&'a str>,
+    pub allowed_models: Option<String>,
+}
+
+/// Update an existing virtual key. Returns the updated row, or None if not found / revoked.
+/// When `budget_duration` is provided, the budget period is reset (period_start = NULL,
+/// period_spend_usd = 0) so the new window starts fresh.
+pub fn update_virtual_key(
+    conn: &Connection,
+    id: i64,
+    p: &UpdateVirtualKeyParams,
+) -> rusqlite::Result<Option<VirtualKeyRow>> {
+    // When changing budget_duration, reset the spend period so the new window starts clean.
+    let mut sql = String::from(
+        "UPDATE virtual_api_key
+         SET description = ?2, expires_at = ?3, rpm_limit = ?4, tpm_limit = ?5,
+             max_budget_usd = ?6, budget_duration = ?7, allowed_models = ?8",
+    );
+    if p.budget_duration.is_some() {
+        sql.push_str(", period_start = NULL, period_spend_usd = 0.0");
+    }
+    sql.push_str(" WHERE id = ?1 AND revoked_at IS NULL");
+    let updated = conn.execute(
+        &sql,
+        params![
+            id,
+            p.description,
+            p.expires_at,
+            p.rpm_limit.map(|v| v as i64),
+            p.tpm_limit.map(|v| v as i64),
+            p.max_budget_usd,
+            p.budget_duration,
+            p.allowed_models,
+        ],
+    )?;
+    if updated == 0 {
+        return Ok(None);
+    }
+    let sql = format!("SELECT {VIRTUAL_KEY_COLUMNS} FROM virtual_api_key WHERE id = ?1");
+    let mut stmt = conn.prepare(&sql)?;
+    stmt.query_row(params![id], |row| Ok(Some(row_to_virtual_key(row)?)))
+}
+
 /// Load all active (non-revoked, non-expired) virtual keys from the database.
 pub fn load_active_virtual_keys(conn: &Connection) -> rusqlite::Result<Vec<VirtualKeyRow>> {
     let now = now_iso8601();
@@ -688,12 +744,41 @@ pub fn query_audit_log(
     conn: &Connection,
     limit: u32,
     offset: u32,
+    action: Option<&str>,
+    target_type: Option<&str>,
+    since: Option<&str>,
+    until: Option<&str>,
 ) -> rusqlite::Result<Vec<AuditEntry>> {
-    let mut stmt = conn.prepare(
+    let mut sql = String::from(
         "SELECT id, timestamp, action, target_type, target_id, detail, source_ip
-         FROM audit_log ORDER BY id DESC LIMIT ?1 OFFSET ?2",
-    )?;
-    let rows = stmt.query_map(params![limit, offset], |row| {
+         FROM audit_log WHERE 1=1",
+    );
+    let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+
+    if let Some(a) = action {
+        sql.push_str(" AND action = ?");
+        param_values.push(Box::new(a.to_string()));
+    }
+    if let Some(t) = target_type {
+        sql.push_str(" AND target_type = ?");
+        param_values.push(Box::new(t.to_string()));
+    }
+    if let Some(s) = since {
+        sql.push_str(" AND timestamp >= ?");
+        param_values.push(Box::new(s.to_string()));
+    }
+    if let Some(u) = until {
+        sql.push_str(" AND timestamp <= ?");
+        param_values.push(Box::new(u.to_string()));
+    }
+    sql.push_str(" ORDER BY id DESC LIMIT ? OFFSET ?");
+    param_values.push(Box::new(limit));
+    param_values.push(Box::new(offset));
+
+    let mut stmt = conn.prepare(&sql)?;
+    let param_refs: Vec<&dyn rusqlite::types::ToSql> =
+        param_values.iter().map(|v| v.as_ref()).collect();
+    let rows = stmt.query_map(param_refs.as_slice(), |row| {
         Ok(AuditEntry {
             id: Some(row.get(0)?),
             timestamp: Some(row.get(1)?),
@@ -756,7 +841,7 @@ mod tests {
         let entry = sample_entry();
         insert_request_log(&conn, &entry).unwrap();
 
-        let results = query_request_log(&conn, 10, 0, None, None, None, None).unwrap();
+        let results = query_request_log(&conn, 10, 0, None, None, None, None, None).unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].request_id, "test-123");
         assert_eq!(results[0].status_code, 200);
@@ -774,7 +859,7 @@ mod tests {
         entry2.backend = "gemini".into();
         insert_request_log(&conn, &entry2).unwrap();
 
-        let results = query_request_log(&conn, 10, 0, Some("gemini"), None, None, None).unwrap();
+        let results = query_request_log(&conn, 10, 0, Some("gemini"), None, None, None, None).unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].backend, "gemini");
     }
@@ -789,11 +874,11 @@ mod tests {
         err_entry.status_code = 500;
         insert_request_log(&conn, &err_entry).unwrap();
 
-        let results = query_request_log(&conn, 10, 0, None, None, Some("5xx"), None).unwrap();
+        let results = query_request_log(&conn, 10, 0, None, None, None, Some("5xx"), None).unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].status_code, 500);
 
-        let results = query_request_log(&conn, 10, 0, None, None, Some("2xx"), None).unwrap();
+        let results = query_request_log(&conn, 10, 0, None, None, None, Some("2xx"), None).unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].status_code, 200);
     }
@@ -807,13 +892,13 @@ mod tests {
             insert_request_log(&conn, &entry).unwrap();
         }
 
-        let page1 = query_request_log(&conn, 2, 0, None, None, None, None).unwrap();
+        let page1 = query_request_log(&conn, 2, 0, None, None, None, None, None).unwrap();
         assert_eq!(page1.len(), 2);
 
-        let page2 = query_request_log(&conn, 2, 2, None, None, None, None).unwrap();
+        let page2 = query_request_log(&conn, 2, 2, None, None, None, None, None).unwrap();
         assert_eq!(page2.len(), 2);
 
-        let page3 = query_request_log(&conn, 2, 4, None, None, None, None).unwrap();
+        let page3 = query_request_log(&conn, 2, 4, None, None, None, None, None).unwrap();
         assert_eq!(page3.len(), 1);
     }
 
@@ -877,7 +962,7 @@ mod tests {
         let purged = purge_old_logs(&conn, 1).unwrap();
         assert_eq!(purged, 1);
 
-        let remaining = query_request_log(&conn, 10, 0, None, None, None, None).unwrap();
+        let remaining = query_request_log(&conn, 10, 0, None, None, None, None, None).unwrap();
         assert_eq!(remaining.len(), 1);
         assert_eq!(remaining[0].request_id, "test-123");
     }
@@ -915,18 +1000,18 @@ mod tests {
         insert_request_log(&conn, &entry).unwrap();
 
         // Query without key_id filter returns all.
-        let results = query_request_log(&conn, 10, 0, None, None, None, None).unwrap();
+        let results = query_request_log(&conn, 10, 0, None, None, None, None, None).unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].key_id, Some(42));
         assert!((results[0].cost_usd.unwrap() - 0.0075).abs() < 1e-12);
 
         // Query with matching key_id filter.
-        let results = query_request_log(&conn, 10, 0, None, None, None, Some(42)).unwrap();
+        let results = query_request_log(&conn, 10, 0, None, None, None, None, Some(42)).unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].request_id, "test-123");
 
         // Query with non-matching key_id filter.
-        let results = query_request_log(&conn, 10, 0, None, None, None, Some(99)).unwrap();
+        let results = query_request_log(&conn, 10, 0, None, None, None, None, Some(99)).unwrap();
         assert!(results.is_empty());
 
         // get_request_by_id also returns the new fields.
@@ -941,7 +1026,7 @@ mod tests {
         let conn = in_memory_db();
         insert_request_log(&conn, &sample_entry()).unwrap();
 
-        let results = query_request_log(&conn, 10, 0, None, None, None, None).unwrap();
+        let results = query_request_log(&conn, 10, 0, None, None, None, None, None).unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].key_id, None);
         assert_eq!(results[0].cost_usd, None);
@@ -971,7 +1056,7 @@ mod tests {
         insert_audit_entry(&conn, &entry1).unwrap();
         insert_audit_entry(&conn, &entry2).unwrap();
 
-        let results = query_audit_log(&conn, 50, 0).unwrap();
+        let results = query_audit_log(&conn, 50, 0, None, None, None, None).unwrap();
         assert_eq!(results.len(), 2);
         // Reverse chronological: most recent first.
         assert_eq!(results[0].action, "key_revoked");
@@ -990,7 +1075,7 @@ mod tests {
     #[test]
     fn audit_log_empty_returns_empty_vec() {
         let conn = in_memory_db();
-        let results = query_audit_log(&conn, 50, 0).unwrap();
+        let results = query_audit_log(&conn, 50, 0, None, None, None, None).unwrap();
         assert!(results.is_empty());
     }
 
@@ -1012,11 +1097,11 @@ mod tests {
             )
             .unwrap();
         }
-        let page1 = query_audit_log(&conn, 2, 0).unwrap();
+        let page1 = query_audit_log(&conn, 2, 0, None, None, None, None).unwrap();
         assert_eq!(page1.len(), 2);
-        let page2 = query_audit_log(&conn, 2, 2).unwrap();
+        let page2 = query_audit_log(&conn, 2, 2, None, None, None, None).unwrap();
         assert_eq!(page2.len(), 2);
-        let page3 = query_audit_log(&conn, 2, 4).unwrap();
+        let page3 = query_audit_log(&conn, 2, 4, None, None, None, None).unwrap();
         assert_eq!(page3.len(), 1);
     }
 
@@ -1049,7 +1134,7 @@ mod tests {
         insert_request_log(&conn, &err_entry).unwrap();
 
         // Exact code filter should match only the 404 entry.
-        let results = query_request_log(&conn, 10, 0, None, None, Some("404"), None).unwrap();
+        let results = query_request_log(&conn, 10, 0, None, None, None, Some("404"), None).unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].status_code, 404);
     }
@@ -1061,8 +1146,180 @@ mod tests {
 
         // Invalid filter should be silently ignored, returning all rows.
         let results =
-            query_request_log(&conn, 10, 0, None, None, Some("garbage"), None).unwrap();
+            query_request_log(&conn, 10, 0, None, None, None, Some("garbage"), None).unwrap();
         assert_eq!(results.len(), 1);
+    }
+
+    // --- update_virtual_key tests ---
+
+    fn sample_key_params() -> InsertVirtualKeyParams<'static> {
+        InsertVirtualKeyParams {
+            key_hash: "hash-abc",
+            key_prefix: "sk-vk-test",
+            description: Some("test key"),
+            expires_at: None,
+            rpm_limit: Some(100),
+            tpm_limit: None,
+            spend_limit: None,
+            role: "user",
+            max_budget_usd: Some(10.0),
+            budget_duration: Some("monthly"),
+            allowed_models: None,
+        }
+    }
+
+    #[test]
+    fn update_virtual_key_returns_updated_row() {
+        let conn = in_memory_db();
+        let id = insert_virtual_key(&conn, &sample_key_params()).unwrap();
+
+        let params = UpdateVirtualKeyParams {
+            description: Some("updated desc"),
+            expires_at: None,
+            rpm_limit: Some(200),
+            tpm_limit: None,
+            max_budget_usd: None,
+            budget_duration: None,
+            allowed_models: None,
+        };
+        let row = update_virtual_key(&conn, id, &params).unwrap();
+        assert!(row.is_some());
+        let row = row.unwrap();
+        assert_eq!(row.description.as_deref(), Some("updated desc"));
+        assert_eq!(row.rpm_limit, Some(200));
+    }
+
+    #[test]
+    fn update_virtual_key_on_revoked_returns_none() {
+        let conn = in_memory_db();
+        let id = insert_virtual_key(&conn, &sample_key_params()).unwrap();
+        revoke_virtual_key(&conn, id).unwrap();
+
+        let params = UpdateVirtualKeyParams {
+            description: Some("should not apply"),
+            expires_at: None,
+            rpm_limit: None,
+            tpm_limit: None,
+            max_budget_usd: None,
+            budget_duration: None,
+            allowed_models: None,
+        };
+        let row = update_virtual_key(&conn, id, &params).unwrap();
+        assert!(row.is_none());
+    }
+
+    #[test]
+    fn update_virtual_key_allowed_models_roundtrip() {
+        let conn = in_memory_db();
+        let id = insert_virtual_key(&conn, &sample_key_params()).unwrap();
+
+        let models_json = serde_json::to_string(&["gpt-4o", "claude-*"]).unwrap();
+        let params = UpdateVirtualKeyParams {
+            description: None,
+            expires_at: None,
+            rpm_limit: None,
+            tpm_limit: None,
+            max_budget_usd: None,
+            budget_duration: None,
+            allowed_models: Some(models_json),
+        };
+        let row = update_virtual_key(&conn, id, &params).unwrap().unwrap();
+        // row.allowed_models is parsed from JSON into Vec<String>.
+        assert_eq!(
+            row.allowed_models,
+            Some(vec!["gpt-4o".to_string(), "claude-*".to_string()])
+        );
+    }
+
+    #[test]
+    fn update_virtual_key_budget_duration_resets_period() {
+        let conn = in_memory_db();
+        // Insert with a non-null period_spend_usd to verify reset.
+        let id = insert_virtual_key(&conn, &sample_key_params()).unwrap();
+        conn.execute(
+            "UPDATE virtual_api_key SET period_spend_usd = 5.0, period_start = '2020-01-01' WHERE id = ?1",
+            params![id],
+        )
+        .unwrap();
+
+        let params = UpdateVirtualKeyParams {
+            description: None,
+            expires_at: None,
+            rpm_limit: None,
+            tpm_limit: None,
+            max_budget_usd: None,
+            budget_duration: Some("daily"),
+            allowed_models: None,
+        };
+        update_virtual_key(&conn, id, &params).unwrap();
+
+        // period_spend_usd should be reset to 0, period_start to NULL.
+        let (spend, start): (f64, Option<String>) = conn
+            .query_row(
+                "SELECT period_spend_usd, period_start FROM virtual_api_key WHERE id = ?1",
+                params![id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(spend, 0.0);
+        assert!(start.is_none());
+    }
+
+    // --- query_audit_log filter tests ---
+
+    fn insert_audit(conn: &Connection, action: &str, target_type: &str, ts: &str) {
+        conn.execute(
+            "INSERT INTO audit_log (timestamp, action, source_ip, target_type, target_id, detail) \
+             VALUES (?1, ?2, '127.0.0.1', ?3, NULL, NULL)",
+            params![ts, action, target_type],
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn audit_filter_by_action() {
+        let conn = in_memory_db();
+        insert_audit(&conn, "key_created", "virtual_key", "2099-01-01T00:00:00Z");
+        insert_audit(&conn, "key_revoked", "virtual_key", "2099-01-02T00:00:00Z");
+
+        let results =
+            query_audit_log(&conn, 10, 0, Some("key_created"), None, None, None).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].action, "key_created");
+    }
+
+    #[test]
+    fn audit_filter_by_target_type() {
+        let conn = in_memory_db();
+        insert_audit(&conn, "key_created", "virtual_key", "2099-01-01T00:00:00Z");
+        insert_audit(&conn, "config_changed", "config", "2099-01-02T00:00:00Z");
+
+        let results =
+            query_audit_log(&conn, 10, 0, None, Some("config"), None, None).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].target_type, "config");
+    }
+
+    #[test]
+    fn audit_filter_since_until() {
+        let conn = in_memory_db();
+        insert_audit(&conn, "key_created", "virtual_key", "2099-01-01T00:00:00Z");
+        insert_audit(&conn, "key_revoked", "virtual_key", "2099-01-03T00:00:00Z");
+        insert_audit(&conn, "key_updated", "virtual_key", "2099-01-05T00:00:00Z");
+
+        // since + until window should return only the middle entry.
+        let results = query_audit_log(
+            &conn,
+            10,
+            0,
+            None,
+            None,
+            Some("2099-01-02T00:00:00Z"),
+            Some("2099-01-04T00:00:00Z"),
+        )
+        .unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].action, "key_revoked");
     }
 
     #[test]
