@@ -79,6 +79,7 @@ pub fn cache_key_for_request(body: &serde_json::Value, ns: CacheNamespace) -> St
     // Fields that affect the backend response. Order does not matter because
     // BTreeMap sorts keys alphabetically before serialization.
     const CACHE_FIELDS: &[&str] = &[
+        "cache_ttl_secs",
         "max_tokens",
         "messages",
         "model",
@@ -335,5 +336,22 @@ mod tests {
     fn parse_cache_ttl_string() {
         let body = serde_json::json!({"cache_ttl_secs": "not a number"});
         assert!(parse_cache_ttl(&body).is_err());
+    }
+
+    #[test]
+    fn cache_key_differs_for_different_cache_ttl_secs() {
+        let body1 = serde_json::json!({
+            "model": "gpt-4o",
+            "messages": [{"role": "user", "content": "hi"}],
+            "cache_ttl_secs": 60
+        });
+        let body2 = serde_json::json!({
+            "model": "gpt-4o",
+            "messages": [{"role": "user", "content": "hi"}],
+            "cache_ttl_secs": 3600
+        });
+        let key1 = cache_key_for_request(&body1, CacheNamespace::OpenAI);
+        let key2 = cache_key_for_request(&body2, CacheNamespace::OpenAI);
+        assert_ne!(key1, key2, "different cache_ttl_secs must produce different cache keys");
     }
 }
