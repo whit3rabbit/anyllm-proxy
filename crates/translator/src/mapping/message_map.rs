@@ -238,16 +238,27 @@ fn apply_strict_mode_to_tool(tools: &mut [openai::ChatTool], forced_name: &str) 
 }
 
 /// Returns true if the model name matches an OpenAI o-series reasoning model
-/// (o1, o3, o4-mini, etc.). Does not match "gpt-4o" where 'o' is a suffix.
-/// Update this list when new o-series model families ship.
+/// (o1, o2, o3, o4, o5, o10, etc.). Does not match "gpt-4o" where 'o' is a suffix.
+/// Pattern: starts with 'o' or 'O', then one or more ASCII digits, then end-of-string or '-'.
 fn is_o_series_model(model: &str) -> bool {
-    // Case-insensitive without allocating a lowercase copy.
-    let prefixes: &[&str] = &["o1", "o3", "o4"];
-    prefixes.iter().any(|p| {
-        model.len() >= p.len()
-            && model[..p.len()].eq_ignore_ascii_case(p)
-            && (model.len() == p.len() || model.as_bytes()[p.len()] == b'-')
-    })
+    // Matches: o1, o2, o3, o10, o1-mini, O4-preview, etc.
+    // Rejects: gpt-4o (suffix 'o'), openai-x, o-preview (no digit after 'o').
+    let bytes = model.as_bytes();
+    if bytes.is_empty() || !bytes[0].eq_ignore_ascii_case(&b'o') {
+        return false;
+    }
+    // Must have at least one digit after the 'o'.
+    if bytes.len() < 2 || !bytes[1].is_ascii_digit() {
+        return false;
+    }
+    // Skip remaining digits.
+    let after_digits = bytes[1..]
+        .iter()
+        .position(|b| !b.is_ascii_digit())
+        .map(|p| 1 + p)
+        .unwrap_or(bytes.len());
+    // After the digits: either end-of-string or a '-'.
+    after_digits == bytes.len() || bytes[after_digits] == b'-'
 }
 
 /// Convert a single Anthropic InputMessage into one or more OpenAI ChatMessages.
@@ -2151,6 +2162,16 @@ mod tests {
         assert!(!is_o_series_model("gpt-4o-mini"));
         assert!(!is_o_series_model("gpt-4"));
         assert!(!is_o_series_model("claude-3-opus"));
+    }
+
+    #[test]
+    fn is_o_series_model_future_models() {
+        assert!(is_o_series_model("o2"), "o2 must match");
+        assert!(is_o_series_model("o5"), "o5 must match");
+        assert!(is_o_series_model("o10"), "o10 (multi-digit) must match");
+        assert!(is_o_series_model("o2-mini"), "o2-mini must match");
+        assert!(!is_o_series_model("o-preview"), "bare 'o' with no digit must not match");
+        assert!(!is_o_series_model("openai-o1"), "o1 not at start must not match");
     }
 
     fn make_request(model: &str, system: Option<&str>) -> anthropic::MessageCreateRequest {
