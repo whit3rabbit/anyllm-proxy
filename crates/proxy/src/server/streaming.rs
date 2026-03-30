@@ -170,6 +170,7 @@ pub(crate) async fn messages_stream(
     let metrics = state.metrics.clone();
     let log_shared = state.shared.clone();
     let log_backend_name = state.backend_name.clone();
+    let stream_timeout_secs = state.stream_timeout_secs;
 
     match &state.backend {
         BackendClient::OpenAI(client)
@@ -221,7 +222,7 @@ pub(crate) async fn messages_stream(
                             mapping::streaming_map::StreamingTranslator::new(model);
                         let mut done = false;
 
-                        let outcome = read_sse_frames(response, &tx, &metrics, |json_str| {
+                        let stream_future = read_sse_frames(response, &tx, &metrics, |json_str| {
                             if json_str == "[DONE]" {
                                 done = true;
                                 let events = translator.finish();
@@ -234,8 +235,26 @@ pub(crate) async fn messages_stream(
                                     None
                                 }
                             }
-                        })
-                        .await;
+                        });
+                        let outcome = if stream_timeout_secs > 0 {
+                            match tokio::time::timeout(
+                                std::time::Duration::from_secs(stream_timeout_secs),
+                                stream_future,
+                            )
+                            .await
+                            {
+                                Ok(o) => o,
+                                Err(_) => {
+                                    tracing::warn!(
+                                        timeout_secs = stream_timeout_secs,
+                                        "streaming response exceeded wall-clock timeout"
+                                    );
+                                    StreamOutcome::UpstreamError
+                                }
+                            }
+                        } else {
+                            stream_future.await
+                        };
 
                         if matches!(outcome, StreamOutcome::Completed) && !done {
                             let events = translator.finish();
@@ -314,7 +333,7 @@ pub(crate) async fn messages_stream(
                                 model,
                             );
 
-                        let outcome = read_sse_frames(response, &tx, &metrics, |json_str| {
+                        let stream_future = read_sse_frames(response, &tx, &metrics, |json_str| {
                             match serde_json::from_str::<
                                 mapping::responses_streaming_map::ResponsesStreamEvent,
                             >(json_str)
@@ -327,8 +346,26 @@ pub(crate) async fn messages_stream(
                                     None
                                 }
                             }
-                        })
-                        .await;
+                        });
+                        let outcome = if stream_timeout_secs > 0 {
+                            match tokio::time::timeout(
+                                std::time::Duration::from_secs(stream_timeout_secs),
+                                stream_future,
+                            )
+                            .await
+                            {
+                                Ok(o) => o,
+                                Err(_) => {
+                                    tracing::warn!(
+                                        timeout_secs = stream_timeout_secs,
+                                        "streaming response exceeded wall-clock timeout"
+                                    );
+                                    StreamOutcome::UpstreamError
+                                }
+                            }
+                        } else {
+                            stream_future.await
+                        };
 
                         if matches!(outcome, StreamOutcome::Completed) {
                             let events = translator.finish();

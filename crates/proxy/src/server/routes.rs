@@ -83,6 +83,9 @@ pub struct AppState {
     pub concurrency: Arc<Semaphore>,
     /// Strip `stream_options` from streaming requests for local LLM compat.
     pub omit_stream_options: bool,
+    /// Wall-clock cap for streaming responses in seconds. 0 = disabled.
+    /// Prevents resource exhaustion from stalled backends.
+    pub stream_timeout_secs: u64,
     /// Optional response cache for non-streaming requests.
     pub cache: Option<Arc<crate::cache::memory::MemoryCache>>,
     /// Model-level router for LiteLLM model_list configs. None for TOML/env configs.
@@ -244,6 +247,7 @@ pub fn app_multi_with_shared(
             backend_name: name.clone(),
             concurrency: Arc::new(Semaphore::new(super::middleware::MAX_CONCURRENT_REQUESTS)),
             omit_stream_options: bc.omit_stream_options,
+            stream_timeout_secs: bc.stream_timeout_secs,
             cache: Some(response_cache.clone()),
             model_router: model_router.clone(),
             // all_backends is set after the loop (needs all states built first).

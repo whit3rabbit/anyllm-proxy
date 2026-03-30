@@ -105,6 +105,7 @@ OPENAI_API_KEY=sk-... cargo run -p anyllm_proxy
 - `TRUST_PROXY_HEADERS`: Set to `true` or `1` to use `X-Forwarded-For` header for client IP when behind a reverse proxy. Only effective when `IP_ALLOWLIST` is set.
 - `WEBHOOK_URLS`: Comma-separated webhook URLs for request completion notifications. Fire-and-forget HTTP POST with `RequestLogEntry` JSON payload.
 - `RATE_LIMIT_FAIL_POLICY`: Behavior when Redis rate limiter is unavailable: `open` (default, allow requests) or `closed`/`deny` (reject with 503 and retry-after 60s).
+- `REQUEST_TIMEOUT_SECS`: Maximum wall-clock seconds for a streaming response (default: 900, 0 = disabled). Prevents resource exhaustion from stalled backends.
 
 ### LiteLLM env var aliases
 

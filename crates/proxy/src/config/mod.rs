@@ -415,6 +415,8 @@ pub struct BackendConfig {
     /// (older Ollama, text-generation-webui, LM Studio) that reject unknown
     /// fields with HTTP 400.
     pub omit_stream_options: bool,
+    /// Wall-clock cap for streaming responses in seconds. 0 = disabled.
+    pub stream_timeout_secs: u64,
     /// AWS credentials for Bedrock backend. None for all other backends.
     pub bedrock_credentials: Option<aws_credential_types::Credentials>,
 }
@@ -463,6 +465,8 @@ struct TomlBackendConfig {
     access_token: Option<String>,
     // Strip stream_options from streaming requests (local LLM compat)
     omit_stream_options: Option<bool>,
+    // Wall-clock cap for streaming responses in seconds (0 = disabled)
+    stream_timeout_secs: Option<u64>,
     // Bedrock-specific: AWS credentials (support env: prefix for env var resolution)
     aws_access_key_id: Option<String>,
     aws_secret_access_key: Option<String>,
@@ -561,6 +565,10 @@ impl MultiConfig {
         let omit_stream_options = std::env::var("OMIT_STREAM_OPTIONS")
             .map(|v| v == "true" || v == "1")
             .unwrap_or(false);
+        let stream_timeout_secs = std::env::var("REQUEST_TIMEOUT_SECS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(900u64);
 
         // For Bedrock, read AWS credentials from env vars.
         let bedrock_credentials = if config.backend == BackendKind::Bedrock {
@@ -579,6 +587,7 @@ impl MultiConfig {
             backend_auth: config.backend_auth.clone(),
             log_bodies: config.log_bodies,
             omit_stream_options,
+            stream_timeout_secs,
             bedrock_credentials,
         };
 
@@ -883,6 +892,12 @@ impl MultiConfig {
             backend_auth,
             log_bodies,
             omit_stream_options: tb.omit_stream_options.unwrap_or(false),
+            stream_timeout_secs: tb.stream_timeout_secs.unwrap_or_else(|| {
+                std::env::var("REQUEST_TIMEOUT_SECS")
+                    .ok()
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(900u64)
+            }),
             bedrock_credentials,
         }
     }

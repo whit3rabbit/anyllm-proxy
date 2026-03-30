@@ -477,6 +477,10 @@ fn build_backend_config(
         backend_auth,
         log_bodies,
         omit_stream_options: false,
+        stream_timeout_secs: std::env::var("REQUEST_TIMEOUT_SECS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(900u64),
         bedrock_credentials,
     }
 }
