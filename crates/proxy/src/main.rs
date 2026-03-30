@@ -480,6 +480,21 @@ async fn main() {
         );
     }
 
+    // Warn loudly when open-relay mode is active on a non-loopback address.
+    // PROXY_OPEN_RELAY=true accepts any non-empty string as a valid API key;
+    // combined with a public bind address this exposes the backend to the internet.
+    let open_relay_active = std::env::var("PROXY_OPEN_RELAY")
+        .map(|v| v == "true" || v == "1")
+        .unwrap_or(false);
+    if open_relay_active && !listen_addr.ip().is_loopback() {
+        tracing::error!(
+            addr = %listen_addr,
+            "PROXY_OPEN_RELAY=true on a non-loopback address: any non-empty \
+             API key is accepted. This is INSECURE on a publicly reachable address. \
+             Use PROXY_API_KEYS or virtual keys instead."
+        );
+    }
+
     // Single shutdown channel shared by proxy and (optionally) admin.
     let (shutdown_tx, mut shutdown_rx1) = tokio::sync::watch::channel(false);
 
