@@ -75,7 +75,7 @@ struct RouterSettings {
 }
 
 /// Map LiteLLM routing_strategy string to our enum.
-fn parse_routing_strategy(s: &str) -> RoutingStrategy {
+pub(crate) fn parse_routing_strategy_str(s: &str) -> RoutingStrategy {
     match s.to_ascii_lowercase().replace('_', "-").as_str() {
         "simple-shuffle" | "round-robin" => RoutingStrategy::RoundRobin,
         "least-busy" => RoutingStrategy::LeastBusy,
@@ -285,7 +285,7 @@ pub fn parse_litellm_yaml(yaml: &str) -> LiteLLMParsed {
         .router_settings
         .as_ref()
         .and_then(|rs| rs.routing_strategy.as_deref())
-        .map(parse_routing_strategy)
+        .map(parse_routing_strategy_str)
         .unwrap_or_default();
 
     if strategy != RoutingStrategy::RoundRobin {
