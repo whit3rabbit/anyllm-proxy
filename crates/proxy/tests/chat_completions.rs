@@ -25,6 +25,13 @@ fn openai_config_with_base(base_url: &str) -> Config {
     }
 }
 
+fn openai_config_with_degradation(base_url: &str) -> Config {
+    Config {
+        expose_degradation_warnings: true,
+        ..openai_config_with_base(base_url)
+    }
+}
+
 /// Mock backend that returns a fixed OpenAI Chat Completions response.
 async fn spawn_mock_chat_backend() -> String {
     let app = Router::new().route(
@@ -143,10 +150,11 @@ async fn chat_completions_empty_messages_returns_400() {
     assert_eq!(body["error"]["type"], "invalid_request_error");
 }
 
+// When expose_degradation_warnings is true, lossy fields must appear in the header.
 #[tokio::test]
 async fn chat_completions_degradation_header_on_lossy_fields() {
     let mock = spawn_mock_chat_backend().await;
-    let proxy = spawn_proxy(openai_config_with_base(&mock)).await;
+    let proxy = spawn_proxy(openai_config_with_degradation(&mock)).await;
 
     let client = Client::new();
     let resp = client
@@ -177,6 +185,37 @@ async fn chat_completions_degradation_header_on_lossy_fields() {
     assert!(
         degradation.contains("frequency_penalty"),
         "expected frequency_penalty in degradation header, got: {degradation}"
+    );
+}
+
+// When expose_degradation_warnings is false (default), the header must not be set
+// even when lossy fields are present.
+#[tokio::test]
+async fn chat_completions_degradation_header_suppressed_when_disabled() {
+    let mock = spawn_mock_chat_backend().await;
+    // openai_config_with_base has expose_degradation_warnings: false
+    let proxy = spawn_proxy(openai_config_with_base(&mock)).await;
+
+    let client = Client::new();
+    let resp = client
+        .post(format!("{proxy}/v1/chat/completions"))
+        .header("x-api-key", "test")
+        .header("content-type", "application/json")
+        .json(&json!({
+            "model": "claude-sonnet-4-20250514",
+            "messages": [{"role": "user", "content": "Hi"}],
+            "max_tokens": 100,
+            "presence_penalty": 0.5,
+            "frequency_penalty": 0.3
+        }))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), 200);
+    assert!(
+        resp.headers().get("x-anyllm-degradation").is_none(),
+        "x-anyllm-degradation must not be present when expose_degradation_warnings is false"
     );
 }
 
