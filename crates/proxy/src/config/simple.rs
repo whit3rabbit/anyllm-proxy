@@ -407,13 +407,17 @@ fn default_base_url(kind: &BackendKind, entry: &NormalizedEntry) -> String {
                 endpoint.trim_end_matches('/')
             )
         }
-        BackendKind::Bedrock => entry
-            .aws_region
-            .as_deref()
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| {
-                std::env::var("AWS_REGION").unwrap_or_else(|_| "us-east-1".to_string())
-            }),
+        BackendKind::Bedrock => {
+            // Bedrock doesn't use a URL — the region string is stored in base_url
+            // and used by the Bedrock client directly for SigV4 endpoint construction.
+            entry
+                .aws_region
+                .as_deref()
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| {
+                    std::env::var("AWS_REGION").unwrap_or_else(|_| "us-east-1".to_string())
+                })
+        }
     }
 }
 

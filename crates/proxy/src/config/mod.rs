@@ -512,6 +512,14 @@ impl MultiConfig {
                     };
                 }
 
+                // LiteLLM format requires model_list: key.
+                if probe.get("model_list").is_none() {
+                    panic!(
+                        "config file '{path}' must contain either a top-level 'models:' key \
+                         (simple format) or 'model_list:' key (LiteLLM format)"
+                    );
+                }
+
                 // LiteLLM format (model_list: + litellm_params:).
                 let parsed = litellm::parse_litellm_yaml(&yaml);
 
