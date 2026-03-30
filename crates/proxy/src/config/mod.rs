@@ -494,7 +494,23 @@ impl MultiConfig {
         if let Ok(path) = std::env::var("PROXY_CONFIG") {
             if path.ends_with(".yaml") || path.ends_with(".yml") {
                 let yaml = std::fs::read_to_string(&path)
-                    .unwrap_or_else(|e| panic!("failed to read LiteLLM config '{path}': {e}"));
+                    .unwrap_or_else(|e| panic!("failed to read config '{path}': {e}"));
+
+                // Detect format: "models:" key = simple native format, "model_list:" = LiteLLM.
+                let probe: serde_yaml::Value = serde_yaml::from_str(&yaml)
+                    .unwrap_or_else(|e| panic!("invalid YAML in '{path}': {e}"));
+
+                if probe.get("models").is_some() {
+                    // Simple native format.
+                    let parsed = simple::parse_simple_yaml(&yaml);
+                    return LoadResult {
+                        multi_config: parsed.multi_config,
+                        model_router: Some(Arc::new(std::sync::RwLock::new(parsed.router))),
+                        litellm_master_key: None,
+                    };
+                }
+
+                // LiteLLM format (model_list: + litellm_params:).
                 let parsed = litellm::parse_litellm_yaml(&yaml);
 
                 // Wire up webhook callbacks and named integrations from litellm_settings.callbacks.
