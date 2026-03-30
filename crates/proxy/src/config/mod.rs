@@ -1,6 +1,7 @@
 pub mod env_aliases;
 pub mod litellm;
 pub mod model_router;
+pub mod simple;
 mod tls;
 mod url_validation;
 
