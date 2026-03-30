@@ -41,6 +41,7 @@ serde_yaml = "0.9"
 jsonwebtoken = "10"
 ipnetwork = "0.20"
 zeroize = "1"
+crc32fast = "1"
 
 [features]
 redis = ["dep:redis"]

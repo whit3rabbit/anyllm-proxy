@@ -179,14 +179,23 @@ async fn bedrock_stream(
             }
 
             // Decode all complete frames in the buffer
-            while let Some(payload) = eventstream::decode_frame(&mut event_buf) {
-                if let Some(event_json) = eventstream::extract_event_from_payload(&payload) {
-                    // Re-emit as SSE: "event: <type>\ndata: <json>\n\n"
-                    // Bedrock events are raw Anthropic JSON; detect the event type.
-                    let event_type = detect_event_type(&event_json);
-                    let sse_line = format!("event: {event_type}\ndata: {event_json}\n\n");
-                    if tx.send(Ok(sse_line)).await.is_err() {
-                        return; // client disconnected
+            loop {
+                match eventstream::decode_frame(&mut event_buf) {
+                    Err(e) => {
+                        tracing::warn!(error = %e, "Bedrock event stream CRC mismatch, dropping frame");
+                        // Buffer was already advanced past the bad frame; continue.
+                    }
+                    Ok(None) => break, // no complete frame yet
+                    Ok(Some(payload)) => {
+                        if let Some(event_json) = eventstream::extract_event_from_payload(&payload) {
+                            // Re-emit as SSE: "event: <type>\ndata: <json>\n\n"
+                            // Bedrock events are raw Anthropic JSON; detect the event type.
+                            let event_type = detect_event_type(&event_json);
+                            let sse_line = format!("event: {event_type}\ndata: {event_json}\n\n");
+                            if tx.send(Ok(sse_line)).await.is_err() {
+                                return; // client disconnected
+                            }
+                        }
                     }
                 }
             }

@@ -262,17 +262,44 @@ pub mod eventstream {
     /// Try to extract one complete event stream frame from the buffer.
     /// Returns `Some(payload_bytes)` and advances the buffer past the frame,
     /// or `None` if the buffer does not contain a complete frame yet.
-    pub fn decode_frame(buf: &mut BytesMut) -> Option<Vec<u8>> {
+    /// Returns `Err` if CRC validation fails (corrupted frame).
+    pub fn decode_frame(buf: &mut BytesMut) -> Result<Option<Vec<u8>>, String> {
         if buf.len() < MIN_FRAME_SIZE {
-            return None;
+            return Ok(None);
         }
 
         let total_len = u32::from_be_bytes([buf[0], buf[1], buf[2], buf[3]]) as usize;
         if buf.len() < total_len {
-            return None; // incomplete frame
+            return Ok(None); // incomplete frame
         }
 
         let headers_len = u32::from_be_bytes([buf[4], buf[5], buf[6], buf[7]]) as usize;
+
+        // Validate prelude CRC (bytes 8-11 = CRC32 of bytes 0-7).
+        let prelude_crc_stored = u32::from_be_bytes([buf[8], buf[9], buf[10], buf[11]]);
+        let prelude_crc_computed = crc32fast::hash(&buf[..8]);
+        if prelude_crc_stored != prelude_crc_computed {
+            let _ = buf.split_to(total_len);
+            return Err(format!(
+                "event stream prelude CRC mismatch: stored={prelude_crc_stored:#010x} computed={prelude_crc_computed:#010x}"
+            ));
+        }
+
+        // Validate message CRC (last 4 bytes = CRC32 of frame minus final 4 bytes).
+        let msg_crc_offset = total_len - 4;
+        let msg_crc_stored = u32::from_be_bytes([
+            buf[msg_crc_offset],
+            buf[msg_crc_offset + 1],
+            buf[msg_crc_offset + 2],
+            buf[msg_crc_offset + 3],
+        ]);
+        let msg_crc_computed = crc32fast::hash(&buf[..msg_crc_offset]);
+        if msg_crc_stored != msg_crc_computed {
+            let _ = buf.split_to(total_len);
+            return Err(format!(
+                "event stream message CRC mismatch: stored={msg_crc_stored:#010x} computed={msg_crc_computed:#010x}"
+            ));
+        }
 
         // Prelude is 8 bytes (total_len + headers_len), then 4-byte prelude CRC
         let headers_start = 12; // 4 + 4 + 4 (prelude CRC)
@@ -283,7 +310,7 @@ pub mod eventstream {
         if payload_start > payload_end || payload_end > buf.len() {
             // Malformed frame: skip it
             let _ = buf.split_to(total_len);
-            return Some(Vec::new());
+            return Ok(Some(Vec::new()));
         }
 
         let payload = buf[payload_start..payload_end].to_vec();
@@ -291,7 +318,7 @@ pub mod eventstream {
         // Advance buffer past this frame
         let _ = buf.split_to(total_len);
 
-        Some(payload)
+        Ok(Some(payload))
     }
 
     /// Extract the Anthropic event JSON string from a Bedrock event stream payload.
@@ -319,17 +346,21 @@ mod tests {
     use bytes::BytesMut;
 
     /// Build a minimal AWS Event Stream frame with the given payload.
-    /// Uses zero CRCs (we don't validate CRCs in the decoder).
+    /// Emits real CRC32 checksums so the decoder's validation passes.
     fn build_frame(headers: &[u8], payload: &[u8]) -> Vec<u8> {
-        let total_len = 12 + headers.len() + payload.len() + 4; // prelude(12) + headers + payload + msg CRC(4)
-        let headers_len = headers.len();
-        let mut frame = Vec::with_capacity(total_len);
-        frame.extend_from_slice(&(total_len as u32).to_be_bytes());
-        frame.extend_from_slice(&(headers_len as u32).to_be_bytes());
-        frame.extend_from_slice(&[0u8; 4]); // prelude CRC (not validated)
+        let total_len = (12 + headers.len() + payload.len() + 4) as u32;
+        let headers_len = headers.len() as u32;
+        let mut frame: Vec<u8> = Vec::with_capacity(total_len as usize);
+        frame.extend_from_slice(&total_len.to_be_bytes());
+        frame.extend_from_slice(&headers_len.to_be_bytes());
+        // Prelude CRC: CRC32 of bytes 0-7.
+        let prelude_crc = crc32fast::hash(&frame[..8]);
+        frame.extend_from_slice(&prelude_crc.to_be_bytes());
         frame.extend_from_slice(headers);
         frame.extend_from_slice(payload);
-        frame.extend_from_slice(&[0u8; 4]); // message CRC (not validated)
+        // Message CRC: CRC32 of everything so far.
+        let msg_crc = crc32fast::hash(&frame);
+        frame.extend_from_slice(&msg_crc.to_be_bytes());
         frame
     }
 
@@ -337,7 +368,7 @@ mod tests {
     fn decode_frame_empty_payload() {
         let frame = build_frame(&[], &[]);
         let mut buf = BytesMut::from(frame.as_slice());
-        let payload = eventstream::decode_frame(&mut buf).unwrap();
+        let payload = eventstream::decode_frame(&mut buf).unwrap().unwrap();
         assert!(payload.is_empty());
         assert!(buf.is_empty());
     }
@@ -347,7 +378,7 @@ mod tests {
         let payload_data = b"hello world";
         let frame = build_frame(&[], payload_data);
         let mut buf = BytesMut::from(frame.as_slice());
-        let payload = eventstream::decode_frame(&mut buf).unwrap();
+        let payload = eventstream::decode_frame(&mut buf).unwrap().unwrap();
         assert_eq!(payload, b"hello world");
         assert!(buf.is_empty());
     }
@@ -356,7 +387,7 @@ mod tests {
     fn decode_frame_incomplete() {
         let frame = build_frame(&[], b"hello");
         let mut buf = BytesMut::from(&frame[..frame.len() - 2]); // truncate
-        assert!(eventstream::decode_frame(&mut buf).is_none());
+        assert!(eventstream::decode_frame(&mut buf).unwrap().is_none());
     }
 
     #[test]
@@ -367,9 +398,9 @@ mod tests {
         buf.extend_from_slice(&frame1);
         buf.extend_from_slice(&frame2);
 
-        let p1 = eventstream::decode_frame(&mut buf).unwrap();
+        let p1 = eventstream::decode_frame(&mut buf).unwrap().unwrap();
         assert_eq!(p1, b"first");
-        let p2 = eventstream::decode_frame(&mut buf).unwrap();
+        let p2 = eventstream::decode_frame(&mut buf).unwrap().unwrap();
         assert_eq!(p2, b"second");
         assert!(buf.is_empty());
     }
@@ -380,8 +411,39 @@ mod tests {
         let payload_data = b"data";
         let frame = build_frame(headers, payload_data);
         let mut buf = BytesMut::from(frame.as_slice());
-        let payload = eventstream::decode_frame(&mut buf).unwrap();
+        let payload = eventstream::decode_frame(&mut buf).unwrap().unwrap();
         assert_eq!(payload, b"data");
+    }
+
+    #[test]
+    fn decode_frame_rejects_bad_prelude_crc() {
+        let payload = b"{}";
+        let mut frame = build_frame(b"", payload);
+        frame[8] ^= 0xFF; // corrupt prelude CRC
+        let mut buf = BytesMut::from(frame.as_slice());
+        let result = eventstream::decode_frame(&mut buf);
+        assert!(result.is_err(), "bad prelude CRC must be rejected");
+    }
+
+    #[test]
+    fn decode_frame_rejects_bad_message_crc() {
+        let payload = b"{}";
+        let mut frame = build_frame(b"", payload);
+        let last = frame.len() - 1;
+        frame[last] ^= 0xFF; // corrupt message CRC
+        let mut buf = BytesMut::from(frame.as_slice());
+        let result = eventstream::decode_frame(&mut buf);
+        assert!(result.is_err(), "bad message CRC must be rejected");
+    }
+
+    #[test]
+    fn decode_frame_accepts_valid_crc() {
+        let payload = b"{}";
+        let frame = build_frame(b"", payload);
+        let mut buf = BytesMut::from(frame.as_slice());
+        let result = eventstream::decode_frame(&mut buf);
+        assert!(result.is_ok(), "valid CRC must be accepted");
+        assert!(result.unwrap().is_some());
     }
 
     #[test]
