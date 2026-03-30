@@ -5,6 +5,8 @@
 //! look like JWTs (contain two dots) are validated against the JWKS.
 //! On validation failure, auth falls through to static/virtual key checks.
 
+use crate::config::validate_base_url;
+use anyllm_client::http::{build_http_client, HttpClientConfig};
 use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, Validation};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, RwLock};
@@ -71,14 +73,27 @@ struct JwkKey {
     y: Option<String>,
 }
 
+/// Validate that an OIDC issuer URL or JWKS URI is safe to fetch.
+/// Rejects private/loopback/metadata IP ranges to prevent SSRF.
+pub fn validate_oidc_url(url: &str) -> Result<(), String> {
+    validate_base_url(url)
+}
+
 impl OidcConfig {
     /// Discover OIDC configuration from the issuer URL.
     /// Fetches `.well-known/openid-configuration` and then the JWKS.
+    /// Both the issuer URL and the discovered JWKS URI are validated against
+    /// private/loopback/metadata IP ranges before any network call is made.
     pub async fn discover(issuer_url: &str, audience: &str) -> Result<Self, OidcError> {
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(10))
-            .build()
-            .map_err(|e| OidcError::Http(e.to_string()))?;
+        // Validate issuer URL before making any network call.
+        validate_oidc_url(issuer_url)
+            .map_err(|e| OidcError::Http(format!("OIDC issuer URL rejected (SSRF risk): {e}")))?;
+
+        let client = build_http_client(&HttpClientConfig {
+            ssrf_protection: true,
+            connect_timeout: Some(std::time::Duration::from_secs(10)),
+            ..Default::default()
+        });
 
         let discovery_url = format!(
             "{}/.well-known/openid-configuration",
@@ -92,6 +107,14 @@ impl OidcConfig {
             .json()
             .await
             .map_err(|e| OidcError::Http(format!("OIDC discovery parse failed: {e}")))?;
+
+        // Validate the JWKS URI from the discovery document before fetching it.
+        // A compromised or MITM'd discovery endpoint could redirect to an internal service.
+        validate_oidc_url(&discovery.jwks_uri).map_err(|e| {
+            OidcError::Http(format!(
+                "JWKS URI in OIDC discovery document rejected (SSRF risk): {e}"
+            ))
+        })?;
 
         let config = Self {
             audience: audience.to_string(),
@@ -239,6 +262,23 @@ impl std::fmt::Display for OidcError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn validate_oidc_url_rejects_private_ips() {
+        // Cloud metadata endpoint.
+        assert!(validate_oidc_url("http://169.254.169.254/oidc").is_err());
+        // Loopback.
+        assert!(validate_oidc_url("http://127.0.0.1/oidc").is_err());
+        // RFC 1918 private range.
+        assert!(validate_oidc_url("http://10.0.0.1/oidc").is_err());
+        assert!(validate_oidc_url("http://192.168.1.1/oidc").is_err());
+    }
+
+    #[test]
+    fn validate_oidc_url_accepts_public_https() {
+        assert!(validate_oidc_url("https://accounts.google.com").is_ok());
+        assert!(validate_oidc_url("https://login.microsoftonline.com/tenant/v2.0").is_ok());
+    }
 
     #[test]
     fn looks_like_jwt_detects_jwt_shape() {
