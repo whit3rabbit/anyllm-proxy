@@ -38,7 +38,7 @@ All implementation phases are complete.
 - Security fixes (2026-03-30 audit): `AWS_ACCESS_KEY_ID`/`GOOGLE_ACCESS_TOKEN` redacted in env endpoint; admin rate limiter uses sliding window; all audit entries include `source_ip`; OIDC discovery and webhook callbacks use SSRF-safe HTTP client and validate URLs against private IP ranges; CSRF public-route decision documented; non-Unix token file warning already present
 - Model mapping and lossy-translation warnings
 - `POST /v1/embeddings` passthrough: forwards directly to the backend with no translation; works with OpenAI, Vertex, Gemini (`gemini-embedding-exp-03-07`), and vLLM/HuggingFace models. Not mounted for the Anthropic passthrough backend.
-- `x-anyllm-degradation` response header: set when features are silently dropped during translation (e.g., `top_k`, `thinking_config`, `cache_control`, `document_blocks`, `stop_sequences_truncated`)
+- `x-anyllm-degradation` response header: set when features are silently dropped during translation (opt-in via `ANYLLM_DEGRADATION_WARNINGS=true`; auto-enabled when `PROXY_CONFIG` is set). Examples: `top_k`, `thinking_config`, `cache_control`, `document_blocks`, `stop_sequences_truncated`
 
 **Not fully validated:**
 - OpenAI Responses API backend: wired up via `OPENAI_API_FORMAT=responses` but not tested against live API
@@ -97,6 +97,7 @@ OPENAI_API_KEY=sk-... cargo run -p anyllm_proxy
 - `PROXY_API_KEYS`: Comma-separated list of allowed API keys for proxy authentication (optional; if unset and PROXY_OPEN_RELAY is not set, all requests are rejected)
 - `PROXY_OPEN_RELAY`: Set to `true` or `1` to accept any non-empty key (insecure, for local dev only)
 - `LOG_BODIES`: Enable request/response body logging at debug level (`true` or `1`, default: disabled)
+- `ANYLLM_DEGRADATION_WARNINGS`: Expose `x-anyllm-degradation` response header when features are silently dropped during translation (`true` or `1`, default: disabled). Auto-enabled when `PROXY_CONFIG` is set.
 - `OTEL_EXPORTER_OTLP_ENDPOINT`: OTLP collector endpoint (default: `http://localhost:4318`). Only effective when built with `--features otel`.
 - `OTEL_SERVICE_NAME`: Service name for exported traces. Only effective when built with `--features otel`.
 - `OTEL_TRACES_SAMPLER`: Sampling strategy (default: `parentbased_always_on`). Only effective when built with `--features otel`.
