@@ -483,11 +483,13 @@ impl MultiConfig {
     /// Load configuration.
     ///
     /// Detection order:
-    /// 1. `PROXY_CONFIG` with `.yaml`/`.yml` extension: parse as LiteLLM config
+    /// 1. `PROXY_CONFIG` with `.yaml`/`.yml` extension:
+    ///    - If root `models:` key is present: simple native format (`simple::parse_simple_yaml`)
+    ///    - Otherwise (`model_list:` key): LiteLLM-compatible format (`litellm::parse_litellm_yaml`)
     /// 2. `PROXY_CONFIG` with any other extension: parse as TOML
     /// 3. No `PROXY_CONFIG`: env-var-based single-backend config
     ///
-    /// The model router is only set for LiteLLM configs (model_list routing).
+    /// The model router is set for both YAML config formats (simple and LiteLLM).
     /// `litellm_master_key` is returned (not applied) so the caller can
     /// consolidate all `set_var` calls into a single pre-runtime block.
     pub fn load() -> LoadResult {
