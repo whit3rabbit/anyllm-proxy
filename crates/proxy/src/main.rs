@@ -520,6 +520,30 @@ async fn main() {
     tracing::info!("server shut down gracefully");
 }
 
+/// Interpret backslash escapes in double-quoted dotenv values.
+/// Handles: \n (newline), \t (tab), \r (carriage return), \\ (backslash), \" (double quote).
+/// Other backslash sequences are passed through unchanged.
+fn unescape_double_quoted(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars();
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            match chars.next() {
+                Some('n')  => out.push('\n'),
+                Some('t')  => out.push('\t'),
+                Some('r')  => out.push('\r'),
+                Some('\\') => out.push('\\'),
+                Some('"')  => out.push('"'),
+                Some(other) => { out.push('\\'); out.push(other); }
+                None => out.push('\\'),
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
 /// Parse a `.env`-format file and return `(key, value)` pairs to set.
 ///
 /// Rules:
@@ -562,11 +586,16 @@ fn parse_env_file(path: &str) -> Vec<(String, String)> {
             continue;
         }
         // Strip optional surrounding quotes from the value.
+        // Double-quoted: process backslash escapes (\n, \t, \r, \\, \").
+        // Single-quoted: literal content only (POSIX behavior, no escapes).
         let val = val.trim();
-        let val = if (val.starts_with('"') && val.ends_with('"'))
-            || (val.starts_with('\'') && val.ends_with('\''))
-        {
-            &val[1..val.len() - 1]
+        let owned_val: String;
+        let val: &str = if val.starts_with('"') && val.ends_with('"') && val.len() >= 2 {
+            owned_val = unescape_double_quoted(&val[1..val.len() - 1]);
+            &owned_val
+        } else if val.starts_with('\'') && val.ends_with('\'') && val.len() >= 2 {
+            owned_val = val[1..val.len() - 1].to_string();
+            &owned_val
         } else {
             val
         };
@@ -635,5 +664,53 @@ async fn shutdown_signal() {
     {
         ctrl_c.await.expect("failed to listen for Ctrl+C");
         tracing::info!("received Ctrl+C, starting graceful shutdown");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_env_file_double_quoted_newline_escape() {
+        use std::io::Write;
+        let dir = std::env::temp_dir();
+        let path = dir.join("test_parse_env_escape_n.env");
+        let mut f = std::fs::File::create(&path).unwrap();
+        writeln!(f, r#"KEY="hello\nworld""#).unwrap();
+        drop(f);
+        let vars = parse_env_file(path.to_str().unwrap());
+        std::fs::remove_file(&path).ok();
+        let val = vars.iter().find(|(k, _)| k == "KEY").map(|(_, v)| v.as_str());
+        assert_eq!(val, Some("hello\nworld"), "\\n inside double quotes must become a newline");
+    }
+
+    #[test]
+    fn parse_env_file_double_quoted_tab_escape() {
+        use std::io::Write;
+        let dir = std::env::temp_dir();
+        let path = dir.join("test_parse_env_escape_t.env");
+        let mut f = std::fs::File::create(&path).unwrap();
+        writeln!(f, r#"KEY="col1\tcol2""#).unwrap();
+        drop(f);
+        let vars = parse_env_file(path.to_str().unwrap());
+        std::fs::remove_file(&path).ok();
+        let val = vars.iter().find(|(k, _)| k == "KEY").map(|(_, v)| v.as_str());
+        assert_eq!(val, Some("col1\tcol2"), "\\t inside double quotes must become a tab");
+    }
+
+    #[test]
+    fn parse_env_file_single_quoted_no_escape() {
+        use std::io::Write;
+        let dir = std::env::temp_dir();
+        let path = dir.join("test_parse_env_single.env");
+        let mut f = std::fs::File::create(&path).unwrap();
+        writeln!(f, r#"KEY='hello\nworld'"#).unwrap();
+        drop(f);
+        let vars = parse_env_file(path.to_str().unwrap());
+        std::fs::remove_file(&path).ok();
+        let val = vars.iter().find(|(k, _)| k == "KEY").map(|(_, v)| v.as_str());
+        // Single quotes: backslash is literal, no escape processing.
+        assert_eq!(val, Some(r"hello\nworld"), "single quotes must not process escapes");
     }
 }
