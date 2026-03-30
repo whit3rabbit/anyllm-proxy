@@ -35,6 +35,7 @@ All implementation phases are complete.
 - Model allowlist: per-key policy with exact match and `prefix/*` wildcard
 - Admin UI: login form (sessionStorage), virtual keys tab, models tab, request detail view, cost column, feed pause + filter
 - Security hardening: plaintext HTTP startup warning, 1MB admin body limit, CSP header, model name validation
+- Security fixes (2026-03-30 audit): `AWS_ACCESS_KEY_ID`/`GOOGLE_ACCESS_TOKEN` redacted in env endpoint; admin rate limiter uses sliding window; all audit entries include `source_ip`; OIDC discovery and webhook callbacks use SSRF-safe HTTP client and validate URLs against private IP ranges; CSRF public-route decision documented; non-Unix token file warning already present
 - Model mapping and lossy-translation warnings
 - `POST /v1/embeddings` passthrough: forwards directly to the backend with no translation; works with OpenAI, Vertex, Gemini (`gemini-embedding-exp-03-07`), and vLLM/HuggingFace models. Not mounted for the Anthropic passthrough backend.
 - `x-anyllm-degradation` response header: set when features are silently dropped during translation (e.g., `top_k`, `thinking_config`, `cache_control`, `document_blocks`, `stop_sequences_truncated`)
