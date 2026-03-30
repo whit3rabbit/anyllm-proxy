@@ -106,6 +106,7 @@ OPENAI_API_KEY=sk-... cargo run -p anyllm_proxy
 - `WEBHOOK_URLS`: Comma-separated webhook URLs for request completion notifications. Fire-and-forget HTTP POST with `RequestLogEntry` JSON payload.
 - `RATE_LIMIT_FAIL_POLICY`: Behavior when Redis rate limiter is unavailable: `open` (default, allow requests) or `closed`/`deny` (reject with 503 and retry-after 60s).
 - `REQUEST_TIMEOUT_SECS`: Maximum wall-clock seconds for a streaming response (default: 900, 0 = disabled). Prevents resource exhaustion from stalled backends.
+- `MODEL_PRICING_FILE`: Path to a JSON pricing file overriding the embedded model pricing at startup. Format: array of `{model_pattern, input_cost_per_token, output_cost_per_token, provider}`. Falls back to embedded pricing if unreadable.
 
 ### LiteLLM env var aliases
 

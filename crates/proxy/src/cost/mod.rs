@@ -117,11 +117,34 @@ pub struct ModelPricing {
 }
 
 impl ModelPricing {
-    /// Load from embedded JSON (compiled into the binary).
+    /// Load pricing from embedded JSON, or from the file at `MODEL_PRICING_FILE` if set.
     pub fn load() -> Self {
-        let json = include_str!("../../../../assets/model_pricing.json");
+        let override_path = std::env::var("MODEL_PRICING_FILE").ok();
+        Self::load_with_optional_override(override_path.as_deref())
+    }
+
+    /// Load pricing from `path` if provided and readable, otherwise fall back to embedded JSON.
+    pub fn load_with_optional_override(path: Option<&str>) -> Self {
+        let json = if let Some(p) = path {
+            match std::fs::read_to_string(p) {
+                Ok(content) => {
+                    tracing::info!(path = %p, "loaded model pricing from MODEL_PRICING_FILE");
+                    content
+                }
+                Err(e) => {
+                    tracing::error!(
+                        path = %p,
+                        error = %e,
+                        "failed to read MODEL_PRICING_FILE; falling back to embedded pricing"
+                    );
+                    include_str!("../../../../assets/model_pricing.json").to_string()
+                }
+            }
+        } else {
+            include_str!("../../../../assets/model_pricing.json").to_string()
+        };
         let entries: Vec<ModelPricingEntry> =
-            serde_json::from_str(json).expect("invalid model_pricing.json");
+            serde_json::from_str(&json).expect("invalid model_pricing.json");
         Self { entries }
     }
 
@@ -315,6 +338,34 @@ mod tests {
         // Verify the embedded JSON parses without panic
         let pricing = ModelPricing::load();
         assert!(!pricing.entries.is_empty());
+    }
+
+    #[test]
+    fn load_with_optional_override_uses_file() {
+        use std::io::Write;
+        let dir = std::env::temp_dir();
+        let path = dir.join("test_model_pricing.json");
+        let mut f = std::fs::File::create(&path).unwrap();
+        writeln!(f, r#"[{{"model_pattern":"test-only-model","input_cost_per_token":0.001,"output_cost_per_token":0.002,"provider":"test"}}]"#).unwrap();
+        drop(f);
+        let pricing = ModelPricing::load_with_optional_override(Some(path.to_str().unwrap()));
+        std::fs::remove_file(&path).ok();
+        assert_eq!(pricing.entries.len(), 1);
+        assert_eq!(pricing.entries[0].model_pattern, "test-only-model");
+        assert!((pricing.entries[0].input_cost_per_token - 0.001).abs() < 1e-10);
+    }
+
+    #[test]
+    fn load_with_optional_override_none_uses_embedded() {
+        let pricing = ModelPricing::load_with_optional_override(None);
+        // Embedded pricing has many entries.
+        assert!(pricing.entries.len() > 5, "embedded pricing should have multiple entries");
+    }
+
+    #[test]
+    fn load_with_optional_override_bad_path_falls_back_to_embedded() {
+        let pricing = ModelPricing::load_with_optional_override(Some("/nonexistent/path/pricing.json"));
+        assert!(pricing.entries.len() > 5, "bad path should fall back to embedded pricing");
     }
 
     #[test]
