@@ -293,6 +293,7 @@ impl BackendClient {
             tls: bc.tls.clone(),
             backend_auth: bc.backend_auth.clone(),
             log_bodies: bc.log_bodies,
+            expose_degradation_warnings: false, // not used by BackendClient constructors
             openai_api_format: bc.api_format.clone(),
         };
 

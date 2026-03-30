@@ -68,6 +68,10 @@ pub struct Config {
     pub backend_auth: BackendAuth,
     /// Enable request/response body logging at debug level.
     pub log_bodies: bool,
+    /// Expose `x-anyllm-degradation` response header when features are silently dropped.
+    /// Defaults to false (simple mode). Enable with ANYLLM_DEGRADATION_WARNINGS=true
+    /// or automatically when PROXY_CONFIG is set.
+    pub expose_degradation_warnings: bool,
     /// Which OpenAI API format to use (only relevant when BACKEND=openai).
     pub openai_api_format: OpenAIApiFormat,
 }
@@ -111,6 +115,12 @@ impl Config {
         let log_bodies = std::env::var("LOG_BODIES")
             .map(|v| v == "true" || v == "1")
             .unwrap_or(false);
+        let expose_degradation_warnings = std::env::var("ANYLLM_DEGRADATION_WARNINGS")
+            .map(|v| v == "true" || v == "1")
+            .unwrap_or(false);
+        // Config file presence implies advanced mode — enable degradation warnings.
+        let expose_degradation_warnings =
+            expose_degradation_warnings || std::env::var("PROXY_CONFIG").is_ok();
 
         match backend {
             BackendKind::OpenAI => {
@@ -141,6 +151,7 @@ impl Config {
                     tls,
                     backend_auth,
                     log_bodies,
+                    expose_degradation_warnings,
                     openai_api_format,
                 }
             }
@@ -178,6 +189,7 @@ impl Config {
                     tls,
                     backend_auth: BackendAuth::AzureApiKey(api_key),
                     log_bodies,
+                    expose_degradation_warnings,
                     openai_api_format: OpenAIApiFormat::Chat,
                 }
             }
@@ -216,6 +228,7 @@ impl Config {
                     tls,
                     backend_auth,
                     log_bodies,
+                    expose_degradation_warnings,
                     openai_api_format: OpenAIApiFormat::Chat,
                 }
             }
@@ -244,6 +257,7 @@ impl Config {
                     tls,
                     backend_auth,
                     log_bodies,
+                    expose_degradation_warnings,
                     openai_api_format: OpenAIApiFormat::Chat,
                 }
             }
@@ -270,6 +284,7 @@ impl Config {
                     tls,
                     backend_auth: BackendAuth::BearerToken(api_key),
                     log_bodies,
+                    expose_degradation_warnings,
                     openai_api_format: OpenAIApiFormat::Chat,
                 }
             }
@@ -302,6 +317,7 @@ impl Config {
                     tls,
                     backend_auth: BackendAuth::BearerToken(String::new()),
                     log_bodies,
+                    expose_degradation_warnings,
                     openai_api_format: OpenAIApiFormat::Chat,
                 }
             }
