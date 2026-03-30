@@ -471,6 +471,7 @@ async fn chat_completions_stream(
             let log_backend_name = state.backend_name.clone();
             let model_for_translator = original_model.clone();
             let cost_model = mapped_model.clone();
+            let stream_timeout_secs = state.stream_timeout_secs;
             let _permit = concurrency_permit;
 
             tokio::spawn(async move {
@@ -485,53 +486,56 @@ async fn chat_completions_stream(
                 let mut byte_stream = resp.bytes_stream();
                 let mut buffer = BytesMut::new();
                 let mut search_from: usize = 0;
+                let mut timed_out = false;
 
-                while let Some(chunk_result) = byte_stream.next().await {
-                    let bytes = match chunk_result {
-                        Ok(b) => b,
-                        Err(e) => {
-                            tracing::error!("stream read error: {e}");
+                let stream_loop = async {
+                    while let Some(chunk_result) = byte_stream.next().await {
+                        let bytes = match chunk_result {
+                            Ok(b) => b,
+                            Err(e) => {
+                                tracing::error!("stream read error: {e}");
+                                metrics.record_error();
+                                metrics.record_stream_failed();
+                                return;
+                            }
+                        };
+                        buffer.extend_from_slice(&bytes);
+
+                        if buffer.len() > MAX_SSE_BUFFER_SIZE {
+                            tracing::error!("SSE buffer exceeded maximum size");
                             metrics.record_error();
                             metrics.record_stream_failed();
-                            break;
+                            return;
                         }
-                    };
-                    buffer.extend_from_slice(&bytes);
 
-                    if buffer.len() > MAX_SSE_BUFFER_SIZE {
-                        tracing::error!("SSE buffer exceeded maximum size");
-                        metrics.record_error();
-                        metrics.record_stream_failed();
-                        break;
-                    }
-
-                    while let Some((pos, delim_len)) = find_double_newline(&buffer, search_from) {
-                        if let Ok(frame_str) = std::str::from_utf8(&buffer[..pos]) {
-                            for line in frame_str.lines() {
-                                let line = line.trim();
-                                if let Some(json_str) = line.strip_prefix("data: ") {
-                                    if json_str == "[DONE]" {
-                                        // Emit [DONE] for OpenAI clients
-                                        let _ = tx.send(Ok("data: [DONE]\n\n".to_string())).await;
-                                        continue;
-                                    }
-                                    // Parse OpenAI chunk, translate to Anthropic events,
-                                    // then reverse-translate to OpenAI chunks
-                                    if let Ok(chunk) =
-                                        serde_json::from_str::<openai::ChatCompletionChunk>(
-                                            json_str,
-                                        )
-                                    {
-                                        let anthropic_events =
-                                            stream_translator.process_chunk(&chunk);
-                                        for event in &anthropic_events {
-                                            let oai_chunks = translator.process_event(event);
-                                            for oai_chunk in &oai_chunks {
-                                                if let Ok(json) = serde_json::to_string(oai_chunk) {
-                                                    let sse_line = format!("data: {}\n\n", json);
-                                                    if tx.send(Ok(sse_line)).await.is_err() {
-                                                        metrics.record_stream_client_disconnected();
-                                                        return; // Client disconnected
+                        while let Some((pos, delim_len)) = find_double_newline(&buffer, search_from) {
+                            if let Ok(frame_str) = std::str::from_utf8(&buffer[..pos]) {
+                                for line in frame_str.lines() {
+                                    let line = line.trim();
+                                    if let Some(json_str) = line.strip_prefix("data: ") {
+                                        if json_str == "[DONE]" {
+                                            // Emit [DONE] for OpenAI clients
+                                            let _ = tx.send(Ok("data: [DONE]\n\n".to_string())).await;
+                                            continue;
+                                        }
+                                        // Parse OpenAI chunk, translate to Anthropic events,
+                                        // then reverse-translate to OpenAI chunks
+                                        if let Ok(chunk) =
+                                            serde_json::from_str::<openai::ChatCompletionChunk>(
+                                                json_str,
+                                            )
+                                        {
+                                            let anthropic_events =
+                                                stream_translator.process_chunk(&chunk);
+                                            for event in &anthropic_events {
+                                                let oai_chunks = translator.process_event(event);
+                                                for oai_chunk in &oai_chunks {
+                                                    if let Ok(json) = serde_json::to_string(oai_chunk) {
+                                                        let sse_line = format!("data: {}\n\n", json);
+                                                        if tx.send(Ok(sse_line)).await.is_err() {
+                                                            metrics.record_stream_client_disconnected();
+                                                            return; // Client disconnected
+                                                        }
                                                     }
                                                 }
                                             }
@@ -539,11 +543,51 @@ async fn chat_completions_stream(
                                     }
                                 }
                             }
+                            let _ = buffer.split_to(pos + delim_len);
+                            search_from = 0;
                         }
-                        let _ = buffer.split_to(pos + delim_len);
-                        search_from = 0;
+                        search_from = buffer.len().saturating_sub(3);
                     }
-                    search_from = buffer.len().saturating_sub(3);
+                };
+
+                if stream_timeout_secs > 0 {
+                    match tokio::time::timeout(
+                        std::time::Duration::from_secs(stream_timeout_secs),
+                        stream_loop,
+                    )
+                    .await
+                    {
+                        Ok(()) => {}
+                        Err(_) => {
+                            tracing::warn!(
+                                timeout_secs = stream_timeout_secs,
+                                "chat_completions streaming response exceeded wall-clock timeout"
+                            );
+                            metrics.record_error();
+                            metrics.record_stream_failed();
+                            timed_out = true;
+                        }
+                    }
+                } else {
+                    stream_loop.await;
+                }
+
+                if timed_out {
+                    // Log and exit without emitting finish events on timeout.
+                    log_request(
+                        &log_shared,
+                        ctx.log_entry_with_attribution(
+                            &log_backend_name,
+                            Some(mapped_model),
+                            504,
+                            None,
+                            true,
+                            Some("stream timeout".into()),
+                            &vk_ctx,
+                            None,
+                        ),
+                    );
+                    return;
                 }
 
                 // Emit any remaining finish events
