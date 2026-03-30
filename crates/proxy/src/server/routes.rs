@@ -522,7 +522,7 @@ async fn health() -> impl IntoResponse {
 /// Convert a BackendError into an Anthropic error Response.
 pub(super) fn backend_error_to_response(error: BackendError) -> Response {
     if let Some((message, status)) = error.api_error_details() {
-        let anthropic_err = mapping::errors_map::status_to_anthropic_error(status, message, None);
+        let anthropic_err = mapping::errors_map::status_to_anthropic_error(status, &message, None);
         let http_status = StatusCode::from_u16(
             mapping::errors_map::anthropic_error_type_to_status(&anthropic_err.error.error_type),
         )

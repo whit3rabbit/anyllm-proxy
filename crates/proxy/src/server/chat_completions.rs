@@ -45,7 +45,7 @@ fn backend_error_to_openai_response(error: BackendError) -> Response {
             "invalid_request_error"
         };
         let http_status = StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
-        return openai_error_response(message, error_type, http_status);
+        return openai_error_response(&message, error_type, http_status);
     }
     tracing::error!("backend client error: {error}");
     openai_error_response(

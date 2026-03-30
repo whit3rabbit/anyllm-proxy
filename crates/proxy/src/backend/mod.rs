@@ -115,10 +115,19 @@ impl BackendError {
 
     /// Extract the upstream error message and HTTP status for API errors.
     /// Returns None for transport/deserialization errors.
-    pub fn api_error_details(&self) -> Option<(&str, u16)> {
+    pub fn api_error_details(&self) -> Option<(String, u16)> {
         match self {
             Self::OpenAI(OpenAIClientError::ApiError { status, error }) => {
-                Some((&error.error.message, *status))
+                Some((error.error.message.clone(), *status))
+            }
+            Self::Anthropic(AnthropicClientError::ApiError { status, body }) => {
+                Some((String::from_utf8_lossy(body).into_owned(), *status))
+            }
+            Self::Bedrock(BedrockClientError::ApiError { status, body }) => {
+                Some((String::from_utf8_lossy(body).into_owned(), *status))
+            }
+            Self::Gemini(GeminiClientError::ApiError { status, body }) => {
+                Some((body.clone(), *status))
             }
             _ => None,
         }
@@ -157,6 +166,64 @@ impl From<BedrockClientError> for BackendError {
 impl From<GeminiClientError> for BackendError {
     fn from(e: GeminiClientError) -> Self {
         Self::Gemini(e)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn api_error_details_anthropic_returns_message() {
+        let err = BackendError::Anthropic(AnthropicClientError::ApiError {
+            status: 429,
+            body: bytes::Bytes::from_static(b"rate limit exceeded"),
+        });
+        let details = err.api_error_details();
+        assert!(details.is_some(), "Anthropic ApiError must return details");
+        let (msg, status) = details.unwrap();
+        assert_eq!(status, 429);
+        assert!(msg.contains("rate limit"), "message should contain upstream body");
+    }
+
+    #[test]
+    fn api_error_details_bedrock_returns_message() {
+        let err = BackendError::Bedrock(BedrockClientError::ApiError {
+            status: 403,
+            body: bytes::Bytes::from_static(b"access denied"),
+        });
+        let details = err.api_error_details();
+        assert!(details.is_some());
+        let (msg, status) = details.unwrap();
+        assert_eq!(status, 403);
+        assert!(msg.contains("access denied"));
+    }
+
+    #[test]
+    fn api_error_details_gemini_returns_message() {
+        let err = BackendError::Gemini(GeminiClientError::ApiError {
+            status: 400,
+            body: "bad request from gemini".to_string(),
+        });
+        let details = err.api_error_details();
+        assert!(details.is_some());
+        let (msg, status) = details.unwrap();
+        assert_eq!(status, 400);
+        assert!(msg.contains("gemini"));
+    }
+
+    #[test]
+    fn api_error_details_transport_returns_none() {
+        let err = BackendError::Anthropic(AnthropicClientError::Transport("timeout".into()));
+        assert!(err.api_error_details().is_none());
+    }
+
+    #[test]
+    fn api_error_details_openai_non_api_error_returns_none() {
+        // Non-ApiError variants on any backend return None.
+        // Use Bedrock::Signing since OpenAIClientError::Request requires a live reqwest::Error.
+        let err = BackendError::Bedrock(BedrockClientError::Signing("bad key".into()));
+        assert!(err.api_error_details().is_none());
     }
 }
 
