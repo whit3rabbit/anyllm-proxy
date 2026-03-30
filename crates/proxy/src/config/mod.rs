@@ -1,6 +1,7 @@
 pub mod env_aliases;
 pub mod litellm;
 pub mod model_router;
+pub mod simple;
 mod tls;
 mod url_validation;
 
@@ -506,18 +507,44 @@ impl MultiConfig {
     /// Load configuration.
     ///
     /// Detection order:
-    /// 1. `PROXY_CONFIG` with `.yaml`/`.yml` extension: parse as LiteLLM config
+    /// 1. `PROXY_CONFIG` with `.yaml`/`.yml` extension:
+    ///    - If root `models:` key is present: simple native format (`simple::parse_simple_yaml`)
+    ///    - Otherwise (`model_list:` key): LiteLLM-compatible format (`litellm::parse_litellm_yaml`)
     /// 2. `PROXY_CONFIG` with any other extension: parse as TOML
     /// 3. No `PROXY_CONFIG`: env-var-based single-backend config
     ///
-    /// The model router is only set for LiteLLM configs (model_list routing).
+    /// The model router is set for both YAML config formats (simple and LiteLLM).
     /// `litellm_master_key` is returned (not applied) so the caller can
     /// consolidate all `set_var` calls into a single pre-runtime block.
     pub fn load() -> LoadResult {
         if let Ok(path) = std::env::var("PROXY_CONFIG") {
             if path.ends_with(".yaml") || path.ends_with(".yml") {
                 let yaml = std::fs::read_to_string(&path)
-                    .unwrap_or_else(|e| panic!("failed to read LiteLLM config '{path}': {e}"));
+                    .unwrap_or_else(|e| panic!("failed to read config '{path}': {e}"));
+
+                // Detect format: "models:" key = simple native format, "model_list:" = LiteLLM.
+                let probe: serde_yaml::Value = serde_yaml::from_str(&yaml)
+                    .unwrap_or_else(|e| panic!("invalid YAML in '{path}': {e}"));
+
+                if probe.get("models").is_some() {
+                    // Simple native format.
+                    let parsed = simple::parse_simple_yaml(&yaml);
+                    return LoadResult {
+                        multi_config: parsed.multi_config,
+                        model_router: Some(Arc::new(std::sync::RwLock::new(parsed.router))),
+                        litellm_master_key: None,
+                    };
+                }
+
+                // LiteLLM format requires model_list: key.
+                if probe.get("model_list").is_none() {
+                    panic!(
+                        "config file '{path}' must contain either a top-level 'models:' key \
+                         (simple format) or 'model_list:' key (LiteLLM format)"
+                    );
+                }
+
+                // LiteLLM format (model_list: + litellm_params:).
                 let parsed = litellm::parse_litellm_yaml(&yaml);
 
                 // Wire up webhook callbacks and named integrations from litellm_settings.callbacks.
