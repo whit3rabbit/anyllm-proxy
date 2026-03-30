@@ -44,6 +44,7 @@ fn azure_test_config() -> Config {
         tls: config::TlsConfig::default(),
         backend_auth: config::BackendAuth::AzureApiKey(api_key),
         log_bodies: true,
+        expose_degradation_warnings: false,
         openai_api_format: config::OpenAIApiFormat::Chat,
     }
 }

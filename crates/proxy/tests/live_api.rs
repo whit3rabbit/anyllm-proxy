@@ -29,6 +29,7 @@ fn test_config() -> Config {
         tls: config::TlsConfig::default(),
         backend_auth: config::BackendAuth::BearerToken(api_key),
         log_bodies: false,
+        expose_degradation_warnings: false,
         openai_api_format: config::OpenAIApiFormat::Chat,
     }
 }
@@ -277,6 +278,7 @@ async fn live_openai_error() {
         tls: config::TlsConfig::default(),
         backend_auth: config::BackendAuth::BearerToken(bad_key.to_string()),
         log_bodies: false,
+        expose_degradation_warnings: false,
         openai_api_format: config::OpenAIApiFormat::Chat,
     };
 

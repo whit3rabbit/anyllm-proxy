@@ -461,6 +461,7 @@ mod tests {
             tls: TlsConfig::default(),
             backend_auth: BackendAuth::BearerToken("test".into()),
             log_bodies: false,
+            expose_degradation_warnings: false,
             openai_api_format: OpenAIApiFormat::Chat,
         };
         // Should not panic
@@ -482,6 +483,7 @@ mod tests {
             tls: TlsConfig::default(),
             backend_auth: BackendAuth::GoogleApiKey("test-key".into()),
             log_bodies: false,
+            expose_degradation_warnings: false,
             openai_api_format: OpenAIApiFormat::Chat,
         };
         let client = OpenAIClient::new(&config);
@@ -506,6 +508,7 @@ mod tests {
             tls: TlsConfig::default(),
             backend_auth: BackendAuth::BearerToken("test".into()),
             log_bodies: false,
+            expose_degradation_warnings: false,
             openai_api_format: OpenAIApiFormat::Chat,
         };
         let client = OpenAIClient::new(&config);
@@ -530,6 +533,7 @@ mod tests {
             tls: TlsConfig::default(),
             backend_auth: BackendAuth::GoogleApiKey("test-key".into()),
             log_bodies: false,
+            expose_degradation_warnings: false,
             openai_api_format: OpenAIApiFormat::Chat,
         };
         let client = OpenAIClient::new(&config);
@@ -556,6 +560,7 @@ mod tests {
             tls: TlsConfig::default(),
             backend_auth: BackendAuth::GoogleApiKey("test-gemini-key".into()),
             log_bodies: false,
+            expose_degradation_warnings: false,
             openai_api_format: OpenAIApiFormat::Chat,
         };
         let client = OpenAIClient::new(&config);
@@ -580,6 +585,7 @@ mod tests {
             tls: TlsConfig::default(),
             backend_auth: BackendAuth::AzureApiKey("test-azure-key".into()),
             log_bodies: false,
+            expose_degradation_warnings: false,
             openai_api_format: OpenAIApiFormat::Chat,
         };
         let client = OpenAIClient::new(&config);
