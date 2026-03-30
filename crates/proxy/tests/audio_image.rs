@@ -20,6 +20,7 @@ fn openai_config_with_base(base_url: &str) -> Config {
         tls: config::TlsConfig::default(),
         backend_auth: BackendAuth::BearerToken("test-key".into()),
         log_bodies: false,
+        expose_degradation_warnings: false,
         openai_api_format: OpenAIApiFormat::Chat,
     }
 }
@@ -37,6 +38,7 @@ fn anthropic_config() -> Config {
         tls: config::TlsConfig::default(),
         backend_auth: BackendAuth::BearerToken("test-key".into()),
         log_bodies: false,
+        expose_degradation_warnings: false,
         openai_api_format: OpenAIApiFormat::Chat,
     }
 }

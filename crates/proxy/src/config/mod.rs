@@ -68,6 +68,10 @@ pub struct Config {
     pub backend_auth: BackendAuth,
     /// Enable request/response body logging at debug level.
     pub log_bodies: bool,
+    /// Expose `x-anyllm-degradation` response header when features are silently dropped.
+    /// Defaults to false (simple mode). Enable with ANYLLM_DEGRADATION_WARNINGS=true
+    /// or automatically when PROXY_CONFIG is set.
+    pub expose_degradation_warnings: bool,
     /// Which OpenAI API format to use (only relevant when BACKEND=openai).
     pub openai_api_format: OpenAIApiFormat,
 }
@@ -111,6 +115,12 @@ impl Config {
         let log_bodies = std::env::var("LOG_BODIES")
             .map(|v| v == "true" || v == "1")
             .unwrap_or(false);
+        let expose_degradation_warnings = std::env::var("ANYLLM_DEGRADATION_WARNINGS")
+            .map(|v| v == "true" || v == "1")
+            .unwrap_or(false);
+        // Config file presence implies advanced mode — enable degradation warnings.
+        let expose_degradation_warnings =
+            expose_degradation_warnings || std::env::var("PROXY_CONFIG").is_ok();
 
         match backend {
             BackendKind::OpenAI => {
@@ -141,6 +151,7 @@ impl Config {
                     tls,
                     backend_auth,
                     log_bodies,
+                    expose_degradation_warnings,
                     openai_api_format,
                 }
             }
@@ -178,6 +189,7 @@ impl Config {
                     tls,
                     backend_auth: BackendAuth::AzureApiKey(api_key),
                     log_bodies,
+                    expose_degradation_warnings,
                     openai_api_format: OpenAIApiFormat::Chat,
                 }
             }
@@ -216,6 +228,7 @@ impl Config {
                     tls,
                     backend_auth,
                     log_bodies,
+                    expose_degradation_warnings,
                     openai_api_format: OpenAIApiFormat::Chat,
                 }
             }
@@ -244,6 +257,7 @@ impl Config {
                     tls,
                     backend_auth,
                     log_bodies,
+                    expose_degradation_warnings,
                     openai_api_format: OpenAIApiFormat::Chat,
                 }
             }
@@ -270,6 +284,7 @@ impl Config {
                     tls,
                     backend_auth: BackendAuth::BearerToken(api_key),
                     log_bodies,
+                    expose_degradation_warnings,
                     openai_api_format: OpenAIApiFormat::Chat,
                 }
             }
@@ -302,6 +317,7 @@ impl Config {
                     tls,
                     backend_auth: BackendAuth::BearerToken(String::new()),
                     log_bodies,
+                    expose_degradation_warnings,
                     openai_api_format: OpenAIApiFormat::Chat,
                 }
             }
@@ -433,6 +449,8 @@ pub struct MultiConfig {
     pub default_backend: String,
     /// Ordered map: key = route prefix (e.g. "openai"), value = backend config.
     pub backends: IndexMap<String, BackendConfig>,
+    /// See Config::expose_degradation_warnings.
+    pub expose_degradation_warnings: bool,
 }
 
 // -- TOML deserialization structs (separate from runtime types) --
@@ -442,6 +460,8 @@ struct TomlConfig {
     listen_port: Option<u16>,
     log_bodies: Option<bool>,
     default_backend: Option<String>,
+    #[serde(default)]
+    expose_degradation_warnings: bool,
     #[serde(default)]
     backends: IndexMap<String, TomlBackendConfig>,
 }
@@ -520,8 +540,11 @@ impl MultiConfig {
                     tracing::info!("callbacks configured from litellm_settings");
                 }
 
+                let mut mc = parsed.multi_config;
+                // PROXY_CONFIG is set (we're in this branch): auto-enable warnings.
+                mc.expose_degradation_warnings = true;
                 return LoadResult {
-                    multi_config: parsed.multi_config,
+                    multi_config: mc,
                     model_router: Some(Arc::new(std::sync::RwLock::new(parsed.router))),
                     litellm_master_key: parsed.master_key,
                 };
@@ -599,6 +622,7 @@ impl MultiConfig {
             log_bodies: config.log_bodies,
             default_backend: name.to_string(),
             backends,
+            expose_degradation_warnings: config.expose_degradation_warnings,
         }
     }
 
@@ -639,11 +663,19 @@ impl MultiConfig {
             backends.insert(name.clone(), bc);
         }
 
+        // OR-in: TOML field || env var || PROXY_CONFIG presence (auto-enable).
+        let expose_degradation_warnings = raw.expose_degradation_warnings
+            || std::env::var("ANYLLM_DEGRADATION_WARNINGS")
+                .map(|v| v == "true" || v == "1")
+                .unwrap_or(false)
+            || std::env::var("PROXY_CONFIG").is_ok();
+
         Self {
             listen_port,
             log_bodies,
             default_backend,
             backends,
+            expose_degradation_warnings,
         }
     }
 

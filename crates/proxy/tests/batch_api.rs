@@ -19,6 +19,7 @@ fn test_config() -> Config {
         tls: config::TlsConfig::default(),
         backend_auth: config::BackendAuth::BearerToken("test-key".into()),
         log_bodies: false,
+        expose_degradation_warnings: false,
         openai_api_format: config::OpenAIApiFormat::Chat,
     }
 }
@@ -193,6 +194,7 @@ async fn unsupported_backend_returns_501() {
         tls: config::TlsConfig::default(),
         backend_auth: config::BackendAuth::BearerToken("test-key".into()),
         log_bodies: false,
+        expose_degradation_warnings: false,
         openai_api_format: config::OpenAIApiFormat::Chat,
     };
 

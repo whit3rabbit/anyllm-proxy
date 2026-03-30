@@ -1,7 +1,8 @@
 // Admin server routes. Served on a separate localhost-only listener.
 
-use crate::admin::auth::{extract_csrf_cookie, generate_csrf_token, validate_admin_token,
-    validate_csrf_tokens};
+use crate::admin::auth::{
+    extract_csrf_cookie, generate_csrf_token, validate_admin_token, validate_csrf_tokens,
+};
 use crate::admin::state::SharedState;
 use crate::admin::ws::ws_handler;
 use axum::{
@@ -259,6 +260,10 @@ pub fn admin_router(shared: SharedState, token: Arc<String>) -> Router {
         )
         .route("/admin/api/env", get(get_env))
         .route("/admin/api/metrics", get(get_metrics))
+        .route(
+            "/admin/api/observability/overview",
+            get(get_observability_overview),
+        )
         .route("/admin/api/requests", get(get_requests))
         .route("/admin/api/requests/{id}", get(get_request_by_id))
         .route("/admin/api/backends", get(get_backends))
@@ -745,6 +750,115 @@ async fn get_metrics(State(shared): State<SharedState>) -> Json<serde_json::Valu
         "latency_p99_ms": p99,
         "error_rate": aggregate.error_rate(),
     }))
+}
+
+#[derive(serde::Deserialize)]
+struct ObservabilityQuery {
+    hours: Option<u32>,
+    backend: Option<String>,
+    key_id: Option<i64>,
+    timeline_limit: Option<u32>,
+    failure_limit: Option<u32>,
+}
+
+/// GET /admin/api/observability/overview -- request rollups for the operator dashboard.
+async fn get_observability_overview(
+    State(shared): State<SharedState>,
+    Query(params): Query<ObservabilityQuery>,
+) -> Json<serde_json::Value> {
+    let hours = params.hours.unwrap_or(6).clamp(1, 168);
+    let timeline_limit = params.timeline_limit.unwrap_or(40).clamp(10, 200);
+    let failure_limit = params.failure_limit.unwrap_or(12).clamp(1, 100);
+    let backend = params.backend.filter(|value| !value.is_empty());
+    let key_id = params.key_id;
+
+    let now_epoch = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let since = crate::admin::db::epoch_to_iso8601(now_epoch.saturating_sub(hours as u64 * 3600));
+    let until = crate::admin::db::now_iso8601();
+    let until_display = until.clone();
+
+    match crate::admin::state::with_db(&shared.db, move |conn| {
+        let series = crate::admin::db::query_request_timeseries(
+            conn,
+            &since,
+            Some(&until),
+            backend.as_deref(),
+            key_id,
+        )?;
+        let timeline = crate::admin::db::query_request_timeline(
+            conn,
+            &since,
+            Some(&until),
+            backend.as_deref(),
+            key_id,
+            timeline_limit,
+        )?;
+        let failures = crate::admin::db::query_failure_breakdown(
+            conn,
+            &since,
+            Some(&until),
+            backend.as_deref(),
+            key_id,
+            failure_limit,
+        )?;
+        Ok::<_, rusqlite::Error>((series, timeline, failures))
+    })
+    .await
+    {
+        Some(Ok((series, timeline, failures))) => {
+            let totals = series.iter().fold(
+                (0u64, 0u64, 0u64, 0u64, 0.0f64),
+                |(requests_total, requests_error, input_tokens, output_tokens, cost_usd),
+                 bucket| {
+                    (
+                        requests_total + bucket.requests_total,
+                        requests_error + bucket.requests_error,
+                        input_tokens + bucket.input_tokens,
+                        output_tokens + bucket.output_tokens,
+                        cost_usd + bucket.cost_usd,
+                    )
+                },
+            );
+
+            Json(serde_json::json!({
+                "window_hours": hours,
+                "generated_at": until_display,
+                "totals": {
+                    "requests_total": totals.0,
+                    "requests_error": totals.1,
+                    "input_tokens": totals.2,
+                    "output_tokens": totals.3,
+                    "cost_usd": totals.4,
+                    "error_rate": if totals.0 == 0 {
+                        0.0
+                    } else {
+                        totals.1 as f64 / totals.0 as f64
+                    },
+                },
+                "series": series,
+                "timeline": timeline,
+                "failures": failures,
+            }))
+        }
+        Some(Err(e)) => {
+            tracing::error!(error = %e, "query observability overview failed");
+            Json(serde_json::json!({
+                "error": "internal database error",
+                "series": [],
+                "timeline": [],
+                "failures": [],
+            }))
+        }
+        None => Json(serde_json::json!({
+            "error": "task panicked",
+            "series": [],
+            "timeline": [],
+            "failures": [],
+        })),
+    }
 }
 
 /// Compute p50, p95, p99 latency from the last 5 minutes of request log.
@@ -1578,7 +1692,10 @@ mod tests {
         // With rpm=2, the first 2 requests must pass, the 3rd must fail.
         assert!(check_admin_rate_limit_with_rpm(ip, 2));
         assert!(check_admin_rate_limit_with_rpm(ip, 2));
-        assert!(!check_admin_rate_limit_with_rpm(ip, 2), "3rd request must be blocked when rpm=2");
+        assert!(
+            !check_admin_rate_limit_with_rpm(ip, 2),
+            "3rd request must be blocked when rpm=2"
+        );
     }
 
     /// POST to a protected admin route without CSRF token returns 403.
@@ -1691,14 +1808,26 @@ mod tests {
     #[test]
     fn aws_access_key_id_uses_secret_pattern() {
         // The secret() closure masks the value; this test verifies the masking logic.
-        let mask = |v: &str| if !v.is_empty() { "***REDACTED***".to_string() } else { "<unset>".to_string() };
+        let mask = |v: &str| {
+            if !v.is_empty() {
+                "***REDACTED***".to_string()
+            } else {
+                "<unset>".to_string()
+            }
+        };
         assert_eq!(mask("AKIAIOSFODNN7EXAMPLE"), "***REDACTED***");
         assert_eq!(mask(""), "<unset>");
     }
 
     #[test]
     fn google_access_token_uses_secret_pattern() {
-        let mask = |v: &str| if !v.is_empty() { "***REDACTED***".to_string() } else { "<unset>".to_string() };
+        let mask = |v: &str| {
+            if !v.is_empty() {
+                "***REDACTED***".to_string()
+            } else {
+                "<unset>".to_string()
+            }
+        };
         assert_eq!(mask("ya29.someoauthtoken"), "***REDACTED***");
     }
 }

@@ -30,6 +30,18 @@ anyllm_proxy
 # or: anyllm_proxy --env-file ~/configs/ollama.env
 ```
 
+### Simple mode vs. advanced mode
+
+| | Simple mode | Advanced mode |
+|---|---|---|
+| **Config** | 3 env vars or `.anyllm.env` | `config.toml` / `config.yaml` |
+| **Routing** | Single backend | Multi-backend with path prefixes |
+| **Admin UI** | Not started | `--webui` flag |
+| **Translation warnings** | Silent (never exposed to clients) | `x-anyllm-degradation` header active |
+| **How to enable** | Default | Pass `--webui`, set `PROXY_CONFIG`, or `ANYLLM_DEGRADATION_WARNINGS=true` |
+
+Most users never leave simple mode. Start there.
+
 Point Claude Code at the proxy:
 
 ```bash
@@ -67,6 +79,8 @@ DISABLE_ADMIN=1 anyllm_proxy --webui   # admin will NOT start
 ```
 
 Additional admin env vars: `ADMIN_DB_PATH` (SQLite file, default: `admin.db`), `ADMIN_TOKEN_PATH` (where the generated token is written, default: `.admin_token`), `ADMIN_LOG_RETENTION_DAYS` (request log retention, default: `7`).
+
+## Advanced Mode
 
 ### Multiple backends on one proxy (recommended)
 
@@ -276,6 +290,11 @@ PROXY_CONFIG=config.toml anyllm_proxy --webui
 ```
 
 Additional per-backend fields: `api_format = "chat"` (OpenAI only; `chat` or `responses`), `omit_stream_options = true` (strip `stream_options` for backends that reject it). Top-level `log_bodies = true` enables request/response body logging. Any config value can use `env:VAR_NAME` to read from the environment at startup (e.g., `api_key = "env:OPENAI_API_KEY"`).
+
+Key environment variables for advanced mode:
+
+- `LOG_BODIES`: Enable request/response body logging at debug level (`true` or `1`, default: disabled).
+- `ANYLLM_DEGRADATION_WARNINGS`: Set to `true` or `1` to expose `x-anyllm-degradation` response header when translation silently drops features (default: disabled; auto-enabled when `PROXY_CONFIG` is set).
 
 All backends are live at once on a single port. The path prefix matches the backend name in the config:
 

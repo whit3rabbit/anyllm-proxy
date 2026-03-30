@@ -168,7 +168,9 @@ pub(crate) async fn chat_completions(
                 .header("x-anyllm-cache", "hit")
                 .body(axum::body::Body::from(entry.response_body))
                 .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response());
-            inject_degradation_header(response.headers_mut(), &warnings);
+            if state.expose_degradation_warnings {
+                inject_degradation_header(response.headers_mut(), &warnings);
+            }
             return response;
         }
     }
@@ -272,7 +274,9 @@ pub(crate) async fn chat_completions(
                     let cache_hv = super::routes::cache_header_value(bypass_cache);
                     let mut response = (StatusCode::OK, Json(oai_response)).into_response();
                     rate_limits.inject_anthropic_response_headers(response.headers_mut());
-                    inject_degradation_header(response.headers_mut(), &warnings);
+                    if state.expose_degradation_warnings {
+                        inject_degradation_header(response.headers_mut(), &warnings);
+                    }
                     response.headers_mut().insert("x-anyllm-cache", cache_hv);
                     response
                 }
@@ -355,7 +359,9 @@ pub(crate) async fn chat_completions(
                     let cache_hv = super::routes::cache_header_value(bypass_cache);
                     let mut response = (StatusCode::OK, Json(oai_response)).into_response();
                     rate_limits.inject_anthropic_response_headers(response.headers_mut());
-                    inject_degradation_header(response.headers_mut(), &warnings);
+                    if state.expose_degradation_warnings {
+                        inject_degradation_header(response.headers_mut(), &warnings);
+                    }
                     response.headers_mut().insert("x-anyllm-cache", cache_hv);
                     response
                 }
@@ -648,7 +654,9 @@ async fn chat_completions_stream(
                 .body(body)
                 .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response());
             rate_limits.inject_anthropic_response_headers(response.headers_mut());
-            inject_degradation_header(response.headers_mut(), &warnings);
+            if state.expose_degradation_warnings {
+                inject_degradation_header(response.headers_mut(), &warnings);
+            }
             response
         }
         Err(e) => {
