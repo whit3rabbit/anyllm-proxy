@@ -13,7 +13,7 @@ default = ["ssrf-protection"]
 ssrf-protection = []
 
 [dependencies]
-anyllm_translate = { path = "../translator", version = "0.1.0" }
+anyllm_translate = { path = "../translator", version = "0.2.0" }
 reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "native-tls", "http2"] }
 tokio = { version = "1", features = ["rt", "sync", "time"] }
 serde = { version = "1", features = ["derive"] }
