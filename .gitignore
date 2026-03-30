@@ -35,6 +35,7 @@ Thumbs.db
 # Tool config
 .claude/
 .cook/
+.worktrees/
 
 # Script caches and venv
 scripts/.cache/
