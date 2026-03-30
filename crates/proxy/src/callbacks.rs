@@ -4,7 +4,9 @@
 // Fire-and-forget: spawned tasks, no impact on request latency.
 
 use crate::admin::state::RequestLogEntry;
+use crate::config::validate_base_url;
 use crate::integrations::NamedIntegration;
+use anyllm_client::http::{build_http_client, HttpClientConfig};
 use std::sync::Arc;
 
 /// Configuration for webhook callbacks.
@@ -27,29 +29,34 @@ impl CallbackConfig {
 
     /// Create a CallbackConfig with both webhook URLs and named integrations.
     /// Returns None only when both valid_urls and named are empty.
+    /// URLs pointing to private/loopback/metadata IP ranges are rejected to prevent SSRF.
     pub fn with_named(urls: Vec<String>, named: Vec<NamedIntegration>) -> Option<Arc<Self>> {
         let valid_urls: Vec<String> = urls
             .into_iter()
             .filter(|u| {
-                if u.starts_with("http://") || u.starts_with("https://") {
-                    true
-                } else {
+                if !u.starts_with("http://") && !u.starts_with("https://") {
                     tracing::warn!(
                         callback = %u,
                         "ignoring non-URL callback (only http/https webhook URLs are supported)"
                     );
-                    false
+                    return false;
                 }
+                // Reject private/loopback/metadata targets to prevent SSRF.
+                if let Err(reason) = validate_base_url(u) {
+                    tracing::warn!(
+                        url = %u,
+                        reason = %reason,
+                        "ignoring webhook URL: SSRF risk (private/loopback/metadata target)"
+                    );
+                    return false;
+                }
+                true
             })
             .collect();
 
-        // Warn on plaintext HTTP URLs that aren't localhost (security risk in production).
+        // Warn on plaintext HTTP (all private/loopback URLs already rejected above).
         for url in &valid_urls {
-            if url.starts_with("http://")
-                && !url.starts_with("http://localhost")
-                && !url.starts_with("http://127.0.0.1")
-                && !url.starts_with("http://[::1]")
-            {
+            if url.starts_with("http://") {
                 tracing::warn!(
                     url = %url,
                     "webhook URL uses plaintext HTTP; request metadata (model, tokens, latency) \
@@ -62,10 +69,12 @@ impl CallbackConfig {
             return None;
         }
 
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(5))
-            .build()
-            .expect("callback http client");
+        let client = build_http_client(&HttpClientConfig {
+            ssrf_protection: true,
+            connect_timeout: Some(std::time::Duration::from_secs(5)),
+            read_timeout: Some(std::time::Duration::from_secs(10)),
+            ..Default::default()
+        });
 
         Some(Arc::new(Self {
             urls: valid_urls,
@@ -165,13 +174,27 @@ mod tests {
 
     #[test]
     fn filters_non_url_callbacks() {
+        // Non-URL strings and localhost/private URLs are all filtered.
         let config = CallbackConfig::new(vec![
             "https://example.com/hook".to_string(),
-            "langfuse".to_string(), // not a URL, should be filtered
-            "http://localhost:9999/cb".to_string(),
+            "langfuse".to_string(),            // not a URL, filtered
+            "http://localhost:9999/cb".to_string(), // loopback, rejected (SSRF)
         ]);
         let config = config.unwrap();
-        assert_eq!(config.url_count(), 2);
+        // Only the public HTTPS URL survives.
+        assert_eq!(config.url_count(), 1);
+    }
+
+    #[test]
+    fn rejects_private_and_loopback_webhook_urls() {
+        let config = CallbackConfig::new(vec![
+            "http://169.254.169.254/hook".to_string(), // cloud metadata
+            "http://10.0.0.1/hook".to_string(),        // RFC 1918
+            "http://127.0.0.1:9999/hook".to_string(),  // loopback
+            "http://localhost:8080/hook".to_string(),   // loopback hostname
+        ]);
+        // All URLs are private/loopback; no valid URLs remain.
+        assert!(config.is_none(), "private/loopback webhook URLs must be rejected");
     }
 
     #[test]
@@ -187,18 +210,15 @@ mod tests {
     }
 
     #[test]
-    fn http_urls_accepted_not_rejected() {
-        // Plaintext HTTP URLs are accepted (with a warning), not filtered out.
-        // Localhost variants should not warn but should also be accepted.
+    fn http_plaintext_to_public_host_accepted() {
+        // Plaintext HTTP to a public hostname is accepted (with a warning).
+        // Private/loopback URLs are now rejected.
         let config = CallbackConfig::new(vec![
             "http://external.example.com/hook".to_string(),
-            "http://localhost:9999/cb".to_string(),
-            "http://127.0.0.1:8080/cb".to_string(),
-            "http://[::1]:3000/cb".to_string(),
             "https://secure.example.com/hook".to_string(),
         ]);
         let config = config.unwrap();
-        assert_eq!(config.url_count(), 5);
+        assert_eq!(config.url_count(), 2);
     }
 
     #[test]
