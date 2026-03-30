@@ -83,6 +83,9 @@ pub struct AppState {
     pub concurrency: Arc<Semaphore>,
     /// Strip `stream_options` from streaming requests for local LLM compat.
     pub omit_stream_options: bool,
+    /// When true, set `x-anyllm-degradation` header on responses that silently drop features.
+    /// Mirrors Config::expose_degradation_warnings / MultiConfig::expose_degradation_warnings.
+    pub expose_degradation_warnings: bool,
     /// Optional response cache for non-streaming requests.
     pub cache: Option<Arc<crate::cache::memory::MemoryCache>>,
     /// Model-level router for LiteLLM model_list configs. None for TOML/env configs.
@@ -244,6 +247,7 @@ pub fn app_multi_with_shared(
             backend_name: name.clone(),
             concurrency: Arc::new(Semaphore::new(super::middleware::MAX_CONCURRENT_REQUESTS)),
             omit_stream_options: bc.omit_stream_options,
+            expose_degradation_warnings: config.expose_degradation_warnings,
             cache: Some(response_cache.clone()),
             model_router: model_router.clone(),
             // all_backends is set after the loop (needs all states built first).
@@ -710,7 +714,9 @@ async fn messages(
                 }
                 let mut response = sse.into_response();
                 rate_limits.inject_anthropic_response_headers(response.headers_mut());
-                inject_degradation_header(response.headers_mut(), &warnings);
+                if state.expose_degradation_warnings {
+                    inject_degradation_header(response.headers_mut(), &warnings);
+                }
                 response.headers_mut().insert(
                     "x-anyllm-cache",
                     axum::http::HeaderValue::from_static("bypass"),
@@ -760,7 +766,9 @@ async fn messages(
                 .header("x-anyllm-cache", "hit")
                 .body(axum::body::Body::from(entry.response_body))
                 .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response());
-            inject_degradation_header(response.headers_mut(), &warnings);
+            if state.expose_degradation_warnings {
+                inject_degradation_header(response.headers_mut(), &warnings);
+            }
             return response;
         }
     }
@@ -863,7 +871,9 @@ async fn messages(
                     let cache_hv = cache_header_value(bypass_cache);
                     let mut response = (StatusCode::OK, Json(anthropic_resp)).into_response();
                     rate_limits.inject_anthropic_response_headers(response.headers_mut());
-                    inject_degradation_header(response.headers_mut(), &warnings);
+                    if state.expose_degradation_warnings {
+                        inject_degradation_header(response.headers_mut(), &warnings);
+                    }
                     response.headers_mut().insert("x-anyllm-cache", cache_hv);
                     response
                 }
@@ -950,7 +960,9 @@ async fn messages(
                     let cache_hv = cache_header_value(bypass_cache);
                     let mut response = (StatusCode::OK, Json(anthropic_resp)).into_response();
                     rate_limits.inject_anthropic_response_headers(response.headers_mut());
-                    inject_degradation_header(response.headers_mut(), &warnings);
+                    if state.expose_degradation_warnings {
+                        inject_degradation_header(response.headers_mut(), &warnings);
+                    }
                     response.headers_mut().insert("x-anyllm-cache", cache_hv);
                     response
                 }
