@@ -1235,4 +1235,71 @@ mod tests {
         let usage = translator.usage().expect("usage should be present");
         assert!(usage.cache_read_input_tokens.is_none());
     }
+
+    // Boundary: idx == MAX_TOOL_CALL_INDEX (128) uses `>` not `>=`, so 128 is accepted.
+    #[test]
+    fn tool_call_at_max_index_is_accepted() {
+        let mut translator = StreamingTranslator::new("gpt-4o".into());
+        translator.process_chunk(&role_chunk("c1", "gpt-4o"));
+
+        // idx == 128: 128 > 128 is false, so the chunk is processed.
+        let events = translator.process_chunk(&tool_call_chunk(
+            "c1",
+            "gpt-4o",
+            MAX_TOOL_CALL_INDEX as u32,
+            Some("call_at_max"),
+            Some("my_tool"),
+            Some("{}"),
+        ));
+
+        // Must emit at least a ContentBlockStart for the tool call.
+        let has_tool_start = events.iter().any(|e| {
+            matches!(
+                e,
+                anthropic::StreamEvent::ContentBlockStart {
+                    content_block: anthropic::ContentBlock::ToolUse { .. },
+                    ..
+                }
+            )
+        });
+        assert!(
+            has_tool_start,
+            "expected ContentBlockStart for tool_use at index {MAX_TOOL_CALL_INDEX}, got {events:?}"
+        );
+    }
+
+    // Boundary: idx == MAX_TOOL_CALL_INDEX + 1 (129) satisfies `>`, so it is dropped.
+    #[test]
+    fn tool_call_above_max_index_is_dropped() {
+        let mut translator = StreamingTranslator::new("gpt-4o".into());
+        translator.process_chunk(&role_chunk("c1", "gpt-4o"));
+
+        // idx == 129: 129 > 128 is true, so the chunk is silently skipped.
+        let events = translator.process_chunk(&tool_call_chunk(
+            "c1",
+            "gpt-4o",
+            (MAX_TOOL_CALL_INDEX + 1) as u32,
+            Some("call_over_max"),
+            Some("bad_tool"),
+            Some("{}"),
+        ));
+
+        // No tool-related events should be emitted for this chunk.
+        let has_tool_event = events.iter().any(|e| {
+            matches!(
+                e,
+                anthropic::StreamEvent::ContentBlockStart {
+                    content_block: anthropic::ContentBlock::ToolUse { .. },
+                    ..
+                } | anthropic::StreamEvent::ContentBlockDelta {
+                    delta: anthropic::Delta::InputJsonDelta { .. },
+                    ..
+                }
+            )
+        });
+        assert!(
+            !has_tool_event,
+            "expected no tool events for index > {MAX_TOOL_CALL_INDEX}, got {events:?}"
+        );
+    }
 }
