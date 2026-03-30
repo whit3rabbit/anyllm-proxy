@@ -8,12 +8,14 @@ use anyllm_proxy::admin;
 use anyllm_proxy::config::{BackendAuth, BackendKind, Config, ModelMapping, OpenAIApiFormat};
 use anyllm_proxy::server::routes;
 use axum::body::Body;
+use axum::extract::connect_info::MockConnectInfo;
 use axum::http::Request;
 use axum::routing::post;
 use axum::Router;
 use dashmap::DashMap;
 use reqwest::Client;
 use serde_json::json;
+use std::net::SocketAddr;
 use std::sync::{Arc, OnceLock};
 use tokio::net::TcpListener;
 use tower::ServiceExt;
@@ -73,7 +75,11 @@ fn test_admin_router() -> (Router, admin::state::SharedState) {
     admin::routes::set_admin_rpm(10_000);
     let state = shared_state();
     let token = Arc::new("test-admin-token".to_string());
-    let router = admin::routes::admin_router(state.clone(), token);
+    let router = admin::routes::admin_router(state.clone(), token)
+        // ConnectInfo extractor requires the service to be wrapped with
+        // into_make_service_with_connect_info in production. In tests we use
+        // MockConnectInfo so handlers can extract a fake peer address.
+        .layer(MockConnectInfo(SocketAddr::from(([127, 0, 0, 1], 0))));
     (router, state)
 }
 
@@ -462,7 +468,14 @@ async fn virtual_key_auth_and_revocation_lifecycle() {
     let admin_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let admin_port = admin_listener.local_addr().unwrap().port();
     let admin_url = format!("http://127.0.0.1:{admin_port}");
-    tokio::spawn(async move { axum::serve(admin_listener, admin_app).await.unwrap() });
+    tokio::spawn(async move {
+        axum::serve(
+            admin_listener,
+            admin_app.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .await
+        .unwrap()
+    });
 
     let client = Client::new();
 
@@ -537,7 +550,14 @@ async fn rpm_limit_returns_429_after_exceeded() {
     let admin_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let admin_port = admin_listener.local_addr().unwrap().port();
     let admin_url = format!("http://127.0.0.1:{admin_port}");
-    tokio::spawn(async move { axum::serve(admin_listener, admin_app).await.unwrap() });
+    tokio::spawn(async move {
+        axum::serve(
+            admin_listener,
+            admin_app.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .await
+        .unwrap()
+    });
 
     let client = Client::new();
 
@@ -631,7 +651,14 @@ async fn spawn_test_servers(admin_token: &str) -> (String, String, u16) {
     let admin_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let admin_port = admin_listener.local_addr().unwrap().port();
     let admin_url = format!("http://127.0.0.1:{admin_port}");
-    tokio::spawn(async move { axum::serve(admin_listener, admin_app).await.unwrap() });
+    tokio::spawn(async move {
+        axum::serve(
+            admin_listener,
+            admin_app.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .await
+        .unwrap()
+    });
 
     (proxy_url, admin_url, admin_port)
 }

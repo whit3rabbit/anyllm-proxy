@@ -200,9 +200,24 @@ pub async fn validate_csrf(
 
 /// GET /admin/csrf-token
 ///
-/// Returns a fresh CSRF token as JSON and sets it in a non-httpOnly cookie
-/// so the admin SPA can read it and include it in subsequent POST/PUT/DELETE headers.
-/// This route is public (no auth) so the token can be fetched before login.
+/// Returns a fresh CSRF token as JSON and sets it in a non-HttpOnly cookie.
+/// The admin SPA reads the cookie in JS and includes it as `X-CSRF-Token` on
+/// POST/PUT/DELETE requests (double-submit cookie pattern).
+///
+/// Security architecture note:
+/// This route is intentionally public (no Bearer auth required). The SPA must
+/// fetch a CSRF token to submit the login form itself, so requiring auth here
+/// would be circular. Protection comes from two middleware layers applied to all
+/// admin routes, including this one:
+///   1. `reject_cross_origin`: validates Origin/Host header; only requests
+///      from localhost can reach any admin endpoint.
+///   2. `SameSite=Strict` on the cookie: browsers do not attach the cookie on
+///      cross-site requests, preventing a cross-origin attacker from using a
+///      CSRF token they fetched independently.
+///
+/// Together these make unauthenticated CSRF token fetching safe: an attacker who
+/// can reach this endpoint is already on localhost and has other attack vectors.
+/// If TLS is ever added to the admin server, also add `Secure` to Set-Cookie.
 async fn get_csrf_token() -> axum::response::Response {
     let token = generate_csrf_token();
     let body = serde_json::json!({"csrf_token": token});
@@ -427,6 +442,7 @@ async fn get_config(State(shared): State<SharedState>) -> Json<serde_json::Value
 
 /// PUT /admin/api/config -- update config overrides. Partial JSON body.
 async fn put_config(
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     State(shared): State<SharedState>,
     Json(body): Json<serde_json::Value>,
 ) -> impl IntoResponse {
@@ -602,7 +618,7 @@ async fn put_config(
                 target_type: "config".into(),
                 target_id: Some(key.clone()),
                 detail: Some(format!("value={value}")),
-                source_ip: None,
+                source_ip: Some(addr.ip().to_string()),
             },
         );
     }
@@ -641,6 +657,7 @@ async fn get_config_overrides(State(shared): State<SharedState>) -> Json<serde_j
 
 /// DELETE /admin/api/config/overrides/:key -- remove a single override.
 async fn delete_config_override(
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     State(shared): State<SharedState>,
     Path(key): Path<String>,
 ) -> impl IntoResponse {
@@ -660,7 +677,7 @@ async fn delete_config_override(
                     target_type: "config".into(),
                     target_id: Some(key.clone()),
                     detail: None,
-                    source_ip: None,
+                    source_ip: Some(addr.ip().to_string()),
                 },
             );
             (StatusCode::OK, Json(serde_json::json!({"deleted": key}))).into_response()
@@ -909,6 +926,7 @@ struct CreateKeyRequest {
 
 /// POST /admin/api/keys -- create a new virtual API key.
 async fn create_key(
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     State(shared): State<SharedState>,
     Json(body): Json<CreateKeyRequest>,
 ) -> axum::response::Response {
@@ -992,7 +1010,7 @@ async fn create_key(
                         body.description.as_deref().unwrap_or(""),
                         key_prefix
                     )),
-                    source_ip: None,
+                    source_ip: Some(addr.ip().to_string()),
                 },
             );
             (
@@ -1078,6 +1096,7 @@ struct UpdateKeyRequest {
 
 /// PUT /admin/api/keys/{id} -- update an existing virtual key (except role).
 async fn update_key(
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     State(shared): State<SharedState>,
     Path(id): Path<i64>,
     Json(body): Json<UpdateKeyRequest>,
@@ -1144,7 +1163,7 @@ async fn update_key(
                     target_type: "virtual_key".into(),
                     target_id: Some(id.to_string()),
                     detail: Some(format!("prefix={}", row.key_prefix)),
-                    source_ip: None,
+                    source_ip: Some(addr.ip().to_string()),
                 },
             );
             (
@@ -1180,6 +1199,7 @@ async fn update_key(
 
 /// DELETE /admin/api/keys/{id} -- revoke a virtual key.
 async fn revoke_key(
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     State(shared): State<SharedState>,
     Path(id): Path<i64>,
 ) -> axum::response::Response {
@@ -1201,7 +1221,7 @@ async fn revoke_key(
                     target_type: "virtual_key".into(),
                     target_id: Some(id.to_string()),
                     detail: None,
-                    source_ip: None,
+                    source_ip: Some(addr.ip().to_string()),
                 },
             );
             Json(serde_json::json!({
@@ -1281,6 +1301,7 @@ fn default_weight() -> u32 {
 
 /// POST /admin/api/models -- add a deployment for a model name.
 async fn add_model(
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     State(shared): State<SharedState>,
     Json(body): Json<AddModelRequest>,
 ) -> impl IntoResponse {
@@ -1322,7 +1343,7 @@ async fn add_model(
                 "backend={}, actual_model={}",
                 body.backend_name, body.actual_model
             )),
-            source_ip: None,
+            source_ip: Some(addr.ip().to_string()),
         },
     );
 
@@ -1340,6 +1361,7 @@ async fn add_model(
 
 /// DELETE /admin/api/models/{name} -- remove all deployments for a model.
 async fn remove_model(
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     State(shared): State<SharedState>,
     Path(name): Path<String>,
 ) -> impl IntoResponse {
@@ -1363,7 +1385,7 @@ async fn remove_model(
                 target_type: "model".into(),
                 target_id: Some(name.clone()),
                 detail: None,
-                source_ip: None,
+                source_ip: Some(addr.ip().to_string()),
             },
         );
         (

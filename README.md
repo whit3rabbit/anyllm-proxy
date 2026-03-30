@@ -38,7 +38,15 @@ ANTHROPIC_BASE_URL=http://localhost:3000 claude
 
 ### Admin Web Interface (optional)
 
-Pass `--webui` (or `--admin`) to also start the admin dashboard on `127.0.0.1:3001`. It shows live request logs, latency, error rates, and lets you hot-reload model mappings without restarting.
+Pass `--webui` (or `--admin`) to also start the admin dashboard on `127.0.0.1:3001`. The dashboard has the following tabs:
+
+- **Dashboard:** Live RPM, error rate, P50/P95 latency, per-backend cards, and a filterable live request feed.
+- **Request Log:** Historical request log with filters (backend, status, key, date range), paginated, with per-request cost and token detail.
+- **Settings:** Mutable config (log level, log_bodies, per-backend model mappings), read-only env vars (secrets masked), and **Export .env** to generate a `.anyllm.env` template.
+- **Backends:** Configured backends and their settings.
+- **Access Control:** Virtual key CRUD — create, edit (RPM/TPM limits, budget, expiry, model allowlist), and revoke keys without restarting.
+- **Models:** Add/remove model routing deployments (LiteLLM config mode only).
+- **Audit:** Log of all admin config mutations and key lifecycle events.
 
 ```bash
 anyllm_proxy --webui
@@ -57,6 +65,8 @@ To force-disable the admin even when the flag is present (useful in automated en
 ```bash
 DISABLE_ADMIN=1 anyllm_proxy --webui   # admin will NOT start
 ```
+
+Additional admin env vars: `ADMIN_DB_PATH` (SQLite file, default: `admin.db`), `ADMIN_TOKEN_PATH` (where the generated token is written, default: `.admin_token`), `ADMIN_LOG_RETENTION_DAYS` (request log retention, default: `7`).
 
 ### Multiple backends on one proxy (recommended)
 
@@ -265,6 +275,8 @@ small_model = "google/gemini-2.5-flash"
 PROXY_CONFIG=config.toml anyllm_proxy --webui
 ```
 
+Additional per-backend fields: `api_format = "chat"` (OpenAI only; `chat` or `responses`), `omit_stream_options = true` (strip `stream_options` for backends that reject it). Top-level `log_bodies = true` enables request/response body logging. Any config value can use `env:VAR_NAME` to read from the environment at startup (e.g., `api_key = "env:OPENAI_API_KEY"`).
+
 All backends are live at once on a single port. The path prefix matches the backend name in the config:
 
 | Path | Backend | Notes |
@@ -285,6 +297,8 @@ Start the proxy with `--webui`, then open:
 ```bash
 open http://127.0.0.1:3001/admin/?token=$(cat .admin_token)
 ```
+
+The dashboard tabs are described under [Admin Web Interface](#admin-web-interface-optional) above. When using a LiteLLM config, the **Models** tab lets you add/remove deployments without editing the config file. All config mutations (model changes, key creation/revocation) are recorded in the **Audit** tab.
 
 ---
 
@@ -342,6 +356,18 @@ SMALL_MODEL=anthropic.claude-3-5-haiku-20241022-v1:0 \
 cargo run -p anyllm_proxy
 ```
 
+### Anthropic Passthrough
+
+Forwards requests to the Anthropic API with no format translation. Use this when the upstream is already Anthropic and you only need auth, routing, or rate limiting from the proxy.
+
+```bash
+BACKEND=anthropic \
+ANTHROPIC_API_KEY=sk-ant-... \
+cargo run -p anyllm_proxy
+```
+
+`ANTHROPIC_BASE_URL` overrides the upstream URL (default: `https://api.anthropic.com`). Note: `POST /v1/embeddings` is not available on this backend.
+
 ### OpenAI Chat Completions Input
 
 The proxy accepts `POST /v1/chat/completions` in OpenAI format and returns OpenAI format. This means any OpenAI-native client (LiteLLM, LangChain, etc.) can route through the proxy unchanged:
@@ -359,14 +385,22 @@ curl http://localhost:3000/v1/chat/completions \
 
 ### Virtual Key Management
 
-Create short-lived or rate-limited API keys without restarting the proxy. Start with `--webui` to enable the admin server, then:
+Create short-lived, rate-limited, or budget-capped API keys without restarting the proxy. Start with `--webui` to enable the admin server, then:
 
 ```bash
-# Create a key with RPM limit
+# Create a key with RPM/TPM limits, a monthly budget, and a model allowlist
 curl -X POST http://localhost:3001/admin/api/keys \
   -H "Authorization: Bearer $(cat .admin_token)" \
   -H "Content-Type: application/json" \
-  -d '{"description": "dev key", "rpm_limit": 60}'
+  -d '{
+    "description": "dev key",
+    "rpm_limit": 60,
+    "tpm_limit": 100000,
+    "max_budget_usd": 10.00,
+    "budget_duration": "monthly",
+    "expires_at": "2026-12-31T00:00:00Z",
+    "allowed_models": ["claude-*", "gpt-4o"]
+  }'
 # Response: {"id": 1, "key": "sk-vk...", ...}
 
 # Use the key like any other proxy key
@@ -374,10 +408,26 @@ curl http://localhost:3000/v1/messages \
   -H "x-api-key: sk-vk..." \
   -d '{"model": "claude-sonnet-4-20250514", "max_tokens": 100, "messages": [...]}'
 
+# Update limits on an existing key (no restart needed)
+curl -X PUT http://localhost:3001/admin/api/keys/1 \
+  -H "Authorization: Bearer $(cat .admin_token)" \
+  -H "Content-Type: application/json" \
+  -d '{"rpm_limit": 120, "max_budget_usd": 20.00}'
+
+# Check spend for a key
+curl http://localhost:3001/admin/api/keys/1/spend \
+  -H "Authorization: Bearer $(cat .admin_token)"
+
 # Revoke immediately (no restart needed)
 curl -X DELETE http://localhost:3001/admin/api/keys/1 \
   -H "Authorization: Bearer $(cat .admin_token)"
 ```
+
+`budget_duration` accepts `daily`, `monthly`, or `lifetime`. `allowed_models` supports exact names and `prefix/*` wildcards. A key at 100% of its budget returns 429 with period reset information. Webhook notifications fire at 80%, 95%, and 100% of the budget via `WEBHOOK_URLS`.
+
+Requests from unauthenticated clients are rejected by default. For local development, set `PROXY_OPEN_RELAY=true` to accept any non-empty key (insecure, never use in production).
+
+**Distributed rate limiting (optional):** Build with `--features redis` and set `REDIS_URL=redis://localhost:6379` to use Redis-backed rate limiting across multiple proxy instances. In-process rate limits are per-instance only. `RATE_LIMIT_FAIL_POLICY=open` (default) allows requests when Redis is unavailable; `closed` rejects them with 503.
 
 ### OpenTelemetry Export
 
@@ -586,8 +636,14 @@ For cross-language bindings (FFI, WASM, PyO3), see [docs/library-integration.md]
 - **Streaming SSE:** Real-time translation of chunked responses.
 - **Tool Calling:** Transparent tool definition and `tool_use`/`tool_result` translation.
 - **Image & Document Blocks:** Base64/URL and document block support.
+- **Embeddings passthrough:** `POST /v1/embeddings` forwarded as-is to the backend (no translation). Works with OpenAI, Azure, Vertex, Gemini, and vLLM. Not available when `BACKEND=anthropic`.
+- **Degradation header:** `x-anyllm-degradation` is set on responses when features are silently dropped during translation (e.g., `top_k`, `cache_control`, `document_blocks`, `thinking_config`).
+- **Model allowlist:** Per-virtual-key restriction by exact model name or `prefix/*` wildcard, enforced pre-request.
+- **Budget tracking and spend alerts:** Per-key `max_budget_usd` with daily/monthly/lifetime periods. Webhook notifications (via `WEBHOOK_URLS`) fire at 80%, 95%, and 100% of the budget.
+- **Audit log:** All admin config mutations and key lifecycle events stored in SQLite, queryable via `GET /admin/api/audit`.
+- **OIDC/JWT authentication:** Set `OIDC_ISSUER_URL` (and optionally `OIDC_AUDIENCE`) to accept JWT bearer tokens for proxy authentication.
 - **Observability:** SQLite request logging, metrics endpoint, WebSocket live dashboard.
-- **Safety:** SSRF protection, concurrency limits, exponential backoff retry.
+- **Safety:** SSRF protection (including IPv6 ULA/link-local), concurrency limits, exponential backoff retry, CSRF protection on admin endpoints.
 
 ## License
 
