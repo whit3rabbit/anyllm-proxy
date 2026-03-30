@@ -18,8 +18,9 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, LazyLock};
 
 /// Per-IP sliding window rate limiter for admin API endpoints.
-/// Tuple is (window_start_epoch_secs, request_count).
-static ADMIN_RATE_LIMIT: LazyLock<DashMap<IpAddr, (u64, u32)>> = LazyLock::new(DashMap::new);
+/// Each entry is a VecDeque of millisecond timestamps within the last 60 seconds.
+static ADMIN_RATE_LIMIT: LazyLock<DashMap<IpAddr, std::collections::VecDeque<u64>>> =
+    LazyLock::new(DashMap::new);
 
 /// Maximum admin API requests per IP per 60-second window.
 /// Default 10; can be overridden at runtime for tests via `set_admin_rpm`.
@@ -38,22 +39,21 @@ pub fn reset_admin_rate_limit() {
 
 /// Inner rate-limit check with an explicit rpm; avoids touching the global ADMIN_RPM in tests.
 fn check_admin_rate_limit_with_rpm(ip: IpAddr, rpm: u32) -> bool {
-    let now = std::time::SystemTime::now()
+    let now_ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
-        .as_secs();
-    let mut entry = ADMIN_RATE_LIMIT.entry(ip).or_insert((now, 0));
-    let (window_start, count) = entry.value_mut();
-    if now - *window_start >= 60 {
-        *window_start = now;
-        *count = 1;
-        true
-    } else if *count < rpm {
-        *count += 1;
-        true
-    } else {
-        false
+        .as_millis() as u64;
+    let cutoff = now_ms.saturating_sub(60_000);
+    let mut window = ADMIN_RATE_LIMIT.entry(ip).or_default();
+    // Evict timestamps older than 60 seconds.
+    while window.front().is_some_and(|&ts| ts < cutoff) {
+        window.pop_front();
     }
+    if window.len() >= rpm as usize {
+        return false;
+    }
+    window.push_back(now_ms);
+    true
 }
 
 /// Returns true if the request is within the rate limit, false if exceeded.
@@ -1547,6 +1547,16 @@ mod tests {
         assert!(!check_admin_rate_limit_with_rpm(ip, 3));
 
         ADMIN_RATE_LIMIT.remove(&ip);
+    }
+
+    #[test]
+    fn sliding_window_blocks_on_rpm_exceeded() {
+        // Use a unique IP to avoid test isolation issues.
+        let ip: IpAddr = "10.88.77.66".parse().unwrap();
+        // With rpm=2, the first 2 requests must pass, the 3rd must fail.
+        assert!(check_admin_rate_limit_with_rpm(ip, 2));
+        assert!(check_admin_rate_limit_with_rpm(ip, 2));
+        assert!(!check_admin_rate_limit_with_rpm(ip, 2), "3rd request must be blocked when rpm=2");
     }
 
     /// POST to a protected admin route without CSRF token returns 403.
