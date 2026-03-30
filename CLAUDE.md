@@ -100,7 +100,10 @@ OPENAI_API_KEY=sk-... cargo run -p anyllm_proxy
 - `OTEL_EXPORTER_OTLP_ENDPOINT`: OTLP collector endpoint (default: `http://localhost:4318`). Only effective when built with `--features otel`.
 - `OTEL_SERVICE_NAME`: Service name for exported traces. Only effective when built with `--features otel`.
 - `OTEL_TRACES_SAMPLER`: Sampling strategy (default: `parentbased_always_on`). Only effective when built with `--features otel`.
-- `PROXY_CONFIG`: Path to config file. TOML for multi-backend config, or `.yaml`/`.yml` for LiteLLM-compatible config with model_list routing.
+- `PROXY_CONFIG`: Path to config file. Three formats accepted:
+  - **Simple YAML** (`.yaml`/`.yml` with top-level `models:` key): ergonomic native format; provider API keys from env vars; supports routing strategies and string shorthand (e.g. `- openai/gpt-4o`).
+  - **LiteLLM YAML** (`.yaml`/`.yml` with top-level `model_list:` key): LiteLLM-compatible format with `litellm_params:` nesting.
+  - **TOML** (any other extension): multi-backend TOML config.
 - `IP_ALLOWLIST`: Comma-separated CIDR ranges for IP allowlisting (e.g., `192.168.1.0/24,10.0.0.0/8`). Bare IPs also accepted. When set, only matching IPs can access the proxy.
 - `TRUST_PROXY_HEADERS`: Set to `true` or `1` to use `X-Forwarded-For` header for client IP when behind a reverse proxy. Only effective when `IP_ALLOWLIST` is set.
 - `WEBHOOK_URLS`: Comma-separated webhook URLs for request completion notifications. Fire-and-forget HTTP POST with `RequestLogEntry` JSON payload.
@@ -201,6 +204,46 @@ Client (Anthropic format) -> proxy (axum)
 - Test distribution: translator (~305 tests including reverse translation), proxy + client (~240 tests including virtual key CRUD + rate limiting integration), plus doc tests. Counts shift as features are added.
 - Virtual key CRUD integration tests are in `crates/proxy/tests/virtual_keys.rs`. They use a shared `OnceLock<DashMap>` to avoid fighting over the global `set_virtual_keys` OnceLock.
 - The `PROXY_OPEN_RELAY=true` env var enables dev mode (any non-empty key accepted). Without it and without `PROXY_API_KEYS`, the proxy rejects all requests.
+
+## Simple Config Format
+
+Ergonomic native alternative to the LiteLLM format. Activated when the config file has a top-level `models:` key. Set via `PROXY_CONFIG=/path/to/anyllm.yaml`.
+
+```yaml
+# anyllm.yaml
+routing_strategy: latency-based   # round-robin (default) | least-busy | latency-based | weighted | cost-based
+listen_port: 3000                  # optional
+log_bodies: false                  # optional
+
+models:
+  # String shorthand: bare model name defaults to openai
+  - gpt-4o
+  # String shorthand with provider prefix
+  - openai/gpt-4o-mini
+  - anthropic/claude-3-5-sonnet-20241022
+  # Full form: virtual name, actual model, weight, rate limits
+  - name: smart                    # virtual name clients send in requests
+    model: gpt-4o
+    provider: openai
+    weight: 3
+    rpm: 1000
+    tpm: 500000
+  - name: smart                    # second deployment for "smart" (round-robin / failover)
+    model: claude-3-5-sonnet-20241022
+    provider: anthropic
+    weight: 1
+```
+
+Provider API key defaults (used when `api_key` is not specified in the entry):
+
+| provider   | env var                                       |
+|------------|-----------------------------------------------|
+| openai     | `OPENAI_API_KEY`                              |
+| anthropic  | `ANTHROPIC_API_KEY`                           |
+| gemini     | `GEMINI_API_KEY`                              |
+| vertex     | `VERTEX_API_KEY` or `GOOGLE_ACCESS_TOKEN`     |
+| azure      | `AZURE_OPENAI_API_KEY`                        |
+| bedrock    | `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` |
 
 ## References
 
