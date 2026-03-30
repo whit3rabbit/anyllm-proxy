@@ -447,6 +447,8 @@ pub struct MultiConfig {
     pub default_backend: String,
     /// Ordered map: key = route prefix (e.g. "openai"), value = backend config.
     pub backends: IndexMap<String, BackendConfig>,
+    /// See Config::expose_degradation_warnings.
+    pub expose_degradation_warnings: bool,
 }
 
 // -- TOML deserialization structs (separate from runtime types) --
@@ -456,6 +458,8 @@ struct TomlConfig {
     listen_port: Option<u16>,
     log_bodies: Option<bool>,
     default_backend: Option<String>,
+    #[serde(default)]
+    expose_degradation_warnings: bool,
     #[serde(default)]
     backends: IndexMap<String, TomlBackendConfig>,
 }
@@ -532,8 +536,11 @@ impl MultiConfig {
                     tracing::info!("callbacks configured from litellm_settings");
                 }
 
+                let mut mc = parsed.multi_config;
+                // PROXY_CONFIG is set (we're in this branch): auto-enable warnings.
+                mc.expose_degradation_warnings = true;
                 return LoadResult {
-                    multi_config: parsed.multi_config,
+                    multi_config: mc,
                     model_router: Some(Arc::new(std::sync::RwLock::new(parsed.router))),
                     litellm_master_key: parsed.master_key,
                 };
@@ -606,6 +613,7 @@ impl MultiConfig {
             log_bodies: config.log_bodies,
             default_backend: name.to_string(),
             backends,
+            expose_degradation_warnings: config.expose_degradation_warnings,
         }
     }
 
@@ -646,11 +654,19 @@ impl MultiConfig {
             backends.insert(name.clone(), bc);
         }
 
+        // OR-in: TOML field || env var || PROXY_CONFIG presence (auto-enable).
+        let expose_degradation_warnings = raw.expose_degradation_warnings
+            || std::env::var("ANYLLM_DEGRADATION_WARNINGS")
+                .map(|v| v == "true" || v == "1")
+                .unwrap_or(false)
+            || std::env::var("PROXY_CONFIG").is_ok();
+
         Self {
             listen_port,
             log_bodies,
             default_backend,
             backends,
+            expose_degradation_warnings,
         }
     }
 

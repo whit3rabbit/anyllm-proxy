@@ -278,6 +278,7 @@ pub fn parse_litellm_yaml(yaml: &str) -> LiteLLMParsed {
         log_bodies,
         default_backend,
         backends,
+        expose_degradation_warnings: false, // overridden in MultiConfig::load()
     };
 
     // Determine routing strategy from router_settings.
