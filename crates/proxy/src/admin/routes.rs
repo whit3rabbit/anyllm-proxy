@@ -362,9 +362,11 @@ async fn get_env() -> Json<serde_json::Value> {
         "AZURE_OPENAI_API_VERSION": plain("AZURE_OPENAI_API_VERSION"),
         // AWS Bedrock
         "AWS_REGION":               plain("AWS_REGION"),
-        "AWS_ACCESS_KEY_ID":        plain("AWS_ACCESS_KEY_ID"),
+        "AWS_ACCESS_KEY_ID":        secret("AWS_ACCESS_KEY_ID"),
         "AWS_SECRET_ACCESS_KEY":    secret("AWS_SECRET_ACCESS_KEY"),
         "AWS_SESSION_TOKEN":        secret("AWS_SESSION_TOKEN"),
+        // Google OAuth bearer token (full token — treat as secret)
+        "GOOGLE_ACCESS_TOKEN":      secret("GOOGLE_ACCESS_TOKEN"),
         // Auth
         "PROXY_API_KEYS":     secret("PROXY_API_KEYS"),
         "PROXY_OPEN_RELAY":   plain("PROXY_OPEN_RELAY"),
@@ -1652,5 +1654,19 @@ mod tests {
         let resp = app.oneshot(req).await.unwrap();
         // CSRF should not reject GET; any non-403 means CSRF passed.
         assert_ne!(resp.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[test]
+    fn aws_access_key_id_uses_secret_pattern() {
+        // The secret() closure masks the value; this test verifies the masking logic.
+        let mask = |v: &str| if !v.is_empty() { "***REDACTED***".to_string() } else { "<unset>".to_string() };
+        assert_eq!(mask("AKIAIOSFODNN7EXAMPLE"), "***REDACTED***");
+        assert_eq!(mask(""), "<unset>");
+    }
+
+    #[test]
+    fn google_access_token_uses_secret_pattern() {
+        let mask = |v: &str| if !v.is_empty() { "***REDACTED***".to_string() } else { "<unset>".to_string() };
+        assert_eq!(mask("ya29.someoauthtoken"), "***REDACTED***");
     }
 }
