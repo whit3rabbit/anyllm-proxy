@@ -1,0 +1,36 @@
+name: Nightly Integration Tests
+
+on:
+  schedule:
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  live-openai:
+    runs-on: ubuntu-latest
+    if: secrets.OPENAI_API_KEY != ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run live OpenAI integration tests
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: cargo test --test live_api -- --ignored --test-threads=1
+
+  live-bedrock:
+    runs-on: ubuntu-latest
+    if: secrets.AWS_ACCESS_KEY_ID != ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run live Bedrock integration tests
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+        run: cargo test --test live_bedrock -- --ignored --test-threads=1
