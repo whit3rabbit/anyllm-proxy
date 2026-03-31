@@ -533,12 +533,48 @@ async fn main() {
         None
     };
 
+    // Initialize batch engine with its own connection to the same DB file.
+    // Only available when admin is enabled (requires a DB path).
+    let batch_engine: Option<std::sync::Arc<anyllm_batch_engine::BatchEngine<
+        anyllm_batch_engine::queue::sqlite::SqliteQueue,
+        anyllm_batch_engine::webhook::sqlite::SqliteWebhookQueue,
+    >>> = if enable_admin {
+        let db_path = std::env::var("ADMIN_DB_PATH").unwrap_or_else(|_| "admin.db".into());
+        let batch_conn = rusqlite::Connection::open(&db_path)
+            .expect("failed to open second SQLite connection for batch engine");
+        anyllm_batch_engine::db::migrate_old_tables(&batch_conn)
+            .expect("failed to migrate old batch tables");
+        anyllm_batch_engine::db::init_batch_engine_tables(&batch_conn)
+            .expect("failed to initialize batch engine tables");
+        let batch_db = std::sync::Arc::new(tokio::sync::Mutex::new(batch_conn));
+        let global_webhook_urls: Vec<String> = std::env::var("BATCH_WEBHOOK_URLS")
+            .unwrap_or_default()
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+        Some(std::sync::Arc::new(anyllm_batch_engine::BatchEngine {
+            queue: std::sync::Arc::new(
+                anyllm_batch_engine::queue::sqlite::SqliteQueue::new(batch_db.clone()),
+            ),
+            file_store: anyllm_batch_engine::file_store::FileStore::new(batch_db.clone()),
+            webhook_queue: std::sync::Arc::new(
+                anyllm_batch_engine::webhook::sqlite::SqliteWebhookQueue::new(batch_db),
+            ),
+            global_webhook_urls,
+            webhook_signing_secret: std::env::var("BATCH_WEBHOOK_SIGNING_SECRET").ok(),
+        }))
+    } else {
+        None
+    };
+
     // Build proxy router with optional shared admin state and tool engine.
     let app = routes::app_multi_with_shared(
         multi_config,
         admin_parts.as_ref().map(|(s, _, _)| s.clone()),
         model_router,
         tool_engine_state,
+        batch_engine,
     );
 
     // --- Start servers ---

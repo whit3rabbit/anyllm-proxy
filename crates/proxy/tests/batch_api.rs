@@ -24,20 +24,37 @@ fn test_config() -> Config {
     }
 }
 
+async fn make_test_batch_engine() -> std::sync::Arc<
+    anyllm_batch_engine::BatchEngine<
+        anyllm_batch_engine::queue::sqlite::SqliteQueue,
+        anyllm_batch_engine::webhook::sqlite::SqliteWebhookQueue,
+    >,
+> {
+    use anyllm_batch_engine::{
+        db::init_batch_engine_tables, file_store::FileStore, queue::sqlite::SqliteQueue,
+        webhook::sqlite::SqliteWebhookQueue, BatchEngine,
+    };
+    let conn = rusqlite::Connection::open_in_memory().unwrap();
+    init_batch_engine_tables(&conn).unwrap();
+    let db = std::sync::Arc::new(tokio::sync::Mutex::new(conn));
+    std::sync::Arc::new(BatchEngine {
+        queue: std::sync::Arc::new(SqliteQueue::new(db.clone())),
+        file_store: FileStore::new(db.clone()),
+        webhook_queue: std::sync::Arc::new(SqliteWebhookQueue::new(db)),
+        global_webhook_urls: vec![],
+        webhook_signing_secret: None,
+    })
+}
+
 /// Spawn a test server with SharedState (needed for batch DB access).
 async fn spawn_test_server_with_shared() -> String {
     std::env::set_var("PROXY_OPEN_RELAY", "true");
     let config = test_config();
     let multi = MultiConfig::from_single_config(&config);
     let shared = admin::state::SharedState::new_for_test();
+    let engine = make_test_batch_engine().await;
 
-    // Initialize batch tables in the test DB
-    {
-        let conn = shared.db.lock().unwrap();
-        anyllm_proxy::batch::db::init_batch_tables(&conn).unwrap();
-    }
-
-    let app = routes::app_multi_with_shared(multi, Some(shared), None, None);
+    let app = routes::app_multi_with_shared(multi, Some(shared), None, None, Some(engine));
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
@@ -94,7 +111,8 @@ async fn upload_file_and_create_batch() {
 
     let batch_obj: serde_json::Value = resp.json().await.unwrap();
     assert_eq!(batch_obj["object"], "batch");
-    assert!(batch_obj["id"].as_str().unwrap().starts_with("batch-"));
+    // Engine generates batch IDs (e.g. "batch_<uuid>")
+    assert!(batch_obj["id"].as_str().unwrap().starts_with("batch"));
     assert_eq!(batch_obj["status"], "validating");
     assert_eq!(batch_obj["input_file_id"], file_id);
     assert_eq!(batch_obj["request_counts"]["total"], 2);
@@ -200,11 +218,8 @@ async fn unsupported_backend_returns_501() {
 
     let multi = MultiConfig::from_single_config(&config);
     let shared = admin::state::SharedState::new_for_test();
-    {
-        let conn = shared.db.lock().unwrap();
-        anyllm_proxy::batch::db::init_batch_tables(&conn).unwrap();
-    }
-    let app = routes::app_multi_with_shared(multi, Some(shared), None, None);
+    let engine = make_test_batch_engine().await;
+    let app = routes::app_multi_with_shared(multi, Some(shared), None, None, Some(engine));
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
@@ -223,6 +238,62 @@ async fn unsupported_backend_returns_501() {
         .await
         .unwrap();
     assert_eq!(resp.status(), 501);
+}
+
+#[tokio::test]
+async fn cancel_queued_batch() {
+    let base = spawn_test_server_with_shared().await;
+    let client = Client::new();
+
+    // Upload a file first
+    let form = multipart::Form::new().text("purpose", "batch").part(
+        "file",
+        multipart::Part::bytes(valid_jsonl().as_bytes().to_vec())
+            .file_name("test.jsonl")
+            .mime_str("application/jsonl")
+            .unwrap(),
+    );
+    let resp = client
+        .post(format!("{base}/v1/files"))
+        .header("x-api-key", "test")
+        .multipart(form)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+    let file_obj: serde_json::Value = resp.json().await.unwrap();
+    let file_id = file_obj["id"].as_str().unwrap().to_string();
+
+    // Create a batch
+    let resp = client
+        .post(format!("{base}/v1/batches"))
+        .header("x-api-key", "test")
+        .json(&serde_json::json!({
+            "input_file_id": file_id,
+            "endpoint": "/v1/chat/completions",
+            "completion_window": "24h"
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+    let batch_obj: serde_json::Value = resp.json().await.unwrap();
+    let batch_id = batch_obj["id"].as_str().unwrap().to_string();
+
+    // Cancel the batch
+    let resp = client
+        .post(format!("{base}/v1/batches/{batch_id}/cancel"))
+        .header("x-api-key", "test")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+    let cancelled: serde_json::Value = resp.json().await.unwrap();
+    let status = cancelled["status"].as_str().unwrap();
+    assert!(
+        status == "cancelling" || status == "cancelled",
+        "expected cancelling or cancelled, got {status}"
+    );
 }
 
 #[tokio::test]
