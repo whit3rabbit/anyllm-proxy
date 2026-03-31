@@ -341,6 +341,25 @@ loop {
         }
     }
 }
+
+async fn poll_native_job(job: BatchJob) {
+    let status = executor.poll_native(&job).await;
+    queue.update_progress(job.id, status.counts);
+
+    // Emit Started on first poll that shows progress
+    if job.started_at.is_none() && status.counts.processing > 0 {
+        notification.dispatch(Started { .. }).await;
+    }
+
+    // Emit Progress on every poll with updated counts
+    notification.dispatch(Progress { counts: status.counts }).await;
+
+    if status.is_terminal() {
+        let results = executor.fetch_native_results(&job).await;
+        // store results, complete batch
+        notification.dispatch(Completed { .. }).await;
+    }
+}
 ```
 
 **process_item:**
@@ -352,7 +371,7 @@ async fn process_item(leased: LeasedItem) {
     match executor.execute_item(&leased.item).await {
         Ok(result) => {
             queue.complete_item(item_id, result)
-            event_bus.emit(ItemCompleted { .. })
+            notification.dispatch(ItemCompleted { .. }).await
         }
         Err(Retryable(msg)) if item.attempts < max_retries => {
             let delay = base_delay * 2^attempts  // exponential backoff
@@ -361,13 +380,13 @@ async fn process_item(leased: LeasedItem) {
         Err(e) => {
             queue.fail_item(item_id, e)
             queue.dead_letter(item_id)
-            event_bus.emit(ItemFailed { .. })
+            notification.dispatch(ItemFailed { .. }).await
         }
     }
 
     if queue.is_batch_complete(batch_id) {
         queue.complete_batch(batch_id)
-        event_bus.emit(BatchCompleted { .. })
+        notification.dispatch(BatchCompleted { .. }).await
     }
 
     cancel item_lease_renewal
@@ -417,7 +436,7 @@ Worker emits event
     +-- WebhookQueue (durable, SQLite) --> WebhookDispatcher (reliable, retried)
 ```
 
-The engine never sends events through a single path. Every event goes to both.
+The engine never sends events through a single path. Every event goes to both. All event emission MUST go through `NotificationManager::dispatch()`. Workers must not call `event_bus.emit()` directly.
 
 ### EventBus (SSE path, lossy)
 
@@ -448,6 +467,7 @@ pub trait WebhookQueue: Send + Sync + 'static {
     async fn ack(&self, delivery_id: &str) -> Result<(), QueueError>;
     async fn schedule_retry(&self, delivery_id: &str, delay: Duration) -> Result<(), QueueError>;
     async fn dead_letter(&self, delivery_id: &str) -> Result<(), QueueError>;
+    async fn reclaim_expired_leases(&self) -> Result<u32, QueueError>;
 }
 
 pub struct WebhookDelivery {
@@ -465,7 +485,7 @@ pub struct WebhookDelivery {
 ### Dispatch (single call site)
 
 ```rust
-pub fn dispatch(&self, event: BatchEvent) {
+pub async fn dispatch(&self, event: BatchEvent) {
     self.event_bus.emit(event.clone());           // SSE (lossy)
     for sink in self.resolve_sinks(&event) {
         self.webhook_queue.enqueue(WebhookDelivery {
@@ -486,7 +506,7 @@ Global webhooks receive all events. Per-batch webhooks receive terminal events o
 
 ### WebhookDispatcher (background loop)
 
-Retries with exponential backoff (1s, 2s, 4s). Dead-letters after max retries.
+Retries with exponential backoff (1s, 2s, 4s). Dead-letters after max retries. Runs a lease reclaim loop (same pattern as item queue) to recover stuck deliveries from crashed dispatchers.
 
 **Webhook HTTP headers:**
 
@@ -591,10 +611,22 @@ async fn sse_stream(
     Path(batch_id): Path<String>,
 ) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, ApiError> {
     let id = BatchId(batch_id);
-    state.batch_engine.queue.get(&id).await?.ok_or(ApiError::NotFound)?;
+    let job = state.batch_engine.queue.get(&id).await?.ok_or(ApiError::NotFound)?;
 
     let mut subscriber = state.sse_broadcaster.subscribe(&id);
     let stream = async_stream::stream! {
+        // Emit snapshot for late subscribers so they see current state immediately
+        let snapshot = BatchEvent {
+            event_id: format!("evt_snapshot_{}", Uuid::new_v4()),
+            sequence: 0,
+            timestamp: Utc::now(),
+            batch_id: id.clone(),
+            payload: BatchEventPayload::Progress { counts: job.request_counts.clone() },
+        };
+        yield Ok(Event::default().event("batch.snapshot").data(
+            serde_json::to_string(&snapshot).unwrap()
+        ));
+
         while let Some(event) = subscriber.next().await {
             let event_type = event.payload.event_type();
             let data = serde_json::to_string(&event).unwrap();
