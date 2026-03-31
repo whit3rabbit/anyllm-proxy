@@ -1459,6 +1459,23 @@ async fn add_model(
             .into_response();
     };
 
+    // Validate name fields to prevent log injection via control characters.
+    for (field, value) in [
+        ("model_name", &body.model_name),
+        ("backend_name", &body.backend_name),
+        ("actual_model", &body.actual_model),
+    ] {
+        if !is_safe_model_name(value) {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "error": format!("invalid {field}: contains disallowed characters")
+                })),
+            )
+                .into_response();
+        }
+    }
+
     let deployment = std::sync::Arc::new(crate::config::model_router::Deployment::with_weight(
         body.backend_name.clone(),
         body.actual_model.clone(),
