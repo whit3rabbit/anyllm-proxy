@@ -501,6 +501,9 @@ pub struct LoadResult {
     /// Resolved master_key from LiteLLM general_settings, if present.
     /// Caller should apply as PROXY_API_KEYS if that var is not already set.
     pub litellm_master_key: Option<String>,
+    /// Tool-related config from a simple YAML config file. None when the config
+    /// was loaded from env vars, TOML, or LiteLLM format (which has no tool sections).
+    pub tool_config: Option<simple::ToolStartupConfig>,
 }
 
 impl MultiConfig {
@@ -533,6 +536,7 @@ impl MultiConfig {
                         multi_config: parsed.multi_config,
                         model_router: Some(Arc::new(std::sync::RwLock::new(parsed.router))),
                         litellm_master_key: None,
+                        tool_config: Some(parsed.tool_config),
                     };
                 }
 
@@ -574,18 +578,21 @@ impl MultiConfig {
                     multi_config: mc,
                     model_router: Some(Arc::new(std::sync::RwLock::new(parsed.router))),
                     litellm_master_key: parsed.master_key,
+                    tool_config: None, // LiteLLM format has no tool sections
                 };
             }
             LoadResult {
                 multi_config: Self::from_toml_file(&path),
                 model_router: None,
                 litellm_master_key: None,
+                tool_config: None,
             }
         } else {
             LoadResult {
                 multi_config: Self::from_legacy_env(),
                 model_router: None,
                 litellm_master_key: None,
+                tool_config: None,
             }
         }
     }

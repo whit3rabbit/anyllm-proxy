@@ -1,4 +1,4 @@
-use anyllm_proxy::{admin, config, server::routes};
+use anyllm_proxy::{admin, config, server::routes, tools};
 use std::sync::Arc;
 use tracing_subscriber::prelude::*;
 
@@ -156,6 +156,80 @@ async fn main() {
             }
         }
     }
+
+    // Build tool engine state from config, if tool sections were present.
+    // Only constructed when at least one of tool_execution / builtin_tools / mcp_servers
+    // is present in the config file, to avoid overhead when tools are unused.
+    let tool_engine_state: Option<Arc<routes::ToolEngineState>> =
+        if let Some(tc) = load_result.tool_config.filter(|tc| tc.has_any()) {
+            let simple_config_shell = config::simple::SimpleConfig {
+                routing_strategy: None,
+                listen_port: None,
+                log_bodies: None,
+                models: vec![],
+                tool_execution: tc.tool_execution,
+                builtin_tools: tc.builtin_tools,
+                mcp_servers: tc.mcp_servers,
+            };
+            let (policy, loop_config) = simple_config_shell.build_tool_config();
+
+            let mut registry = tools::ToolRegistry::new();
+            // Register built-in tools (gated behind the dangerous-builtin-tools feature).
+            anyllm_proxy::tools::builtin::register_all(&mut registry);
+
+            // Build MCP manager and discover tools from configured servers.
+            let mcp_manager = if let Some(ref servers) = simple_config_shell.mcp_servers {
+                let manager = Arc::new(tools::McpServerManager::new());
+                for server_cfg in servers {
+                    match tools::McpServerManager::discover_tools(&server_cfg.url).await {
+                        Ok(discovered) => {
+                            tracing::info!(
+                                server = %server_cfg.name,
+                                url = %server_cfg.url,
+                                tools = discovered.len(),
+                                "MCP server connected and tools discovered"
+                            );
+                            manager.register_server_blocking(
+                                &server_cfg.name,
+                                &server_cfg.url,
+                                discovered,
+                            );
+                        }
+                        Err(e) => {
+                            tracing::warn!(
+                                server = %server_cfg.name,
+                                url = %server_cfg.url,
+                                error = %e,
+                                "MCP server unreachable at startup; tools from this server will be unavailable"
+                            );
+                        }
+                    }
+                }
+                // Register all discovered MCP tools into the registry.
+                tools::mcp::register_mcp_tools(&manager, &mut registry);
+                Some(manager)
+            } else {
+                None
+            };
+
+            tracing::info!(
+                registered_tools = registry.list_names().len(),
+                mcp_servers = mcp_manager
+                    .as_ref()
+                    .map(|m| m.list_servers_blocking().len())
+                    .unwrap_or(0),
+                "tool execution engine initialized"
+            );
+
+            Some(Arc::new(routes::ToolEngineState {
+                registry: Arc::new(registry),
+                policy: Arc::new(policy),
+                loop_config,
+                mcp_manager,
+            }))
+        } else {
+            None
+        };
 
     // Admin web UI is opt-in: pass --webui or --admin to enable.
     // DISABLE_ADMIN=1 overrides the flag (useful in container/scripted environments).
@@ -335,7 +409,9 @@ async fn main() {
             virtual_keys,
             hmac_secret,
             model_router: model_router.clone(),
-            mcp_manager: None,
+            mcp_manager: tool_engine_state
+                .as_ref()
+                .and_then(|s| s.mcp_manager.clone()),
         };
 
         // Admin token: use env var or generate random UUID written to a file.
@@ -447,12 +523,12 @@ async fn main() {
         None
     };
 
-    // Build proxy router with optional shared admin state.
+    // Build proxy router with optional shared admin state and tool engine.
     let app = routes::app_multi_with_shared(
         multi_config,
         admin_parts.as_ref().map(|(s, _, _)| s.clone()),
         model_router,
-        None, // Tool engine: wired in when config-driven setup is implemented
+        tool_engine_state,
     );
 
     // --- Start servers ---

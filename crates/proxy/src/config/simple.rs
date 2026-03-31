@@ -137,10 +137,32 @@ pub struct McpServerConfig {
 // Parsed result + public parser
 // ---------------------------------------------------------------------------
 
+/// Tool-related config extracted from SimpleConfig, passed up to main.rs
+/// so it can build ToolEngineState without re-parsing the config file.
+#[derive(Debug)]
+pub struct ToolStartupConfig {
+    pub tool_execution: Option<ToolExecutionConfig>,
+    pub builtin_tools: Option<HashMap<String, BuiltinToolConfig>>,
+    pub mcp_servers: Option<Vec<McpServerConfig>>,
+}
+
+impl ToolStartupConfig {
+    /// Returns true when at least one tool-related section was present in the config.
+    /// Used to decide whether to construct a ToolEngineState at all.
+    pub fn has_any(&self) -> bool {
+        self.tool_execution.is_some()
+            || self.builtin_tools.is_some()
+            || self.mcp_servers.is_some()
+    }
+}
+
 /// Result from parsing a simple YAML config file.
 pub struct SimpleParsed {
     pub multi_config: MultiConfig,
     pub router: ModelRouter,
+    /// Tool-related sections extracted from the config. None-valued when no tool
+    /// sections were present (callers should check `has_any()` before using).
+    pub tool_config: ToolStartupConfig,
 }
 
 /// Parse a simple YAML config string and produce a `MultiConfig + ModelRouter`.
@@ -293,6 +315,11 @@ pub fn parse_simple_yaml(yaml: &str) -> SimpleParsed {
     SimpleParsed {
         multi_config: multi,
         router,
+        tool_config: ToolStartupConfig {
+            tool_execution: config.tool_execution,
+            builtin_tools: config.builtin_tools,
+            mcp_servers: config.mcp_servers,
+        },
     }
 }
 
