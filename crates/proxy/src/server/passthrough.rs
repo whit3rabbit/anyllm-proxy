@@ -14,6 +14,7 @@ use super::routes::AppState;
 
 pub(crate) async fn anthropic_passthrough(
     State(state): State<AppState>,
+    vk_ctx: Option<axum::Extension<super::middleware::VirtualKeyContext>>,
     headers: axum::http::HeaderMap,
     body: Bytes,
 ) -> Response {
@@ -44,17 +45,32 @@ pub(crate) async fn anthropic_passthrough(
         })
         .collect();
 
-    // Peek at just the `stream` field instead of parsing the full body.
+    // Peek at just the `stream` and `model` fields instead of parsing the full body.
     // Full deserialization would be wasteful for image-heavy requests
     // (up to 32MB) when we only need one boolean to choose the handler.
     #[derive(serde::Deserialize)]
-    struct StreamPeek {
+    struct BodyPeek {
         #[serde(default)]
         stream: bool,
+        model: Option<String>,
     }
-    let is_stream = serde_json::from_slice::<StreamPeek>(&body)
-        .map(|p| p.stream)
-        .unwrap_or(false);
+    let peek = serde_json::from_slice::<BodyPeek>(&body)
+        .unwrap_or(BodyPeek { stream: false, model: None });
+    let is_stream = peek.stream;
+
+    // Enforce model allowlist for virtual keys.
+    if let Some(axum::Extension(ref ctx)) = vk_ctx {
+        if let Some(ref m) = peek.model {
+            if !super::policy::is_model_allowed(m, &ctx.allowed_models) {
+                let err = mapping::errors_map::create_anthropic_error(
+                    anthropic::ErrorType::PermissionError,
+                    format!("Model '{}' is not allowed for this API key.", m),
+                    None,
+                );
+                return (StatusCode::FORBIDDEN, Json(err)).into_response();
+            }
+        }
+    }
 
     if is_stream {
         match client.forward_stream(body, &extra_headers).await {
