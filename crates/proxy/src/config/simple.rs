@@ -350,6 +350,16 @@ impl SimpleConfig {
                     Some("deny") => PolicyAction::Deny,
                     _ => PolicyAction::PassThrough,
                 };
+                // Warn loudly when execute_bash is set to Allow: it executes
+                // arbitrary OS commands as the proxy process user. Operators
+                // should only enable this inside a sandboxed environment.
+                if name == "execute_bash" && action == PolicyAction::Allow {
+                    tracing::warn!(
+                        "execute_bash policy is Allow: the LLM can execute arbitrary OS \
+                         commands as the proxy process user. Only enable this inside an \
+                         isolated sandbox (seccomp, read-only rootfs, network isolation)."
+                    );
+                }
                 rules.push(PolicyRule {
                     tool_name: name.clone(),
                     action,
