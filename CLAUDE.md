@@ -39,6 +39,9 @@ All implementation phases are complete.
 - Model mapping and lossy-translation warnings
 - `POST /v1/embeddings` passthrough: forwards directly to the backend with no translation; works with OpenAI, Vertex, Gemini (`gemini-embedding-exp-03-07`), and vLLM/HuggingFace models. Not mounted for the Anthropic passthrough backend.
 - `x-anyllm-degradation` response header: set when features are silently dropped during translation (opt-in via `ANYLLM_DEGRADATION_WARNINGS=true`; auto-enabled when `PROXY_CONFIG` is set). Examples: `top_k`, `thinking_config`, `cache_control`, `document_blocks`, `stop_sequences_truncated`
+- Tool execution engine: bounded loop with configurable max_iterations (default 1), per-tool policy (Allow/Deny/PassThrough), parallel execution via tokio::JoinSet, duplicate detection, timeout guards, and observability trace
+- MCP server integration: SSE transport, tool discovery via tools/list, admin API (add/list/remove), config-file driven
+- Builtin tools: execute_bash and read_file registered but PassThrough by default; must be explicitly set to Allow via config
 
 **Not fully validated:**
 - OpenAI Responses API backend: wired up via `OPENAI_API_FORMAT=responses` but not tested against live API
@@ -122,6 +125,28 @@ These LiteLLM env var names are accepted as aliases at startup (target takes pre
 - `AZURE_API_VERSION` -> `AZURE_OPENAI_API_VERSION`
 - `AWS_REGION_NAME` -> `AWS_REGION`
 - `LITELLM_IP_ALLOWLIST` -> `IP_ALLOWLIST`
+
+### Tool Execution Config (in PROXY_CONFIG simple format)
+
+```yaml
+tool_execution:
+  max_iterations: 1        # Max LLM round-trips (default: 1)
+  tool_timeout_secs: 30    # Per-tool execution timeout
+  total_timeout_secs: 300  # Wall-clock cap for entire loop
+
+builtin_tools:
+  execute_bash:
+    enabled: true
+    policy: pass_through   # allow | deny | pass_through
+  read_file:
+    enabled: true
+    policy: pass_through
+
+mcp_servers:
+  - name: github
+    url: https://mcp.github.com/sse
+    policy: allow          # Default policy for all tools from this server
+```
 
 ## Architecture
 
