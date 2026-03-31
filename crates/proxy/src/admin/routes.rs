@@ -246,9 +246,11 @@ pub async fn validate_csrf(
             return (StatusCode::FORBIDDEN, axum::Json(body)).into_response();
         }
 
-        // Verify the token was server-issued and consume it (one-time use).
-        // This prevents replay of tokens that passed the double-submit cookie check.
-        if shared.issued_csrf_tokens.get(header_token).is_none() {
+        // Verify the token was server-issued and consume it atomically (one-time use).
+        // DashMap::remove() is a single atomic operation: it both removes the entry
+        // and returns whether it existed, preventing two concurrent requests with the
+        // same token from both passing the check before either consumes it.
+        if shared.issued_csrf_tokens.remove(header_token).is_none() {
             let body = serde_json::json!({
                 "type": "error",
                 "error": {
@@ -258,8 +260,6 @@ pub async fn validate_csrf(
             });
             return (StatusCode::FORBIDDEN, axum::Json(body)).into_response();
         }
-        // Consume the token (one-time use).
-        shared.issued_csrf_tokens.invalidate(header_token);
     }
 
     next.run(req).await
@@ -287,8 +287,11 @@ pub async fn validate_csrf(
 /// If TLS is ever added to the admin server, also add `Secure` to Set-Cookie.
 async fn get_csrf_token(State(shared): State<SharedState>) -> axum::response::Response {
     let token = generate_csrf_token();
-    // Track the issued token so validate_csrf can verify it was server-generated.
-    shared.issued_csrf_tokens.insert(token.clone(), ());
+    // Cap at 1,000 entries to prevent memory exhaustion from unauthenticated callers.
+    // At capacity, silently do not track the token (client will retry on CSRF failure).
+    if shared.issued_csrf_tokens.len() < 1_000 {
+        shared.issued_csrf_tokens.insert(token.clone(), ());
+    }
     let body = serde_json::json!({"csrf_token": token});
     axum::http::Response::builder()
         .status(StatusCode::OK)

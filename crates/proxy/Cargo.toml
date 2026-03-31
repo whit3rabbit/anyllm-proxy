@@ -38,7 +38,7 @@ aws-credential-types = "1.2"
 aws-smithy-runtime-api = "1"
 base64 = "0.22"
 hex = "0.4"
-moka = { version = "0.12", features = ["future", "sync"] }
+moka = { version = "0.12", features = ["future"] }
 serde_yaml = "0.9"
 jsonwebtoken = "10"
 ipnetwork = "0.20"

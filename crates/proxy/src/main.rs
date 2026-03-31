@@ -432,10 +432,7 @@ async fn main() {
             mcp_manager: tool_engine_state
                 .as_ref()
                 .and_then(|s| s.mcp_manager.clone()),
-            issued_csrf_tokens: moka::sync::Cache::builder()
-                .max_capacity(1_000)
-                .time_to_live(std::time::Duration::from_secs(86_400))
-                .build(),
+            issued_csrf_tokens: Arc::new(dashmap::DashMap::new()),
         };
 
         // Admin token: use env var or generate random UUID written to a file.

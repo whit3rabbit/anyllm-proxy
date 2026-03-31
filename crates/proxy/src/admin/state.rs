@@ -8,7 +8,6 @@ use dashmap::DashMap;
 use indexmap::IndexMap;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
-use std::time::Duration;
 use tokio::sync::broadcast;
 
 /// Type-erased closure that reloads the tracing filter at runtime.
@@ -50,10 +49,11 @@ pub struct SharedState {
     pub model_router: Option<Arc<RwLock<crate::config::model_router::ModelRouter>>>,
     /// MCP server manager for tool discovery and execution. None when tool execution is disabled.
     pub mcp_manager: Option<Arc<crate::tools::McpServerManager>>,
-    /// Bounded moka cache (max 1,000 entries, 24 h TTL) that tracks CSRF tokens
-    /// issued by GET /admin/csrf-token but not yet consumed. Using a bounded
-    /// cache prevents memory exhaustion from unauthenticated callers.
-    pub issued_csrf_tokens: moka::sync::Cache<String, ()>,
+    /// In-memory set of CSRF tokens issued by GET /admin/csrf-token.
+    /// Tokens are removed atomically on first successful CSRF validation
+    /// (one-time use). DashMap is used for the atomic remove() operation.
+    /// Size is capped at 1,000 in the issuance handler to prevent DoS.
+    pub issued_csrf_tokens: Arc<DashMap<String, ()>>,
 }
 
 /// Run a synchronous closure against the SQLite connection on the blocking
@@ -158,10 +158,7 @@ impl SharedState {
             hmac_secret: Arc::new(hmac_secret),
             model_router: None,
             mcp_manager: None,
-            issued_csrf_tokens: moka::sync::Cache::builder()
-                .max_capacity(1_000)
-                .time_to_live(Duration::from_secs(86_400))
-                .build(),
+            issued_csrf_tokens: Arc::new(DashMap::new()),
         }
     }
 }

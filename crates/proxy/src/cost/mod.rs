@@ -435,10 +435,7 @@ mod tests {
             hmac_secret: Arc::new(b"test-secret".to_vec()),
             model_router: None,
             mcp_manager: None,
-            issued_csrf_tokens: moka::sync::Cache::builder()
-                .max_capacity(1_000)
-                .time_to_live(std::time::Duration::from_secs(86_400))
-                .build(),
+            issued_csrf_tokens: Arc::new(dashmap::DashMap::new()),
         };
 
         let vk_ctx = VirtualKeyContext {
