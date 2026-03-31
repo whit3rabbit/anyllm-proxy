@@ -104,6 +104,9 @@ pub struct CreateBatchRequest {
     #[serde(default = "default_completion_window")]
     pub completion_window: String,
     pub metadata: Option<serde_json::Value>,
+    /// Optional per-batch webhook URL. Must be a public HTTP(S) URL.
+    /// Validated against SSRF rules (rejects private/loopback/metadata IPs).
+    pub webhook_url: Option<String>,
 }
 
 fn default_endpoint() -> String {
@@ -148,6 +151,13 @@ pub async fn create_batch(
         Err(e) => return bad_request(&format!("Invalid JSONL: {e}")),
     };
 
+    // Reject private/loopback/metadata targets to prevent SSRF.
+    if let Some(ref url) = req.webhook_url {
+        if let Err(e) = crate::config::validate_base_url(url) {
+            return bad_request(&format!("Invalid webhook_url: {e}"));
+        }
+    }
+
     let execution_mode = if is_batch_supported(&state.backend) {
         ExecutionMode::Native {
             provider: state.backend_name.clone(),
@@ -161,7 +171,7 @@ pub async fn create_batch(
         execution_mode,
         input_file_id: req.input_file_id.clone(),
         key_id: None,
-        webhook_url: None,
+        webhook_url: req.webhook_url.clone(),
         metadata: req.metadata.clone(),
         priority: 0,
     };
@@ -397,4 +407,23 @@ fn internal_error(msg: &str) -> Response {
 fn not_found_response(msg: &str) -> Response {
     let err = create_anthropic_error(anthropic::ErrorType::NotFoundError, msg.to_string(), None);
     (StatusCode::NOT_FOUND, Json(err)).into_response()
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn validate_webhook_url_rejects_private_ip() {
+        let result = crate::config::validate_base_url(
+            "http://169.254.169.254/metadata",
+        );
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("private/loopback"));
+    }
+
+    #[test]
+    fn validate_webhook_url_accepts_public_https() {
+        let result =
+            crate::config::validate_base_url("https://hooks.example.com/notify");
+        assert!(result.is_ok());
+    }
 }
