@@ -245,15 +245,15 @@ pub fn looks_like_jwt(credential: &str) -> bool {
     if credential.len() <= 32 {
         return false;
     }
-    let parts: Vec<&str> = credential.splitn(4, '.').collect();
-    if parts.len() != 3 {
-        return false;
+    let is_base64url = |s: &str| {
+        !s.is_empty() && s.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+    };
+    // splitn(4, '.') yields at most 4 parts: exactly 3 means two dots (valid JWT shape).
+    let mut parts = credential.splitn(4, '.');
+    match (parts.next(), parts.next(), parts.next(), parts.next()) {
+        (Some(a), Some(b), Some(c), None) => is_base64url(a) && is_base64url(b) && is_base64url(c),
+        _ => false,
     }
-    parts.iter().all(|p| {
-        !p.is_empty()
-            && p.bytes()
-                .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
-    })
 }
 
 #[derive(Debug)]

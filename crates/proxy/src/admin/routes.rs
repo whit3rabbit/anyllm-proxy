@@ -18,6 +18,10 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, LazyLock};
 
+/// Maximum number of outstanding CSRF tokens tracked in-memory.
+/// Prevents memory exhaustion from unauthenticated callers flooding GET /admin/csrf-token.
+const MAX_ISSUED_CSRF_TOKENS: usize = 1_000;
+
 /// Validate that a string looks like an ISO 8601 / RFC 3339 timestamp.
 /// Accepts YYYY-MM-DD (date only) or YYYY-MM-DDTHH:MM:SS[...] (datetime).
 /// Does not check calendar validity — the goal is to reject strings that
@@ -40,6 +44,18 @@ fn is_valid_timestamp(s: &str) -> bool {
                 && b[14..16].iter().all(|c| c.is_ascii_digit())
                 && b[16] == b':'
                 && b[17..19].iter().all(|c| c.is_ascii_digit())))
+}
+
+/// Returns the name of the first `since`/`until` parameter that fails timestamp
+/// validation, or `None` if both are valid (or absent).
+fn check_time_range(since: Option<&str>, until: Option<&str>) -> Option<&'static str> {
+    if since.is_some_and(|s| !is_valid_timestamp(s)) {
+        return Some("since");
+    }
+    if until.is_some_and(|u| !is_valid_timestamp(u)) {
+        return Some("until");
+    }
+    None
 }
 
 /// Per-IP sliding window rate limiter for admin API endpoints.
@@ -287,9 +303,9 @@ pub async fn validate_csrf(
 /// If TLS is ever added to the admin server, also add `Secure` to Set-Cookie.
 async fn get_csrf_token(State(shared): State<SharedState>) -> axum::response::Response {
     let token = generate_csrf_token();
-    // Cap at 1,000 entries to prevent memory exhaustion from unauthenticated callers.
     // At capacity, silently do not track the token (client will retry on CSRF failure).
-    if shared.issued_csrf_tokens.len() < 1_000 {
+    // The len() check is inherently racy on a concurrent map; the cap is a soft limit.
+    if shared.issued_csrf_tokens.len() < MAX_ISSUED_CSRF_TOKENS {
         shared.issued_csrf_tokens.insert(token.clone(), ());
     }
     let body = serde_json::json!({"csrf_token": token});
@@ -1001,21 +1017,11 @@ async fn get_requests(
     let until = params.until;
     let status = params.status;
     let key_id = params.key_id;
-    if let Some(ref s) = since {
-        if !is_valid_timestamp(s) {
-            return Json(serde_json::json!({
-                "error": "invalid 'since' value; expected ISO 8601 date or datetime",
-                "requests": [],
-            }));
-        }
-    }
-    if let Some(ref u) = until {
-        if !is_valid_timestamp(u) {
-            return Json(serde_json::json!({
-                "error": "invalid 'until' value; expected ISO 8601 date or datetime",
-                "requests": [],
-            }));
-        }
+    if let Some(param) = check_time_range(since.as_deref(), until.as_deref()) {
+        return Json(serde_json::json!({
+            "error": format!("invalid '{}' value; expected ISO 8601 date or datetime", param),
+            "requests": [],
+        }));
     }
     match crate::admin::state::with_db(&shared.db, move |conn| {
         crate::admin::db::query_request_log(
@@ -1649,21 +1655,11 @@ async fn get_audit_log(
     let target_type = params.target_type;
     let since = params.since;
     let until = params.until;
-    if let Some(ref s) = since {
-        if !is_valid_timestamp(s) {
-            return Json(serde_json::json!({
-                "error": "invalid 'since' value; expected ISO 8601 date or datetime",
-                "entries": [],
-            }));
-        }
-    }
-    if let Some(ref u) = until {
-        if !is_valid_timestamp(u) {
-            return Json(serde_json::json!({
-                "error": "invalid 'until' value; expected ISO 8601 date or datetime",
-                "entries": [],
-            }));
-        }
+    if let Some(param) = check_time_range(since.as_deref(), until.as_deref()) {
+        return Json(serde_json::json!({
+            "error": format!("invalid '{}' value; expected ISO 8601 date or datetime", param),
+            "entries": [],
+        }));
     }
     match crate::admin::state::with_db(&shared.db, move |conn| {
         crate::admin::db::query_audit_log(
