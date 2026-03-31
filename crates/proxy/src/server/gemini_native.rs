@@ -24,6 +24,7 @@ use tokio_stream::wrappers::ReceiverStream;
 /// POST /v1/messages — Gemini native path.
 pub(crate) async fn gemini_native_handler(
     State(state): State<AppState>,
+    vk_ctx: Option<axum::Extension<crate::server::middleware::VirtualKeyContext>>,
     AnthropicJson(body): AnthropicJson<anthropic::MessageCreateRequest>,
 ) -> Response {
     let client = match &state.backend {
@@ -44,6 +45,22 @@ pub(crate) async fn gemini_native_handler(
     };
 
     state.metrics.record_request();
+
+    // Enforce model allowlist for virtual keys.
+    if let Some(axum::Extension(ref ctx)) = vk_ctx {
+        if !crate::server::policy::is_model_allowed(&body.model, &ctx.allowed_models) {
+            let err = anyllm_translate::mapping::errors_map::create_anthropic_error(
+                anthropic::ErrorType::PermissionError,
+                format!("Model '{}' is not allowed for this API key.", body.model),
+                None,
+            );
+            return (
+                axum::http::StatusCode::FORBIDDEN,
+                axum::response::Json(err),
+            )
+                .into_response();
+        }
+    }
 
     let model = client.map_model(&body.model);
     let gemini_req = anthropic_to_gemini_request(&body);
