@@ -431,6 +431,7 @@ async fn main() {
             mcp_manager: tool_engine_state
                 .as_ref()
                 .and_then(|s| s.mcp_manager.clone()),
+            issued_csrf_tokens: Arc::new(dashmap::DashMap::new()),
         };
 
         // Admin token: use env var or generate random UUID written to a file.

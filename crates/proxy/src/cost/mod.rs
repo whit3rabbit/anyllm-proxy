@@ -435,6 +435,7 @@ mod tests {
             hmac_secret: Arc::new(b"test-secret".to_vec()),
             model_router: None,
             mcp_manager: None,
+            issued_csrf_tokens: Arc::new(dashmap::DashMap::new()),
         };
 
         let vk_ctx = VirtualKeyContext {

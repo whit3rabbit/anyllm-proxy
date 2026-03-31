@@ -183,9 +183,12 @@ async fn reject_cross_origin(
 ///
 /// Skips validation for GET, HEAD, OPTIONS.
 /// For POST, PUT, DELETE: requires X-CSRF-Token header to match the csrf_token cookie.
-/// Returns 403 with a descriptive error if the token is missing or mismatched.
+/// Also verifies the token was server-issued (tracked in SharedState) and removes it
+/// on first use (one-time token), preventing replay across multiple mutating requests.
+/// Returns 403 with a descriptive error if the token is missing, mismatched, or unknown.
 /// Applied inside validate_admin_token so unauthenticated requests are rejected first.
 pub async fn validate_csrf(
+    axum::extract::State(shared): axum::extract::State<SharedState>,
     req: axum::extract::Request,
     next: middleware::Next,
 ) -> axum::response::Response {
@@ -218,6 +221,19 @@ pub async fn validate_csrf(
             });
             return (StatusCode::FORBIDDEN, axum::Json(body)).into_response();
         }
+
+        // Verify the token was server-issued and consume it (one-time use).
+        // This prevents replay of tokens that passed the double-submit cookie check.
+        if shared.issued_csrf_tokens.remove(header_token).is_none() {
+            let body = serde_json::json!({
+                "type": "error",
+                "error": {
+                    "type": "permission_error",
+                    "message": "CSRF token not recognized or already used. Fetch a new token from GET /admin/csrf-token."
+                }
+            });
+            return (StatusCode::FORBIDDEN, axum::Json(body)).into_response();
+        }
     }
 
     next.run(req).await
@@ -243,8 +259,10 @@ pub async fn validate_csrf(
 /// Together these make unauthenticated CSRF token fetching safe: an attacker who
 /// can reach this endpoint is already on localhost and has other attack vectors.
 /// If TLS is ever added to the admin server, also add `Secure` to Set-Cookie.
-async fn get_csrf_token() -> axum::response::Response {
+async fn get_csrf_token(State(shared): State<SharedState>) -> axum::response::Response {
     let token = generate_csrf_token();
+    // Track the issued token so validate_csrf can verify it was server-generated.
+    shared.issued_csrf_tokens.insert(token.clone(), ());
     let body = serde_json::json!({"csrf_token": token});
     axum::http::Response::builder()
         .status(StatusCode::OK)
@@ -272,7 +290,8 @@ pub fn admin_router(shared: SharedState, token: Arc<String>) -> Router {
     // /admin/csrf-token is public so the SPA can fetch a token before and after login.
     let public = Router::new()
         .route("/admin/health", get(health))
-        .route("/admin/csrf-token", get(get_csrf_token));
+        .route("/admin/csrf-token", get(get_csrf_token))
+        .with_state(shared.clone());
 
     // Protected routes (require admin token + localhost origin check).
     let protected = Router::new()
@@ -310,7 +329,7 @@ pub fn admin_router(shared: SharedState, token: Arc<String>) -> Router {
         )
         .with_state(shared.clone())
         // Innermost: CSRF check runs after auth succeeds.
-        .layer(middleware::from_fn(validate_csrf))
+        .layer(middleware::from_fn_with_state(shared.clone(), validate_csrf))
         .layer(middleware::from_fn_with_state(
             token.clone(),
             validate_admin_token,
@@ -1865,11 +1884,33 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::FORBIDDEN);
     }
 
-    /// POST with matching CSRF header and cookie succeeds (auth passes, handler runs).
+    /// POST with matching CSRF header and cookie, where token is server-issued, succeeds.
     #[tokio::test]
     async fn post_with_valid_csrf_passes_middleware() {
+        set_admin_rpm(10_000);
+        let shared = crate::admin::state::SharedState::new_for_test();
+        let token_str = "a".repeat(64);
+        // Pre-register the token as server-issued so validate_csrf can find it.
+        shared.issued_csrf_tokens.insert(token_str.clone(), ());
+        let app = admin_router(shared, Arc::new("test-token".to_string()));
+        let req = Request::post("/admin/api/keys")
+            .header("host", "localhost:9090")
+            .header("authorization", "Bearer test-token")
+            .header("content-type", "application/json")
+            .header("x-csrf-token", &token_str)
+            .header("cookie", format!("csrf_token={token_str}"))
+            .body(Body::from(r#"{"description":"test"}"#))
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        // 403 would mean CSRF rejected; any other status means CSRF passed.
+        assert_ne!(resp.status(), StatusCode::FORBIDDEN);
+    }
+
+    /// POST with a CSRF token that was not server-issued is rejected even if header==cookie.
+    #[tokio::test]
+    async fn post_with_unissued_csrf_returns_403() {
         let app = test_router();
-        let token = "a".repeat(64);
+        let token = "b".repeat(64); // valid format but never stored in issued_csrf_tokens
         let req = Request::post("/admin/api/keys")
             .header("host", "localhost:9090")
             .header("authorization", "Bearer test-token")
@@ -1879,8 +1920,7 @@ mod tests {
             .body(Body::from(r#"{"description":"test"}"#))
             .unwrap();
         let resp = app.oneshot(req).await.unwrap();
-        // 403 would mean CSRF rejected; any other status means CSRF passed.
-        assert_ne!(resp.status(), StatusCode::FORBIDDEN);
+        assert_eq!(resp.status(), StatusCode::FORBIDDEN);
     }
 
     /// DELETE without CSRF token returns 403.

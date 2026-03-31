@@ -49,6 +49,10 @@ pub struct SharedState {
     pub model_router: Option<Arc<RwLock<crate::config::model_router::ModelRouter>>>,
     /// MCP server manager for tool discovery and execution. None when tool execution is disabled.
     pub mcp_manager: Option<Arc<crate::tools::McpServerManager>>,
+    /// Set of CSRF tokens issued by GET /admin/csrf-token that have not yet
+    /// been consumed. Tokens are removed on first successful CSRF validation
+    /// (one-time use), preventing replay across multiple mutating requests.
+    pub issued_csrf_tokens: Arc<DashMap<String, ()>>,
 }
 
 /// Run a synchronous closure against the SQLite connection on the blocking
@@ -153,6 +157,7 @@ impl SharedState {
             hmac_secret: Arc::new(hmac_secret),
             model_router: None,
             mcp_manager: None,
+            issued_csrf_tokens: Arc::new(DashMap::new()),
         }
     }
 }
