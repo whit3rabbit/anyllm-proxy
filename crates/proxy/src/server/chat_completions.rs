@@ -258,11 +258,11 @@ pub(crate) async fn chat_completions(
                                         );
                                     oai_req.model = m;
                                     match c.chat_completion(&oai_req).await {
-                                        Ok((resp, _, _)) => Ok(
-                                            mapping::message_map::openai_to_anthropic_response(
+                                        Ok((resp, _, _)) => {
+                                            Ok(mapping::message_map::openai_to_anthropic_response(
                                                 &resp, &om,
-                                            ),
-                                        ),
+                                            ))
+                                        }
                                         Err(e) => Err(format!("{e}")),
                                     }
                                 }
@@ -583,21 +583,29 @@ async fn chat_completions_stream(
                                                     for tc in tc_list {
                                                         let idx = tc.index as usize;
                                                         while accumulated_tool_calls.len() <= idx {
-                                                            accumulated_tool_calls.push((String::new(), String::new(), String::new()));
+                                                            accumulated_tool_calls.push((
+                                                                String::new(),
+                                                                String::new(),
+                                                                String::new(),
+                                                            ));
                                                         }
                                                         if let Some(ref id) = tc.id {
                                                             if !id.is_empty() {
-                                                                accumulated_tool_calls[idx].0 = id.clone();
+                                                                accumulated_tool_calls[idx].0 =
+                                                                    id.clone();
                                                             }
                                                         }
                                                         if let Some(ref func) = tc.function {
                                                             if let Some(ref name) = func.name {
                                                                 if !name.is_empty() {
-                                                                    accumulated_tool_calls[idx].1 = name.clone();
+                                                                    accumulated_tool_calls[idx].1 =
+                                                                        name.clone();
                                                                 }
                                                             }
                                                             if let Some(ref args) = func.arguments {
-                                                                accumulated_tool_calls[idx].2.push_str(args);
+                                                                accumulated_tool_calls[idx]
+                                                                    .2
+                                                                    .push_str(args);
                                                             }
                                                         }
                                                     }
@@ -707,8 +715,7 @@ async fn chat_completions_stream(
                                 &engine.registry,
                                 &engine.policy,
                             );
-                        let denied_results =
-                            crate::tools::execution::denied_tool_results(&denied);
+                        let denied_results = crate::tools::execution::denied_tool_results(&denied);
 
                         if !auto_exec.is_empty() || !denied_results.is_empty() {
                             let mut results = crate::tools::execution::execute_tool_calls(
@@ -734,14 +741,14 @@ async fn chat_completions_stream(
                                     .collect();
 
                             let mut follow_up_req = anthropic_req_for_tools;
-                            follow_up_req
-                                .messages
-                                .push(anyllm_translate::anthropic::InputMessage {
+                            follow_up_req.messages.push(
+                                anyllm_translate::anthropic::InputMessage {
                                     role: anyllm_translate::anthropic::Role::Assistant,
                                     content: anyllm_translate::anthropic::Content::Blocks(
                                         assistant_content,
                                     ),
-                                });
+                                },
+                            );
                             follow_up_req.messages.push(
                                 crate::tools::execution::tool_results_to_user_message(&results),
                             );
@@ -781,25 +788,18 @@ async fn chat_completions_stream(
                                     let mut follow_buffer = BytesMut::new();
                                     let mut follow_search_from: usize = 0;
 
-                                    while let Some(chunk_result) =
-                                        follow_byte_stream.next().await
-                                    {
+                                    while let Some(chunk_result) = follow_byte_stream.next().await {
                                         let bytes = match chunk_result {
                                             Ok(b) => b,
                                             Err(e) => {
-                                                tracing::error!(
-                                                    "follow-up stream read error: {e}"
-                                                );
+                                                tracing::error!("follow-up stream read error: {e}");
                                                 break;
                                             }
                                         };
                                         follow_buffer.extend_from_slice(&bytes);
 
                                         while let Some((pos, delim_len)) =
-                                            find_double_newline(
-                                                &follow_buffer,
-                                                follow_search_from,
-                                            )
+                                            find_double_newline(&follow_buffer, follow_search_from)
                                         {
                                             if let Ok(frame_str) =
                                                 std::str::from_utf8(&follow_buffer[..pos])
@@ -817,13 +817,11 @@ async fn chat_completions_stream(
                                                         >(
                                                             json_str
                                                         ) {
-                                                            let events =
-                                                                follow_stream_translator
-                                                                    .process_chunk(&chunk);
+                                                            let events = follow_stream_translator
+                                                                .process_chunk(&chunk);
                                                             for event in &events {
-                                                                let oai_chunks =
-                                                                    follow_translator
-                                                                        .process_event(event);
+                                                                let oai_chunks = follow_translator
+                                                                    .process_event(event);
                                                                 for oai_chunk in &oai_chunks {
                                                                     if let Ok(json) =
                                                                         serde_json::to_string(
@@ -847,23 +845,18 @@ async fn chat_completions_stream(
                                                     }
                                                 }
                                             }
-                                            let _ =
-                                                follow_buffer.split_to(pos + delim_len);
+                                            let _ = follow_buffer.split_to(pos + delim_len);
                                             follow_search_from = 0;
                                         }
-                                        follow_search_from =
-                                            follow_buffer.len().saturating_sub(3);
+                                        follow_search_from = follow_buffer.len().saturating_sub(3);
                                     }
 
                                     // Emit finish events for the follow-up stream.
                                     let follow_finish = follow_stream_translator.finish();
                                     for event in &follow_finish {
-                                        let oai_chunks =
-                                            follow_translator.process_event(event);
+                                        let oai_chunks = follow_translator.process_event(event);
                                         for oai_chunk in &oai_chunks {
-                                            if let Ok(json) =
-                                                serde_json::to_string(oai_chunk)
-                                            {
+                                            if let Ok(json) = serde_json::to_string(oai_chunk) {
                                                 let _ = tx
                                                     .send(Ok(format!("data: {}\n\n", json)))
                                                     .await;

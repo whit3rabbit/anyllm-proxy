@@ -102,7 +102,7 @@ pub(crate) async fn create_anthropic_batch(
     let model_clone = model.clone();
     let result = tokio::task::spawn_blocking(move || {
         let conn = db.lock().unwrap_or_else(|e| e.into_inner());
-        db::init_batch_tables(&conn)?;
+        db::init_anthropic_batch_map_table(&conn)?;
         db::insert_anthropic_batch_map(&conn, &our_id, &oai_id)?;
         // Store model alongside mapping for result translation.
         conn.execute(
@@ -185,7 +185,7 @@ pub(crate) async fn get_anthropic_batch(
     let batch_id_clone = batch_id.clone();
     let mapping = tokio::task::spawn_blocking(move || {
         let conn = db.lock().unwrap_or_else(|e| e.into_inner());
-        db::init_batch_tables(&conn)?;
+        db::init_anthropic_batch_map_table(&conn)?;
         db::get_anthropic_batch_map(&conn, &batch_id_clone)
     })
     .await;

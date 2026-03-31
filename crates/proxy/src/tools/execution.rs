@@ -6,7 +6,7 @@ use tokio::task::JoinSet;
 
 use crate::tools::policy::{PolicyAction, ToolExecutionPolicy};
 use crate::tools::registry::ToolRegistry;
-use crate::tools::trace::{ToolOutcome};
+use crate::tools::trace::ToolOutcome;
 
 /// A tool call extracted from an LLM response.
 #[derive(Debug, Clone)]
@@ -113,11 +113,8 @@ pub async fn execute_tool_calls(
         let input = call.input.clone();
 
         join_set.spawn(async move {
-            let result = tokio::time::timeout(
-                timeout,
-                execute_single(&registry, &name, input),
-            )
-            .await;
+            let result =
+                tokio::time::timeout(timeout, execute_single(&registry, &name, input)).await;
 
             let outcome = match result {
                 Ok(Ok(value)) => ToolOutcome::Success(value),

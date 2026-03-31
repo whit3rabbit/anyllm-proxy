@@ -154,9 +154,7 @@ impl ToolStartupConfig {
     /// Returns true when at least one tool-related section was present in the config.
     /// Used to decide whether to construct a ToolEngineState at all.
     pub fn has_any(&self) -> bool {
-        self.tool_execution.is_some()
-            || self.builtin_tools.is_some()
-            || self.mcp_servers.is_some()
+        self.tool_execution.is_some() || self.builtin_tools.is_some() || self.mcp_servers.is_some()
     }
 }
 
@@ -395,9 +393,7 @@ impl SimpleConfig {
             crate::tools::LoopConfig {
                 max_iterations: te.max_iterations.unwrap_or(1),
                 tool_timeout: std::time::Duration::from_secs(te.tool_timeout_secs.unwrap_or(30)),
-                total_timeout: std::time::Duration::from_secs(
-                    te.total_timeout_secs.unwrap_or(300),
-                ),
+                total_timeout: std::time::Duration::from_secs(te.total_timeout_secs.unwrap_or(300)),
                 max_tool_calls_per_turn: te.max_tool_calls_per_turn.unwrap_or(16),
             }
         } else {
@@ -903,7 +899,10 @@ mcp_servers:
         assert_eq!(rule.timeout, Some(std::time::Duration::from_secs(10)));
 
         // MCP glob rule
-        assert_eq!(policy.resolve("mcp_github_search_repos"), PolicyAction::Allow);
+        assert_eq!(
+            policy.resolve("mcp_github_search_repos"),
+            PolicyAction::Allow
+        );
 
         // Default loop config (no tool_execution section)
         assert_eq!(loop_config.max_iterations, 1);
@@ -922,10 +921,7 @@ tool_execution:
         let config: SimpleConfig = serde_yaml::from_str(yaml).unwrap();
         let (_policy, loop_config) = config.build_tool_config();
         assert_eq!(loop_config.max_iterations, 5);
-        assert_eq!(
-            loop_config.tool_timeout,
-            std::time::Duration::from_secs(45)
-        );
+        assert_eq!(loop_config.tool_timeout, std::time::Duration::from_secs(45));
         assert_eq!(
             loop_config.total_timeout,
             std::time::Duration::from_secs(300)

@@ -107,6 +107,15 @@ pub struct AppState {
     pub all_backends: Option<Arc<HashMap<String, AppState>>>,
     /// Tool execution engine state. None when tool execution is not configured.
     pub tool_engine: Option<Arc<ToolEngineState>>,
+    /// Batch orchestration engine. None in test configs that don't need batch.
+    pub batch_engine: Option<
+        Arc<
+            anyllm_batch_engine::BatchEngine<
+                anyllm_batch_engine::queue::sqlite::SqliteQueue,
+                anyllm_batch_engine::webhook::sqlite::SqliteWebhookQueue,
+            >,
+        >,
+    >,
 }
 
 impl AppState {
@@ -207,7 +216,7 @@ pub fn app(config: Config) -> Router {
 /// Build the axum router from multi-backend configuration.
 /// Creates nested sub-routers for each configured backend.
 pub fn app_multi(config: MultiConfig) -> Router {
-    app_multi_with_shared(config, None, None, None)
+    app_multi_with_shared(config, None, None, None, None)
 }
 
 /// Build the axum router with optional shared admin state and model router.
@@ -216,6 +225,14 @@ pub fn app_multi_with_shared(
     shared: Option<SharedState>,
     model_router: Option<Arc<RwLock<crate::config::model_router::ModelRouter>>>,
     tool_engine: Option<Arc<ToolEngineState>>,
+    batch_engine: Option<
+        Arc<
+            anyllm_batch_engine::BatchEngine<
+                anyllm_batch_engine::queue::sqlite::SqliteQueue,
+                anyllm_batch_engine::webhook::sqlite::SqliteWebhookQueue,
+            >,
+        >,
+    >,
 ) -> Router {
     let mut backend_metrics: HashMap<String, Metrics> = HashMap::new();
     let mut router = Router::new();
@@ -269,6 +286,7 @@ pub fn app_multi_with_shared(
             // all_backends is set after the loop (needs all states built first).
             all_backends: None,
             tool_engine: tool_engine.clone(),
+            batch_engine: batch_engine.clone(),
         };
         let sub = backend_router(state.clone(), mode);
         backend_states.insert(name.clone(), (state, mode));
@@ -393,6 +411,10 @@ fn backend_router(state: AppState, mode: HandlerMode) -> Router<GlobalState> {
         .route(
             "/v1/batches/{batch_id}",
             get(crate::batch::routes::get_batch),
+        )
+        .route(
+            "/v1/batches/{batch_id}/cancel",
+            post(crate::batch::routes::cancel_batch),
         );
 
     let api_routes = match mode {
