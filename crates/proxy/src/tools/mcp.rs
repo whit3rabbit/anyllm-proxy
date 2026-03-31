@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use anyllm_client::http::{build_http_client, HttpClientConfig};
 
 /// An MCP tool definition discovered from a server.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -54,10 +55,17 @@ pub struct McpServerManager {
 
 impl McpServerManager {
     pub fn new() -> Self {
+        // Use SSRF-safe DNS resolver to prevent DNS rebinding attacks where a
+        // domain passes the registration-time URL check but later resolves to a
+        // private/metadata IP (e.g., 169.254.169.254) after DNS TTL expiry.
+        let client = build_http_client(&HttpClientConfig {
+            ssrf_protection: true,
+            ..Default::default()
+        });
         Self {
             servers: RwLock::new(HashMap::new()),
             tool_to_server: RwLock::new(HashMap::new()),
-            client: reqwest::Client::new(),
+            client,
         }
     }
 
@@ -185,7 +193,10 @@ impl McpServerManager {
     /// This static version creates a one-shot client; use it only for startup
     /// paths where no manager instance exists yet.
     pub async fn discover_tools(url: &str) -> Result<Vec<McpToolDef>, String> {
-        let client = reqwest::Client::new();
+        let client = build_http_client(&HttpClientConfig {
+            ssrf_protection: true,
+            ..Default::default()
+        });
         discover_tools_impl(&client, url).await
     }
 }
