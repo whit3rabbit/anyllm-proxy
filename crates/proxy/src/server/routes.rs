@@ -845,6 +845,68 @@ async fn messages(
                         &openai_resp,
                         &original_model,
                     );
+
+                    // Tool execution: if the response contains tool_use blocks for
+                    // registered tools, execute them and make a follow-up backend call.
+                    let anthropic_resp = if let Some(ref engine) = state.tool_engine {
+                        let tool_calls =
+                            crate::tools::execution::extract_tool_calls(&anthropic_resp);
+                        let (auto_exec, _pass_through) =
+                            crate::tools::execution::partition_tool_calls(
+                                &tool_calls,
+                                &engine.registry,
+                                &engine.policy,
+                            );
+
+                        if !auto_exec.is_empty() {
+                            let results = crate::tools::execution::execute_tool_calls(
+                                &auto_exec,
+                                engine.registry.clone(),
+                                &engine.policy,
+                                &engine.loop_config,
+                            )
+                            .await;
+
+                            let mut follow_up_req = body.clone();
+                            follow_up_req.messages.push(
+                                crate::tools::execution::response_to_assistant_message(
+                                    &anthropic_resp,
+                                ),
+                            );
+                            follow_up_req.messages.push(
+                                crate::tools::execution::tool_results_to_user_message(&results),
+                            );
+
+                            let mut follow_up_openai =
+                                mapping::message_map::anthropic_to_openai_request(&follow_up_req);
+                            follow_up_openai.model = mapped_model.clone();
+
+                            match client.chat_completion(&follow_up_openai).await {
+                                Ok((follow_up_resp, _, _)) => {
+                                    tracing::info!(
+                                        tools_executed = results.len(),
+                                        "tool execution loop completed"
+                                    );
+                                    mapping::message_map::openai_to_anthropic_response(
+                                        &follow_up_resp,
+                                        &original_model,
+                                    )
+                                }
+                                Err(e) => {
+                                    tracing::warn!(
+                                        error = %e,
+                                        "follow-up backend call after tool execution failed"
+                                    );
+                                    anthropic_resp
+                                }
+                            }
+                        } else {
+                            anthropic_resp
+                        }
+                    } else {
+                        anthropic_resp
+                    };
+
                     if state.log_bodies() {
                         tracing::debug!(
                             body = %serde_json::to_string(&anthropic_resp).unwrap_or_else(|_| "[serialization failed]".into()),
