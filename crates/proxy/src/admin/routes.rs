@@ -224,7 +224,7 @@ pub async fn validate_csrf(
 
         // Verify the token was server-issued and consume it (one-time use).
         // This prevents replay of tokens that passed the double-submit cookie check.
-        if shared.issued_csrf_tokens.remove(header_token).is_none() {
+        if shared.issued_csrf_tokens.get(header_token).is_none() {
             let body = serde_json::json!({
                 "type": "error",
                 "error": {
@@ -234,6 +234,8 @@ pub async fn validate_csrf(
             });
             return (StatusCode::FORBIDDEN, axum::Json(body)).into_response();
         }
+        // Consume the token (one-time use).
+        shared.issued_csrf_tokens.invalidate(header_token);
     }
 
     next.run(req).await
