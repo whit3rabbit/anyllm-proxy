@@ -169,6 +169,69 @@ async fn execute_single(
 }
 
 // ---------------------------------------------------------------------------
+// Helper functions for extracting tool calls and building follow-up messages
+// ---------------------------------------------------------------------------
+
+/// Extract ToolCall structs from an Anthropic MessageResponse.
+pub fn extract_tool_calls(
+    response: &anyllm_translate::anthropic::MessageResponse,
+) -> Vec<ToolCall> {
+    response
+        .content
+        .iter()
+        .filter_map(|block| {
+            if let anyllm_translate::anthropic::ContentBlock::ToolUse { id, name, input } = block {
+                Some(ToolCall {
+                    id: id.clone(),
+                    name: name.clone(),
+                    input: input.clone(),
+                })
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+/// Convert tool execution results to an Anthropic user message with ToolResult blocks.
+pub fn tool_results_to_user_message(
+    results: &[ToolResult],
+) -> anyllm_translate::anthropic::InputMessage {
+    let blocks: Vec<anyllm_translate::anthropic::ContentBlock> = results
+        .iter()
+        .map(|r| {
+            let (content_text, is_error) = match &r.outcome {
+                ToolOutcome::Success(v) => (serde_json::to_string(v).unwrap_or_default(), false),
+                ToolOutcome::Error { message, .. } => (message.clone(), true),
+                ToolOutcome::Timeout => ("Tool execution timed out".to_string(), true),
+            };
+            anyllm_translate::anthropic::ContentBlock::ToolResult {
+                tool_use_id: r.tool_use_id.clone(),
+                content: Some(anyllm_translate::anthropic::ToolResultContent::Text(
+                    content_text,
+                )),
+                is_error: Some(is_error),
+            }
+        })
+        .collect();
+
+    anyllm_translate::anthropic::InputMessage {
+        role: anyllm_translate::anthropic::Role::User,
+        content: anyllm_translate::anthropic::Content::Blocks(blocks),
+    }
+}
+
+/// Convert a MessageResponse's content into an assistant InputMessage for conversation history.
+pub fn response_to_assistant_message(
+    response: &anyllm_translate::anthropic::MessageResponse,
+) -> anyllm_translate::anthropic::InputMessage {
+    anyllm_translate::anthropic::InputMessage {
+        role: anyllm_translate::anthropic::Role::Assistant,
+        content: anyllm_translate::anthropic::Content::Blocks(response.content.clone()),
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Timing wrapper used in the execution loop (available to callers)
 // ---------------------------------------------------------------------------
 
@@ -357,5 +420,77 @@ mod tests {
         let a = vec![make_call("id1", "echo", json!({"text": "hello"}))];
         let b = vec![make_call("id2", "echo", json!({"text": "world"}))];
         assert!(!is_duplicate(&a, &b));
+    }
+
+    // 7. extract_tool_calls picks up ToolUse blocks
+    #[test]
+    fn extract_tool_calls_finds_tool_use_blocks() {
+        use anyllm_translate::anthropic::{ContentBlock, MessageResponse, Role, StopReason, Usage};
+
+        let resp = MessageResponse {
+            id: "msg_1".into(),
+            response_type: "message".into(),
+            role: Role::Assistant,
+            content: vec![
+                ContentBlock::Text {
+                    text: "Let me call a tool.".into(),
+                },
+                ContentBlock::ToolUse {
+                    id: "tu_1".into(),
+                    name: "echo".into(),
+                    input: json!({"text": "hello"}),
+                },
+                ContentBlock::ToolUse {
+                    id: "tu_2".into(),
+                    name: "search".into(),
+                    input: json!({"query": "rust"}),
+                },
+            ],
+            model: "test".into(),
+            stop_reason: Some(StopReason::ToolUse),
+            stop_sequence: None,
+            usage: Usage {
+                input_tokens: 10,
+                output_tokens: 20,
+                cache_creation_input_tokens: None,
+                cache_read_input_tokens: None,
+            },
+            created: None,
+        };
+
+        let calls = extract_tool_calls(&resp);
+        assert_eq!(calls.len(), 2);
+        assert_eq!(calls[0].name, "echo");
+        assert_eq!(calls[0].id, "tu_1");
+        assert_eq!(calls[1].name, "search");
+        assert_eq!(calls[1].id, "tu_2");
+    }
+
+    // 8. extract_tool_calls returns empty vec when no ToolUse blocks
+    #[test]
+    fn extract_tool_calls_empty_when_no_tool_use() {
+        use anyllm_translate::anthropic::{ContentBlock, MessageResponse, Role, StopReason, Usage};
+
+        let resp = MessageResponse {
+            id: "msg_2".into(),
+            response_type: "message".into(),
+            role: Role::Assistant,
+            content: vec![ContentBlock::Text {
+                text: "Just text, no tools.".into(),
+            }],
+            model: "test".into(),
+            stop_reason: Some(StopReason::EndTurn),
+            stop_sequence: None,
+            usage: Usage {
+                input_tokens: 5,
+                output_tokens: 10,
+                cache_creation_input_tokens: None,
+                cache_read_input_tokens: None,
+            },
+            created: None,
+        };
+
+        let calls = extract_tool_calls(&resp);
+        assert!(calls.is_empty());
     }
 }
