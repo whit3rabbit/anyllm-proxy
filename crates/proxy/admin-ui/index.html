@@ -909,6 +909,11 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
       syncSelectOptions('obs-backend', data.backends || [], function(item) { return item.name; }, function(item) { return item.name; });
     }).catch(function(e) { console.error('Backends load failed:', e); });
 
+    // Cancel any pending debounced refresh before firing immediately
+    if (observabilityRefreshTimer != null) {
+      clearTimeout(observabilityRefreshTimer);
+      observabilityRefreshTimer = null;
+    }
     loadObservability();
   }
 

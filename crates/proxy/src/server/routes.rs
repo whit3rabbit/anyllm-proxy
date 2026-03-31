@@ -1024,9 +1024,6 @@ impl RequestCtx {
         is_streaming: bool,
         error_message: Option<String>,
     ) -> RequestLogEntry {
-        let inferred_error_kind =
-            crate::backend::infer_error_kind(status_code, error_message.as_deref())
-                .map(str::to_string);
         RequestLogEntry {
             request_id: self.request_id.clone(),
             timestamp: crate::admin::db::now_iso8601(),
@@ -1039,7 +1036,7 @@ impl RequestCtx {
             output_tokens: tokens.map(|(_, o)| o),
             is_streaming,
             error_message,
-            error_kind: inferred_error_kind,
+            error_kind: None,
             key_id: None,
             cost_usd: None,
         }

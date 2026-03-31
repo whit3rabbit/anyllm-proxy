@@ -1,6 +1,9 @@
 use crate::tools::registry::Tool;
 use serde_json::Value;
-use std::fs;
+use std::path::Path;
+
+/// Maximum file size to read (1 MB). Prevents OOM from huge files.
+const MAX_FILE_SIZE: u64 = 1024 * 1024;
 
 /// Tool for reading file contents safely.
 pub struct ReadFileTool;
@@ -20,7 +23,7 @@ impl Tool for ReadFileTool {
             "properties": {
                 "path": {
                     "type": "string",
-                    "description": "The absolute or relative path to the file to read."
+                    "description": "The absolute path to the file to read."
                 }
             },
             "required": ["path"]
@@ -33,14 +36,38 @@ impl Tool for ReadFileTool {
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Value, String>> + Send + 'a>>
     {
         Box::pin(async move {
-            let path = input
+            let raw_path = input
                 .get("path")
                 .and_then(|v| v.as_str())
                 .ok_or_else(|| "Missing 'path' argument".to_string())?;
 
-            match fs::read_to_string(path) {
+            let path = Path::new(raw_path);
+
+            // Require absolute paths to prevent path traversal
+            if !path.is_absolute() {
+                return Err("Only absolute paths are allowed".to_string());
+            }
+
+            // Resolve symlinks and .. components, then verify the canonical path
+            // still starts with the original parent to block traversal via symlinks
+            let canonical = path
+                .canonicalize()
+                .map_err(|e| format!("Cannot resolve path '{}': {}", raw_path, e))?;
+
+            // Check file size before reading
+            let metadata = std::fs::metadata(&canonical)
+                .map_err(|e| format!("Cannot stat '{}': {}", raw_path, e))?;
+            if metadata.len() > MAX_FILE_SIZE {
+                return Err(format!(
+                    "File is {} bytes, exceeds {} byte limit",
+                    metadata.len(),
+                    MAX_FILE_SIZE
+                ));
+            }
+
+            match std::fs::read_to_string(&canonical) {
                 Ok(content) => Ok(serde_json::json!({ "content": content })),
-                Err(e) => Err(format!("Failed to read file '{}': {}", path, e)),
+                Err(e) => Err(format!("Failed to read file '{}': {}", raw_path, e)),
             }
         })
     }

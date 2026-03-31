@@ -3,6 +3,12 @@ use serde_json::Value;
 use std::process::Stdio;
 use tokio::process::Command;
 
+/// Hard cap on subprocess wall-clock time (seconds).
+const TIMEOUT_SECS: u64 = 30;
+
+/// Maximum combined stdout+stderr size returned (bytes). Output beyond this is truncated.
+const MAX_OUTPUT_BYTES: usize = 256 * 1024;
+
 /// Tool for executing bash commands.
 pub struct BashTool;
 
@@ -39,22 +45,31 @@ impl Tool for BashTool {
                 .and_then(|v| v.as_str())
                 .ok_or_else(|| "Missing 'command' argument".to_string())?;
 
-            // Using standard tokio Command for async execution
-            // Timeouts should ideally be added in production
-            let output = match Command::new("bash")
+            let fut = Command::new("bash")
                 .arg("-c")
                 .arg(command)
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped())
-                .output()
-                .await
+                .output();
+
+            let output = match tokio::time::timeout(
+                std::time::Duration::from_secs(TIMEOUT_SECS),
+                fut,
+            )
+            .await
             {
-                Ok(output) => output,
-                Err(e) => return Err(format!("Failed to spawn process: {}", e)),
+                Ok(Ok(output)) => output,
+                Ok(Err(e)) => return Err(format!("Failed to spawn process: {}", e)),
+                Err(_) => {
+                    return Err(format!(
+                        "Command timed out after {} seconds",
+                        TIMEOUT_SECS
+                    ))
+                }
             };
 
-            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let stderr = String::from_utf8_lossy(&output.stderr);
 
             let mut result = String::new();
             if !stdout.is_empty() {
@@ -74,6 +89,12 @@ impl Tool for BashTool {
                     "Command executed successfully with exit code {}",
                     output.status.code().unwrap_or(0)
                 );
+            }
+
+            // Truncate to avoid blowing up context with huge outputs
+            if result.len() > MAX_OUTPUT_BYTES {
+                result.truncate(MAX_OUTPUT_BYTES);
+                result.push_str("\n... [output truncated]");
             }
 
             Ok(serde_json::json!({ "output": result }))
