@@ -18,6 +18,30 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, LazyLock};
 
+/// Validate that a string looks like an ISO 8601 / RFC 3339 timestamp.
+/// Accepts YYYY-MM-DD (date only) or YYYY-MM-DDTHH:MM:SS[...] (datetime).
+/// Does not check calendar validity — the goal is to reject strings that
+/// would bypass the timestamp index and force a full-table scan.
+fn is_valid_timestamp(s: &str) -> bool {
+    let b = s.as_bytes();
+    if b.len() < 10 {
+        return false;
+    }
+    b[0..4].iter().all(|c| c.is_ascii_digit())
+        && b[4] == b'-'
+        && b[5..7].iter().all(|c| c.is_ascii_digit())
+        && b[7] == b'-'
+        && b[8..10].iter().all(|c| c.is_ascii_digit())
+        && (b.len() == 10
+            || (b.len() >= 19
+                && (b[10] == b'T' || b[10] == b' ')
+                && b[11..13].iter().all(|c| c.is_ascii_digit())
+                && b[13] == b':'
+                && b[14..16].iter().all(|c| c.is_ascii_digit())
+                && b[16] == b':'
+                && b[17..19].iter().all(|c| c.is_ascii_digit())))
+}
+
 /// Per-IP sliding window rate limiter for admin API endpoints.
 /// Each entry is a VecDeque of millisecond timestamps within the last 60 seconds.
 static ADMIN_RATE_LIMIT: LazyLock<DashMap<IpAddr, std::collections::VecDeque<u64>>> =
@@ -974,6 +998,22 @@ async fn get_requests(
     let until = params.until;
     let status = params.status;
     let key_id = params.key_id;
+    if let Some(ref s) = since {
+        if !is_valid_timestamp(s) {
+            return Json(serde_json::json!({
+                "error": "invalid 'since' value; expected ISO 8601 date or datetime",
+                "requests": [],
+            }));
+        }
+    }
+    if let Some(ref u) = until {
+        if !is_valid_timestamp(u) {
+            return Json(serde_json::json!({
+                "error": "invalid 'until' value; expected ISO 8601 date or datetime",
+                "requests": [],
+            }));
+        }
+    }
     match crate::admin::state::with_db(&shared.db, move |conn| {
         crate::admin::db::query_request_log(
             conn,
@@ -1606,6 +1646,22 @@ async fn get_audit_log(
     let target_type = params.target_type;
     let since = params.since;
     let until = params.until;
+    if let Some(ref s) = since {
+        if !is_valid_timestamp(s) {
+            return Json(serde_json::json!({
+                "error": "invalid 'since' value; expected ISO 8601 date or datetime",
+                "entries": [],
+            }));
+        }
+    }
+    if let Some(ref u) = until {
+        if !is_valid_timestamp(u) {
+            return Json(serde_json::json!({
+                "error": "invalid 'until' value; expected ISO 8601 date or datetime",
+                "entries": [],
+            }));
+        }
+    }
     match crate::admin::state::with_db(&shared.db, move |conn| {
         crate::admin::db::query_audit_log(
             conn,
@@ -2025,5 +2081,45 @@ mod tests {
             }
         };
         assert_eq!(mask("ya29.someoauthtoken"), "***REDACTED***");
+    }
+}
+
+#[cfg(test)]
+mod timestamp_tests {
+    use super::is_valid_timestamp;
+
+    #[test]
+    fn accepts_date_only() {
+        assert!(is_valid_timestamp("2026-03-31"));
+    }
+
+    #[test]
+    fn accepts_datetime_utc() {
+        assert!(is_valid_timestamp("2026-03-31T12:00:00Z"));
+    }
+
+    #[test]
+    fn accepts_datetime_no_tz() {
+        assert!(is_valid_timestamp("2026-03-31T12:00:00"));
+    }
+
+    #[test]
+    fn rejects_empty() {
+        assert!(!is_valid_timestamp(""));
+    }
+
+    #[test]
+    fn rejects_arbitrary_string() {
+        assert!(!is_valid_timestamp("not-a-date"));
+    }
+
+    #[test]
+    fn rejects_sql_injection_attempt() {
+        assert!(!is_valid_timestamp("'; DROP TABLE request_log; --"));
+    }
+
+    #[test]
+    fn rejects_too_short() {
+        assert!(!is_valid_timestamp("2026-03"));
     }
 }
