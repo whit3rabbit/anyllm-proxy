@@ -175,7 +175,10 @@ async fn main() {
 
             let mut registry = tools::ToolRegistry::new();
             // Register built-in tools (gated behind the dangerous-builtin-tools feature).
-            anyllm_proxy::tools::builtin::register_all(&mut registry);
+            anyllm_proxy::tools::builtin::register_all(
+                &mut registry,
+                simple_config_shell.builtin_tools.as_ref(),
+            );
 
             // Build MCP manager and discover tools from configured servers.
             let mcp_manager = if let Some(ref servers) = simple_config_shell.mcp_servers {

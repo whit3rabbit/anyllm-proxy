@@ -118,6 +118,10 @@ pub struct BuiltinToolConfig {
     pub policy: Option<String>,
     #[serde(default)]
     pub timeout_secs: Option<u64>,
+    /// For read_file: restrict reads to files under these absolute directory paths.
+    /// If empty or absent, all paths are permitted (dangerous; set this in production).
+    #[serde(default)]
+    pub allowed_dirs: Vec<String>,
 }
 
 fn default_true() -> bool {
