@@ -38,6 +38,26 @@ pub fn reset_admin_rate_limit() {
     ADMIN_RATE_LIMIT.clear();
 }
 
+/// Prune stale entries from the admin rate limiter. Removes IPs whose newest
+/// timestamp is older than 60 seconds. Called periodically to prevent unbounded
+/// growth from distinct source IPs.
+fn prune_stale_rate_limit_entries(now_ms: u64) {
+    static LAST_PRUNE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let last = LAST_PRUNE.load(Ordering::Relaxed);
+    // Prune at most once every 60 seconds.
+    if now_ms.saturating_sub(last) < 60_000 {
+        return;
+    }
+    if LAST_PRUNE
+        .compare_exchange(last, now_ms, Ordering::Relaxed, Ordering::Relaxed)
+        .is_err()
+    {
+        return; // another thread won the race
+    }
+    let cutoff = now_ms.saturating_sub(60_000);
+    ADMIN_RATE_LIMIT.retain(|_, window| window.back().is_some_and(|&ts| ts >= cutoff));
+}
+
 /// Inner rate-limit check with an explicit rpm; avoids touching the global ADMIN_RPM in tests.
 fn check_admin_rate_limit_with_rpm(ip: IpAddr, rpm: u32) -> bool {
     let now_ms = std::time::SystemTime::now()
@@ -45,6 +65,10 @@ fn check_admin_rate_limit_with_rpm(ip: IpAddr, rpm: u32) -> bool {
         .unwrap_or_default()
         .as_millis() as u64;
     let cutoff = now_ms.saturating_sub(60_000);
+
+    // Periodically prune entries for IPs that have gone silent.
+    prune_stale_rate_limit_entries(now_ms);
+
     let mut window = ADMIN_RATE_LIMIT.entry(ip).or_default();
     // Evict timestamps older than 60 seconds.
     while window.front().is_some_and(|&ts| ts < cutoff) {
@@ -276,6 +300,14 @@ pub fn admin_router(shared: SharedState, token: Arc<String>) -> Router {
         .route("/admin/api/models", get(list_models).post(add_model))
         .route("/admin/api/models/{name}", delete(remove_model))
         .route("/admin/api/audit", get(get_audit_log))
+        .route(
+            "/admin/api/mcp-servers",
+            get(list_mcp_servers).post(add_mcp_server),
+        )
+        .route(
+            "/admin/api/mcp-servers/{name}",
+            delete(remove_mcp_server),
+        )
         .with_state(shared.clone())
         // Innermost: CSRF check runs after auth succeeds.
         .layer(middleware::from_fn(validate_csrf))
@@ -1569,6 +1601,95 @@ async fn get_audit_log(
             "entries": [],
         })),
     }
+}
+
+// -- MCP server management --
+
+/// GET /admin/api/mcp-servers - List all registered MCP servers and their tools.
+async fn list_mcp_servers(State(shared): State<SharedState>) -> axum::response::Response {
+    let Some(ref mgr) = shared.mcp_manager else {
+        return (StatusCode::OK, Json(serde_json::json!({"servers": []}))).into_response();
+    };
+    let servers = mgr.list_servers_blocking();
+    (StatusCode::OK, Json(serde_json::json!({"servers": servers}))).into_response()
+}
+
+/// POST /admin/api/mcp-servers - Register an MCP server. Body: { name, url }.
+/// Performs tool discovery via JSON-RPC tools/list before registering.
+async fn add_mcp_server(
+    State(shared): State<SharedState>,
+    Json(body): Json<serde_json::Value>,
+) -> axum::response::Response {
+    let Some(ref mgr) = shared.mcp_manager else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(serde_json::json!({"error": "MCP support not enabled"})),
+        )
+            .into_response();
+    };
+
+    let name = match body.get("name").and_then(|v| v.as_str()) {
+        Some(n) => n.to_string(),
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({"error": "missing 'name' field"})),
+            )
+                .into_response()
+        }
+    };
+    let url = match body.get("url").and_then(|v| v.as_str()) {
+        Some(u) => u.to_string(),
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({"error": "missing 'url' field"})),
+            )
+                .into_response()
+        }
+    };
+
+    match crate::tools::mcp::McpServerManager::discover_tools(&url).await {
+        Ok(tools) => {
+            let tool_count = tools.len();
+            mgr.register_server_blocking(&name, &url, tools);
+            tracing::info!(server = %name, tools = tool_count, "MCP server registered");
+            (
+                StatusCode::CREATED,
+                Json(serde_json::json!({
+                    "name": name,
+                    "url": url,
+                    "tools_discovered": tool_count,
+                })),
+            )
+                .into_response()
+        }
+        Err(e) => {
+            tracing::warn!(server = %name, error = %e, "MCP tool discovery failed");
+            (
+                StatusCode::BAD_GATEWAY,
+                Json(serde_json::json!({"error": e})),
+            )
+                .into_response()
+        }
+    }
+}
+
+/// DELETE /admin/api/mcp-servers/:name - Remove a registered MCP server.
+async fn remove_mcp_server(
+    State(shared): State<SharedState>,
+    Path(name): Path<String>,
+) -> axum::response::Response {
+    let Some(ref mgr) = shared.mcp_manager else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(serde_json::json!({"error": "MCP support not enabled"})),
+        )
+            .into_response();
+    };
+    mgr.remove_server_blocking(&name);
+    tracing::info!(server = %name, "MCP server removed");
+    (StatusCode::OK, Json(serde_json::json!({"removed": name}))).into_response()
 }
 
 /// Fire-and-forget audit log write. Failures are logged but never block the caller.

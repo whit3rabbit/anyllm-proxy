@@ -47,6 +47,8 @@ pub struct SharedState {
     pub hmac_secret: Arc<Vec<u8>>,
     /// Model router for dynamic model management. None unless LiteLLM config is active.
     pub model_router: Option<Arc<RwLock<crate::config::model_router::ModelRouter>>>,
+    /// MCP server manager for tool discovery and execution. None when tool execution is disabled.
+    pub mcp_manager: Option<Arc<crate::tools::McpServerManager>>,
 }
 
 /// Run a synchronous closure against the SQLite connection on the blocking
@@ -150,6 +152,7 @@ impl SharedState {
             virtual_keys: Arc::new(DashMap::new()),
             hmac_secret: Arc::new(hmac_secret),
             model_router: None,
+            mcp_manager: None,
         }
     }
 }

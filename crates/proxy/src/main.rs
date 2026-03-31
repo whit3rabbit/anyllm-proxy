@@ -335,6 +335,7 @@ async fn main() {
             virtual_keys,
             hmac_secret,
             model_router: model_router.clone(),
+            mcp_manager: None,
         };
 
         // Admin token: use env var or generate random UUID written to a file.

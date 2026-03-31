@@ -434,6 +434,7 @@ mod tests {
             virtual_keys: Arc::new(dashmap::DashMap::new()),
             hmac_secret: Arc::new(b"test-secret".to_vec()),
             model_router: None,
+            mcp_manager: None,
         };
 
         let vk_ctx = VirtualKeyContext {
