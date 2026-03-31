@@ -851,7 +851,7 @@ async fn messages(
                     let anthropic_resp = if let Some(ref engine) = state.tool_engine {
                         let tool_calls =
                             crate::tools::execution::extract_tool_calls(&anthropic_resp);
-                        let (auto_exec, _pass_through) =
+                        let (auto_exec, _pass_through, _denied) =
                             crate::tools::execution::partition_tool_calls(
                                 &tool_calls,
                                 &engine.registry,
