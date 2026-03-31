@@ -33,6 +33,12 @@ pub struct SimpleConfig {
     /// List of model deployments.
     #[serde(default)]
     pub models: Vec<SimpleModelEntry>,
+    #[serde(default)]
+    pub tool_execution: Option<ToolExecutionConfig>,
+    #[serde(default)]
+    pub builtin_tools: Option<HashMap<String, BuiltinToolConfig>>,
+    #[serde(default)]
+    pub mcp_servers: Option<Vec<McpServerConfig>>,
 }
 
 /// A model entry: either a string shorthand or a full struct.
@@ -88,6 +94,43 @@ pub struct SimpleModelFull {
     pub aws_access_key_id: Option<String>,
     #[serde(default)]
     pub aws_secret_access_key: Option<String>,
+}
+
+/// Tool execution loop configuration.
+#[derive(Debug, Deserialize)]
+pub struct ToolExecutionConfig {
+    #[serde(default)]
+    pub max_iterations: Option<usize>,
+    #[serde(default)]
+    pub tool_timeout_secs: Option<u64>,
+    #[serde(default)]
+    pub total_timeout_secs: Option<u64>,
+    #[serde(default)]
+    pub max_tool_calls_per_turn: Option<usize>,
+}
+
+/// Configuration for a single builtin tool.
+#[derive(Debug, Deserialize)]
+pub struct BuiltinToolConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default)]
+    pub policy: Option<String>,
+    #[serde(default)]
+    pub timeout_secs: Option<u64>,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+/// MCP server configuration entry.
+#[derive(Debug, Deserialize)]
+pub struct McpServerConfig {
+    pub name: String,
+    pub url: String,
+    #[serde(default)]
+    pub policy: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -660,5 +703,59 @@ models:
     fn parse_empty_models_panics() {
         let yaml = "models: []\n";
         parse_simple_yaml(yaml);
+    }
+
+    #[test]
+    fn parse_tool_execution_config() {
+        let yaml = r#"
+models:
+  - gpt-4o
+
+tool_execution:
+  max_iterations: 3
+  tool_timeout_secs: 60
+  total_timeout_secs: 600
+
+builtin_tools:
+  execute_bash:
+    enabled: false
+  read_file:
+    enabled: true
+    policy: allow
+
+mcp_servers:
+  - name: github
+    url: https://mcp.github.com/sse
+    policy: allow
+"#;
+        let config: SimpleConfig = serde_yaml::from_str(yaml).unwrap();
+        let te = config.tool_execution.unwrap();
+        assert_eq!(te.max_iterations, Some(3));
+        assert_eq!(te.tool_timeout_secs, Some(60));
+        assert_eq!(te.total_timeout_secs, Some(600));
+
+        let builtins = config.builtin_tools.unwrap();
+        let bash = builtins.get("execute_bash").unwrap();
+        assert!(!bash.enabled);
+        let rf = builtins.get("read_file").unwrap();
+        assert!(rf.enabled);
+        assert_eq!(rf.policy.as_deref(), Some("allow"));
+
+        let mcp = config.mcp_servers.unwrap();
+        assert_eq!(mcp.len(), 1);
+        assert_eq!(mcp[0].name, "github");
+        assert_eq!(mcp[0].policy.as_deref(), Some("allow"));
+    }
+
+    #[test]
+    fn parse_config_without_tool_sections() {
+        let yaml = r#"
+models:
+  - gpt-4o
+"#;
+        let config: SimpleConfig = serde_yaml::from_str(yaml).unwrap();
+        assert!(config.tool_execution.is_none());
+        assert!(config.builtin_tools.is_none());
+        assert!(config.mcp_servers.is_none());
     }
 }
