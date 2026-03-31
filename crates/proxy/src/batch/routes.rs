@@ -148,7 +148,7 @@ pub async fn create_batch(
         Err(e) => return bad_request(&format!("Invalid JSONL: {e}")),
     };
 
-    let execution_mode = if is_openai_or_azure_backend(&state.backend) {
+    let execution_mode = if is_batch_supported(&state.backend) {
         ExecutionMode::Native {
             provider: state.backend_name.clone(),
         }
@@ -256,11 +256,7 @@ pub async fn cancel_batch(State(state): State<AppState>, Path(batch_id): Path<St
 
     let id = anyllm_batch_engine::BatchId(batch_id);
     match engine.cancel(&id).await {
-        Ok(_) => match engine.get(&id).await {
-            Ok(Some(job)) => (StatusCode::OK, Json(job_to_openai_response(&job))).into_response(),
-            Ok(None) => not_found_response("batch not found"),
-            Err(e) => internal_error(&e.to_string()),
-        },
+        Ok(job) => (StatusCode::OK, Json(job_to_openai_response(&job))).into_response(),
         Err(anyllm_batch_engine::EngineError::Queue(anyllm_batch_engine::QueueError::NotFound)) => {
             not_found_response("batch not found")
         }
@@ -364,13 +360,6 @@ fn iso8601_to_epoch(s: &str) -> i64 {
 
 /// Check if the backend supports batch processing (OpenAI and Azure only).
 fn is_batch_supported(backend: &BackendClient) -> bool {
-    matches!(
-        backend,
-        BackendClient::OpenAI(_) | BackendClient::AzureOpenAI(_)
-    )
-}
-
-fn is_openai_or_azure_backend(backend: &BackendClient) -> bool {
     matches!(
         backend,
         BackendClient::OpenAI(_) | BackendClient::AzureOpenAI(_)

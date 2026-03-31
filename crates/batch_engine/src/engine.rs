@@ -20,14 +20,14 @@ pub struct BatchEngine<Q: JobQueue, W: WebhookQueue> {
 }
 
 impl<Q: JobQueue, W: WebhookQueue> BatchEngine<Q, W> {
-    /// Submit a new batch job.
     pub async fn submit(&self, submission: BatchSubmission) -> Result<BatchJob, EngineError> {
-        // Verify input file exists.
         self.file_store
             .get_meta(&submission.input_file_id)
             .await
             .map_err(|e| EngineError::Backend(e.to_string()))?
             .ok_or_else(|| EngineError::FileNotFound(submission.input_file_id.clone()))?;
+
+        const DEFAULT_MAX_RETRIES: u8 = 3;
 
         let now = now_iso8601();
         let batch_id = BatchId::new();
@@ -67,7 +67,7 @@ impl<Q: JobQueue, W: WebhookQueue> BatchEngine<Q, W> {
                 },
                 result: None,
                 attempts: 0,
-                max_retries: 3,
+                max_retries: DEFAULT_MAX_RETRIES,
                 last_error: None,
                 next_retry_at: None,
                 lease_id: None,
@@ -83,7 +83,6 @@ impl<Q: JobQueue, W: WebhookQueue> BatchEngine<Q, W> {
             .await
             .map_err(EngineError::Queue)?;
 
-        // Fire webhook for batch.queued.
         self.fire_webhook(
             &batch_id,
             "batch.queued",
@@ -92,6 +91,7 @@ impl<Q: JobQueue, W: WebhookQueue> BatchEngine<Q, W> {
                 "total_items": total,
                 "execution_mode": job.execution_mode.as_str(),
             }),
+            None,
         )
         .await;
 
@@ -117,19 +117,20 @@ impl<Q: JobQueue, W: WebhookQueue> BatchEngine<Q, W> {
     }
 
     /// Cancel a batch job.
-    pub async fn cancel(&self, id: &BatchId) -> Result<BatchStatus, EngineError> {
-        let status = self.queue.cancel(id).await.map_err(EngineError::Queue)?;
+    pub async fn cancel(&self, id: &BatchId) -> Result<BatchJob, EngineError> {
+        let job = self.queue.cancel(id).await.map_err(EngineError::Queue)?;
 
-        if status == BatchStatus::Cancelled {
+        if job.status == BatchStatus::Cancelled {
             self.fire_webhook(
                 id,
                 "batch.cancelled",
                 serde_json::json!({ "batch_id": id.0 }),
+                job.webhook_url.as_deref(),
             )
             .await;
         }
 
-        Ok(status)
+        Ok(job)
     }
 
     /// Get items for a batch (used for result retrieval).
@@ -138,26 +139,27 @@ impl<Q: JobQueue, W: WebhookQueue> BatchEngine<Q, W> {
     }
 
     /// Fire a webhook to all configured URLs.
-    async fn fire_webhook(&self, batch_id: &BatchId, event_type: &str, payload: serde_json::Value) {
+    /// `batch_webhook_url`: per-batch URL for terminal events; callers pass it from the job
+    /// they already hold to avoid an extra database round-trip.
+    async fn fire_webhook(
+        &self,
+        batch_id: &BatchId,
+        event_type: &str,
+        payload: serde_json::Value,
+        batch_webhook_url: Option<&str>,
+    ) {
+        const DEFAULT_MAX_RETRIES: u8 = 3;
+
         let event_id = format!("evt_{}", uuid::Uuid::new_v4());
 
-        // Collect URLs: global + per-batch.
         let mut urls: Vec<(String, Option<String>)> = self
             .global_webhook_urls
             .iter()
             .map(|u| (u.clone(), self.webhook_signing_secret.clone()))
             .collect();
 
-        // Per-batch webhook gets terminal events only.
-        if matches!(
-            event_type,
-            "batch.completed" | "batch.failed" | "batch.cancelled"
-        ) {
-            if let Ok(Some(job)) = self.queue.get(batch_id).await {
-                if let Some(url) = job.webhook_url {
-                    urls.push((url, self.webhook_signing_secret.clone()));
-                }
-            }
+        if let Some(url) = batch_webhook_url {
+            urls.push((url.to_string(), self.webhook_signing_secret.clone()));
         }
 
         let full_payload = serde_json::json!({
@@ -175,7 +177,7 @@ impl<Q: JobQueue, W: WebhookQueue> BatchEngine<Q, W> {
                 payload: full_payload.clone(),
                 signing_secret: secret,
                 attempts: 0,
-                max_retries: 3,
+                max_retries: DEFAULT_MAX_RETRIES,
                 next_retry_at: None,
             };
             if let Err(e) = self.webhook_queue.enqueue(delivery).await {
@@ -299,7 +301,7 @@ mod tests {
             .await
             .unwrap();
 
-        let status = engine.cancel(&job.id).await.unwrap();
-        assert_eq!(status, BatchStatus::Cancelled);
+        let cancelled = engine.cancel(&job.id).await.unwrap();
+        assert_eq!(cancelled.status, BatchStatus::Cancelled);
     }
 }

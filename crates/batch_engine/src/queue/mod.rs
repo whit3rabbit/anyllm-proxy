@@ -29,7 +29,7 @@ pub trait JobQueue: Send + Sync + 'static {
         cursor: Option<&str>,
         limit: u32,
     ) -> Result<Vec<BatchJob>, QueueError>;
-    async fn cancel(&self, id: &BatchId) -> Result<BatchStatus, QueueError>;
+    async fn cancel(&self, id: &BatchId) -> Result<BatchJob, QueueError>;
 
     // -- Item-level operations (proxy-native path, Phase 2) --
     async fn claim_next_item(&self) -> Result<Option<LeasedItem>, QueueError>;

@@ -3,25 +3,14 @@
 
 use rusqlite::Connection;
 
-/// ISO 8601 timestamp for "now" in UTC.
-pub fn now_iso8601() -> String {
-    // Replicates the pattern used in proxy's admin/db.rs.
-    // Using SystemTime to avoid chrono dependency.
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
-    // Convert epoch seconds to ISO 8601. Simplified: just store epoch
-    // and use SQLite's datetime() for display. But for compatibility
-    // with existing code, produce a formatted string.
-    let secs = now;
+/// Convert epoch seconds to an ISO 8601 UTC string (Howard Hinnant civil-from-days algorithm).
+pub fn format_epoch_iso8601(secs: u64) -> String {
     let days = secs / 86400;
     let day_secs = secs % 86400;
     let h = day_secs / 3600;
     let m = (day_secs % 3600) / 60;
     let s = day_secs % 60;
 
-    // Civil date from days since epoch (Howard Hinnant algorithm).
     let z = days as i64 + 719468;
     let era = if z >= 0 { z } else { z - 146096 } / 146097;
     let doe = (z - era * 146097) as u64;
@@ -37,6 +26,15 @@ pub fn now_iso8601() -> String {
         "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
         y_val, m_val, d, h, m, s
     )
+}
+
+/// ISO 8601 timestamp for "now" in UTC.
+pub fn now_iso8601() -> String {
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    format_epoch_iso8601(secs)
 }
 
 /// Initialize all batch_engine tables.

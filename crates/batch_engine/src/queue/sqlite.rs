@@ -2,7 +2,7 @@
 //! SQLite-backed JobQueue implementation.
 
 use super::{JobQueue, LeasedItem};
-use crate::db::now_iso8601;
+use crate::db::{format_epoch_iso8601, now_iso8601};
 use crate::error::QueueError;
 use crate::job::*;
 use async_trait::async_trait;
@@ -141,7 +141,7 @@ impl JobQueue for SqliteQueue {
         .unwrap()
     }
 
-    async fn cancel(&self, id: &BatchId) -> Result<BatchStatus, QueueError> {
+    async fn cancel(&self, id: &BatchId) -> Result<BatchJob, QueueError> {
         let db = self.db.clone();
         let id = id.0.clone();
         tokio::task::spawn_blocking(move || {
@@ -160,7 +160,9 @@ impl JobQueue for SqliteQueue {
             let new_status = match current {
                 BatchStatus::Queued => BatchStatus::Cancelled,
                 BatchStatus::Processing => BatchStatus::Cancelling,
-                other if other.is_terminal() => return Ok(other),
+                other if other.is_terminal() => {
+                    return row_to_job(&conn, &id)?.ok_or(QueueError::NotFound);
+                }
                 _ => BatchStatus::Cancelled,
             };
 
@@ -178,7 +180,7 @@ impl JobQueue for SqliteQueue {
                 )?;
             }
 
-            Ok(new_status)
+            row_to_job(&conn, &id)?.ok_or(QueueError::NotFound)
         })
         .await
         .unwrap()
@@ -585,30 +587,6 @@ fn row_to_job(conn: &Connection, batch_id: &str) -> Result<Option<BatchJob>, Que
     }
 }
 
-/// Convert epoch seconds to ISO 8601 string.
-pub(crate) fn format_epoch_iso8601(secs: u64) -> String {
-    let days = secs / 86400;
-    let day_secs = secs % 86400;
-    let h = day_secs / 3600;
-    let m = (day_secs % 3600) / 60;
-    let s = day_secs % 60;
-
-    let z = days as i64 + 719468;
-    let era = if z >= 0 { z } else { z - 146096 } / 146097;
-    let doe = (z - era * 146097) as u64;
-    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
-    let y = yoe as i64 + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = doy - (153 * mp + 2) / 5 + 1;
-    let m_val = if mp < 10 { mp + 3 } else { mp - 9 };
-    let y_val = if m_val <= 2 { y + 1 } else { y };
-
-    format!(
-        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
-        y_val, m_val, d, h, m, s
-    )
-}
 
 #[cfg(test)]
 mod tests {
@@ -715,15 +693,8 @@ mod tests {
         let (job, items) = make_job("batch_cancel");
         q.enqueue(&job, &items).await.unwrap();
 
-        let status = q.cancel(&BatchId("batch_cancel".into())).await.unwrap();
-        assert_eq!(status, BatchStatus::Cancelled);
-
-        let fetched = q
-            .get(&BatchId("batch_cancel".into()))
-            .await
-            .unwrap()
-            .unwrap();
-        assert_eq!(fetched.status, BatchStatus::Cancelled);
+        let cancelled = q.cancel(&BatchId("batch_cancel".into())).await.unwrap();
+        assert_eq!(cancelled.status, BatchStatus::Cancelled);
     }
 
     #[tokio::test]

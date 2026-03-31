@@ -2,7 +2,7 @@
 //! SQLite-backed webhook delivery queue.
 
 use super::{LeasedDelivery, WebhookDelivery, WebhookQueue};
-use crate::db::now_iso8601;
+use crate::db::{format_epoch_iso8601, now_iso8601};
 use crate::error::QueueError;
 use async_trait::async_trait;
 use rusqlite::{params, Connection};
@@ -65,7 +65,7 @@ impl WebhookQueue for SqliteWebhookQueue {
                     .unwrap()
                     .as_secs()
                     + 60;
-                super::super::queue::sqlite::format_epoch_iso8601(secs)
+                format_epoch_iso8601(secs)
             };
 
             let result = conn.query_row(
@@ -139,7 +139,7 @@ impl WebhookQueue for SqliteWebhookQueue {
                 .unwrap()
                 .as_secs()
                 + delay.as_secs();
-            super::super::queue::sqlite::format_epoch_iso8601(secs)
+            format_epoch_iso8601(secs)
         };
         tokio::task::spawn_blocking(move || {
             let conn = db.blocking_lock();
