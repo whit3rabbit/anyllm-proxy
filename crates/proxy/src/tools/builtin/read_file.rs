@@ -70,11 +70,12 @@ impl Tool for ReadFileTool {
                     ));
                 }
             } else {
-                // No allowed_dirs configured: warn the operator.
-                tracing::warn!(
-                    path = %raw_path,
-                    "read_file executed with no allowed_dirs restriction; \
-                     set allowed_dirs in builtin_tools config to restrict file access"
+                // No allowed_dirs configured: reject to prevent unrestricted file access.
+                // Operators must set allowed_dirs explicitly (use ["/"] for unrestricted).
+                return Err(
+                    "read_file requires allowed_dirs to be configured in builtin_tools config. \
+                     Set allowed_dirs: [\"/\"] to explicitly allow unrestricted access."
+                        .to_string(),
                 );
             }
 

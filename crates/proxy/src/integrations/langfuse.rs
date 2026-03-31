@@ -28,6 +28,11 @@ impl LangfuseClient {
         }
         let host = std::env::var("LANGFUSE_HOST")
             .unwrap_or_else(|_| "https://cloud.langfuse.com".to_string());
+        // Validate against SSRF: reject private/loopback URLs.
+        if let Err(e) = crate::config::validate_base_url(&host) {
+            tracing::error!(host = %host, error = %e, "LANGFUSE_HOST rejected (SSRF protection)");
+            return None;
+        }
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(5))
             .build()

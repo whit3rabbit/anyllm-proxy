@@ -156,7 +156,7 @@ fn is_safe_model_name(name: &str) -> bool {
         && !name.contains('#')
         && name
             .chars()
-            .all(|c| c.is_alphanumeric() || "-_./: @".contains(c))
+            .all(|c| c.is_alphanumeric() || "-_./:@".contains(c))
 }
 
 /// Check whether a host string (without port) is a localhost address.
@@ -236,7 +236,10 @@ pub async fn validate_csrf(
 
     if matches!(
         method,
-        axum::http::Method::POST | axum::http::Method::PUT | axum::http::Method::DELETE
+        axum::http::Method::POST
+            | axum::http::Method::PUT
+            | axum::http::Method::DELETE
+            | axum::http::Method::PATCH
     ) {
         let headers = req.headers();
 
@@ -333,10 +336,12 @@ async fn get_csrf_token(State(shared): State<SharedState>) -> axum::response::Re
 pub fn admin_router(shared: SharedState, token: Arc<String>) -> Router {
     // Public routes (no auth).
     // /admin/csrf-token is public so the SPA can fetch a token before and after login.
+    // Rate-limited to prevent unauthenticated flooding of the CSRF token map.
     let public = Router::new()
         .route("/admin/health", get(health))
         .route("/admin/csrf-token", get(get_csrf_token))
-        .with_state(shared.clone());
+        .with_state(shared.clone())
+        .layer(middleware::from_fn(admin_rate_limit_middleware));
 
     // Protected routes (require admin token + localhost origin check).
     let protected = Router::new()
@@ -862,7 +867,9 @@ async fn get_observability_overview(
     let hours = params.hours.unwrap_or(6).clamp(1, 168);
     let timeline_limit = params.timeline_limit.unwrap_or(40).clamp(10, 200);
     let failure_limit = params.failure_limit.unwrap_or(12).clamp(1, 100);
-    let backend = params.backend.filter(|value| !value.is_empty());
+    let backend = params
+        .backend
+        .filter(|value| !value.is_empty() && value.len() <= 128);
     let key_id = params.key_id;
 
     let now_epoch = std::time::SystemTime::now()
@@ -1012,10 +1019,10 @@ async fn get_requests(
     let limit = params.limit.unwrap_or(50).min(1000);
     let offset = params.offset.unwrap_or(0);
 
-    let backend = params.backend;
+    let backend = params.backend.filter(|v| v.len() <= 128);
     let since = params.since;
     let until = params.until;
-    let status = params.status;
+    let status = params.status.filter(|v| v.len() <= 32);
     let key_id = params.key_id;
     if let Some(param) = check_time_range(since.as_deref(), until.as_deref()) {
         return Json(serde_json::json!({
@@ -1651,8 +1658,8 @@ async fn get_audit_log(
 ) -> Json<serde_json::Value> {
     let limit = params.limit.unwrap_or(50).min(1000);
     let offset = params.offset.unwrap_or(0);
-    let action = params.action;
-    let target_type = params.target_type;
+    let action = params.action.filter(|v| v.len() <= 128);
+    let target_type = params.target_type.filter(|v| v.len() <= 128);
     let since = params.since;
     let until = params.until;
     if let Some(param) = check_time_range(since.as_deref(), until.as_deref()) {

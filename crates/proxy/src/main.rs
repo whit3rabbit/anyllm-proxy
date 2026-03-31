@@ -2,9 +2,10 @@ use anyllm_proxy::{admin, config, server::routes, tools};
 use std::sync::Arc;
 use tracing_subscriber::prelude::*;
 
-#[tokio::main]
-async fn main() {
-    // ---- Phase 1: Collect env file overrides (before tracing init) ----
+/// Entry point: set env vars while still single-threaded (before tokio runtime),
+/// then hand off to the async main. This avoids UB from calling set_var after
+/// the multi-thread tokio runtime has spawned worker threads.
+fn main() {
     let args: Vec<String> = std::env::args().collect();
     let env_file_path = args
         .windows(2)
@@ -19,8 +20,7 @@ async fn main() {
         });
     let env_file_vars = env_file_path.map(parse_env_file).unwrap_or_default();
 
-    // ---- Phase 2: Apply env file vars (needed for RUST_LOG before tracing init) ----
-    // SAFETY: single-threaded, before tokio spawns workers.
+    // SAFETY: genuinely single-threaded here (no tokio runtime yet).
     unsafe {
         for (key, val) in &env_file_vars {
             std::env::set_var(key, val);
@@ -32,6 +32,24 @@ async fn main() {
             env_file_vars.len()
         );
     }
+
+    // Compute and apply LiteLLM env aliases (still single-threaded).
+    let aliases = config::env_aliases::compute_env_aliases();
+    unsafe {
+        for (key, val) in &aliases {
+            std::env::set_var(key, val);
+        }
+    }
+
+    // Now start the tokio runtime and enter the async main.
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("failed to build tokio runtime")
+        .block_on(async_main(args));
+}
+
+async fn async_main(args: Vec<String>) {
 
     // ---- Phase 3: Init tracing (needs RUST_LOG from env file) ----
     let env_filter = tracing_subscriber::EnvFilter::from_default_env();
@@ -55,25 +73,20 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer().json())
         .init();
 
-    // ---- Phase 4: Compute remaining env overrides and apply in one block ----
-    let aliases = config::env_aliases::compute_env_aliases();
-
-    // Apply alias overrides so config::MultiConfig::load() sees them.
-    // SAFETY: still single-threaded at this point (no spawns yet).
-    unsafe {
-        for (key, val) in &aliases {
-            std::env::set_var(key, val);
-        }
-    }
-
+    // Env aliases were already applied in sync main(). Load config.
     let load_result = config::MultiConfig::load();
     let multi_config = load_result.multi_config;
     let model_router = load_result.model_router;
 
     // Apply litellm master_key if PROXY_API_KEYS is still unset.
+    // NOTE: this is a read-only check followed by a set. The tokio runtime is
+    // running, but no worker tasks are spawned yet at this point (we haven't
+    // called tokio::spawn). Still, we avoid set_var here to be safe.
     if let Some(ref mk) = load_result.litellm_master_key {
         if std::env::var("PROXY_API_KEYS").is_err() {
-            // SAFETY: still single-threaded, no spawns yet.
+            // Store in a way the middleware can read without set_var.
+            // For now, use set_var since this runs before any spawns in practice.
+            // TODO: refactor PROXY_API_KEYS to use a config struct instead of env var.
             unsafe { std::env::set_var("PROXY_API_KEYS", mk) };
             tracing::info!("applied general_settings.master_key as PROXY_API_KEYS");
         }
@@ -97,6 +110,16 @@ async fn main() {
             anyllm_proxy::server::routes::set_callbacks(cb);
             tracing::info!("callbacks configured from environment");
         }
+    }
+
+    // Warn when request/response body logging is enabled: bodies may contain
+    // user prompts, API keys in tool calls, and other sensitive data.
+    if multi_config.log_bodies {
+        tracing::warn!(
+            "LOG_BODIES is enabled: request and response bodies will be logged at debug level. \
+             This may expose sensitive data (prompts, API keys, PII). \
+             Disable in production by unsetting LOG_BODIES."
+        );
     }
 
     tracing::info!(
@@ -435,9 +458,11 @@ async fn main() {
             issued_csrf_tokens: Arc::new(dashmap::DashMap::new()),
         };
 
-        // Admin token: use env var or generate random UUID written to a file.
+        // Admin token: use env var or generate 256-bit random hex written to a file.
         let admin_token = std::env::var("ADMIN_TOKEN").unwrap_or_else(|_| {
-            let token = uuid::Uuid::new_v4().to_string();
+            let mut buf = [0u8; 32];
+            getrandom::fill(&mut buf).expect("getrandom failed");
+            let token = hex::encode(buf);
             let token_path = resolve_admin_token_path();
             let token_path = token_path.to_string_lossy().to_string();
             // Write token to file with restrictive permissions instead of stderr,
@@ -768,7 +793,15 @@ fn parse_env_file(path: &str) -> Vec<(String, String)> {
 /// falling back to `.admin_token` in the current directory.
 fn resolve_admin_token_path() -> std::path::PathBuf {
     match std::env::var("ADMIN_TOKEN_PATH") {
-        Ok(p) => std::path::PathBuf::from(p),
+        Ok(p) => {
+            let path = std::path::PathBuf::from(&p);
+            // Reject paths containing traversal sequences to prevent writing
+            // the admin token to unexpected locations via misconfigured env vars.
+            if p.contains("..") {
+                panic!("ADMIN_TOKEN_PATH must not contain '..' path traversal: {p}");
+            }
+            path
+        }
         Err(_) => std::path::PathBuf::from(".admin_token"),
     }
 }

@@ -30,6 +30,9 @@ impl SemanticCache {
     /// degradation: the proxy starts without semantic caching.
     pub fn new() -> Option<Self> {
         let url = std::env::var("QDRANT_URL").ok()?;
+        // QDRANT_URL and REDIS_URL are operator-controlled infra addresses.
+        // Private IPs (localhost, 10.x, etc.) are expected for these services.
+        // No SSRF validation needed since these are not user-controlled inputs.
         let collection =
             std::env::var("QDRANT_COLLECTION").unwrap_or_else(|_| "anyllm_cache".to_string());
         let threshold: f32 = std::env::var("SEMANTIC_CACHE_THRESHOLD")

@@ -40,6 +40,16 @@ impl Tool for BashTool {
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Value, String>> + Send + 'a>>
     {
         Box::pin(async move {
+            // Require explicit opt-in via env var to prevent accidental RCE when
+            // an operator sets policy: allow without understanding the risk.
+            if std::env::var("ANYLLM_ALLOW_BASH_EXECUTION").as_deref() != Ok("1") {
+                return Err(
+                    "execute_bash requires ANYLLM_ALLOW_BASH_EXECUTION=1 environment variable. \
+                     This tool allows arbitrary command execution; set the env var to acknowledge the risk."
+                        .to_string(),
+                );
+            }
+
             let command = input
                 .get("command")
                 .and_then(|v| v.as_str())
