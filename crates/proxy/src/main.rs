@@ -794,13 +794,15 @@ fn write_token_file(path: &str, token: &str) -> std::io::Result<()> {
     };
 
     #[cfg(not(unix))]
-    let mut file = {
-        tracing::warn!(
-            path = %path,
-            "admin token file written without restrictive permissions (non-Unix platform); \
-             secure this file manually or set ADMIN_TOKEN_PATH to a protected location"
-        );
-        std::fs::File::create(path)?
+    let mut file: std::fs::File = {
+        // On non-Unix platforms, file permissions cannot be set to owner-only
+        // at creation time. Returning an error forces the caller to panic,
+        // requiring the operator to set ADMIN_TOKEN explicitly.
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "auto-generating the admin token file is not supported on non-Unix platforms; \
+             set the ADMIN_TOKEN environment variable explicitly",
+        ));
     };
 
     file.write_all(token.as_bytes())?;
