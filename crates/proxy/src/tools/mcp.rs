@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -205,6 +205,54 @@ impl Default for McpServerManager {
     }
 }
 
+/// Adapter that wraps an MCP tool as a `Tool` trait implementor.
+/// Delegates execution to `McpServerManager::call_tool()`.
+pub struct McpToolAdapter {
+    pub prefixed_name: String,
+    pub description: String,
+    pub input_schema: Value,
+    pub manager: Arc<McpServerManager>,
+}
+
+impl crate::tools::registry::Tool for McpToolAdapter {
+    fn name(&self) -> &str {
+        &self.prefixed_name
+    }
+
+    fn description(&self) -> &str {
+        &self.description
+    }
+
+    fn input_schema(&self) -> Value {
+        self.input_schema.clone()
+    }
+
+    fn execute<'a>(
+        &'a self,
+        input: Value,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Value, String>> + Send + 'a>>
+    {
+        Box::pin(async move { self.manager.call_tool(&self.prefixed_name, input).await })
+    }
+}
+
+/// Register all MCP tools from the manager into a ToolRegistry.
+pub fn register_mcp_tools(manager: &Arc<McpServerManager>, registry: &mut crate::tools::ToolRegistry) {
+    let servers = manager.list_servers_blocking();
+    for server in &servers {
+        for tool in &server.tools {
+            let prefixed = mcp_tool_name(&server.name, &tool.name);
+            let adapter = McpToolAdapter {
+                prefixed_name: prefixed,
+                description: tool.description.clone(),
+                input_schema: tool.input_schema.clone(),
+                manager: manager.clone(),
+            };
+            registry.register(Box::new(adapter));
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -276,6 +324,37 @@ mod tests {
             mcp_tool_name("my-server", "do_thing"),
             "mcp_my-server_do_thing"
         );
+    }
+
+    #[test]
+    fn mcp_tool_adapter_implements_tool_trait() {
+        let mgr = Arc::new(McpServerManager::new());
+        let adapter = McpToolAdapter {
+            prefixed_name: "mcp_github_search".to_string(),
+            description: "Search repos".to_string(),
+            input_schema: serde_json::json!({"type": "object"}),
+            manager: mgr,
+        };
+        use crate::tools::registry::Tool;
+        assert_eq!(adapter.name(), "mcp_github_search");
+        assert_eq!(adapter.description(), "Search repos");
+    }
+
+    #[test]
+    fn register_mcp_tools_into_registry() {
+        let mgr = Arc::new(McpServerManager::new());
+        mgr.register_server_blocking(
+            "github",
+            "https://example.com/sse",
+            vec![McpToolDef {
+                name: "search".to_string(),
+                description: "Search".to_string(),
+                input_schema: serde_json::json!({"type": "object"}),
+            }],
+        );
+        let mut registry = crate::tools::ToolRegistry::new();
+        register_mcp_tools(&mgr, &mut registry);
+        assert!(registry.contains("mcp_github_search"));
     }
 
     #[test]
