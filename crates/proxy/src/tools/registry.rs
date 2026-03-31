@@ -61,6 +61,11 @@ impl ToolRegistry {
     pub fn contains(&self, name: &str) -> bool {
         self.tools.contains_key(name)
     }
+
+    /// Return all registered tool names.
+    pub fn list_names(&self) -> Vec<&str> {
+        self.tools.keys().map(|s| s.as_str()).collect()
+    }
 }
 
 impl Default for ToolRegistry {
