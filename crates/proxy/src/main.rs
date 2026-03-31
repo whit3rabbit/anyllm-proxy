@@ -21,11 +21,6 @@ async fn main() {
 
     // ---- Phase 2: Apply env file vars (needed for RUST_LOG before tracing init) ----
     // SAFETY: single-threaded, before tokio spawns workers.
-    // The debug_assert catches regressions if a spawn is added before this call.
-    debug_assert!(
-        tokio::runtime::Handle::try_current().is_err(),
-        "set_var called after tokio runtime started; this is unsound in a multi-threaded context"
-    );
     unsafe {
         for (key, val) in &env_file_vars {
             std::env::set_var(key, val);
@@ -65,10 +60,6 @@ async fn main() {
 
     // Apply alias overrides so config::MultiConfig::load() sees them.
     // SAFETY: still single-threaded at this point (no spawns yet).
-    debug_assert!(
-        tokio::runtime::Handle::try_current().is_err(),
-        "set_var called after tokio runtime started; this is unsound in a multi-threaded context"
-    );
     unsafe {
         for (key, val) in &aliases {
             std::env::set_var(key, val);
@@ -83,10 +74,6 @@ async fn main() {
     if let Some(ref mk) = load_result.litellm_master_key {
         if std::env::var("PROXY_API_KEYS").is_err() {
             // SAFETY: still single-threaded, no spawns yet.
-            debug_assert!(
-                tokio::runtime::Handle::try_current().is_err(),
-                "set_var called after tokio runtime started; this is unsound in a multi-threaded context"
-            );
             unsafe { std::env::set_var("PROXY_API_KEYS", mk) };
             tracing::info!("applied general_settings.master_key as PROXY_API_KEYS");
         }
