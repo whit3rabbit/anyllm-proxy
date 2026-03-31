@@ -64,8 +64,7 @@ fn shared_state() -> admin::state::SharedState {
 // ---------------------------------------------------------------------------
 
 /// CSRF token used by unit-level tests (oneshot). Must match the cookie value below.
-const TEST_CSRF_TOKEN: &str =
-    "0000000000000000000000000000000000000000000000000000000000000001";
+const TEST_CSRF_TOKEN: &str = "0000000000000000000000000000000000000000000000000000000000000001";
 /// Cookie header value that satisfies the CSRF double-submit check for the token above.
 const TEST_CSRF_COOKIE: &str =
     "csrf_token=0000000000000000000000000000000000000000000000000000000000000001";

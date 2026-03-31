@@ -130,10 +130,7 @@ pub fn translate_request_gemini(
 /// Translate a Gemini native `GenerateContentResponse` back to an Anthropic response.
 ///
 /// `model` is the Anthropic model name from the original request.
-pub fn translate_response_gemini(
-    resp: &GenerateContentResponse,
-    model: &str,
-) -> MessageResponse {
+pub fn translate_response_gemini(resp: &GenerateContentResponse, model: &str) -> MessageResponse {
     gemini_message_map::gemini_to_anthropic_response(resp, model)
 }
 

@@ -113,6 +113,21 @@ impl BackendError {
         }
     }
 
+    /// Classify the error into a short stable kind string for log/observability use.
+    pub fn error_kind(&self) -> &'static str {
+        match self {
+            Self::Bedrock(crate::backend::bedrock_client::BedrockClientError::Signing(_)) => {
+                "signing"
+            }
+            _ => {
+                let status = self.api_error_status();
+                let msg = self.api_error_message();
+                infer_error_kind(status.unwrap_or(0), Some(msg.as_str()))
+                    .unwrap_or("unknown")
+            }
+        }
+    }
+
     /// Extract the upstream error message and HTTP status for API errors.
     /// Returns None for transport/deserialization errors.
     pub fn api_error_details(&self) -> Option<(String, u16)> {
@@ -132,6 +147,30 @@ impl BackendError {
             _ => None,
         }
     }
+}
+
+/// Classify a status code + optional message into a short stable kind string.
+/// Returns `None` for successful (2xx/3xx) responses.
+pub fn infer_error_kind(status_code: u16, message: Option<&str>) -> Option<&'static str> {
+    if status_code == 429 {
+        return Some("rate_limit");
+    }
+    if status_code == 408 || status_code == 504 {
+        return Some("timeout");
+    }
+    if let Some(msg) = message {
+        let lower = msg.to_ascii_lowercase();
+        if lower.contains("timeout") || lower.contains("timed out") {
+            return Some("timeout");
+        }
+    }
+    if status_code >= 500 {
+        return Some("backend_error");
+    }
+    if status_code >= 400 {
+        return Some("client_error");
+    }
+    None
 }
 
 impl std::fmt::Display for BackendError {
@@ -183,7 +222,10 @@ mod tests {
         assert!(details.is_some(), "Anthropic ApiError must return details");
         let (msg, status) = details.unwrap();
         assert_eq!(status, 429);
-        assert!(msg.contains("rate limit"), "message should contain upstream body");
+        assert!(
+            msg.contains("rate limit"),
+            "message should contain upstream body"
+        );
     }
 
     #[test]
@@ -224,6 +266,23 @@ mod tests {
         // Use Bedrock::Signing since OpenAIClientError::Request requires a live reqwest::Error.
         let err = BackendError::Bedrock(BedrockClientError::Signing("bad key".into()));
         assert!(err.api_error_details().is_none());
+    }
+
+    #[test]
+    fn backend_error_kind_classifies_common_cases() {
+        let rate_limited = BackendError::Gemini(GeminiClientError::ApiError {
+            status: 429,
+            body: "quota hit".to_string(),
+        });
+        assert_eq!(rate_limited.error_kind(), "rate_limit");
+
+        let timeout = BackendError::Anthropic(AnthropicClientError::Transport(
+            "request timeout".to_string(),
+        ));
+        assert_eq!(timeout.error_kind(), "timeout");
+
+        let signing = BackendError::Bedrock(BedrockClientError::Signing("bad sig".into()));
+        assert_eq!(signing.error_kind(), "signing");
     }
 }
 

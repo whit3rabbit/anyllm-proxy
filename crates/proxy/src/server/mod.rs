@@ -4,10 +4,10 @@ pub mod audio;
 mod bedrock_passthrough;
 /// OpenAI Chat Completions input handler (POST /v1/chat/completions).
 mod chat_completions;
-/// Image generation passthrough handler.
-pub mod images;
 /// Gemini native generateContent handler (POST /v1/messages when GEMINI_API_FORMAT=native).
 mod gemini_native;
+/// Image generation passthrough handler.
+pub mod images;
 /// Auth validation, request ID injection, size limits, concurrency limits, header logging.
 pub mod middleware;
 /// OIDC/JWT authentication (optional, enabled via OIDC_ISSUER_URL).

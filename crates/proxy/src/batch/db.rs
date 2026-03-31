@@ -465,6 +465,9 @@ mod tests {
         let record2 = get_anthropic_batch_map(&conn, "msgbatch_our1")
             .unwrap()
             .unwrap();
-        assert_eq!(record2.openai_output_file_id.as_deref(), Some("file-output1"));
+        assert_eq!(
+            record2.openai_output_file_id.as_deref(),
+            Some("file-output1")
+        );
     }
 }

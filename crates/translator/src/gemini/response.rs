@@ -90,7 +90,10 @@ mod tests {
         });
         let resp: GenerateContentResponse = serde_json::from_value(j).unwrap();
         assert_eq!(resp.candidates.len(), 1);
-        assert_eq!(resp.candidates[0].content.parts[0].text.as_deref(), Some("Hello!"));
+        assert_eq!(
+            resp.candidates[0].content.parts[0].text.as_deref(),
+            Some("Hello!")
+        );
         assert_eq!(resp.candidates[0].finish_reason, Some(FinishReason::STOP));
         let usage = resp.usage_metadata.unwrap();
         assert_eq!(usage.prompt_token_count, 5);
@@ -115,7 +118,10 @@ mod tests {
             }]
         });
         let resp: GenerateContentResponse = serde_json::from_value(j).unwrap();
-        let fc = resp.candidates[0].content.parts[0].function_call.as_ref().unwrap();
+        let fc = resp.candidates[0].content.parts[0]
+            .function_call
+            .as_ref()
+            .unwrap();
         assert_eq!(fc.name, "get_weather");
         assert_eq!(fc.args["city"], "London");
     }
@@ -225,7 +231,10 @@ mod tests {
             }]
         });
         let resp: GenerateContentResponse = serde_json::from_value(j).unwrap();
-        assert_eq!(resp.candidates[0].content.parts[0].text.as_deref(), Some("Hello"));
+        assert_eq!(
+            resp.candidates[0].content.parts[0].text.as_deref(),
+            Some("Hello")
+        );
         assert!(resp.candidates[0].finish_reason.is_none());
         assert!(resp.usage_metadata.is_none());
     }

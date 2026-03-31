@@ -8,14 +8,14 @@ pub mod batch;
 pub mod cache;
 /// Webhook callback support for request completion notifications.
 pub mod callbacks;
-/// Named integration registry (Langfuse, etc.).
-pub mod integrations;
 /// Environment-based configuration, TLS client cert setup, URL validation.
 pub mod config;
 /// Per-request cost tracking and model pricing (US4).
 pub mod cost;
 /// Backend fallback chains for transparent failover (US2).
 pub mod fallback;
+/// Named integration registry (Langfuse, etc.).
+pub mod integrations;
 /// Request count, success/error tracking, exposed via GET /metrics.
 pub mod metrics;
 /// Optional OpenTelemetry OTLP trace export (requires `otel` feature).
@@ -25,3 +25,5 @@ pub mod otel;
 pub mod ratelimit;
 /// Axum HTTP server: routes, middleware (auth, request ID, size/concurrency limits), SSE streaming.
 pub mod server;
+/// Optional built-in server-side tools and registry.
+pub mod tools;

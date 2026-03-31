@@ -9,7 +9,7 @@ use futures::stream::Stream;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
-use super::routes::{log_request, AppState, RequestCtx};
+use super::routes::{log_request, set_backend_error_kind, AppState, RequestCtx};
 
 /// Send translated stream events over the SSE channel. Returns false if client disconnected.
 pub(super) async fn send_events(
@@ -290,25 +290,23 @@ pub(crate) async fn messages_stream(
                         );
                     }
                     Err(e) => {
-                        let status = e.status_code();
-                        let err_msg = e.to_string();
+                        let backend_error = crate::backend::BackendError::from(e);
                         metrics.record_error();
-                        log_request(
-                            &log_shared,
-                            ctx.log_entry_with_attribution(
-                                &log_backend_name,
-                                Some(mapped_model),
-                                status,
-                                None,
-                                true,
-                                Some(err_msg),
-                                &vk_ctx,
-                                None,
-                            ),
+                        let mut entry = ctx.log_entry_with_attribution(
+                            &log_backend_name,
+                            Some(mapped_model),
+                            backend_error.status_code(),
+                            None,
+                            true,
+                            Some(backend_error.to_string()),
+                            &vk_ctx,
+                            None,
                         );
+                        set_backend_error_kind(&mut entry, &backend_error);
+                        log_request(&log_shared, entry);
                         // Send the error through the oneshot so the caller can
                         // return a proper HTTP error response instead of 200 OK.
-                        let _ = rl_tx.send(Err(crate::backend::BackendError::from(e)));
+                        let _ = rl_tx.send(Err(backend_error));
                     }
                 }
             });
@@ -400,28 +398,28 @@ pub(crate) async fn messages_stream(
                         );
                     }
                     Err(e) => {
-                        let status = e.status_code();
-                        let err_msg = e.to_string();
+                        let backend_error = crate::backend::BackendError::from(e);
                         metrics.record_error();
-                        log_request(
-                            &log_shared,
-                            ctx.log_entry_with_attribution(
-                                &log_backend_name,
-                                Some(mapped_model),
-                                status,
-                                None,
-                                true,
-                                Some(err_msg),
-                                &vk_ctx,
-                                None,
-                            ),
+                        let mut entry = ctx.log_entry_with_attribution(
+                            &log_backend_name,
+                            Some(mapped_model),
+                            backend_error.status_code(),
+                            None,
+                            true,
+                            Some(backend_error.to_string()),
+                            &vk_ctx,
+                            None,
                         );
-                        let _ = rl_tx.send(Err(crate::backend::BackendError::from(e)));
+                        set_backend_error_kind(&mut entry, &backend_error);
+                        log_request(&log_shared, entry);
+                        let _ = rl_tx.send(Err(backend_error));
                     }
                 }
             });
         }
-        BackendClient::Anthropic(_) | BackendClient::Bedrock(_) | BackendClient::GeminiNative(_) => {
+        BackendClient::Anthropic(_)
+        | BackendClient::Bedrock(_)
+        | BackendClient::GeminiNative(_) => {
             drop(rl_tx);
             let _ = tx
                 .send(Ok(Event::default().data(

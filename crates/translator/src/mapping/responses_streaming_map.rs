@@ -596,7 +596,9 @@ mod tests {
             }),
         );
         t.process_event(&completed);
-        let usage = t.usage().expect("usage should be Some after completed event");
+        let usage = t
+            .usage()
+            .expect("usage should be Some after completed event");
         assert_eq!(usage.input_tokens, 42);
         assert_eq!(usage.output_tokens, 17);
     }

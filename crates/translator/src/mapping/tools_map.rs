@@ -170,18 +170,13 @@ pub fn normalize_schema_for_strict(mut schema: serde_json::Value) -> serde_json:
             })
             .unwrap_or_default();
 
-        let mut merged: Vec<String> = prop_keys
-            .into_iter()
-            .chain(existing)
-            .collect();
+        let mut merged: Vec<String> = prop_keys.into_iter().chain(existing).collect();
         merged.sort();
         merged.dedup();
 
         obj.insert(
             "required".to_string(),
-            serde_json::Value::Array(
-                merged.into_iter().map(serde_json::Value::String).collect(),
-            ),
+            serde_json::Value::Array(merged.into_iter().map(serde_json::Value::String).collect()),
         );
 
         // Recurse into nested object properties.
@@ -208,10 +203,7 @@ pub fn apply_strict_to_forced_tool(tools: &mut [serde_json::Value], forced_name:
         let Some(function) = tool.get_mut("function") else {
             continue;
         };
-        let name_matches = function
-            .get("name")
-            .and_then(|n| n.as_str())
-            == Some(forced_name);
+        let name_matches = function.get("name").and_then(|n| n.as_str()) == Some(forced_name);
 
         if name_matches {
             if let Some(obj) = function.as_object_mut() {
@@ -629,8 +621,14 @@ mod strict_tests {
         });
         let normalized = normalize_schema_for_strict(schema);
         let required = normalized["required"].as_array().unwrap();
-        assert!(required.iter().any(|v| v == "name"), "name should be required");
-        assert!(required.iter().any(|v| v == "age"), "age should be required");
+        assert!(
+            required.iter().any(|v| v == "name"),
+            "name should be required"
+        );
+        assert!(
+            required.iter().any(|v| v == "age"),
+            "age should be required"
+        );
         assert_eq!(normalized["additionalProperties"], json!(false));
     }
 
@@ -719,7 +717,10 @@ mod strict_tests {
 
         // get_weather should be unchanged (no strict flag).
         let get_weather = &tools[0]["function"];
-        assert!(get_weather.get("strict").map(|v| v.is_null() || v == &serde_json::json!(false)).unwrap_or(true));
+        assert!(get_weather
+            .get("strict")
+            .map(|v| v.is_null() || v == &serde_json::json!(false))
+            .unwrap_or(true));
     }
 
     #[test]

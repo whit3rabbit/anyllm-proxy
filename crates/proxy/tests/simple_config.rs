@@ -22,7 +22,10 @@ routing_strategy: least-busy
     unsafe { std::env::set_var("OPENAI_API_KEY", "sk-test") };
 
     let result = MultiConfig::load();
-    assert!(result.model_router.is_some(), "simple format must produce a model router");
+    assert!(
+        result.model_router.is_some(),
+        "simple format must produce a model router"
+    );
 
     let router_arc = result.model_router.unwrap();
     let router = router_arc.read().unwrap();

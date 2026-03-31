@@ -724,7 +724,10 @@ mod tests {
     #[test]
     fn cost_based_picks_cheapest_model() {
         // gpt-4o-mini is cheaper than gpt-4o (both are in the bundled pricing table).
-        let deps = make_deployments(&[("expensive", "gpt-4o", None), ("cheap", "gpt-4o-mini", None)]);
+        let deps = make_deployments(&[
+            ("expensive", "gpt-4o", None),
+            ("cheap", "gpt-4o-mini", None),
+        ]);
         let mut routes = HashMap::new();
         routes.insert("my-model".to_string(), deps);
         let router = ModelRouter::with_strategy(routes, RoutingStrategy::CostBased);
@@ -757,7 +760,10 @@ mod tests {
     #[test]
     fn cost_based_falls_back_to_round_robin_for_unknown_models() {
         // Unknown model names have no pricing entry; should fall back to round-robin.
-        let deps = make_deployments(&[("a", "no-such-model-xyz", None), ("b", "no-such-model-xyz", None)]);
+        let deps = make_deployments(&[
+            ("a", "no-such-model-xyz", None),
+            ("b", "no-such-model-xyz", None),
+        ]);
         let mut routes = HashMap::new();
         routes.insert("m".to_string(), deps);
         let router = ModelRouter::with_strategy(routes, RoutingStrategy::CostBased);

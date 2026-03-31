@@ -177,7 +177,7 @@ mod tests {
         // Non-URL strings and localhost/private URLs are all filtered.
         let config = CallbackConfig::new(vec![
             "https://example.com/hook".to_string(),
-            "langfuse".to_string(),            // not a URL, filtered
+            "langfuse".to_string(),                 // not a URL, filtered
             "http://localhost:9999/cb".to_string(), // loopback, rejected (SSRF)
         ]);
         let config = config.unwrap();
@@ -191,10 +191,13 @@ mod tests {
             "http://169.254.169.254/hook".to_string(), // cloud metadata
             "http://10.0.0.1/hook".to_string(),        // RFC 1918
             "http://127.0.0.1:9999/hook".to_string(),  // loopback
-            "http://localhost:8080/hook".to_string(),   // loopback hostname
+            "http://localhost:8080/hook".to_string(),  // loopback hostname
         ]);
         // All URLs are private/loopback; no valid URLs remain.
-        assert!(config.is_none(), "private/loopback webhook URLs must be rejected");
+        assert!(
+            config.is_none(),
+            "private/loopback webhook URLs must be rejected"
+        );
     }
 
     #[test]
@@ -226,10 +229,7 @@ mod tests {
         // with_named with no URLs but a named integration returns Some
         // We can't construct LangfuseClient directly in tests easily,
         // so just verify with_named([valid_url], []) == new([valid_url])
-        let c1 = CallbackConfig::with_named(
-            vec!["https://example.com/hook".to_string()],
-            vec![],
-        );
+        let c1 = CallbackConfig::with_named(vec!["https://example.com/hook".to_string()], vec![]);
         let c2 = CallbackConfig::new(vec!["https://example.com/hook".to_string()]);
         assert!(c1.is_some());
         assert!(c2.is_some());

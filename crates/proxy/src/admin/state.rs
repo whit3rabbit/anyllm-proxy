@@ -113,6 +113,10 @@ pub struct RequestLogEntry {
     pub is_streaming: bool,
     /// Present only when the request failed; contains the error description.
     pub error_message: Option<String>,
+    /// Stable operator-facing failure classification, such as `rate_limit`,
+    /// `timeout`, or `invalid_request`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_kind: Option<String>,
     /// Database row ID of the virtual key that authenticated this request.
     /// None when the request used a static API key or open relay.
     #[serde(skip_serializing_if = "Option::is_none")]

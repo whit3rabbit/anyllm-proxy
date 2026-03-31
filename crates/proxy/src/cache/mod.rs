@@ -352,6 +352,9 @@ mod tests {
         });
         let key1 = cache_key_for_request(&body1, CacheNamespace::OpenAI);
         let key2 = cache_key_for_request(&body2, CacheNamespace::OpenAI);
-        assert_ne!(key1, key2, "different cache_ttl_secs must produce different cache keys");
+        assert_ne!(
+            key1, key2,
+            "different cache_ttl_secs must produce different cache keys"
+        );
     }
 }

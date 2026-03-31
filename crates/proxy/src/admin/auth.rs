@@ -91,7 +91,10 @@ mod csrf_tests {
     #[test]
     fn extract_csrf_cookie_finds_value() {
         let cookie_header = "csrf_token=abc123; session=xyz";
-        assert_eq!(extract_csrf_cookie(cookie_header), Some("abc123".to_string()));
+        assert_eq!(
+            extract_csrf_cookie(cookie_header),
+            Some("abc123".to_string())
+        );
     }
 
     #[test]

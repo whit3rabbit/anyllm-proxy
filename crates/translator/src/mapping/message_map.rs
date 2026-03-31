@@ -228,8 +228,7 @@ fn apply_strict_mode_to_tool(tools: &mut [openai::ChatTool], forced_name: &str) 
         if tool.function.name == forced_name {
             tool.function.strict = Some(true);
             if let Some(params) = tool.function.parameters.take() {
-                tool.function.parameters =
-                    Some(tools_map::normalize_schema_for_strict(params));
+                tool.function.parameters = Some(tools_map::normalize_schema_for_strict(params));
             }
             // Tool names are unique; stop after the first match.
             break;
@@ -2170,8 +2169,14 @@ mod tests {
         assert!(is_o_series_model("o5"), "o5 must match");
         assert!(is_o_series_model("o10"), "o10 (multi-digit) must match");
         assert!(is_o_series_model("o2-mini"), "o2-mini must match");
-        assert!(!is_o_series_model("o-preview"), "bare 'o' with no digit must not match");
-        assert!(!is_o_series_model("openai-o1"), "o1 not at start must not match");
+        assert!(
+            !is_o_series_model("o-preview"),
+            "bare 'o' with no digit must not match"
+        );
+        assert!(
+            !is_o_series_model("openai-o1"),
+            "o1 not at start must not match"
+        );
     }
 
     fn make_request(model: &str, system: Option<&str>) -> anthropic::MessageCreateRequest {
@@ -2377,11 +2382,17 @@ mod tests {
         assert_eq!(tools[0].function.strict, Some(true));
 
         // The schema should have additionalProperties: false.
-        let params = tools[0].function.parameters.as_ref().expect("parameters should be present");
+        let params = tools[0]
+            .function
+            .parameters
+            .as_ref()
+            .expect("parameters should be present");
         assert_eq!(params["additionalProperties"], serde_json::json!(false));
 
         // required should include both properties.
-        let required = params["required"].as_array().expect("required should be present");
+        let required = params["required"]
+            .as_array()
+            .expect("required should be present");
         assert!(required.iter().any(|v| v == "name"));
         assert!(required.iter().any(|v| v == "value"));
     }

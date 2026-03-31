@@ -18,7 +18,8 @@ use bytes::BytesMut;
 use futures::StreamExt;
 
 use super::routes::{
-    inject_degradation_header, log_request, AppState, ConcurrencyPermit, RequestCtx,
+    inject_degradation_header, log_request, set_backend_error_kind, AppState, ConcurrencyPermit,
+    RequestCtx,
 };
 
 /// OpenAI-shaped error response body.
@@ -285,21 +286,20 @@ pub(crate) async fn chat_completions(
                         d.record_finish(backend_start.elapsed().as_millis() as u64);
                     }
                     state.metrics.record_error();
-                    let status = e.status_code();
-                    log_request(
-                        &state.shared,
-                        ctx.log_entry_with_attribution(
-                            &state.backend_name,
-                            Some(mapped_model),
-                            status,
-                            None,
-                            false,
-                            Some(e.to_string()),
-                            &vk_ctx,
-                            None,
-                        ),
+                    let backend_error = BackendError::from(e);
+                    let mut entry = ctx.log_entry_with_attribution(
+                        &state.backend_name,
+                        Some(mapped_model),
+                        backend_error.status_code(),
+                        None,
+                        false,
+                        Some(backend_error.to_string()),
+                        &vk_ctx,
+                        None,
                     );
-                    backend_error_to_openai_response(BackendError::from(e))
+                    set_backend_error_kind(&mut entry, &backend_error);
+                    log_request(&state.shared, entry);
+                    backend_error_to_openai_response(backend_error)
                 }
             }
         }
@@ -370,25 +370,26 @@ pub(crate) async fn chat_completions(
                         d.record_finish(backend_start.elapsed().as_millis() as u64);
                     }
                     state.metrics.record_error();
-                    let status = e.status_code();
-                    log_request(
-                        &state.shared,
-                        ctx.log_entry_with_attribution(
-                            &state.backend_name,
-                            Some(mapped_model),
-                            status,
-                            None,
-                            false,
-                            Some(e.to_string()),
-                            &vk_ctx,
-                            None,
-                        ),
+                    let backend_error = BackendError::from(e);
+                    let mut entry = ctx.log_entry_with_attribution(
+                        &state.backend_name,
+                        Some(mapped_model),
+                        backend_error.status_code(),
+                        None,
+                        false,
+                        Some(backend_error.to_string()),
+                        &vk_ctx,
+                        None,
                     );
-                    backend_error_to_openai_response(BackendError::from(e))
+                    set_backend_error_kind(&mut entry, &backend_error);
+                    log_request(&state.shared, entry);
+                    backend_error_to_openai_response(backend_error)
                 }
             }
         }
-        BackendClient::Anthropic(_) | BackendClient::Bedrock(_) | BackendClient::GeminiNative(_) => openai_error_response(
+        BackendClient::Anthropic(_)
+        | BackendClient::Bedrock(_)
+        | BackendClient::GeminiNative(_) => openai_error_response(
             "This backend does not support /v1/chat/completions. Use /v1/messages instead.",
             "invalid_request_error",
             StatusCode::BAD_REQUEST,
@@ -431,9 +432,8 @@ async fn chat_completions_stream(
                     .into_iter()
                     .map(|mut t| {
                         if let Some(params) = t.function.parameters.take() {
-                            t.function.parameters = Some(
-                                mapping::tools_map::sanitize_schema_for_gemini(params),
-                            );
+                            t.function.parameters =
+                                Some(mapping::tools_map::sanitize_schema_for_gemini(params));
                         }
                         t
                     })
@@ -455,7 +455,9 @@ async fn chat_completions_stream(
         | BackendClient::Vertex(c)
         | BackendClient::GeminiOpenAI(c)
         | BackendClient::OpenAIResponses(c) => c.clone(),
-        BackendClient::Anthropic(_) | BackendClient::Bedrock(_) | BackendClient::GeminiNative(_) => {
+        BackendClient::Anthropic(_)
+        | BackendClient::Bedrock(_)
+        | BackendClient::GeminiNative(_) => {
             return openai_error_response(
                 "This backend does not support /v1/chat/completions. Use /v1/messages instead.",
                 "invalid_request_error",
@@ -514,14 +516,16 @@ async fn chat_completions_stream(
                             return;
                         }
 
-                        while let Some((pos, delim_len)) = find_double_newline(&buffer, search_from) {
+                        while let Some((pos, delim_len)) = find_double_newline(&buffer, search_from)
+                        {
                             if let Ok(frame_str) = std::str::from_utf8(&buffer[..pos]) {
                                 for line in frame_str.lines() {
                                     let line = line.trim();
                                     if let Some(json_str) = line.strip_prefix("data: ") {
                                         if json_str == "[DONE]" {
                                             // Emit [DONE] for OpenAI clients
-                                            let _ = tx.send(Ok("data: [DONE]\n\n".to_string())).await;
+                                            let _ =
+                                                tx.send(Ok("data: [DONE]\n\n".to_string())).await;
                                             continue;
                                         }
                                         // Parse OpenAI chunk, translate to Anthropic events,
@@ -536,10 +540,15 @@ async fn chat_completions_stream(
                                             for event in &anthropic_events {
                                                 let oai_chunks = translator.process_event(event);
                                                 for oai_chunk in &oai_chunks {
-                                                    if let Ok(json) = serde_json::to_string(oai_chunk) {
-                                                        let sse_line = format!("data: {}\n\n", json);
+                                                    if let Ok(json) =
+                                                        serde_json::to_string(oai_chunk)
+                                                    {
+                                                        let sse_line =
+                                                            format!("data: {}\n\n", json);
                                                         if tx.send(Ok(sse_line)).await.is_err() {
-                                                            metrics.record_stream_client_disconnected();
+                                                            metrics
+                                                                .record_stream_client_disconnected(
+                                                                );
                                                             return; // Client disconnected
                                                         }
                                                     }
@@ -661,20 +670,20 @@ async fn chat_completions_stream(
         }
         Err(e) => {
             state.metrics.record_error();
-            log_request(
-                &state.shared,
-                ctx.log_entry_with_attribution(
-                    &state.backend_name,
-                    Some(mapped_model),
-                    e.status_code(),
-                    None,
-                    true,
-                    Some(e.to_string()),
-                    &vk_ctx,
-                    None,
-                ),
+            let backend_error = BackendError::from(e);
+            let mut entry = ctx.log_entry_with_attribution(
+                &state.backend_name,
+                Some(mapped_model),
+                backend_error.status_code(),
+                None,
+                true,
+                Some(backend_error.to_string()),
+                &vk_ctx,
+                None,
             );
-            backend_error_to_openai_response(BackendError::from(e))
+            set_backend_error_kind(&mut entry, &backend_error);
+            log_request(&state.shared, entry);
+            backend_error_to_openai_response(backend_error)
         }
     };
 

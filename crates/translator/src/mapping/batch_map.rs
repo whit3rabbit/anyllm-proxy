@@ -158,7 +158,10 @@ mod tests {
         let v: serde_json::Value = serde_json::from_str(&result).unwrap();
         assert_eq!(v["custom_id"], "req-2");
         assert_eq!(v["result"]["type"], "errored");
-        assert!(v["result"]["error"]["message"].as_str().unwrap().contains("quota"));
+        assert!(v["result"]["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("quota"));
     }
 
     #[test]

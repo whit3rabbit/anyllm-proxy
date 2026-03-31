@@ -280,9 +280,9 @@ async fn main() {
                                 id: key_row.id,
                                 description: key_row.description.clone(),
                                 expires_at: key_row.expires_at.as_deref().and_then(|s| {
-                                anyllm_proxy::integrations::langfuse::iso8601_to_epoch(s)
-                                    .and_then(|e| i64::try_from(e).ok())
-                            }),
+                                    anyllm_proxy::integrations::langfuse::iso8601_to_epoch(s)
+                                        .and_then(|e| i64::try_from(e).ok())
+                                }),
                                 rpm_limit: key_row.rpm_limit,
                                 tpm_limit: key_row.tpm_limit,
                                 rate_state: Arc::new(admin::keys::RateLimitState::new()),
@@ -515,11 +515,11 @@ async fn main() {
                     admin_listener,
                     admin_app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
                 )
-                    .with_graceful_shutdown(async move {
-                        shutdown_rx2.changed().await.ok();
-                    })
-                    .await
-                    .expect("admin server error");
+                .with_graceful_shutdown(async move {
+                    shutdown_rx2.changed().await.ok();
+                })
+                .await
+                .expect("admin server error");
             }))
         } else {
             None
@@ -544,12 +544,15 @@ fn unescape_double_quoted(s: &str) -> String {
     while let Some(c) = chars.next() {
         if c == '\\' {
             match chars.next() {
-                Some('n')  => out.push('\n'),
-                Some('t')  => out.push('\t'),
-                Some('r')  => out.push('\r'),
+                Some('n') => out.push('\n'),
+                Some('t') => out.push('\t'),
+                Some('r') => out.push('\r'),
                 Some('\\') => out.push('\\'),
-                Some('"')  => out.push('"'),
-                Some(other) => { out.push('\\'); out.push(other); }
+                Some('"') => out.push('"'),
+                Some(other) => {
+                    out.push('\\');
+                    out.push(other);
+                }
                 None => out.push('\\'),
             }
         } else {
@@ -696,8 +699,15 @@ mod tests {
         drop(f);
         let vars = parse_env_file(path.to_str().unwrap());
         std::fs::remove_file(&path).ok();
-        let val = vars.iter().find(|(k, _)| k == "KEY").map(|(_, v)| v.as_str());
-        assert_eq!(val, Some("hello\nworld"), "\\n inside double quotes must become a newline");
+        let val = vars
+            .iter()
+            .find(|(k, _)| k == "KEY")
+            .map(|(_, v)| v.as_str());
+        assert_eq!(
+            val,
+            Some("hello\nworld"),
+            "\\n inside double quotes must become a newline"
+        );
     }
 
     #[test]
@@ -710,8 +720,15 @@ mod tests {
         drop(f);
         let vars = parse_env_file(path.to_str().unwrap());
         std::fs::remove_file(&path).ok();
-        let val = vars.iter().find(|(k, _)| k == "KEY").map(|(_, v)| v.as_str());
-        assert_eq!(val, Some("col1\tcol2"), "\\t inside double quotes must become a tab");
+        let val = vars
+            .iter()
+            .find(|(k, _)| k == "KEY")
+            .map(|(_, v)| v.as_str());
+        assert_eq!(
+            val,
+            Some("col1\tcol2"),
+            "\\t inside double quotes must become a tab"
+        );
     }
 
     #[test]
@@ -724,8 +741,15 @@ mod tests {
         drop(f);
         let vars = parse_env_file(path.to_str().unwrap());
         std::fs::remove_file(&path).ok();
-        let val = vars.iter().find(|(k, _)| k == "KEY").map(|(_, v)| v.as_str());
+        let val = vars
+            .iter()
+            .find(|(k, _)| k == "KEY")
+            .map(|(_, v)| v.as_str());
         // Single quotes: backslash is literal, no escape processing.
-        assert_eq!(val, Some(r"hello\nworld"), "single quotes must not process escapes");
+        assert_eq!(
+            val,
+            Some(r"hello\nworld"),
+            "single quotes must not process escapes"
+        );
     }
 }

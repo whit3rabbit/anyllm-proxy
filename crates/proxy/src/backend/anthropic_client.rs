@@ -113,9 +113,7 @@ impl AnthropicClient {
             } else {
                 rb
             };
-            let rb = extra_headers
-                .iter()
-                .fold(rb, |rb, &(k, v)| rb.header(k, v));
+            let rb = extra_headers.iter().fold(rb, |rb, &(k, v)| rb.header(k, v));
 
             let response = rb
                 .send()

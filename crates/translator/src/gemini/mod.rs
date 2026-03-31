@@ -5,10 +5,8 @@ pub mod response;
 
 // Re-export commonly used types
 pub use request::{
-    Content, FunctionCallingConfig, FunctionCallData, FunctionDeclaration,
-    FunctionResponseData, GenerateContentRequest, GenerationConfig, InlineData, FileData,
-    Part, SafetySetting, Tool, ToolConfig,
+    Content, FileData, FunctionCallData, FunctionCallingConfig, FunctionDeclaration,
+    FunctionResponseData, GenerateContentRequest, GenerationConfig, InlineData, Part,
+    SafetySetting, Tool, ToolConfig,
 };
-pub use response::{
-    Candidate, FinishReason, GenerateContentResponse, SafetyRating, UsageMetadata,
-};
+pub use response::{Candidate, FinishReason, GenerateContentResponse, SafetyRating, UsageMetadata};

@@ -15,8 +15,8 @@ use anyllm_translate::mapping::gemini_streaming_map::GeminiStreamingTranslator;
 use axum::{
     extract::State,
     http::StatusCode,
-    response::{IntoResponse, Json, Response},
     response::sse::{Event, KeepAlive, Sse},
+    response::{IntoResponse, Json, Response},
 };
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
@@ -31,11 +31,13 @@ pub(crate) async fn gemini_native_handler(
         _ => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(anyllm_translate::mapping::errors_map::create_anthropic_error(
-                    anthropic::ErrorType::ApiError,
-                    "gemini_native_handler called with non-native backend".to_string(),
-                    None,
-                )),
+                Json(
+                    anyllm_translate::mapping::errors_map::create_anthropic_error(
+                        anthropic::ErrorType::ApiError,
+                        "gemini_native_handler called with non-native backend".to_string(),
+                        None,
+                    ),
+                ),
             )
                 .into_response();
         }
@@ -83,7 +85,11 @@ pub(crate) async fn gemini_native_handler(
                 match serde_json::from_str::<GenerateContentResponse>(data) {
                     Ok(gresp) => {
                         let events = translator.process_response(&gresp);
-                        if events.is_empty() { None } else { Some(events) }
+                        if events.is_empty() {
+                            None
+                        } else {
+                            Some(events)
+                        }
                     }
                     Err(e) => {
                         tracing::warn!("failed to parse Gemini SSE frame: {e}");

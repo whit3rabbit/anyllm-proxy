@@ -186,7 +186,10 @@ fn content_block_to_part(
         anthropic::ContentBlock::Image { source } => {
             // Gemini only supports inline base64 data, not URLs.
             if source.source_type == "base64" {
-                let mime = source.media_type.clone().unwrap_or_else(|| "image/png".into());
+                let mime = source
+                    .media_type
+                    .clone()
+                    .unwrap_or_else(|| "image/png".into());
                 let data = source.data.clone().unwrap_or_default();
                 Some(gemini::Part::inline_data(mime, data))
             } else {
@@ -321,10 +324,13 @@ pub fn gemini_to_anthropic_response(
 fn gemini_part_to_content_block(part: &gemini::Part) -> Option<anthropic::ContentBlock> {
     // Thought parts from thinking models map to Anthropic thinking blocks.
     if part.thought == Some(true) {
-        return part.text.as_ref().map(|text| anthropic::ContentBlock::Thinking {
-            thinking: text.clone(),
-            signature: None,
-        });
+        return part
+            .text
+            .as_ref()
+            .map(|text| anthropic::ContentBlock::Thinking {
+                thinking: text.clone(),
+                signature: None,
+            });
     }
     if let Some(text) = &part.text {
         return Some(anthropic::ContentBlock::Text { text: text.clone() });
@@ -554,10 +560,7 @@ mod tests {
             },
         ])]);
         let gem = anthropic_to_gemini_request(&req);
-        let fr = gem.contents[0].parts[0]
-            .function_response
-            .as_ref()
-            .unwrap();
+        let fr = gem.contents[0].parts[0].function_response.as_ref().unwrap();
         assert_eq!(fr.name, "unknown_tool");
     }
 
@@ -680,10 +683,7 @@ mod tests {
             disable_parallel_tool_use: None,
         });
         let gem = anthropic_to_gemini_request(&req);
-        assert_eq!(
-            gem.tool_config.unwrap().function_calling_config.mode,
-            "ANY"
-        );
+        assert_eq!(gem.tool_config.unwrap().function_calling_config.mode, "ANY");
     }
 
     #[test]
@@ -881,7 +881,10 @@ mod tests {
 
     #[test]
     fn simple_text_response() {
-        let resp = make_gemini_response(vec![gemini::Part::text("Hello!")], Some(gemini_resp::FinishReason::STOP));
+        let resp = make_gemini_response(
+            vec![gemini::Part::text("Hello!")],
+            Some(gemini_resp::FinishReason::STOP),
+        );
         let msg = gemini_to_anthropic_response(&resp, "gemini-2.5-flash");
         assert_eq!(msg.content.len(), 1);
         match &msg.content[0] {
@@ -895,14 +898,20 @@ mod tests {
     #[test]
     fn function_call_maps_to_tool_use_with_synthesized_id() {
         let resp = make_gemini_response(
-            vec![gemini::Part::function_call("get_weather", json!({"city": "NYC"}))],
+            vec![gemini::Part::function_call(
+                "get_weather",
+                json!({"city": "NYC"}),
+            )],
             Some(gemini_resp::FinishReason::STOP),
         );
         let msg = gemini_to_anthropic_response(&resp, "gemini-2.5-flash");
         assert_eq!(msg.content.len(), 1);
         match &msg.content[0] {
             anthropic::ContentBlock::ToolUse { id, name, input } => {
-                assert!(id.starts_with("toolu_"), "synthesized ID should have toolu_ prefix");
+                assert!(
+                    id.starts_with("toolu_"),
+                    "synthesized ID should have toolu_ prefix"
+                );
                 assert_eq!(name, "get_weather");
                 assert_eq!(input, &json!({"city": "NYC"}));
             }
@@ -921,15 +930,24 @@ mod tests {
         );
         let msg = gemini_to_anthropic_response(&resp, "gemini-2.5-flash");
         assert_eq!(msg.content.len(), 2);
-        assert!(matches!(&msg.content[0], anthropic::ContentBlock::Text { .. }));
-        assert!(matches!(&msg.content[1], anthropic::ContentBlock::ToolUse { .. }));
+        assert!(matches!(
+            &msg.content[0],
+            anthropic::ContentBlock::Text { .. }
+        ));
+        assert!(matches!(
+            &msg.content[1],
+            anthropic::ContentBlock::ToolUse { .. }
+        ));
         // Has function call + STOP -> ToolUse stop reason.
         assert_eq!(msg.stop_reason, Some(anthropic::StopReason::ToolUse));
     }
 
     #[test]
     fn finish_reason_stop_without_tools_maps_to_end_turn() {
-        let resp = make_gemini_response(vec![gemini::Part::text("done")], Some(gemini_resp::FinishReason::STOP));
+        let resp = make_gemini_response(
+            vec![gemini::Part::text("done")],
+            Some(gemini_resp::FinishReason::STOP),
+        );
         let msg = gemini_to_anthropic_response(&resp, "test");
         assert_eq!(msg.stop_reason, Some(anthropic::StopReason::EndTurn));
     }
@@ -946,7 +964,10 @@ mod tests {
 
     #[test]
     fn finish_reason_max_tokens_maps_to_max_tokens() {
-        let resp = make_gemini_response(vec![gemini::Part::text("trunc")], Some(gemini_resp::FinishReason::MAX_TOKENS));
+        let resp = make_gemini_response(
+            vec![gemini::Part::text("trunc")],
+            Some(gemini_resp::FinishReason::MAX_TOKENS),
+        );
         let msg = gemini_to_anthropic_response(&resp, "test");
         assert_eq!(msg.stop_reason, Some(anthropic::StopReason::MaxTokens));
     }
@@ -960,7 +981,10 @@ mod tests {
 
     #[test]
     fn usage_metadata_mapped() {
-        let resp = make_gemini_response(vec![gemini::Part::text("ok")], Some(gemini_resp::FinishReason::STOP));
+        let resp = make_gemini_response(
+            vec![gemini::Part::text("ok")],
+            Some(gemini_resp::FinishReason::STOP),
+        );
         let msg = gemini_to_anthropic_response(&resp, "test");
         assert_eq!(msg.usage.input_tokens, 10);
         assert_eq!(msg.usage.output_tokens, 20);
@@ -1008,14 +1032,20 @@ mod tests {
 
     #[test]
     fn model_name_passed_through() {
-        let resp = make_gemini_response(vec![gemini::Part::text("x")], Some(gemini_resp::FinishReason::STOP));
+        let resp = make_gemini_response(
+            vec![gemini::Part::text("x")],
+            Some(gemini_resp::FinishReason::STOP),
+        );
         let msg = gemini_to_anthropic_response(&resp, "gemini-2.5-pro");
         assert_eq!(msg.model, "gemini-2.5-pro");
     }
 
     #[test]
     fn message_id_has_correct_format() {
-        let resp = make_gemini_response(vec![gemini::Part::text("x")], Some(gemini_resp::FinishReason::STOP));
+        let resp = make_gemini_response(
+            vec![gemini::Part::text("x")],
+            Some(gemini_resp::FinishReason::STOP),
+        );
         let msg = gemini_to_anthropic_response(&resp, "test");
         assert!(msg.id.starts_with("msg_"));
         assert_eq!(msg.response_type, "message");
@@ -1024,7 +1054,10 @@ mod tests {
 
     #[test]
     fn response_without_usage_metadata_gives_zero_usage() {
-        let mut resp = make_gemini_response(vec![gemini::Part::text("x")], Some(gemini_resp::FinishReason::STOP));
+        let mut resp = make_gemini_response(
+            vec![gemini::Part::text("x")],
+            Some(gemini_resp::FinishReason::STOP),
+        );
         resp.usage_metadata = None;
         let msg = gemini_to_anthropic_response(&resp, "test");
         assert_eq!(msg.usage.input_tokens, 0);
@@ -1038,7 +1071,9 @@ mod tests {
     #[test]
     fn thinking_config_enabled_sets_gemini_thinking_config() {
         let mut req = make_request(vec![user_text("think hard")]);
-        req.thinking = Some(anthropic::ThinkingConfig::Enabled { budget_tokens: 8192 });
+        req.thinking = Some(anthropic::ThinkingConfig::Enabled {
+            budget_tokens: 8192,
+        });
         let gem = anthropic_to_gemini_request(&req);
         let gc = gem.generation_config.unwrap();
         let tc = gc.thinking_config.expect("thinkingConfig should be set");
@@ -1052,7 +1087,10 @@ mod tests {
         req.thinking = Some(anthropic::ThinkingConfig::Disabled);
         let gem = anthropic_to_gemini_request(&req);
         let gc = gem.generation_config.unwrap();
-        assert!(gc.thinking_config.is_none(), "disabled should not set thinkingConfig");
+        assert!(
+            gc.thinking_config.is_none(),
+            "disabled should not set thinkingConfig"
+        );
     }
 
     #[test]
@@ -1098,6 +1136,9 @@ mod tests {
         let resp = make_gemini_response(vec![thought_part], Some(gemini_resp::FinishReason::STOP));
         let msg = gemini_to_anthropic_response(&resp, "gemini-2.5-pro");
         assert_eq!(msg.content.len(), 1);
-        assert!(matches!(&msg.content[0], anthropic::ContentBlock::Thinking { .. }));
+        assert!(matches!(
+            &msg.content[0],
+            anthropic::ContentBlock::Thinking { .. }
+        ));
     }
 }

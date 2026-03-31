@@ -203,10 +203,7 @@ mod tests {
 
     #[test]
     fn build_file_upload_url() {
-        let c = OpenAIBatchClient::new(
-            "sk-test".to_string(),
-            "https://api.openai.com".to_string(),
-        );
+        let c = OpenAIBatchClient::new("sk-test".to_string(), "https://api.openai.com".to_string());
         assert_eq!(c.files_url(), "https://api.openai.com/v1/files");
         assert_eq!(c.batches_url(), "https://api.openai.com/v1/batches");
     }

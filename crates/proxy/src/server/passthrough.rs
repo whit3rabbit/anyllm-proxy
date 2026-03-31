@@ -34,16 +34,15 @@ pub(crate) async fn anthropic_passthrough(
     // Collect Anthropic-specific client headers to forward upstream.
     // anthropic-beta enables beta features; must reach upstream to take effect.
     // x-claude-code-session-id allows upstream and intermediary proxies to correlate sessions.
-    let extra_headers: Vec<(&str, &str)> =
-        ["x-claude-code-session-id", "anthropic-beta"]
-            .iter()
-            .filter_map(|&name| {
-                headers
-                    .get(name)
-                    .and_then(|v| v.to_str().ok())
-                    .map(|v| (name, v))
-            })
-            .collect();
+    let extra_headers: Vec<(&str, &str)> = ["x-claude-code-session-id", "anthropic-beta"]
+        .iter()
+        .filter_map(|&name| {
+            headers
+                .get(name)
+                .and_then(|v| v.to_str().ok())
+                .map(|v| (name, v))
+        })
+        .collect();
 
     // Peek at just the `stream` field instead of parsing the full body.
     // Full deserialization would be wasteful for image-heavy requests

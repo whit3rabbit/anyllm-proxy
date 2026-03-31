@@ -420,10 +420,7 @@ mod tests {
     #[test]
     fn from_anthropic_headers_parses_organization_id() {
         let mut headers = reqwest::header::HeaderMap::new();
-        headers.insert(
-            "anthropic-organization-id",
-            "org-abc123".parse().unwrap(),
-        );
+        headers.insert("anthropic-organization-id", "org-abc123".parse().unwrap());
         let rl = RateLimitHeaders::from_anthropic_headers(&headers);
         assert_eq!(rl.organization_id.as_deref(), Some("org-abc123"));
     }
@@ -436,10 +433,7 @@ mod tests {
         };
         let mut map = reqwest::header::HeaderMap::new();
         rl.inject_anthropic_response_headers(&mut map);
-        assert_eq!(
-            map.get("anthropic-organization-id").unwrap(),
-            "org-xyz"
-        );
+        assert_eq!(map.get("anthropic-organization-id").unwrap(), "org-xyz");
         assert_eq!(map.get("anthropic-version").unwrap(), "2023-06-01");
     }
 }

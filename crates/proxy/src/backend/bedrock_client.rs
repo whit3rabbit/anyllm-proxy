@@ -111,7 +111,7 @@ impl BedrockClient {
             self.access_key_id.clone(),
             self.secret_access_key.as_str(),
             self.session_token.as_deref().map(|s| s.to_string()),
-            None,    // expiration
+            None,     // expiration
             "anyllm", // provider name
         );
         let identity: aws_smithy_runtime_api::client::identity::Identity = creds.into();

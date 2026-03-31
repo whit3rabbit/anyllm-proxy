@@ -886,21 +886,20 @@ async fn messages(
                         d.record_finish(backend_start.elapsed().as_millis() as u64);
                     }
                     state.metrics.record_error();
-                    let status = e.status_code();
-                    log_request(
-                        &state.shared,
-                        ctx.log_entry_with_attribution(
-                            &state.backend_name,
-                            Some(mapped_model),
-                            status,
-                            None,
-                            false,
-                            Some(e.to_string()),
-                            &vk_ctx,
-                            None,
-                        ),
+                    let backend_error = BackendError::from(e);
+                    let mut entry = ctx.log_entry_with_attribution(
+                        &state.backend_name,
+                        Some(mapped_model),
+                        backend_error.status_code(),
+                        None,
+                        false,
+                        Some(backend_error.to_string()),
+                        &vk_ctx,
+                        None,
                     );
-                    backend_error_to_response(BackendError::from(e))
+                    set_backend_error_kind(&mut entry, &backend_error);
+                    log_request(&state.shared, entry);
+                    backend_error_to_response(backend_error)
                 }
             }
         }
@@ -975,21 +974,20 @@ async fn messages(
                         d.record_finish(backend_start.elapsed().as_millis() as u64);
                     }
                     state.metrics.record_error();
-                    let status = e.status_code();
-                    log_request(
-                        &state.shared,
-                        ctx.log_entry_with_attribution(
-                            &state.backend_name,
-                            Some(mapped_model),
-                            status,
-                            None,
-                            false,
-                            Some(e.to_string()),
-                            &vk_ctx,
-                            None,
-                        ),
+                    let backend_error = BackendError::from(e);
+                    let mut entry = ctx.log_entry_with_attribution(
+                        &state.backend_name,
+                        Some(mapped_model),
+                        backend_error.status_code(),
+                        None,
+                        false,
+                        Some(backend_error.to_string()),
+                        &vk_ctx,
+                        None,
                     );
-                    backend_error_to_response(BackendError::from(e))
+                    set_backend_error_kind(&mut entry, &backend_error);
+                    log_request(&state.shared, entry);
+                    backend_error_to_response(backend_error)
                 }
             }
         }
@@ -1026,6 +1024,9 @@ impl RequestCtx {
         is_streaming: bool,
         error_message: Option<String>,
     ) -> RequestLogEntry {
+        let inferred_error_kind =
+            crate::backend::infer_error_kind(status_code, error_message.as_deref())
+                .map(str::to_string);
         RequestLogEntry {
             request_id: self.request_id.clone(),
             timestamp: crate::admin::db::now_iso8601(),
@@ -1038,6 +1039,7 @@ impl RequestCtx {
             output_tokens: tokens.map(|(_, o)| o),
             is_streaming,
             error_message,
+            error_kind: inferred_error_kind,
             key_id: None,
             cost_usd: None,
         }
@@ -1132,4 +1134,8 @@ pub(crate) fn log_request(shared: &Option<SharedState>, entry: RequestLogEntry) 
             .send(AdminEvent::RequestCompleted(entry.clone()));
         let _ = shared.log_tx.try_send(entry);
     }
+}
+
+pub(crate) fn set_backend_error_kind(entry: &mut RequestLogEntry, error: &BackendError) {
+    entry.error_kind = Some(error.error_kind().to_string());
 }

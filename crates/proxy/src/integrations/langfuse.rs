@@ -102,7 +102,11 @@ pub(crate) fn build_generation_payload(entry: &RequestLogEntry) -> serde_json::V
         usage["totalCost"] = serde_json::json!(cost);
     }
 
-    let level = if entry.error_message.is_some() { "ERROR" } else { "DEFAULT" };
+    let level = if entry.error_message.is_some() {
+        "ERROR"
+    } else {
+        "DEFAULT"
+    };
 
     let mut metadata = serde_json::json!({
         "backend": entry.backend,
@@ -111,6 +115,9 @@ pub(crate) fn build_generation_payload(entry: &RequestLogEntry) -> serde_json::V
     });
     if let Some(ref msg) = entry.error_message {
         metadata["error"] = serde_json::json!(msg);
+    }
+    if let Some(ref kind) = entry.error_kind {
+        metadata["error_kind"] = serde_json::json!(kind);
     }
 
     serde_json::json!({
@@ -138,9 +145,7 @@ pub(crate) fn base64_encode(input: &[u8]) -> String {
     let mut out = String::with_capacity(input.len().div_ceil(3) * 4);
     let mut i = 0;
     while i + 2 < input.len() {
-        let b = ((input[i] as u32) << 16)
-            | ((input[i + 1] as u32) << 8)
-            | (input[i + 2] as u32);
+        let b = ((input[i] as u32) << 16) | ((input[i + 1] as u32) << 8) | (input[i + 2] as u32);
         out.push(CHARS[((b >> 18) & 0x3f) as usize] as char);
         out.push(CHARS[((b >> 12) & 0x3f) as usize] as char);
         out.push(CHARS[((b >> 6) & 0x3f) as usize] as char);
@@ -362,6 +367,7 @@ mod tests {
             output_tokens: Some(50),
             is_streaming: false,
             error_message: None,
+            error_kind: None,
             key_id: None,
             cost_usd: Some(0.001),
         };
@@ -396,6 +402,7 @@ mod tests {
             output_tokens: None,
             is_streaming: false,
             error_message: Some("internal error".to_string()),
+            error_kind: Some("upstream".to_string()),
             key_id: None,
             cost_usd: None,
         };
@@ -419,6 +426,7 @@ mod tests {
             output_tokens: None,
             is_streaming: false,
             error_message: None,
+            error_kind: None,
             key_id: None,
             cost_usd: None,
         };
@@ -426,7 +434,13 @@ mod tests {
         let body = &payload["batch"][0]["body"];
         let start = body["startTime"].as_str().unwrap();
         let end = body["endTime"].as_str().unwrap();
-        assert_ne!(start, end, "sub-second latency should produce different start/end times");
-        assert!(start.contains('.'), "startTime should have ms precision: {start}");
+        assert_ne!(
+            start, end,
+            "sub-second latency should produce different start/end times"
+        );
+        assert!(
+            start.contains('.'),
+            "startTime should have ms precision: {start}"
+        );
     }
 }

@@ -359,13 +359,20 @@ mod tests {
     fn load_with_optional_override_none_uses_embedded() {
         let pricing = ModelPricing::load_with_optional_override(None);
         // Embedded pricing has many entries.
-        assert!(pricing.entries.len() > 5, "embedded pricing should have multiple entries");
+        assert!(
+            pricing.entries.len() > 5,
+            "embedded pricing should have multiple entries"
+        );
     }
 
     #[test]
     fn load_with_optional_override_bad_path_falls_back_to_embedded() {
-        let pricing = ModelPricing::load_with_optional_override(Some("/nonexistent/path/pricing.json"));
-        assert!(pricing.entries.len() > 5, "bad path should fall back to embedded pricing");
+        let pricing =
+            ModelPricing::load_with_optional_override(Some("/nonexistent/path/pricing.json"));
+        assert!(
+            pricing.entries.len() > 5,
+            "bad path should fall back to embedded pricing"
+        );
     }
 
     #[test]

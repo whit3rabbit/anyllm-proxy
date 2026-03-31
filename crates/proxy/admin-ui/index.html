@@ -58,6 +58,32 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
 .error{color:#f85149}
 .empty{text-align:center;padding:40px;color:#8b949e}
 .pagination{display:flex;gap:8px;margin-top:12px;align-items:center}
+.operator-controls{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+.operator-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-bottom:16px}
+.chart-card{padding:12px;background:#161b22;border:1px solid #30363d;border-radius:6px;min-height:210px}
+.chart-card.wide{grid-column:1/-1}
+.chart-header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:10px}
+.chart-title{font-size:12px;text-transform:uppercase;letter-spacing:0.5px;color:#8b949e}
+.chart-value{font-size:20px;font-weight:600;color:#c9d1d9}
+.chart-subtitle{font-size:11px;color:#8b949e}
+.chart-svg{width:100%;height:130px;display:block}
+.chart-grid-line{stroke:#21262d;stroke-width:1}
+.chart-line{fill:none;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+.chart-line.secondary{stroke-width:1.8;opacity:0.85}
+.chart-area{fill-opacity:0.14}
+.chart-axis{display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:#8b949e}
+.failure-table{width:100%;border-collapse:collapse;font-size:12px}
+.failure-table th,.failure-table td{padding:8px 10px;text-align:left;border-bottom:1px solid #21262d;vertical-align:top}
+.failure-table th{color:#8b949e;font-size:10px;text-transform:uppercase;letter-spacing:0.5px}
+.failure-summary{max-width:340px;color:#c9d1d9}
+.timeline-list{display:flex;flex-direction:column;gap:10px}
+.timeline-item{padding:10px;border:1px solid #21262d;border-radius:6px;background:#0d1117}
+.timeline-item:hover{border-color:#30363d}
+.timeline-meta{display:grid;grid-template-columns:90px 52px 88px 1fr 70px;gap:8px;align-items:center;font-size:12px;margin-bottom:8px}
+.timeline-track{height:10px;border-radius:999px;background:#161b22;overflow:hidden}
+.timeline-bar{height:100%;min-width:4px;border-radius:999px}
+.timeline-caption{display:flex;justify-content:space-between;gap:8px;margin-top:6px;font-size:11px;color:#8b949e}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 /* Login overlay */
 .login-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:#0d1117;display:flex;align-items:center;justify-content:center;z-index:1000}
 .login-card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:32px;width:320px}
@@ -130,6 +156,73 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
     <div class="stat"><div class="stat-label">Completed</div><div class="stat-value" id="stat-streams-completed" style="color:#3fb950">0</div></div>
     <div class="stat"><div class="stat-label">Failed</div><div class="stat-value" id="stat-streams-failed" style="color:#f85149">0</div></div>
     <div class="stat"><div class="stat-label">Client Disconnects</div><div class="stat-value" id="stat-streams-disconnected" style="color:#d29922">0</div></div>
+  </div>
+  <div class="operator-controls">
+    <div class="section-label" style="margin-bottom:0">Operator View</div>
+    <div class="form-row" style="flex-wrap:wrap;gap:6px;margin-top:0">
+      <select id="obs-window">
+        <option value="1">Last 1 hour</option>
+        <option value="6" selected>Last 6 hours</option>
+        <option value="24">Last 24 hours</option>
+      </select>
+      <select id="obs-backend"><option value="">All backends</option></select>
+    </div>
+  </div>
+  <div class="stats-row">
+    <div class="stat"><div class="stat-label">Input Tokens</div><div class="stat-value" id="obs-input-total">0</div></div>
+    <div class="stat"><div class="stat-label">Output Tokens</div><div class="stat-value" id="obs-output-total">0</div></div>
+    <div class="stat"><div class="stat-label">Window Failures</div><div class="stat-value" id="obs-failure-total">0</div></div>
+    <div class="stat"><div class="stat-label">Window Cost</div><div class="stat-value" id="obs-cost-total">$0.00</div></div>
+  </div>
+  <div class="operator-grid">
+    <div class="chart-card">
+      <div class="chart-header">
+        <div>
+          <div class="chart-title">Request Volume</div>
+          <div class="chart-subtitle" id="obs-requests-subtitle">Rolling request count and errors</div>
+        </div>
+        <div class="chart-value" id="obs-requests-value">0</div>
+      </div>
+      <div id="obs-chart-requests" class="chart-subtitle">Loading...</div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-header">
+        <div>
+          <div class="chart-title">Tokens</div>
+          <div class="chart-subtitle" id="obs-tokens-subtitle">Input and output usage</div>
+        </div>
+        <div class="chart-value" id="obs-tokens-value">0</div>
+      </div>
+      <div id="obs-chart-tokens" class="chart-subtitle">Loading...</div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-header">
+        <div>
+          <div class="chart-title">Estimated Cost</div>
+          <div class="chart-subtitle" id="obs-cost-subtitle">USD by minute bucket</div>
+        </div>
+        <div class="chart-value" id="obs-cost-value">$0.00</div>
+      </div>
+      <div id="obs-chart-cost" class="chart-subtitle">Loading...</div>
+    </div>
+    <div class="chart-card wide">
+      <div class="chart-header">
+        <div>
+          <div class="chart-title">Failure Analysis</div>
+          <div class="chart-subtitle">Grouped by backend, model, status, and normalized error text</div>
+        </div>
+      </div>
+      <div id="obs-failures">Loading...</div>
+    </div>
+    <div class="chart-card wide">
+      <div class="chart-header">
+        <div>
+          <div class="chart-title">Request Timeline</div>
+          <div class="chart-subtitle">Recent requests sized by latency, newest first</div>
+        </div>
+      </div>
+      <div id="obs-timeline">Loading...</div>
+    </div>
   </div>
   <div class="backend-cards" id="backend-cards"></div>
   <div class="section-header">
@@ -413,6 +506,28 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
     return ms + 'ms';
   }
 
+  function formatCount(value) {
+    return (value || 0).toLocaleString();
+  }
+
+  function formatCurrency(value) {
+    var amount = value || 0;
+    var decimals = amount >= 1 ? 2 : (amount >= 0.01 ? 3 : 4);
+    return '$' + amount.toFixed(decimals);
+  }
+
+  function formatShortDate(ts) {
+    if (!ts) return '--';
+    var d = new Date(ts);
+    return d.toLocaleString('en-US', {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit', hour12:false});
+  }
+
+  function svgEl(tag, attrs) {
+    var e = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    Object.keys(attrs || {}).forEach(function(key) { e.setAttribute(key, attrs[key]); });
+    return e;
+  }
+
   function makeFeedRow(r, clickable) {
     var modelText = r.model_mapped || r.model_requested || '--';
     var modelChildren = [text(modelText)];
@@ -432,6 +547,151 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
       row.addEventListener('click', function() { toggleRequestDetail(row, r.request_id); });
     }
     return row;
+  }
+
+  function syncSelectOptions(selectId, items, getValue, getLabel) {
+    var select = document.getElementById(selectId);
+    var currentValue = select.value;
+    while (select.options.length > 1) select.remove(1);
+    (items || []).forEach(function(item) {
+      var option = document.createElement('option');
+      option.value = getValue(item);
+      option.textContent = getLabel(item);
+      select.appendChild(option);
+    });
+    if (currentValue) select.value = currentValue;
+  }
+
+  function setEmptyState(containerId, message) {
+    var container = document.getElementById(containerId);
+    container.textContent = '';
+    container.appendChild(el('div', {className: 'empty', textContent: message}));
+  }
+
+  function renderLineChart(containerId, series, lines, axisStart, axisEnd) {
+    if (!series || series.length === 0) {
+      setEmptyState(containerId, 'No request data in this window');
+      return;
+    }
+    var container = document.getElementById(containerId);
+    container.textContent = '';
+
+    var width = 640;
+    var height = 130;
+    var padding = 10;
+    var maxValue = 0;
+    lines.forEach(function(line) {
+      series.forEach(function(point) {
+        var value = line.getValue(point) || 0;
+        if (value > maxValue) maxValue = value;
+      });
+    });
+    maxValue = Math.max(maxValue, 1);
+
+    var svg = svgEl('svg', {viewBox: '0 0 ' + width + ' ' + height, class: 'chart-svg', preserveAspectRatio: 'none'});
+    [0.25, 0.5, 0.75].forEach(function(ratio) {
+      var y = padding + (height - padding * 2) * ratio;
+      svg.appendChild(svgEl('line', {x1: 0, x2: width, y1: y, y2: y, class: 'chart-grid-line'}));
+    });
+
+    function pointFor(index, total, value) {
+      var x = total <= 1 ? width / 2 : (index * (width - padding * 2) / (total - 1)) + padding;
+      var y = height - padding - ((value / maxValue) * (height - padding * 2));
+      return {x: x, y: y};
+    }
+
+    lines.forEach(function(line, idx) {
+      var points = series.map(function(point, index) {
+        var coord = pointFor(index, series.length, line.getValue(point) || 0);
+        return coord.x + ',' + coord.y;
+      }).join(' ');
+      if (idx === 0) {
+        var areaPoints = '0,' + (height - padding) + ' ' + points + ' ' + width + ',' + (height - padding);
+        svg.appendChild(svgEl('polygon', {points: areaPoints, class: 'chart-area', fill: line.color}));
+      }
+      svg.appendChild(svgEl('polyline', {
+        points: points,
+        class: 'chart-line' + (idx > 0 ? ' secondary' : ''),
+        stroke: line.color
+      }));
+    });
+
+    container.appendChild(svg);
+    container.appendChild(el('div', {className: 'chart-axis'}, [
+      el('span', {textContent: axisStart || '--'}),
+      el('span', {textContent: axisEnd || '--'})
+    ]));
+  }
+
+  function renderFailureTable(items) {
+    if (!items || items.length === 0) {
+      setEmptyState('obs-failures', 'No failures in this window');
+      return;
+    }
+    var container = document.getElementById('obs-failures');
+    container.textContent = '';
+
+    var thead = el('thead', null, [
+      el('tr', null, [
+        el('th', {textContent: 'Count'}),
+        el('th', {textContent: 'Kind'}),
+        el('th', {textContent: 'Backend'}),
+        el('th', {textContent: 'Status'}),
+        el('th', {textContent: 'Model'}),
+        el('th', {textContent: 'Avg Latency'}),
+        el('th', {textContent: 'Latest Seen'}),
+        el('th', {textContent: 'Summary'})
+      ])
+    ]);
+    var tbody = el('tbody', null, null);
+    items.forEach(function(item) {
+      tbody.appendChild(el('tr', null, [
+        el('td', {textContent: formatCount(item.count)}),
+        el('td', {textContent: item.error_kind || '--', className: 'mono'}),
+        el('td', {textContent: item.backend || '--'}),
+        el('td', {className: statusClass(item.status_code), textContent: String(item.status_code)}),
+        el('td', {textContent: item.model || '--', className: 'mono'}),
+        el('td', {textContent: formatLatency(item.avg_latency_ms)}),
+        el('td', {textContent: formatShortDate(item.latest_seen)}),
+        el('td', {textContent: item.summary || '--', className: 'failure-summary'})
+      ]));
+    });
+    container.appendChild(el('table', {className: 'failure-table'}, [thead, tbody]));
+  }
+
+  function renderTimeline(items) {
+    if (!items || items.length === 0) {
+      setEmptyState('obs-timeline', 'No recent requests in this window');
+      return;
+    }
+    var container = document.getElementById('obs-timeline');
+    container.textContent = '';
+
+    var maxLatency = 1;
+    items.forEach(function(item) { if ((item.latency_ms || 0) > maxLatency) maxLatency = item.latency_ms || 0; });
+    var list = el('div', {className: 'timeline-list'}, null);
+    items.forEach(function(item) {
+      var widthPct = Math.max(4, Math.round(((item.latency_ms || 0) / maxLatency) * 100));
+      var barColor = item.status_code >= 500 ? '#f85149' : (item.status_code >= 400 ? '#d29922' : '#3fb950');
+      var timelineItem = el('div', {className: 'timeline-item'}, [
+        el('div', {className: 'timeline-meta'}, [
+          el('div', {textContent: formatTime(item.finished_at)}),
+          el('div', {className: statusClass(item.status_code), textContent: String(item.status_code)}),
+          el('div', {textContent: item.backend || '--'}),
+          el('div', {textContent: item.model || '--', className: 'mono', style:{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}),
+          el('div', {textContent: formatLatency(item.latency_ms)})
+        ]),
+        el('div', {className: 'timeline-track'}, [
+          el('div', {className: 'timeline-bar', style:{width: widthPct + '%', background: barColor}})
+        ]),
+        el('div', {className: 'timeline-caption'}, [
+          el('span', {textContent: formatTime(item.started_at) + ' -> ' + formatTime(item.finished_at)}),
+          el('span', {textContent: (item.input_tokens != null ? item.input_tokens : '--') + ' / ' + (item.output_tokens != null ? item.output_tokens : '--') + ' tok'})
+        ])
+      ]);
+      list.appendChild(timelineItem);
+    });
+    container.appendChild(list);
   }
 
   function toggleRequestDetail(row, requestId) {
@@ -467,6 +727,10 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
         detail.appendChild(el('span', {className: 'label', textContent: 'Cost'}));
         detail.appendChild(el('span', {className: 'val', textContent: '$' + data.cost_usd.toFixed(6)}));
       }
+      if (data.error_kind) {
+        detail.appendChild(el('span', {className: 'label', textContent: 'Error Kind'}));
+        detail.appendChild(el('span', {className: 'val', textContent: data.error_kind}));
+      }
       if (data.error_message) {
         detail.appendChild(el('div', {className: 'error-msg', textContent: data.error_message}));
       }
@@ -481,6 +745,7 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
       document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
       navEl.classList.add('active');
       document.getElementById('tab-' + navEl.dataset.tab).classList.add('active');
+      if (navEl.dataset.tab === 'dashboard') loadDashboard();
       if (navEl.dataset.tab === 'requests') { populateKeyFilter(); loadRequests(); }
       if (navEl.dataset.tab === 'settings') { loadConfig(); loadEnv(); }
       if (navEl.dataset.tab === 'backends') loadBackends();
@@ -529,12 +794,15 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
   var totalRequests = 0;
   var feedPaused = false;
   var feedFilter = '';
+  var observabilityRefreshTimer = null;
 
   document.getElementById('btn-pause-feed').addEventListener('click', function() {
     feedPaused = !feedPaused;
     this.textContent = feedPaused ? 'Resume' : 'Pause';
     this.style.borderColor = feedPaused ? '#d29922' : '#484f58';
   });
+  document.getElementById('obs-window').addEventListener('change', loadObservability);
+  document.getElementById('obs-backend').addEventListener('change', loadObservability);
 
   document.getElementById('live-filter-status').addEventListener('change', function() {
     feedFilter = this.value;
@@ -548,6 +816,7 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
       if (!feedPaused) renderFeed();
       totalRequests++;
       document.getElementById('stat-total').textContent = totalRequests.toLocaleString();
+      scheduleObservabilityRefresh();
     } else if (event.type === 'metrics_snapshot') {
       updateDashboardMetrics(event.data);
     }
@@ -637,7 +906,84 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
         ]);
         container.appendChild(card);
       });
+      syncSelectOptions('obs-backend', data.backends || [], function(item) { return item.name; }, function(item) { return item.name; });
     }).catch(function(e) { console.error('Backends load failed:', e); });
+
+    loadObservability();
+  }
+
+  function scheduleObservabilityRefresh() {
+    if (observabilityRefreshTimer != null) return;
+    observabilityRefreshTimer = setTimeout(function() {
+      observabilityRefreshTimer = null;
+      loadObservability();
+    }, 1500);
+  }
+
+  function loadObservability() {
+    var hours = document.getElementById('obs-window').value || '6';
+    var backend = document.getElementById('obs-backend').value;
+    var path = '/observability/overview?hours=' + encodeURIComponent(hours) + '&timeline_limit=30&failure_limit=12';
+    if (backend) path += '&backend=' + encodeURIComponent(backend);
+
+    apiFetch(path).then(function(data) {
+      var totals = data.totals || {};
+      var series = data.series || [];
+      var failures = data.failures || [];
+      var timeline = data.timeline || [];
+      var latestBucket = series.length ? series[series.length - 1] : null;
+
+      document.getElementById('obs-input-total').textContent = formatCount(totals.input_tokens);
+      document.getElementById('obs-output-total').textContent = formatCount(totals.output_tokens);
+      document.getElementById('obs-failure-total').textContent = formatCount(totals.requests_error);
+      document.getElementById('obs-cost-total').textContent = formatCurrency(totals.cost_usd);
+      document.getElementById('obs-requests-value').textContent = formatCount(totals.requests_total);
+      document.getElementById('obs-tokens-value').textContent = formatCount((totals.input_tokens || 0) + (totals.output_tokens || 0));
+      document.getElementById('obs-cost-value').textContent = formatCurrency(totals.cost_usd);
+      document.getElementById('obs-requests-subtitle').textContent = latestBucket ? ('Latest bucket: ' + formatCount(latestBucket.requests_total) + ' requests, ' + formatCount(latestBucket.requests_error) + ' errors') : 'No requests in this window';
+      document.getElementById('obs-tokens-subtitle').textContent = 'Input ' + formatCount(totals.input_tokens) + ', output ' + formatCount(totals.output_tokens);
+      document.getElementById('obs-cost-subtitle').textContent = 'Window error rate ' + (((totals.error_rate || 0) * 100).toFixed(1)) + '%';
+
+      var axisStart = series.length ? formatTime(series[0].bucket_start) : '--';
+      var axisEnd = series.length ? formatTime(series[series.length - 1].bucket_start) : '--';
+
+      renderLineChart(
+        'obs-chart-requests',
+        series,
+        [
+          {color: '#4a9eff', getValue: function(point) { return point.requests_total || 0; }},
+          {color: '#f85149', getValue: function(point) { return point.requests_error || 0; }}
+        ],
+        axisStart, axisEnd
+      );
+
+      renderLineChart(
+        'obs-chart-tokens',
+        series,
+        [
+          {color: '#3fb950', getValue: function(point) { return point.input_tokens || 0; }},
+          {color: '#d29922', getValue: function(point) { return point.output_tokens || 0; }}
+        ],
+        axisStart, axisEnd
+      );
+
+      renderLineChart(
+        'obs-chart-cost',
+        series,
+        [{color: '#56d4dd', getValue: function(point) { return point.cost_usd || 0; }}],
+        axisStart, axisEnd
+      );
+
+      renderFailureTable(failures);
+      renderTimeline(timeline);
+    }).catch(function(e) {
+      console.error('Observability load failed:', e);
+      setEmptyState('obs-chart-requests', 'Failed to load request volume');
+      setEmptyState('obs-chart-tokens', 'Failed to load tokens');
+      setEmptyState('obs-chart-cost', 'Failed to load cost');
+      setEmptyState('obs-failures', 'Failed to load failures');
+      setEmptyState('obs-timeline', 'Failed to load timeline');
+    });
   }
 
   // -- Request Log --

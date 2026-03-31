@@ -210,12 +210,17 @@ pub fn parse_simple_yaml(yaml: &str) -> SimpleParsed {
     for (name, bc) in backend_map.values() {
         backends.insert(name.clone(), bc.clone());
     }
-    let default_backend = backends.keys().next().cloned().expect("at least one backend");
+    let default_backend = backends
+        .keys()
+        .next()
+        .cloned()
+        .expect("at least one backend");
     let multi = MultiConfig {
         listen_port,
         log_bodies,
         default_backend,
         backends,
+        expose_degradation_warnings: false,
     };
 
     let strategy: RoutingStrategy = config
@@ -442,9 +447,7 @@ fn build_backend_config(
             .as_deref()
             .map(|s| s.to_string())
             .or_else(|| std::env::var("AWS_ACCESS_KEY_ID").ok())
-            .unwrap_or_else(|| {
-                panic!("backend '{name}': aws_access_key_id required for bedrock")
-            });
+            .unwrap_or_else(|| panic!("backend '{name}': aws_access_key_id required for bedrock"));
 
         let secret_key = entry
             .aws_secret_access_key
@@ -479,6 +482,7 @@ fn build_backend_config(
         backend_auth,
         log_bodies,
         omit_stream_options: false,
+        stream_timeout_secs: 900,
         bedrock_credentials,
     }
 }

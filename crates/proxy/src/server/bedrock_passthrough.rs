@@ -187,7 +187,8 @@ async fn bedrock_stream(
                     }
                     Ok(None) => break, // no complete frame yet
                     Ok(Some(payload)) => {
-                        if let Some(event_json) = eventstream::extract_event_from_payload(&payload) {
+                        if let Some(event_json) = eventstream::extract_event_from_payload(&payload)
+                        {
                             // Re-emit as SSE: "event: <type>\ndata: <json>\n\n"
                             // Bedrock events are raw Anthropic JSON; detect the event type.
                             let event_type = detect_event_type(&event_json);
@@ -275,20 +276,28 @@ mod tests {
 
     #[test]
     fn detect_message_start() {
-        assert_eq!(detect_event_type(r#"{"type":"message_start","message":{"id":"msg-1"}}"#), "message_start");
+        assert_eq!(
+            detect_event_type(r#"{"type":"message_start","message":{"id":"msg-1"}}"#),
+            "message_start"
+        );
     }
 
     #[test]
     fn detect_content_block_delta() {
         assert_eq!(
-            detect_event_type(r#"{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hi"}}"#),
+            detect_event_type(
+                r#"{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hi"}}"#
+            ),
             "content_block_delta"
         );
     }
 
     #[test]
     fn detect_falls_back_for_unknown_type() {
-        assert_eq!(detect_event_type(r#"{"type":"some_future_event"}"#), "message");
+        assert_eq!(
+            detect_event_type(r#"{"type":"some_future_event"}"#),
+            "message"
+        );
     }
 
     #[test]
@@ -298,7 +307,10 @@ mod tests {
 
     #[test]
     fn detect_handles_spaced_json() {
-        assert_eq!(detect_event_type(r#"{ "type" : "message_stop" }"#), "message_stop");
+        assert_eq!(
+            detect_event_type(r#"{ "type" : "message_stop" }"#),
+            "message_stop"
+        );
     }
 
     #[test]

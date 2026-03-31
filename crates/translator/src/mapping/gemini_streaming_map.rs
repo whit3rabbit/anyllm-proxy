@@ -299,7 +299,9 @@ impl GeminiStreamingTranslator {
 mod tests {
     use super::*;
     use crate::gemini::request::{Content, Part};
-    use crate::gemini::response::{Candidate, FinishReason, GenerateContentResponse, UsageMetadata};
+    use crate::gemini::response::{
+        Candidate, FinishReason, GenerateContentResponse, UsageMetadata,
+    };
     use serde_json::json;
 
     // --- Test helpers ---
@@ -429,7 +431,10 @@ mod tests {
         assert_eq!(extract_text_deltas(&events2), vec![" world"]);
 
         // Event 3: "Hello world!" with STOP
-        let events3 = t.process_response(&make_text_response("Hello world!", Some(FinishReason::STOP)));
+        let events3 = t.process_response(&make_text_response(
+            "Hello world!",
+            Some(FinishReason::STOP),
+        ));
         assert_eq!(extract_text_deltas(&events3), vec!["!"]);
         assert_eq!(count_event_type(&events3, "content_block_stop"), 1);
         assert_eq!(count_event_type(&events3, "message_delta"), 1);
@@ -473,7 +478,9 @@ mod tests {
         assert_eq!(count_event_type(&events2, "content_block_start"), 1); // tool start
 
         // Should finish with tool_use stop reason
-        let delta_event = events2.iter().find(|e| matches!(e, anthropic::StreamEvent::MessageDelta { .. }));
+        let delta_event = events2
+            .iter()
+            .find(|e| matches!(e, anthropic::StreamEvent::MessageDelta { .. }));
         if let Some(anthropic::StreamEvent::MessageDelta { delta, .. }) = delta_event {
             assert_eq!(delta.stop_reason, Some(anthropic::StopReason::ToolUse));
         } else {
@@ -485,18 +492,34 @@ mod tests {
     #[test]
     fn tool_call_only_no_text() {
         let mut t = GeminiStreamingTranslator::new("gemini-2.5-pro".into());
-        let resp = make_tool_call_response("search", json!({"q": "rust"}), Some(FinishReason::STOP));
+        let resp =
+            make_tool_call_response("search", json!({"q": "rust"}), Some(FinishReason::STOP));
         let events = t.process_response(&resp);
 
         assert_eq!(count_event_type(&events, "message_start"), 1);
         // No text block should be opened
         assert!(extract_text_deltas(&events).is_empty());
         // Tool call events
-        let tool_starts: Vec<_> = events.iter().filter(|e| matches!(e, anthropic::StreamEvent::ContentBlockStart { content_block: anthropic::ContentBlock::ToolUse { .. }, .. })).collect();
+        let tool_starts: Vec<_> = events
+            .iter()
+            .filter(|e| {
+                matches!(
+                    e,
+                    anthropic::StreamEvent::ContentBlockStart {
+                        content_block: anthropic::ContentBlock::ToolUse { .. },
+                        ..
+                    }
+                )
+            })
+            .collect();
         assert_eq!(tool_starts.len(), 1);
 
         // Verify tool name
-        if let anthropic::StreamEvent::ContentBlockStart { content_block: anthropic::ContentBlock::ToolUse { name, .. }, .. } = &tool_starts[0] {
+        if let anthropic::StreamEvent::ContentBlockStart {
+            content_block: anthropic::ContentBlock::ToolUse { name, .. },
+            ..
+        } = &tool_starts[0]
+        {
             assert_eq!(name, "search");
         }
         assert!(t.is_finished());
@@ -515,7 +538,18 @@ mod tests {
         );
         let events = t.process_response(&resp);
 
-        let tool_starts: Vec<_> = events.iter().filter(|e| matches!(e, anthropic::StreamEvent::ContentBlockStart { content_block: anthropic::ContentBlock::ToolUse { .. }, .. })).collect();
+        let tool_starts: Vec<_> = events
+            .iter()
+            .filter(|e| {
+                matches!(
+                    e,
+                    anthropic::StreamEvent::ContentBlockStart {
+                        content_block: anthropic::ContentBlock::ToolUse { .. },
+                        ..
+                    }
+                )
+            })
+            .collect();
         assert_eq!(tool_starts.len(), 2);
         assert!(t.is_finished());
     }
@@ -535,7 +569,9 @@ mod tests {
         let mut t = GeminiStreamingTranslator::new("gemini-2.5-pro".into());
         let events = t.process_response(&make_text_response("I can't", Some(FinishReason::SAFETY)));
 
-        let delta_event = events.iter().find(|e| matches!(e, anthropic::StreamEvent::MessageDelta { .. }));
+        let delta_event = events
+            .iter()
+            .find(|e| matches!(e, anthropic::StreamEvent::MessageDelta { .. }));
         if let Some(anthropic::StreamEvent::MessageDelta { delta, .. }) = delta_event {
             assert_eq!(delta.stop_reason, Some(anthropic::StopReason::EndTurn));
         } else {
@@ -547,9 +583,14 @@ mod tests {
     #[test]
     fn max_tokens_stop() {
         let mut t = GeminiStreamingTranslator::new("gemini-2.5-pro".into());
-        let events = t.process_response(&make_text_response("truncated", Some(FinishReason::MAX_TOKENS)));
+        let events = t.process_response(&make_text_response(
+            "truncated",
+            Some(FinishReason::MAX_TOKENS),
+        ));
 
-        let delta_event = events.iter().find(|e| matches!(e, anthropic::StreamEvent::MessageDelta { .. }));
+        let delta_event = events
+            .iter()
+            .find(|e| matches!(e, anthropic::StreamEvent::MessageDelta { .. }));
         if let Some(anthropic::StreamEvent::MessageDelta { delta, .. }) = delta_event {
             assert_eq!(delta.stop_reason, Some(anthropic::StopReason::MaxTokens));
         } else {
@@ -583,7 +624,9 @@ mod tests {
         let resp = make_text_response_with_usage("done", Some(FinishReason::STOP), usage);
         let events = t.process_response(&resp);
 
-        let delta_event = events.iter().find(|e| matches!(e, anthropic::StreamEvent::MessageDelta { .. }));
+        let delta_event = events
+            .iter()
+            .find(|e| matches!(e, anthropic::StreamEvent::MessageDelta { .. }));
         if let Some(anthropic::StreamEvent::MessageDelta { usage: Some(u), .. }) = delta_event {
             assert_eq!(u.output_tokens, 25);
         } else {
@@ -655,9 +698,24 @@ mod tests {
         let resp = make_tool_call_response("test_fn", json!({}), Some(FinishReason::STOP));
         let events = t.process_response(&resp);
 
-        let tool_start = events.iter().find(|e| matches!(e, anthropic::StreamEvent::ContentBlockStart { content_block: anthropic::ContentBlock::ToolUse { .. }, .. }));
-        if let Some(anthropic::StreamEvent::ContentBlockStart { content_block: anthropic::ContentBlock::ToolUse { id, .. }, .. }) = tool_start {
-            assert!(id.starts_with("toolu_"), "tool ID should start with toolu_, got: {id}");
+        let tool_start = events.iter().find(|e| {
+            matches!(
+                e,
+                anthropic::StreamEvent::ContentBlockStart {
+                    content_block: anthropic::ContentBlock::ToolUse { .. },
+                    ..
+                }
+            )
+        });
+        if let Some(anthropic::StreamEvent::ContentBlockStart {
+            content_block: anthropic::ContentBlock::ToolUse { id, .. },
+            ..
+        }) = tool_start
+        {
+            assert!(
+                id.starts_with("toolu_"),
+                "tool ID should start with toolu_, got: {id}"
+            );
         } else {
             panic!("expected tool use content block start");
         }
@@ -686,10 +744,16 @@ mod tests {
         assert_eq!(count_event_type(&events2, "content_block_start"), 1); // tool
 
         // Verify InputJsonDelta was emitted for the tool
-        let json_deltas: Vec<_> = events2.iter().filter_map(|e| match e {
-            anthropic::StreamEvent::ContentBlockDelta { delta: anthropic::streaming::Delta::InputJsonDelta { partial_json }, .. } => Some(partial_json.clone()),
-            _ => None,
-        }).collect();
+        let json_deltas: Vec<_> = events2
+            .iter()
+            .filter_map(|e| match e {
+                anthropic::StreamEvent::ContentBlockDelta {
+                    delta: anthropic::streaming::Delta::InputJsonDelta { partial_json },
+                    ..
+                } => Some(partial_json.clone()),
+                _ => None,
+            })
+            .collect();
         assert_eq!(json_deltas.len(), 1);
         assert!(json_deltas[0].contains("42"));
 
@@ -708,10 +772,13 @@ mod tests {
         let events = t.process_response(&resp);
 
         // Collect all indices from ContentBlockStart events
-        let start_indices: Vec<u32> = events.iter().filter_map(|e| match e {
-            anthropic::StreamEvent::ContentBlockStart { index, .. } => Some(*index),
-            _ => None,
-        }).collect();
+        let start_indices: Vec<u32> = events
+            .iter()
+            .filter_map(|e| match e {
+                anthropic::StreamEvent::ContentBlockStart { index, .. } => Some(*index),
+                _ => None,
+            })
+            .collect();
         // text block at 0, fn_a at 1, fn_b at 2
         assert_eq!(start_indices, vec![0, 1, 2]);
     }
@@ -721,7 +788,9 @@ mod tests {
         let mut t = GeminiStreamingTranslator::new("gemini-2.5-pro".into());
         let events = t.process_response(&make_text_response("x", Some(FinishReason::RECITATION)));
 
-        let delta_event = events.iter().find(|e| matches!(e, anthropic::StreamEvent::MessageDelta { .. }));
+        let delta_event = events
+            .iter()
+            .find(|e| matches!(e, anthropic::StreamEvent::MessageDelta { .. }));
         if let Some(anthropic::StreamEvent::MessageDelta { delta, .. }) = delta_event {
             assert_eq!(delta.stop_reason, Some(anthropic::StopReason::EndTurn));
         }
@@ -732,7 +801,9 @@ mod tests {
         let mut t = GeminiStreamingTranslator::new("gemini-2.5-pro".into());
         let events = t.process_response(&make_text_response("x", Some(FinishReason::Unknown)));
 
-        let delta_event = events.iter().find(|e| matches!(e, anthropic::StreamEvent::MessageDelta { .. }));
+        let delta_event = events
+            .iter()
+            .find(|e| matches!(e, anthropic::StreamEvent::MessageDelta { .. }));
         if let Some(anthropic::StreamEvent::MessageDelta { delta, .. }) = delta_event {
             assert_eq!(delta.stop_reason, Some(anthropic::StopReason::EndTurn));
         }
@@ -756,7 +827,9 @@ mod tests {
         let resp = make_tool_call_response("run", json!({}), Some(FinishReason::STOP));
         let events = t.process_response(&resp);
 
-        let delta_event = events.iter().find(|e| matches!(e, anthropic::StreamEvent::MessageDelta { .. }));
+        let delta_event = events
+            .iter()
+            .find(|e| matches!(e, anthropic::StreamEvent::MessageDelta { .. }));
         if let Some(anthropic::StreamEvent::MessageDelta { delta, .. }) = delta_event {
             assert_eq!(delta.stop_reason, Some(anthropic::StopReason::ToolUse));
         } else {
@@ -771,10 +844,16 @@ mod tests {
         let resp = make_tool_call_response("weather", args.clone(), Some(FinishReason::STOP));
         let events = t.process_response(&resp);
 
-        let json_deltas: Vec<_> = events.iter().filter_map(|e| match e {
-            anthropic::StreamEvent::ContentBlockDelta { delta: anthropic::streaming::Delta::InputJsonDelta { partial_json }, .. } => Some(partial_json.clone()),
-            _ => None,
-        }).collect();
+        let json_deltas: Vec<_> = events
+            .iter()
+            .filter_map(|e| match e {
+                anthropic::StreamEvent::ContentBlockDelta {
+                    delta: anthropic::streaming::Delta::InputJsonDelta { partial_json },
+                    ..
+                } => Some(partial_json.clone()),
+                _ => None,
+            })
+            .collect();
         assert_eq!(json_deltas.len(), 1);
         // Parse back and verify
         let parsed: serde_json::Value = serde_json::from_str(&json_deltas[0]).unwrap();
@@ -831,7 +910,18 @@ mod tests {
             model_version: None,
         };
         let events1 = t.process_response(&resp1);
-        let tool_starts_1: usize = events1.iter().filter(|e| matches!(e, anthropic::StreamEvent::ContentBlockStart { content_block: anthropic::ContentBlock::ToolUse { .. }, .. })).count();
+        let tool_starts_1: usize = events1
+            .iter()
+            .filter(|e| {
+                matches!(
+                    e,
+                    anthropic::StreamEvent::ContentBlockStart {
+                        content_block: anthropic::ContentBlock::ToolUse { .. },
+                        ..
+                    }
+                )
+            })
+            .count();
         assert_eq!(tool_starts_1, 1);
 
         // Event 2: two tool calls (first is same, second is new)
@@ -851,7 +941,18 @@ mod tests {
             model_version: None,
         };
         let events2 = t.process_response(&resp2);
-        let tool_starts_2: usize = events2.iter().filter(|e| matches!(e, anthropic::StreamEvent::ContentBlockStart { content_block: anthropic::ContentBlock::ToolUse { .. }, .. })).count();
+        let tool_starts_2: usize = events2
+            .iter()
+            .filter(|e| {
+                matches!(
+                    e,
+                    anthropic::StreamEvent::ContentBlockStart {
+                        content_block: anthropic::ContentBlock::ToolUse { .. },
+                        ..
+                    }
+                )
+            })
+            .count();
         // Only the new tool call should produce a start event
         assert_eq!(tool_starts_2, 1);
         assert!(t.is_finished());
@@ -964,7 +1065,10 @@ mod tests {
             }
         }
         assert!(saw_thought_stop, "thinking block should be closed");
-        assert!(saw_text_start_after_stop, "text block should start after thinking stop");
+        assert!(
+            saw_text_start_after_stop,
+            "text block should start after thinking stop"
+        );
 
         // No thinking block should remain open at message_stop.
         assert!(t.is_finished());

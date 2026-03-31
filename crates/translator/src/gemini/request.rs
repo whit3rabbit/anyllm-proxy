@@ -247,7 +247,10 @@ mod tests {
             safety_settings: None,
         };
         let j = serde_json::to_value(&req).unwrap();
-        assert_eq!(j["systemInstruction"]["parts"][0]["text"], "You are helpful.");
+        assert_eq!(
+            j["systemInstruction"]["parts"][0]["text"],
+            "You are helpful."
+        );
         // systemInstruction should not have a role field
         assert!(j["systemInstruction"].get("role").is_none());
     }
@@ -262,14 +265,19 @@ mod tests {
                 function_declarations: vec![FunctionDeclaration {
                     name: "get_weather".into(),
                     description: Some("Get weather".into()),
-                    parameters: Some(json!({"type": "object", "properties": {"city": {"type": "string"}}})),
+                    parameters: Some(
+                        json!({"type": "object", "properties": {"city": {"type": "string"}}}),
+                    ),
                 }],
             }]),
             tool_config: None,
             safety_settings: None,
         };
         let j = serde_json::to_value(&req).unwrap();
-        assert_eq!(j["tools"][0]["functionDeclarations"][0]["name"], "get_weather");
+        assert_eq!(
+            j["tools"][0]["functionDeclarations"][0]["name"],
+            "get_weather"
+        );
     }
 
     #[test]
@@ -350,10 +358,7 @@ mod tests {
         let json_str = serde_json::to_string(&req).unwrap();
         let back: GenerateContentRequest = serde_json::from_str(&json_str).unwrap();
         assert_eq!(back.contents.len(), 1);
-        assert_eq!(
-            back.generation_config.unwrap().temperature,
-            Some(0.5)
-        );
+        assert_eq!(back.generation_config.unwrap().temperature, Some(0.5));
     }
 
     #[test]
@@ -375,9 +380,7 @@ mod tests {
     #[test]
     fn tool_config_serializes_correctly() {
         let tc = ToolConfig {
-            function_calling_config: FunctionCallingConfig {
-                mode: "ANY".into(),
-            },
+            function_calling_config: FunctionCallingConfig { mode: "ANY".into() },
         };
         let j = serde_json::to_value(&tc).unwrap();
         assert_eq!(j["functionCallingConfig"]["mode"], "ANY");
