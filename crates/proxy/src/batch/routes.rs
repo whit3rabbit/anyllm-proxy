@@ -333,3 +333,48 @@ fn internal_error(msg: &str) -> Response {
     let err = create_anthropic_error(anthropic::ErrorType::ApiError, msg.to_string(), None);
     (StatusCode::INTERNAL_SERVER_ERROR, Json(err)).into_response()
 }
+
+/// POST /v1/batches/{batch_id}/cancel
+pub async fn cancel_batch(
+    State(state): State<AppState>,
+    Path(batch_id): Path<String>,
+) -> Response {
+    let Some(engine) = state.batch_engine.as_ref() else {
+        return not_implemented("batch engine not available");
+    };
+
+    let id = anyllm_batch_engine::BatchId(batch_id);
+    match engine.cancel(&id).await {
+        Ok(_) => match engine.get(&id).await {
+            Ok(Some(job)) => {
+                let resp = serde_json::json!({
+                    "id": job.id.0,
+                    "object": "batch",
+                    "status": job.status.as_str(),
+                    "created_at": 0,
+                    "request_counts": {
+                        "total": job.request_counts.total,
+                        "completed": job.request_counts.succeeded,
+                        "failed": job.request_counts.failed,
+                    },
+                });
+                (StatusCode::OK, Json(resp)).into_response()
+            }
+            Ok(None) => not_found_response("batch not found"),
+            Err(e) => internal_error(&e.to_string()),
+        },
+        Err(anyllm_batch_engine::EngineError::Queue(anyllm_batch_engine::QueueError::NotFound)) => {
+            not_found_response("batch not found")
+        }
+        Err(e) => internal_error(&e.to_string()),
+    }
+}
+
+fn not_found_response(msg: &str) -> Response {
+    let err = create_anthropic_error(
+        anthropic::ErrorType::NotFoundError,
+        msg.to_string(),
+        None,
+    );
+    (StatusCode::NOT_FOUND, Json(err)).into_response()
+}

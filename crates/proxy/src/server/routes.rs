@@ -107,6 +107,11 @@ pub struct AppState {
     pub all_backends: Option<Arc<HashMap<String, AppState>>>,
     /// Tool execution engine state. None when tool execution is not configured.
     pub tool_engine: Option<Arc<ToolEngineState>>,
+    /// Batch orchestration engine. None in test configs that don't need batch.
+    pub batch_engine: Option<Arc<anyllm_batch_engine::BatchEngine<
+        anyllm_batch_engine::queue::sqlite::SqliteQueue,
+        anyllm_batch_engine::webhook::sqlite::SqliteWebhookQueue,
+    >>>,
 }
 
 impl AppState {
@@ -269,6 +274,7 @@ pub fn app_multi_with_shared(
             // all_backends is set after the loop (needs all states built first).
             all_backends: None,
             tool_engine: tool_engine.clone(),
+            batch_engine: None,
         };
         let sub = backend_router(state.clone(), mode);
         backend_states.insert(name.clone(), (state, mode));
@@ -393,6 +399,10 @@ fn backend_router(state: AppState, mode: HandlerMode) -> Router<GlobalState> {
         .route(
             "/v1/batches/{batch_id}",
             get(crate::batch::routes::get_batch),
+        )
+        .route(
+            "/v1/batches/{batch_id}/cancel",
+            post(crate::batch::routes::cancel_batch),
         );
 
     let api_routes = match mode {

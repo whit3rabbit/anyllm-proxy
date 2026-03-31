@@ -36,6 +36,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 
 [[package]]
+name = "anyllm_batch_engine"
+version = "0.2.0"
+dependencies = [
+ "anyllm_translate",
+ "async-trait",
+ "hex",
+ "hmac",
+ "pretty_assertions",
+ "reqwest",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "url",
+ "uuid",
+]
+
+[[package]]
 name = "anyllm_client"
 version = "0.2.0"
 dependencies = [
@@ -57,6 +79,7 @@ dependencies = [
 name = "anyllm_proxy"
 version = "0.2.0"
 dependencies = [
+ "anyllm_batch_engine",
  "anyllm_client",
  "anyllm_translate",
  "aws-credential-types",
@@ -2895,6 +2918,7 @@ dependencies = [
  "bytes",
  "futures-core",
  "futures-sink",
+ "futures-util",
  "pin-project-lite",
  "tokio",
 ]
