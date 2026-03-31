@@ -44,28 +44,45 @@ impl Default for LoopConfig {
     }
 }
 
-/// Partition tool calls into those to auto-execute and those to pass through.
+/// Partition tool calls into three categories.
 ///
-/// A tool is auto-executed only if it exists in the registry AND the policy says Allow.
-/// Tools not in the registry always pass through regardless of policy.
-/// Denied tools also pass through (caller is responsible for generating an error response).
+/// - `auto_execute`: in registry AND policy says Allow
+/// - `pass_through`: not in registry, OR policy says PassThrough
+/// - `denied`: policy says Deny (caller must surface error ToolResults to LLM)
 pub fn partition_tool_calls<'a>(
     tool_calls: &'a [ToolCall],
     registry: &ToolRegistry,
     policy: &ToolExecutionPolicy,
-) -> (Vec<&'a ToolCall>, Vec<&'a ToolCall>) {
+) -> (Vec<&'a ToolCall>, Vec<&'a ToolCall>, Vec<&'a ToolCall>) {
     let mut auto_execute = Vec::new();
     let mut pass_through = Vec::new();
+    let mut denied = Vec::new();
 
     for call in tool_calls {
-        if registry.contains(&call.name) && policy.resolve(&call.name) == PolicyAction::Allow {
-            auto_execute.push(call);
-        } else {
-            pass_through.push(call);
+        match policy.resolve(&call.name) {
+            PolicyAction::Deny => denied.push(call),
+            PolicyAction::Allow if registry.contains(&call.name) => auto_execute.push(call),
+            // Allow but not in registry, or PassThrough
+            _ => pass_through.push(call),
         }
     }
 
-    (auto_execute, pass_through)
+    (auto_execute, pass_through, denied)
+}
+
+/// Build error ToolResults for denied tool calls.
+pub fn denied_tool_results(denied: &[&ToolCall]) -> Vec<ToolResult> {
+    denied
+        .iter()
+        .map(|call| ToolResult {
+            tool_use_id: call.id.clone(),
+            tool_name: call.name.clone(),
+            outcome: ToolOutcome::Error {
+                message: format!("Tool '{}' is denied by policy", call.name),
+                retryable: false,
+            },
+        })
+        .collect()
 }
 
 /// Execute tool calls in parallel, respecting per-tool timeouts.
@@ -248,6 +265,233 @@ pub async fn execute_tool_calls_timed(
     (results, start.elapsed())
 }
 
+// ---------------------------------------------------------------------------
+// Centralized bounded tool-execution loop for non-streaming requests
+// ---------------------------------------------------------------------------
+
+use crate::tools::trace::{IterationTrace, LoopTrace, TerminationReason, ToolCallTrace};
+
+/// Engine state needed by `maybe_execute_tools`. Re-exported alias so callers
+/// do not need to reach into `server::routes`.
+pub use crate::server::routes::ToolEngineState;
+
+/// Process an LLM response for tool execution. If auto-executable tool calls
+/// are found, executes them and makes follow-up backend calls in a bounded loop.
+///
+/// Returns the final response (original if no tools were auto-executed) and a
+/// `LoopTrace` recording what happened.
+///
+/// `backend_call` is a closure the caller provides. It takes a
+/// `MessageCreateRequest` and returns the translated `MessageResponse`.
+/// This keeps the loop backend-agnostic: the handler knows how to translate
+/// and call its specific backend; this function only knows about Anthropic types.
+pub async fn maybe_execute_tools<F, Fut>(
+    engine: &ToolEngineState,
+    original_req: &anyllm_translate::anthropic::MessageCreateRequest,
+    initial_response: anyllm_translate::anthropic::MessageResponse,
+    backend_call: F,
+) -> (anyllm_translate::anthropic::MessageResponse, LoopTrace)
+where
+    F: Fn(anyllm_translate::anthropic::MessageCreateRequest) -> Fut,
+    Fut: std::future::Future<Output = Result<anyllm_translate::anthropic::MessageResponse, String>>,
+{
+    let loop_start = Instant::now();
+    let mut iterations: Vec<IterationTrace> = Vec::new();
+    let mut current_response = initial_response;
+    let mut current_messages = original_req.messages.clone();
+    let mut prev_tool_calls: Option<Vec<ToolCall>> = None;
+
+    for _iteration in 0..engine.loop_config.max_iterations {
+        // Guard: total timeout
+        if loop_start.elapsed() > engine.loop_config.total_timeout {
+            return (
+                current_response,
+                LoopTrace {
+                    iterations,
+                    total_duration: loop_start.elapsed(),
+                    termination_reason: TerminationReason::Timeout,
+                },
+            );
+        }
+
+        let tool_calls = extract_tool_calls(&current_response);
+        let (auto_exec, _pass_through, denied) =
+            partition_tool_calls(&tool_calls, &engine.registry, &engine.policy);
+
+        // Generate error results for denied tools so the LLM sees them.
+        let denied_results = denied_tool_results(&denied);
+
+        if auto_exec.is_empty() && denied_results.is_empty() {
+            return (
+                current_response,
+                LoopTrace {
+                    iterations,
+                    total_duration: loop_start.elapsed(),
+                    termination_reason: TerminationReason::NoToolCalls,
+                },
+            );
+        }
+
+        // If only denials (no auto-execute), send error results back to LLM immediately.
+        if auto_exec.is_empty() {
+            current_messages.push(response_to_assistant_message(&current_response));
+            current_messages.push(tool_results_to_user_message(&denied_results));
+            let mut follow_up_req = original_req.clone();
+            follow_up_req.messages = current_messages.clone();
+            let llm_start = Instant::now();
+            let deny_traces: Vec<ToolCallTrace> = denied_results
+                .iter()
+                .map(|r| ToolCallTrace {
+                    tool_name: r.tool_name.clone(),
+                    duration: Duration::ZERO,
+                    outcome: r.outcome.clone(),
+                })
+                .collect();
+            iterations.push(IterationTrace {
+                tool_calls: deny_traces,
+                llm_latency: Duration::ZERO,
+            });
+            match backend_call(follow_up_req).await {
+                Ok(resp) => {
+                    if let Some(last) = iterations.last_mut() {
+                        last.llm_latency = llm_start.elapsed();
+                    }
+                    prev_tool_calls = None;
+                    current_response = resp;
+                    continue;
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, "follow-up backend call failed after deny");
+                    if let Some(last) = iterations.last_mut() {
+                        last.llm_latency = llm_start.elapsed();
+                    }
+                    return (
+                        current_response,
+                        LoopTrace {
+                            iterations,
+                            total_duration: loop_start.elapsed(),
+                            termination_reason: TerminationReason::NoToolCalls,
+                        },
+                    );
+                }
+            }
+        }
+
+        // Guard: duplicate detection (same tool calls as previous iteration)
+        let auto_calls: Vec<ToolCall> = auto_exec.iter().map(|c| (*c).clone()).collect();
+        if let Some(ref prev) = prev_tool_calls {
+            if is_duplicate(prev, &auto_calls) {
+                return (
+                    current_response,
+                    LoopTrace {
+                        iterations,
+                        total_duration: loop_start.elapsed(),
+                        termination_reason: TerminationReason::DuplicateDetected,
+                    },
+                );
+            }
+        }
+
+        // Execute auto-allowed tools in parallel
+        let exec_start = Instant::now();
+        let mut results = execute_tool_calls(
+            &auto_exec,
+            engine.registry.clone(),
+            &engine.policy,
+            &engine.loop_config,
+        )
+        .await;
+        let exec_duration = exec_start.elapsed();
+
+        // Append denied-tool error results so the LLM sees all outcomes.
+        results.extend(denied_results);
+
+        // Build per-tool traces
+        let tool_traces: Vec<ToolCallTrace> = results
+            .iter()
+            .map(|r| ToolCallTrace {
+                tool_name: r.tool_name.clone(),
+                duration: exec_duration,
+                outcome: r.outcome.clone(),
+            })
+            .collect();
+
+        // Guard: all tools failed (includes deny errors, which are non-retryable)
+        let all_failed = results
+            .iter()
+            .all(|r| !matches!(r.outcome, ToolOutcome::Success(_)));
+
+        iterations.push(IterationTrace {
+            tool_calls: tool_traces,
+            llm_latency: Duration::ZERO, // filled after backend call below
+        });
+
+        if all_failed {
+            return (
+                current_response,
+                LoopTrace {
+                    iterations,
+                    total_duration: loop_start.elapsed(),
+                    termination_reason: TerminationReason::AllToolsFailed,
+                },
+            );
+        }
+
+        // Build follow-up: append assistant response + tool results to conversation
+        current_messages.push(response_to_assistant_message(&current_response));
+        current_messages.push(tool_results_to_user_message(&results));
+
+        let mut follow_up_req = original_req.clone();
+        follow_up_req.messages = current_messages.clone();
+
+        // Call backend via caller-provided closure
+        let llm_start = Instant::now();
+        match backend_call(follow_up_req).await {
+            Ok(resp) => {
+                if let Some(last) = iterations.last_mut() {
+                    last.llm_latency = llm_start.elapsed();
+                }
+                tracing::info!(
+                    tools_executed = results.len(),
+                    iteration = _iteration + 1,
+                    "tool execution loop: iteration complete"
+                );
+                prev_tool_calls = Some(auto_calls);
+                current_response = resp;
+            }
+            Err(e) => {
+                tracing::warn!(
+                    error = %e,
+                    "follow-up backend call failed, returning last good response"
+                );
+                if let Some(last) = iterations.last_mut() {
+                    last.llm_latency = llm_start.elapsed();
+                }
+                return (
+                    current_response,
+                    LoopTrace {
+                        iterations,
+                        total_duration: loop_start.elapsed(),
+                        // Backend error is not a clean termination; closest match is NoToolCalls
+                        // since we are stopping the loop and returning what we have.
+                        termination_reason: TerminationReason::NoToolCalls,
+                    },
+                );
+            }
+        }
+    }
+
+    // Exhausted max_iterations
+    (
+        current_response,
+        LoopTrace {
+            iterations,
+            total_duration: loop_start.elapsed(),
+            termination_reason: TerminationReason::MaxIterations,
+        },
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -339,10 +583,11 @@ mod tests {
         let policy = passthrough_policy();
 
         let calls = vec![make_call("id1", "echo", json!({"text": "hi"}))];
-        let (auto, pass) = partition_tool_calls(&calls, &registry, &policy);
+        let (auto, pass, denied) = partition_tool_calls(&calls, &registry, &policy);
 
         assert!(auto.is_empty());
         assert_eq!(pass.len(), 1);
+        assert!(denied.is_empty());
     }
 
     // 2. allow policy + registered tool -> auto-execute; unregistered -> pass through
@@ -356,12 +601,57 @@ mod tests {
             make_call("id1", "echo", json!({"text": "hi"})),
             make_call("id2", "unknown_tool", json!({})),
         ];
-        let (auto, pass) = partition_tool_calls(&calls, &registry, &policy);
+        let (auto, pass, denied) = partition_tool_calls(&calls, &registry, &policy);
 
         assert_eq!(auto.len(), 1);
         assert_eq!(auto[0].name, "echo");
         assert_eq!(pass.len(), 1);
         assert_eq!(pass[0].name, "unknown_tool");
+        assert!(denied.is_empty());
+    }
+
+    // 2b. deny policy -> tool goes to denied bucket, not pass_through
+    #[test]
+    fn partition_deny_policy() {
+        let mut registry = ToolRegistry::new();
+        registry.register(Box::new(EchoTool));
+        let policy = ToolExecutionPolicy {
+            default_action: PolicyAction::PassThrough,
+            rules: vec![PolicyRule {
+                tool_name: "echo".to_string(),
+                action: PolicyAction::Deny,
+                timeout: None,
+                max_concurrency: None,
+            }],
+        };
+
+        let calls = vec![make_call("id1", "echo", json!({"text": "hi"}))];
+        let (auto, pass, denied) = partition_tool_calls(&calls, &registry, &policy);
+
+        assert!(auto.is_empty());
+        assert!(pass.is_empty());
+        assert_eq!(denied.len(), 1);
+        assert_eq!(denied[0].name, "echo");
+    }
+
+    // 2c. denied_tool_results generates error ToolResult with correct message
+    #[test]
+    fn denied_tool_results_generates_error_results() {
+        let calls = vec![make_call("id1", "rm_rf", json!({}))];
+        let refs: Vec<&ToolCall> = calls.iter().collect();
+        let results = denied_tool_results(&refs);
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].tool_use_id, "id1");
+        assert_eq!(results[0].tool_name, "rm_rf");
+        match &results[0].outcome {
+            ToolOutcome::Error { message, retryable } => {
+                assert!(message.contains("rm_rf"));
+                assert!(message.contains("denied"));
+                assert!(!retryable);
+            }
+            other => panic!("expected Error outcome, got {:?}", other),
+        }
     }
 
     // 3. EchoTool executes successfully

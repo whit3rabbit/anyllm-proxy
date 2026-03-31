@@ -238,64 +238,38 @@ pub(crate) async fn chat_completions(
                         &original_model,
                     );
 
-                    // Tool execution: if the response contains tool_use blocks for
-                    // registered tools, execute them and make a follow-up backend call.
+                    // Tool execution: bounded loop with termination guards.
                     let anthropic_resp = if let Some(ref engine) = state.tool_engine {
-                        let tool_calls =
-                            crate::tools::execution::extract_tool_calls(&anthropic_resp);
-                        let (auto_exec, _pass_through) =
-                            crate::tools::execution::partition_tool_calls(
-                                &tool_calls,
-                                &engine.registry,
-                                &engine.policy,
-                            );
-
-                        if !auto_exec.is_empty() {
-                            let results = crate::tools::execution::execute_tool_calls(
-                                &auto_exec,
-                                engine.registry.clone(),
-                                &engine.policy,
-                                &engine.loop_config,
-                            )
-                            .await;
-
-                            // Build follow-up: original messages + assistant response + tool results
-                            let mut follow_up_req = anthropic_req.clone();
-                            follow_up_req.messages.push(
-                                crate::tools::execution::response_to_assistant_message(
-                                    &anthropic_resp,
-                                ),
-                            );
-                            follow_up_req.messages.push(
-                                crate::tools::execution::tool_results_to_user_message(&results),
-                            );
-
-                            let mut follow_up_openai =
-                                mapping::message_map::anthropic_to_openai_request(&follow_up_req);
-                            follow_up_openai.model = mapped_model.clone();
-
-                            match client.chat_completion(&follow_up_openai).await {
-                                Ok((follow_up_resp, _, _)) => {
-                                    tracing::info!(
-                                        tools_executed = results.len(),
-                                        "tool execution loop completed"
-                                    );
-                                    mapping::message_map::openai_to_anthropic_response(
-                                        &follow_up_resp,
-                                        &original_model,
-                                    )
+                        let client_for_tools = client.clone();
+                        let model_for_tools = mapped_model.clone();
+                        let orig_model_for_tools = original_model.clone();
+                        let (resp, _trace) = crate::tools::execution::maybe_execute_tools(
+                            engine,
+                            &anthropic_req,
+                            anthropic_resp,
+                            |follow_up_req| {
+                                let c = client_for_tools.clone();
+                                let m = model_for_tools.clone();
+                                let om = orig_model_for_tools.clone();
+                                async move {
+                                    let mut oai_req =
+                                        mapping::message_map::anthropic_to_openai_request(
+                                            &follow_up_req,
+                                        );
+                                    oai_req.model = m;
+                                    match c.chat_completion(&oai_req).await {
+                                        Ok((resp, _, _)) => Ok(
+                                            mapping::message_map::openai_to_anthropic_response(
+                                                &resp, &om,
+                                            ),
+                                        ),
+                                        Err(e) => Err(format!("{e}")),
+                                    }
                                 }
-                                Err(e) => {
-                                    tracing::warn!(
-                                        error = %e,
-                                        "follow-up backend call after tool execution failed"
-                                    );
-                                    anthropic_resp
-                                }
-                            }
-                        } else {
-                            anthropic_resp
-                        }
+                            },
+                        )
+                        .await;
+                        resp
                     } else {
                         anthropic_resp
                     };
@@ -727,21 +701,26 @@ async fn chat_completions_stream(
                             })
                             .collect();
 
-                        let (auto_exec, _pass_through) =
+                        let (auto_exec, _pass_through, denied) =
                             crate::tools::execution::partition_tool_calls(
                                 &tool_calls,
                                 &engine.registry,
                                 &engine.policy,
                             );
+                        let denied_results =
+                            crate::tools::execution::denied_tool_results(&denied);
 
-                        if !auto_exec.is_empty() {
-                            let results = crate::tools::execution::execute_tool_calls(
+                        if !auto_exec.is_empty() || !denied_results.is_empty() {
+                            let mut results = crate::tools::execution::execute_tool_calls(
                                 &auto_exec,
                                 engine.registry.clone(),
                                 &engine.policy,
                                 &engine.loop_config,
                             )
                             .await;
+
+                            // Include denied-tool errors in the follow-up so the LLM sees them.
+                            results.extend(denied_results);
 
                             // Build the assistant message from accumulated tool calls.
                             let assistant_content: Vec<anyllm_translate::anthropic::ContentBlock> =

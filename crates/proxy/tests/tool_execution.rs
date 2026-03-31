@@ -11,8 +11,8 @@ use anyllm_proxy::tools::{
     PolicyAction, PolicyRule, Tool, ToolCall, ToolExecutionPolicy, ToolRegistry, ToolResult,
 };
 use anyllm_proxy::tools::execution::{
-    execute_tool_calls, extract_tool_calls, is_duplicate, partition_tool_calls,
-    tool_results_to_user_message, LoopConfig,
+    denied_tool_results, execute_tool_calls, extract_tool_calls, is_duplicate, maybe_execute_tools,
+    partition_tool_calls, tool_results_to_user_message, LoopConfig, ToolEngineState,
 };
 use anyllm_proxy::tools::trace::ToolOutcome;
 
@@ -85,11 +85,12 @@ fn partition_allows_registered_tools() {
         make_call("1", "upper", serde_json::json!({"text": "hi"})),
         make_call("2", "unknown", serde_json::json!({})),
     ];
-    let (auto, pass) = partition_tool_calls(&calls, &reg, &policy);
+    let (auto, pass, denied) = partition_tool_calls(&calls, &reg, &policy);
     assert_eq!(auto.len(), 1);
     assert_eq!(auto[0].name, "upper");
     assert_eq!(pass.len(), 1);
     assert_eq!(pass[0].name, "unknown");
+    assert!(denied.is_empty());
 }
 
 #[test]
@@ -99,9 +100,53 @@ fn partition_passthrough_policy_sends_all_through() {
     let passthrough_policy = ToolExecutionPolicy::default();
 
     let calls = vec![make_call("1", "upper", serde_json::json!({"text": "hi"}))];
-    let (auto, pass) = partition_tool_calls(&calls, &reg, &passthrough_policy);
+    let (auto, pass, denied) = partition_tool_calls(&calls, &reg, &passthrough_policy);
     assert!(auto.is_empty());
     assert_eq!(pass.len(), 1);
+    assert!(denied.is_empty());
+}
+
+#[test]
+fn partition_deny_policy_goes_to_denied_bucket() {
+    use anyllm_proxy::tools::{PolicyAction, PolicyRule, ToolExecutionPolicy};
+
+    let (reg, _) = setup();
+    let deny_policy = ToolExecutionPolicy {
+        default_action: PolicyAction::PassThrough,
+        rules: vec![PolicyRule {
+            tool_name: "upper".to_string(),
+            action: PolicyAction::Deny,
+            timeout: None,
+            max_concurrency: None,
+        }],
+    };
+
+    let calls = vec![make_call("1", "upper", serde_json::json!({"text": "hi"}))];
+    let (auto, pass, denied) = partition_tool_calls(&calls, &reg, &deny_policy);
+    assert!(auto.is_empty());
+    assert!(pass.is_empty());
+    assert_eq!(denied.len(), 1);
+    assert_eq!(denied[0].name, "upper");
+}
+
+#[test]
+fn denied_tool_results_are_errors() {
+    use anyllm_proxy::tools::trace::ToolOutcome;
+
+    let calls = vec![make_call("tc_denied", "upper", serde_json::json!({}))];
+    let refs: Vec<&ToolCall> = calls.iter().collect();
+    let results = denied_tool_results(&refs);
+
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].tool_use_id, "tc_denied");
+    match &results[0].outcome {
+        ToolOutcome::Error { message, retryable } => {
+            assert!(message.contains("upper"));
+            assert!(message.contains("denied"));
+            assert!(!retryable);
+        }
+        other => panic!("expected Error outcome, got {:?}", other),
+    }
 }
 
 #[tokio::test]
@@ -280,4 +325,240 @@ fn extract_tool_calls_empty_when_no_tool_use() {
 
     let calls = extract_tool_calls(&resp);
     assert!(calls.is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// maybe_execute_tools tests
+// ---------------------------------------------------------------------------
+
+use anyllm_translate::anthropic::{
+    Content, ContentBlock, InputMessage, MessageCreateRequest, MessageResponse, Role, StopReason,
+    Usage,
+};
+use std::time::Duration;
+
+fn make_engine(max_iterations: usize) -> ToolEngineState {
+    let (reg, policy) = setup();
+    ToolEngineState {
+        registry: reg,
+        policy,
+        loop_config: LoopConfig {
+            max_iterations,
+            tool_timeout: Duration::from_secs(5),
+            total_timeout: Duration::from_secs(30),
+            max_tool_calls_per_turn: 16,
+        },
+        mcp_manager: None,
+    }
+}
+
+fn text_response(text: &str) -> MessageResponse {
+    MessageResponse {
+        id: "msg_test".into(),
+        response_type: "message".into(),
+        role: Role::Assistant,
+        content: vec![ContentBlock::Text { text: text.into() }],
+        model: "test".into(),
+        stop_reason: Some(StopReason::EndTurn),
+        stop_sequence: None,
+        usage: Usage {
+            input_tokens: 5,
+            output_tokens: 3,
+            cache_creation_input_tokens: None,
+            cache_read_input_tokens: None,
+        },
+        created: None,
+    }
+}
+
+fn tool_use_response(tool_id: &str, tool_name: &str, input: serde_json::Value) -> MessageResponse {
+    MessageResponse {
+        id: "msg_tool".into(),
+        response_type: "message".into(),
+        role: Role::Assistant,
+        content: vec![ContentBlock::ToolUse {
+            id: tool_id.into(),
+            name: tool_name.into(),
+            input,
+        }],
+        model: "test".into(),
+        stop_reason: Some(StopReason::ToolUse),
+        stop_sequence: None,
+        usage: Usage {
+            input_tokens: 10,
+            output_tokens: 5,
+            cache_creation_input_tokens: None,
+            cache_read_input_tokens: None,
+        },
+        created: None,
+    }
+}
+
+fn simple_request() -> MessageCreateRequest {
+    MessageCreateRequest {
+        model: "test".into(),
+        max_tokens: 100,
+        messages: vec![InputMessage {
+            role: Role::User,
+            content: Content::Text("hello".into()),
+        }],
+        system: None,
+        stop_sequences: None,
+        stream: None,
+        temperature: None,
+        top_p: None,
+        top_k: None,
+        tools: None,
+        tool_choice: None,
+        metadata: None,
+        thinking: None,
+        extra: serde_json::Map::new(),
+    }
+}
+
+#[tokio::test]
+async fn maybe_execute_no_tool_calls_returns_original() {
+    let engine = make_engine(3);
+    let req = simple_request();
+    let initial = text_response("just text");
+
+    let (resp, trace) = maybe_execute_tools(&engine, &req, initial.clone(), |_| async {
+        panic!("backend should not be called when no tool calls");
+    })
+    .await;
+
+    assert_eq!(resp.id, initial.id);
+    assert!(trace.iterations.is_empty());
+    assert_eq!(
+        trace.termination_reason,
+        anyllm_proxy::tools::TerminationReason::NoToolCalls
+    );
+}
+
+#[tokio::test]
+async fn maybe_execute_unregistered_tool_passes_through() {
+    // Tool "unknown" is not in registry, so it should pass through (no execution).
+    let engine = make_engine(3);
+    let req = simple_request();
+    let initial = tool_use_response("tu_1", "unknown", serde_json::json!({}));
+
+    let (resp, trace) = maybe_execute_tools(&engine, &req, initial.clone(), |_| async {
+        panic!("backend should not be called for pass-through tools");
+    })
+    .await;
+
+    // Original response returned as-is
+    assert_eq!(resp.id, initial.id);
+    assert_eq!(
+        trace.termination_reason,
+        anyllm_proxy::tools::TerminationReason::NoToolCalls
+    );
+}
+
+#[tokio::test]
+async fn maybe_execute_one_iteration_success() {
+    let engine = make_engine(3);
+    let req = simple_request();
+    let initial = tool_use_response("tu_1", "upper", serde_json::json!({"text": "hello"}));
+
+    let (resp, trace) = maybe_execute_tools(&engine, &req, initial, |_follow_up| async {
+        // The follow-up response has no tool calls, so the loop stops.
+        Ok(text_response("HELLO"))
+    })
+    .await;
+
+    // Should get the follow-up response
+    assert_eq!(resp.id, "msg_test");
+    assert_eq!(trace.iterations.len(), 1);
+    assert_eq!(trace.iterations[0].tool_calls.len(), 1);
+    assert_eq!(trace.iterations[0].tool_calls[0].tool_name, "upper");
+    assert_eq!(
+        trace.termination_reason,
+        anyllm_proxy::tools::TerminationReason::NoToolCalls
+    );
+}
+
+#[tokio::test]
+async fn maybe_execute_duplicate_detection_stops_loop() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let engine = make_engine(5);
+    let req = simple_request();
+    let initial = tool_use_response("tu_1", "upper", serde_json::json!({"text": "hello"}));
+
+    let call_count = Arc::new(AtomicUsize::new(0));
+    let call_count_clone = call_count.clone();
+
+    let (resp, trace) = maybe_execute_tools(&engine, &req, initial, move |_| {
+        let cc = call_count_clone.clone();
+        async move {
+            cc.fetch_add(1, Ordering::SeqCst);
+            // Always return same tool call, triggering duplicate detection on 2nd iteration.
+            Ok(tool_use_response(
+                "tu_2",
+                "upper",
+                serde_json::json!({"text": "hello"}),
+            ))
+        }
+    })
+    .await;
+
+    // Should have called backend once, then detected duplicate on 2nd iteration.
+    assert_eq!(call_count.load(Ordering::SeqCst), 1);
+    assert_eq!(trace.iterations.len(), 1);
+    assert_eq!(
+        trace.termination_reason,
+        anyllm_proxy::tools::TerminationReason::DuplicateDetected
+    );
+    // Returns the last response from backend
+    assert_eq!(resp.id, "msg_tool");
+}
+
+#[tokio::test]
+async fn maybe_execute_max_iterations_honored() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let engine = make_engine(2); // max 2 iterations
+    let req = simple_request();
+    let initial = tool_use_response("tu_1", "upper", serde_json::json!({"text": "a"}));
+
+    let call_count = Arc::new(AtomicUsize::new(0));
+    let call_count_clone = call_count.clone();
+
+    let (_resp, trace) = maybe_execute_tools(&engine, &req, initial, move |_| {
+        let cc = call_count_clone.clone();
+        async move {
+            let n = cc.fetch_add(1, Ordering::SeqCst);
+            // Each iteration returns a different tool call to avoid duplicate detection.
+            Ok(tool_use_response(
+                &format!("tu_{}", n + 2),
+                "upper",
+                serde_json::json!({"text": format!("iter_{}", n)}),
+            ))
+        }
+    })
+    .await;
+
+    assert_eq!(call_count.load(Ordering::SeqCst), 2);
+    assert_eq!(trace.iterations.len(), 2);
+    assert_eq!(
+        trace.termination_reason,
+        anyllm_proxy::tools::TerminationReason::MaxIterations
+    );
+}
+
+#[tokio::test]
+async fn maybe_execute_backend_error_returns_last_response() {
+    let engine = make_engine(3);
+    let req = simple_request();
+    let initial = tool_use_response("tu_1", "upper", serde_json::json!({"text": "hello"}));
+
+    let (resp, trace) = maybe_execute_tools(&engine, &req, initial.clone(), |_| async {
+        Err("backend unavailable".to_string())
+    })
+    .await;
+
+    // Should return the initial response (last good one before backend error)
+    assert_eq!(resp.id, initial.id);
+    assert_eq!(trace.iterations.len(), 1);
 }
