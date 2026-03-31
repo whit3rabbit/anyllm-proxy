@@ -202,11 +202,17 @@ async fn main() {
                                 tools = discovered.len(),
                                 "MCP server connected and tools discovered"
                             );
-                            manager.register_server_blocking(
+                            if let Err(e) = manager.register_server_blocking(
                                 &server_cfg.name,
                                 &server_cfg.url,
                                 discovered,
-                            );
+                            ) {
+                                tracing::error!(
+                                    server = %server_cfg.name,
+                                    error = %e,
+                                    "MCP server registration failed"
+                                );
+                            }
                         }
                         Err(e) => {
                             tracing::warn!(

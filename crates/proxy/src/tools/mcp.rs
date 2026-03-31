@@ -19,6 +19,14 @@ pub struct McpServer {
     pub tools: Vec<McpToolDef>,
 }
 
+/// Validate that an MCP server name is safe to use in tool key construction.
+/// Allows alphanumerics and hyphens only. Underscores are forbidden because
+/// the tool name scheme uses `mcp_{server}_{tool}`; an underscore in the server
+/// name makes `parse_mcp_tool_name` ambiguous and can cause tool misrouting.
+pub fn is_valid_mcp_server_name(name: &str) -> bool {
+    !name.is_empty() && name.chars().all(|c| c.is_alphanumeric() || c == '-')
+}
+
 /// Build a prefixed tool name: mcp_{server}_{tool}.
 pub fn mcp_tool_name(server_name: &str, tool_name: &str) -> String {
     format!("mcp_{}_{}", server_name, tool_name)
@@ -53,7 +61,18 @@ impl McpServerManager {
         }
     }
 
-    pub fn register_server_blocking(&self, name: &str, url: &str, tools: Vec<McpToolDef>) {
+    pub fn register_server_blocking(
+        &self,
+        name: &str,
+        url: &str,
+        tools: Vec<McpToolDef>,
+    ) -> Result<(), String> {
+        if !is_valid_mcp_server_name(name) {
+            return Err(format!(
+                "invalid MCP server name '{}': only alphanumerics and hyphens are allowed",
+                name
+            ));
+        }
         self.remove_server_blocking(name);
         let mut tool_map = self.tool_to_server.write().unwrap();
         for tool in &tools {
@@ -65,6 +84,7 @@ impl McpServerManager {
             tools,
         };
         self.servers.write().unwrap().insert(name.to_string(), server);
+        Ok(())
     }
 
     pub fn remove_server_blocking(&self, name: &str) {
@@ -295,7 +315,8 @@ mod tests {
                 input_schema: serde_json::json!({"type": "object"}),
             },
         ];
-        mgr.register_server_blocking("github", "https://example.com/sse", tools);
+        mgr.register_server_blocking("github", "https://example.com/sse", tools)
+            .unwrap();
 
         let servers = mgr.list_servers_blocking();
         assert_eq!(servers.len(), 1);
@@ -322,7 +343,8 @@ mod tests {
                 description: "s".into(),
                 input_schema: serde_json::json!({"type": "object"}),
             }],
-        );
+        )
+        .unwrap();
         assert!(mgr
             .find_server_for_tool_blocking("mcp_github_search")
             .is_some());
@@ -367,7 +389,8 @@ mod tests {
                 description: "Search".to_string(),
                 input_schema: serde_json::json!({"type": "object"}),
             }],
-        );
+        )
+        .unwrap();
         let mut registry = crate::tools::ToolRegistry::new();
         register_mcp_tools(&mgr, &mut registry);
         assert!(registry.contains("mcp_github_search"));
@@ -384,9 +407,35 @@ mod tests {
                 description: "Search".into(),
                 input_schema: serde_json::json!({"type": "object", "properties": {}}),
             }],
-        );
+        )
+        .unwrap();
         let tools = mgr.as_anthropic_tools_blocking();
         assert_eq!(tools.len(), 1);
         assert_eq!(tools[0].name, "mcp_github_search");
+    }
+
+    #[test]
+    fn valid_server_names_accepted() {
+        assert!(is_valid_mcp_server_name("github"));
+        assert!(is_valid_mcp_server_name("my-server"));
+        assert!(is_valid_mcp_server_name("Server1"));
+    }
+
+    #[test]
+    fn invalid_server_names_rejected() {
+        assert!(!is_valid_mcp_server_name(""));
+        assert!(!is_valid_mcp_server_name("my_server")); // underscore
+        assert!(!is_valid_mcp_server_name("bad name")); // space
+        assert!(!is_valid_mcp_server_name("a/b")); // slash
+    }
+
+    #[test]
+    fn register_server_blocking_rejects_underscored_names() {
+        let mgr = McpServerManager::new();
+        let err = mgr
+            .register_server_blocking("evil_server", "https://example.com", vec![])
+            .unwrap_err();
+        assert!(err.contains("invalid MCP server name"));
+        assert!(mgr.list_servers_blocking().is_empty());
     }
 }

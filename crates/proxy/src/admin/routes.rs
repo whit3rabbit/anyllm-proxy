@@ -1661,7 +1661,13 @@ async fn add_mcp_server(
     match crate::tools::mcp::McpServerManager::discover_tools(&url).await {
         Ok(tools) => {
             let tool_count = tools.len();
-            mgr.register_server_blocking(&name, &url, tools);
+            if let Err(e) = mgr.register_server_blocking(&name, &url, tools) {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(serde_json::json!({"error": e})),
+                )
+                    .into_response();
+            }
             tracing::info!(server = %name, tools = tool_count, "MCP server registered");
             (
                 StatusCode::CREATED,
