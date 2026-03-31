@@ -33,11 +33,7 @@ pub trait JobQueue: Send + Sync + 'static {
 
     // -- Item-level operations (proxy-native path, Phase 2) --
     async fn claim_next_item(&self) -> Result<Option<LeasedItem>, QueueError>;
-    async fn complete_item(
-        &self,
-        id: &ItemId,
-        result: BatchItemResult,
-    ) -> Result<(), QueueError>;
+    async fn complete_item(&self, id: &ItemId, result: BatchItemResult) -> Result<(), QueueError>;
     async fn fail_item(&self, id: &ItemId, error: &str) -> Result<(), QueueError>;
     async fn schedule_retry(
         &self,
@@ -58,11 +54,8 @@ pub trait JobQueue: Send + Sync + 'static {
     async fn reclaim_expired_leases(&self) -> Result<u32, QueueError>;
 
     // -- Progress --
-    async fn update_progress(
-        &self,
-        id: &BatchId,
-        counts: &RequestCounts,
-    ) -> Result<(), QueueError>;
+    async fn update_progress(&self, id: &BatchId, counts: &RequestCounts)
+        -> Result<(), QueueError>;
 
     // -- Items query --
     async fn get_items(&self, batch_id: &BatchId) -> Result<Vec<BatchItem>, QueueError>;

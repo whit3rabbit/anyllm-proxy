@@ -52,21 +52,15 @@ impl Tool for BashTool {
                 .stderr(Stdio::piped())
                 .output();
 
-            let output = match tokio::time::timeout(
-                std::time::Duration::from_secs(TIMEOUT_SECS),
-                fut,
-            )
-            .await
-            {
-                Ok(Ok(output)) => output,
-                Ok(Err(e)) => return Err(format!("Failed to spawn process: {}", e)),
-                Err(_) => {
-                    return Err(format!(
-                        "Command timed out after {} seconds",
-                        TIMEOUT_SECS
-                    ))
-                }
-            };
+            let output =
+                match tokio::time::timeout(std::time::Duration::from_secs(TIMEOUT_SECS), fut).await
+                {
+                    Ok(Ok(output)) => output,
+                    Ok(Err(e)) => return Err(format!("Failed to spawn process: {}", e)),
+                    Err(_) => {
+                        return Err(format!("Command timed out after {} seconds", TIMEOUT_SECS))
+                    }
+                };
 
             let stdout = String::from_utf8_lossy(&output.stdout);
             let stderr = String::from_utf8_lossy(&output.stderr);

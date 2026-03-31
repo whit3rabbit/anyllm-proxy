@@ -304,10 +304,7 @@ pub fn admin_router(shared: SharedState, token: Arc<String>) -> Router {
             "/admin/api/mcp-servers",
             get(list_mcp_servers).post(add_mcp_server),
         )
-        .route(
-            "/admin/api/mcp-servers/{name}",
-            delete(remove_mcp_server),
-        )
+        .route("/admin/api/mcp-servers/{name}", delete(remove_mcp_server))
         .with_state(shared.clone())
         // Innermost: CSRF check runs after auth succeeds.
         .layer(middleware::from_fn(validate_csrf))
@@ -1611,7 +1608,11 @@ async fn list_mcp_servers(State(shared): State<SharedState>) -> axum::response::
         return (StatusCode::OK, Json(serde_json::json!({"servers": []}))).into_response();
     };
     let servers = mgr.list_servers_blocking();
-    (StatusCode::OK, Json(serde_json::json!({"servers": servers}))).into_response()
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({"servers": servers})),
+    )
+        .into_response()
 }
 
 /// POST /admin/api/mcp-servers - Register an MCP server. Body: { name, url }.

@@ -138,12 +138,7 @@ impl<Q: JobQueue, W: WebhookQueue> BatchEngine<Q, W> {
     }
 
     /// Fire a webhook to all configured URLs.
-    async fn fire_webhook(
-        &self,
-        batch_id: &BatchId,
-        event_type: &str,
-        payload: serde_json::Value,
-    ) {
+    async fn fire_webhook(&self, batch_id: &BatchId, event_type: &str, payload: serde_json::Value) {
         let event_id = format!("evt_{}", uuid::Uuid::new_v4());
 
         // Collect URLs: global + per-batch.

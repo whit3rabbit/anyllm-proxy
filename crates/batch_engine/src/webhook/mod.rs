@@ -37,11 +37,7 @@ pub trait WebhookQueue: Send + Sync + 'static {
     async fn enqueue(&self, delivery: WebhookDelivery) -> Result<(), QueueError>;
     async fn claim_next(&self) -> Result<Option<LeasedDelivery>, QueueError>;
     async fn ack(&self, delivery_id: &str) -> Result<(), QueueError>;
-    async fn schedule_retry(
-        &self,
-        delivery_id: &str,
-        delay: Duration,
-    ) -> Result<(), QueueError>;
+    async fn schedule_retry(&self, delivery_id: &str, delay: Duration) -> Result<(), QueueError>;
     async fn dead_letter(&self, delivery_id: &str) -> Result<(), QueueError>;
     async fn reclaim_expired_leases(&self) -> Result<u32, QueueError>;
 }

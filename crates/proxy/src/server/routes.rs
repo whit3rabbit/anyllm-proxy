@@ -108,10 +108,14 @@ pub struct AppState {
     /// Tool execution engine state. None when tool execution is not configured.
     pub tool_engine: Option<Arc<ToolEngineState>>,
     /// Batch orchestration engine. None in test configs that don't need batch.
-    pub batch_engine: Option<Arc<anyllm_batch_engine::BatchEngine<
-        anyllm_batch_engine::queue::sqlite::SqliteQueue,
-        anyllm_batch_engine::webhook::sqlite::SqliteWebhookQueue,
-    >>>,
+    pub batch_engine: Option<
+        Arc<
+            anyllm_batch_engine::BatchEngine<
+                anyllm_batch_engine::queue::sqlite::SqliteQueue,
+                anyllm_batch_engine::webhook::sqlite::SqliteWebhookQueue,
+            >,
+        >,
+    >,
 }
 
 impl AppState {
@@ -221,10 +225,14 @@ pub fn app_multi_with_shared(
     shared: Option<SharedState>,
     model_router: Option<Arc<RwLock<crate::config::model_router::ModelRouter>>>,
     tool_engine: Option<Arc<ToolEngineState>>,
-    batch_engine: Option<Arc<anyllm_batch_engine::BatchEngine<
-        anyllm_batch_engine::queue::sqlite::SqliteQueue,
-        anyllm_batch_engine::webhook::sqlite::SqliteWebhookQueue,
-    >>>,
+    batch_engine: Option<
+        Arc<
+            anyllm_batch_engine::BatchEngine<
+                anyllm_batch_engine::queue::sqlite::SqliteQueue,
+                anyllm_batch_engine::webhook::sqlite::SqliteWebhookQueue,
+            >,
+        >,
+    >,
 ) -> Router {
     let mut backend_metrics: HashMap<String, Metrics> = HashMap::new();
     let mut router = Router::new();

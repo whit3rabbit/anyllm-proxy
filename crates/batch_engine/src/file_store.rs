@@ -90,8 +90,7 @@ impl FileStore {
 
         tokio::task::spawn_blocking(move || {
             let conn = db.blocking_lock();
-            let mut stmt =
-                conn.prepare("SELECT content FROM batch_file WHERE file_id = ?1")?;
+            let mut stmt = conn.prepare("SELECT content FROM batch_file WHERE file_id = ?1")?;
             let mut rows = stmt.query(params![file_id])?;
             if let Some(row) = rows.next()? {
                 let content: Vec<u8> = row.get(0)?;
@@ -135,10 +134,7 @@ mod tests {
     async fn get_content_roundtrip() {
         let store = test_store().await;
         let data = b"test content bytes";
-        store
-            .insert("file-xyz", None, None, data, 1)
-            .await
-            .unwrap();
+        store.insert("file-xyz", None, None, data, 1).await.unwrap();
 
         let content = store.get_content("file-xyz").await.unwrap().unwrap();
         assert_eq!(content, data);

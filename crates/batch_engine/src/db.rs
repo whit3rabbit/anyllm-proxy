@@ -217,7 +217,13 @@ mod tests {
         init_batch_engine_tables(&conn).unwrap();
 
         // Verify tables exist by querying them.
-        let tables = ["batch_job", "batch_item", "batch_file", "webhook_delivery", "batch_event_log"];
+        let tables = [
+            "batch_job",
+            "batch_item",
+            "batch_file",
+            "webhook_delivery",
+            "batch_event_log",
+        ];
         for table in tables {
             let count: i64 = conn
                 .query_row(&format!("SELECT count(*) FROM {table}"), [], |r| r.get(0))

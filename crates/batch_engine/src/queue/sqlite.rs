@@ -47,7 +47,9 @@ impl JobQueue for SqliteQueue {
                     job.key_id,
                     job.input_file_id,
                     job.webhook_url,
-                    job.metadata.as_ref().map(|m| serde_json::to_string(m).unwrap_or_default()),
+                    job.metadata
+                        .as_ref()
+                        .map(|m| serde_json::to_string(m).unwrap_or_default()),
                     job.request_counts.total,
                     job.created_at,
                     job.expires_at,
@@ -119,7 +121,9 @@ impl JobQueue for SqliteQueue {
                 param_values.push(Box::new(kid));
             }
             if let Some(ref c) = cursor {
-                sql.push_str(" AND created_at < (SELECT created_at FROM batch_job WHERE batch_id = ?)");
+                sql.push_str(
+                    " AND created_at < (SELECT created_at FROM batch_job WHERE batch_id = ?)",
+                );
                 param_values.push(Box::new(c.clone()));
             }
             sql.push_str(" ORDER BY created_at DESC LIMIT ?");
@@ -129,10 +133,9 @@ impl JobQueue for SqliteQueue {
                 param_values.iter().map(|p| p.as_ref()).collect();
 
             let mut stmt = conn.prepare(&sql)?;
-            let rows = stmt.query_map(params_refs.as_slice(), |row| {
-                Ok(batch_job_from_row(row))
-            })?;
-            rows.collect::<Result<Vec<_>, _>>().map_err(QueueError::from)
+            let rows = stmt.query_map(params_refs.as_slice(), |row| Ok(batch_job_from_row(row)))?;
+            rows.collect::<Result<Vec<_>, _>>()
+                .map_err(QueueError::from)
         })
         .await
         .unwrap()
@@ -248,15 +251,11 @@ impl JobQueue for SqliteQueue {
         .unwrap()
     }
 
-    async fn complete_item(
-        &self,
-        id: &ItemId,
-        result: BatchItemResult,
-    ) -> Result<(), QueueError> {
+    async fn complete_item(&self, id: &ItemId, result: BatchItemResult) -> Result<(), QueueError> {
         let db = self.db.clone();
         let id = id.0.clone();
-        let result_body = serde_json::to_string(&result.body)
-            .map_err(|e| QueueError::Storage(e.to_string()))?;
+        let result_body =
+            serde_json::to_string(&result.body).map_err(|e| QueueError::Storage(e.to_string()))?;
         let status_code = result.status_code;
 
         tokio::task::spawn_blocking(move || {
@@ -404,7 +403,8 @@ impl JobQueue for SqliteQueue {
                  WHERE execution_mode = 'native' AND status = 'processing'",
             )?;
             let rows = stmt.query_map([], |row| Ok(batch_job_from_row(row)))?;
-            rows.collect::<Result<Vec<_>, _>>().map_err(QueueError::from)
+            rows.collect::<Result<Vec<_>, _>>()
+                .map_err(QueueError::from)
         })
         .await
         .unwrap()
@@ -475,7 +475,8 @@ impl JobQueue for SqliteQueue {
                  ORDER BY created_at ASC",
             )?;
             let rows = stmt.query_map(params![batch_id], |row| Ok(batch_item_from_row(row)))?;
-            rows.collect::<Result<Vec<_>, _>>().map_err(QueueError::from)
+            rows.collect::<Result<Vec<_>, _>>()
+                .map_err(QueueError::from)
         })
         .await
         .unwrap()
@@ -529,8 +530,8 @@ fn batch_item_from_row(row: &rusqlite::Row) -> BatchItem {
     let result_status: Option<i64> = row.get(7).unwrap_or(None);
     let result_body_str: Option<String> = row.get(8).unwrap_or(None);
 
-    let source_format = serde_json::from_str::<SourceFormat>(&source_fmt_str)
-        .unwrap_or(SourceFormat::OpenAI);
+    let source_format =
+        serde_json::from_str::<SourceFormat>(&source_fmt_str).unwrap_or(SourceFormat::OpenAI);
 
     let body = serde_json::from_str(&body_str).unwrap_or(serde_json::Value::Null);
 
@@ -603,7 +604,10 @@ pub(crate) fn format_epoch_iso8601(secs: u64) -> String {
     let m_val = if mp < 10 { mp + 3 } else { mp - 9 };
     let y_val = if m_val <= 2 { y + 1 } else { y };
 
-    format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z", y_val, m_val, d, h, m, s)
+    format!(
+        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
+        y_val, m_val, d, h, m, s
+    )
 }
 
 #[cfg(test)]
@@ -714,7 +718,11 @@ mod tests {
         let status = q.cancel(&BatchId("batch_cancel".into())).await.unwrap();
         assert_eq!(status, BatchStatus::Cancelled);
 
-        let fetched = q.get(&BatchId("batch_cancel".into())).await.unwrap().unwrap();
+        let fetched = q
+            .get(&BatchId("batch_cancel".into()))
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(fetched.status, BatchStatus::Cancelled);
     }
 
@@ -763,10 +771,19 @@ mod tests {
             .await
             .unwrap();
 
-        assert!(q.is_batch_complete(&BatchId("batch_complete".into())).await.unwrap());
+        assert!(q
+            .is_batch_complete(&BatchId("batch_complete".into()))
+            .await
+            .unwrap());
 
-        q.complete_batch(&BatchId("batch_complete".into())).await.unwrap();
-        let job = q.get(&BatchId("batch_complete".into())).await.unwrap().unwrap();
+        q.complete_batch(&BatchId("batch_complete".into()))
+            .await
+            .unwrap();
+        let job = q
+            .get(&BatchId("batch_complete".into()))
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(job.status, BatchStatus::Completed);
         assert_eq!(job.request_counts.succeeded, 2);
     }

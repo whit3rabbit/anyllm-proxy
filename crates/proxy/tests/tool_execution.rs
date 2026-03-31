@@ -7,14 +7,14 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use anyllm_proxy::tools::{
-    PolicyAction, PolicyRule, Tool, ToolCall, ToolExecutionPolicy, ToolRegistry, ToolResult,
-};
 use anyllm_proxy::tools::execution::{
     denied_tool_results, execute_tool_calls, extract_tool_calls, is_duplicate, maybe_execute_tools,
     partition_tool_calls, tool_results_to_user_message, LoopConfig, ToolEngineState,
 };
 use anyllm_proxy::tools::trace::ToolOutcome;
+use anyllm_proxy::tools::{
+    PolicyAction, PolicyRule, Tool, ToolCall, ToolExecutionPolicy, ToolRegistry, ToolResult,
+};
 
 // ---------------------------------------------------------------------------
 // Test tool: uppercases the "text" field of the input
@@ -231,14 +231,12 @@ fn tool_results_error_outcome_sets_is_error_true() {
     }];
     let msg = tool_results_to_user_message(&results);
     match &msg.content {
-        anyllm_translate::anthropic::Content::Blocks(blocks) => {
-            match &blocks[0] {
-                anyllm_translate::anthropic::ContentBlock::ToolResult { is_error, .. } => {
-                    assert_eq!(*is_error, Some(true));
-                }
-                other => panic!("expected ToolResult block, got {:?}", other),
+        anyllm_translate::anthropic::Content::Blocks(blocks) => match &blocks[0] {
+            anyllm_translate::anthropic::ContentBlock::ToolResult { is_error, .. } => {
+                assert_eq!(*is_error, Some(true));
             }
-        }
+            other => panic!("expected ToolResult block, got {:?}", other),
+        },
         other => panic!("expected Blocks content, got {:?}", other),
     }
 }
@@ -247,10 +245,20 @@ fn tool_results_error_outcome_sets_is_error_true() {
 fn duplicate_detection_works() {
     let a = vec![make_call("1", "upper", serde_json::json!({"text": "same"}))];
     let b = vec![make_call("2", "upper", serde_json::json!({"text": "same"}))];
-    assert!(is_duplicate(&a, &b), "same name+input with different IDs should be duplicate");
+    assert!(
+        is_duplicate(&a, &b),
+        "same name+input with different IDs should be duplicate"
+    );
 
-    let c = vec![make_call("3", "upper", serde_json::json!({"text": "different"}))];
-    assert!(!is_duplicate(&a, &c), "different input should not be duplicate");
+    let c = vec![make_call(
+        "3",
+        "upper",
+        serde_json::json!({"text": "different"}),
+    )];
+    assert!(
+        !is_duplicate(&a, &c),
+        "different input should not be duplicate"
+    );
 }
 
 #[test]

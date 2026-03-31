@@ -1,7 +1,7 @@
-use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::HashMap;
+use std::sync::{Arc, RwLock};
 
 /// An MCP tool definition discovered from a server.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -64,7 +64,10 @@ impl McpServerManager {
             url: url.to_string(),
             tools,
         };
-        self.servers.write().unwrap().insert(name.to_string(), server);
+        self.servers
+            .write()
+            .unwrap()
+            .insert(name.to_string(), server);
     }
 
     pub fn remove_server_blocking(&self, name: &str) {
@@ -81,7 +84,11 @@ impl McpServerManager {
     }
 
     pub fn find_server_for_tool_blocking(&self, prefixed_name: &str) -> Option<String> {
-        self.tool_to_server.read().unwrap().get(prefixed_name).cloned()
+        self.tool_to_server
+            .read()
+            .unwrap()
+            .get(prefixed_name)
+            .cloned()
     }
 
     pub fn as_anthropic_tools_blocking(&self) -> Vec<anyllm_translate::anthropic::Tool> {
@@ -170,49 +177,51 @@ impl McpServerManager {
     }
 }
 
-async fn discover_tools_impl(client: &reqwest::Client, url: &str) -> Result<Vec<McpToolDef>, String> {
-        let rpc_request = serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "tools/list",
-            "params": {}
-        });
+async fn discover_tools_impl(
+    client: &reqwest::Client,
+    url: &str,
+) -> Result<Vec<McpToolDef>, String> {
+    let rpc_request = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/list",
+        "params": {}
+    });
 
-        let response = client
-            .post(url)
-            .json(&rpc_request)
-            .send()
-            .await
-            .map_err(|e| format!("MCP discovery failed for '{}': {}", url, e))?;
+    let response = client
+        .post(url)
+        .json(&rpc_request)
+        .send()
+        .await
+        .map_err(|e| format!("MCP discovery failed for '{}': {}", url, e))?;
 
-        if !response.status().is_success() {
-            return Err(format!(
-                "MCP discovery returned status {} for '{}'",
-                response.status(),
-                url
-            ));
-        }
+    if !response.status().is_success() {
+        return Err(format!(
+            "MCP discovery returned status {} for '{}'",
+            response.status(),
+            url
+        ));
+    }
 
-        let body: Value = response
-            .json()
-            .await
-            .map_err(|e| format!("MCP discovery parse error: {}", e))?;
+    let body: Value = response
+        .json()
+        .await
+        .map_err(|e| format!("MCP discovery parse error: {}", e))?;
 
-        if let Some(error) = body.get("error") {
-            let msg = error
-                .get("message")
-                .and_then(|m| m.as_str())
-                .unwrap_or("unknown error");
-            return Err(format!("MCP discovery error: {}", msg));
-        }
+    if let Some(error) = body.get("error") {
+        let msg = error
+            .get("message")
+            .and_then(|m| m.as_str())
+            .unwrap_or("unknown error");
+        return Err(format!("MCP discovery error: {}", msg));
+    }
 
-        let tools_value = body
-            .get("result")
-            .and_then(|r| r.get("tools"))
-            .ok_or_else(|| "MCP response missing result.tools".to_string())?;
+    let tools_value = body
+        .get("result")
+        .and_then(|r| r.get("tools"))
+        .ok_or_else(|| "MCP response missing result.tools".to_string())?;
 
-        serde_json::from_value(tools_value.clone())
-            .map_err(|e| format!("MCP tools parse error: {}", e))
+    serde_json::from_value(tools_value.clone()).map_err(|e| format!("MCP tools parse error: {}", e))
 }
 
 impl Default for McpServerManager {
@@ -253,7 +262,10 @@ impl crate::tools::registry::Tool for McpToolAdapter {
 }
 
 /// Register all MCP tools from the manager into a ToolRegistry.
-pub fn register_mcp_tools(manager: &Arc<McpServerManager>, registry: &mut crate::tools::ToolRegistry) {
+pub fn register_mcp_tools(
+    manager: &Arc<McpServerManager>,
+    registry: &mut crate::tools::ToolRegistry,
+) {
     let servers = manager.list_servers_blocking();
     for server in &servers {
         for tool in &server.tools {
@@ -308,7 +320,9 @@ mod tests {
             mgr.find_server_for_tool_blocking("mcp_github_create_issue"),
             Some("github".to_string())
         );
-        assert!(mgr.find_server_for_tool_blocking("mcp_slack_send").is_none());
+        assert!(mgr
+            .find_server_for_tool_blocking("mcp_slack_send")
+            .is_none());
     }
 
     #[test]

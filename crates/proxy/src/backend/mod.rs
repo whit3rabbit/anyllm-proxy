@@ -122,8 +122,7 @@ impl BackendError {
             _ => {
                 let status = self.api_error_status();
                 let msg = self.api_error_message();
-                infer_error_kind(status.unwrap_or(0), Some(msg.as_str()))
-                    .unwrap_or("unknown")
+                infer_error_kind(status.unwrap_or(0), Some(msg.as_str())).unwrap_or("unknown")
             }
         }
     }

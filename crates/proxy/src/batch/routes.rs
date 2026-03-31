@@ -64,7 +64,13 @@ pub async fn upload_file(State(state): State<AppState>, mut multipart: Multipart
 
     match engine
         .file_store
-        .insert(&file_id, None, filename.as_deref(), data.as_ref(), line_count)
+        .insert(
+            &file_id,
+            None,
+            filename.as_deref(),
+            data.as_ref(),
+            line_count,
+        )
         .await
     {
         Ok(()) => {
@@ -179,10 +185,7 @@ pub async fn get_batch(State(state): State<AppState>, Path(batch_id): Path<Strin
         None => return service_unavailable("Batch storage not available"),
     };
 
-    match engine
-        .get(&anyllm_batch_engine::BatchId(batch_id))
-        .await
-    {
+    match engine.get(&anyllm_batch_engine::BatchId(batch_id)).await {
         Ok(Some(job)) => (StatusCode::OK, Json(job_to_openai_response(&job))).into_response(),
         Ok(None) => {
             let err = create_anthropic_error(
@@ -246,10 +249,7 @@ pub async fn list_batches(
 }
 
 /// POST /v1/batches/{batch_id}/cancel
-pub async fn cancel_batch(
-    State(state): State<AppState>,
-    Path(batch_id): Path<String>,
-) -> Response {
+pub async fn cancel_batch(State(state): State<AppState>, Path(batch_id): Path<String>) -> Response {
     let Some(engine) = state.batch_engine.as_ref() else {
         return not_implemented("batch engine not available");
     };
@@ -406,10 +406,6 @@ fn internal_error(msg: &str) -> Response {
 }
 
 fn not_found_response(msg: &str) -> Response {
-    let err = create_anthropic_error(
-        anthropic::ErrorType::NotFoundError,
-        msg.to_string(),
-        None,
-    );
+    let err = create_anthropic_error(anthropic::ErrorType::NotFoundError, msg.to_string(), None);
     (StatusCode::NOT_FOUND, Json(err)).into_response()
 }

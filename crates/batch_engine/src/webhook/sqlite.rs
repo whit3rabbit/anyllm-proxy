@@ -84,7 +84,8 @@ impl WebhookQueue for SqliteWebhookQueue {
                 params![lease_id, lease_expires, now],
                 |row| {
                     let payload_str: String = row.get(4)?;
-                    let payload = serde_json::from_str(&payload_str).unwrap_or(serde_json::Value::Null);
+                    let payload =
+                        serde_json::from_str(&payload_str).unwrap_or(serde_json::Value::Null);
                     Ok(LeasedDelivery {
                         delivery: WebhookDelivery {
                             delivery_id: row.get(0)?,
@@ -129,11 +130,7 @@ impl WebhookQueue for SqliteWebhookQueue {
         .unwrap()
     }
 
-    async fn schedule_retry(
-        &self,
-        delivery_id: &str,
-        delay: Duration,
-    ) -> Result<(), QueueError> {
+    async fn schedule_retry(&self, delivery_id: &str, delay: Duration) -> Result<(), QueueError> {
         let db = self.db.clone();
         let id = delivery_id.to_string();
         let retry_at = {
