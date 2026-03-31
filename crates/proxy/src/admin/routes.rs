@@ -1649,6 +1649,15 @@ async fn add_mcp_server(
         }
     };
 
+    // SSRF protection: reject private/loopback IPs and reserved hostnames.
+    if let Err(e) = crate::config::validate_base_url(&url) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": format!("invalid MCP server URL: {e}")})),
+        )
+            .into_response();
+    }
+
     match crate::tools::mcp::McpServerManager::discover_tools(&url).await {
         Ok(tools) => {
             let tool_count = tools.len();

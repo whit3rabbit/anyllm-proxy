@@ -181,6 +181,16 @@ async fn main() {
             let mcp_manager = if let Some(ref servers) = simple_config_shell.mcp_servers {
                 let manager = Arc::new(tools::McpServerManager::new());
                 for server_cfg in servers {
+                    // SSRF protection: skip servers with private/loopback URLs.
+                    if let Err(e) = crate::config::validate_base_url(&server_cfg.url) {
+                        tracing::error!(
+                            server = %server_cfg.name,
+                            url = %server_cfg.url,
+                            error = %e,
+                            "MCP server URL rejected (SSRF protection); skipping"
+                        );
+                        continue;
+                    }
                     match tools::McpServerManager::discover_tools(&server_cfg.url).await {
                         Ok(discovered) => {
                             tracing::info!(

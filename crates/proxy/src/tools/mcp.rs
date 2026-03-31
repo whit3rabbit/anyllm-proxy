@@ -40,6 +40,8 @@ pub fn parse_mcp_tool_name(prefixed: &str) -> Option<(&str, &str)> {
 pub struct McpServerManager {
     servers: RwLock<HashMap<String, McpServer>>,
     tool_to_server: RwLock<HashMap<String, String>>,
+    /// Shared HTTP client; reqwest::Client is cheaply cloneable (Arc internally).
+    client: reqwest::Client,
 }
 
 impl McpServerManager {
@@ -47,6 +49,7 @@ impl McpServerManager {
         Self {
             servers: RwLock::new(HashMap::new()),
             tool_to_server: RwLock::new(HashMap::new()),
+            client: reqwest::Client::new(),
         }
     }
 
@@ -110,7 +113,7 @@ impl McpServerManager {
                 .clone()
         };
 
-        let client = reqwest::Client::new();
+        let client = &self.client;
         let rpc_request = serde_json::json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -151,9 +154,23 @@ impl McpServerManager {
             .ok_or_else(|| "MCP response missing 'result' field".to_string())
     }
 
+    /// Discover tools from an MCP server using the manager's shared HTTP client.
+    pub async fn discover_tools_with_client(&self, url: &str) -> Result<Vec<McpToolDef>, String> {
+        discover_tools_impl(&self.client, url).await
+    }
+
     /// Discover tools from an MCP server by calling tools/list.
+    ///
+    /// Prefer `discover_tools_with_client` when called on a manager instance.
+    /// This static version creates a one-shot client; use it only for startup
+    /// paths where no manager instance exists yet.
     pub async fn discover_tools(url: &str) -> Result<Vec<McpToolDef>, String> {
         let client = reqwest::Client::new();
+        discover_tools_impl(&client, url).await
+    }
+}
+
+async fn discover_tools_impl(client: &reqwest::Client, url: &str) -> Result<Vec<McpToolDef>, String> {
         let rpc_request = serde_json::json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -196,7 +213,6 @@ impl McpServerManager {
 
         serde_json::from_value(tools_value.clone())
             .map_err(|e| format!("MCP tools parse error: {}", e))
-    }
 }
 
 impl Default for McpServerManager {
