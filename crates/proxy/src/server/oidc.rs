@@ -237,9 +237,23 @@ impl OidcConfig {
     }
 }
 
-/// Check if a credential looks like a JWT (three base64url segments separated by dots).
+/// Check if a credential looks like a JWT (three Base64url segments separated by dots).
+/// All characters in each segment must be `[A-Za-z0-9_-]` (Base64url alphabet).
+/// This prevents API keys that happen to contain two dots from being sent through
+/// JWT validation, which would add latency on every request.
 pub fn looks_like_jwt(credential: &str) -> bool {
-    credential.matches('.').count() == 2 && credential.len() > 32
+    if credential.len() <= 32 {
+        return false;
+    }
+    let parts: Vec<&str> = credential.splitn(4, '.').collect();
+    if parts.len() != 3 {
+        return false;
+    }
+    parts.iter().all(|p| {
+        !p.is_empty()
+            && p.bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+    })
 }
 
 #[derive(Debug)]
@@ -353,5 +367,49 @@ mod tests {
         let entry = entry.unwrap();
         assert_eq!(entry.kid, "ed-key");
         assert!(matches!(entry.algorithm, Algorithm::EdDSA));
+    }
+}
+
+#[cfg(test)]
+mod jwt_heuristic_tests {
+    use super::looks_like_jwt;
+
+    #[test]
+    fn real_jwt_accepted() {
+        // header.payload.signature — all Base64url chars
+        let jwt = "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ1c2VyMSIsImlzcyI6Imh0dHBzOi8vaWRwIn0.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+        assert!(looks_like_jwt(jwt));
+    }
+
+    #[test]
+    fn api_key_with_dots_rejected() {
+        // API key with two dots but non-Base64url chars (e.g. '+')
+        assert!(!looks_like_jwt("sk-abc+def.ghi+jkl.mno+pqr0123456789abcdef"));
+    }
+
+    #[test]
+    fn three_base64url_segments_required() {
+        // Four dots — splitn(4, '.') produces 4 parts, not 3
+        assert!(!looks_like_jwt(
+            "eyJhbGci.eyJzdWIi.AAAAAAAA.extra0000000000000000000000000000000"
+        ));
+    }
+
+    #[test]
+    fn short_credential_rejected() {
+        assert!(!looks_like_jwt("a.b.c"));
+    }
+
+    #[test]
+    fn empty_segment_rejected() {
+        assert!(!looks_like_jwt(
+            "abc..xyz012345678901234567890123456789"
+        ));
+    }
+
+    #[test]
+    fn non_base64url_plus_slash_rejected() {
+        // Base64 (not Base64url) chars '+' and '/'
+        assert!(!looks_like_jwt("abc+def.ghi/jkl.mno+pqr0000000000000000000"));
     }
 }
