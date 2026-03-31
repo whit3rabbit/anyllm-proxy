@@ -543,6 +543,10 @@ async fn chat_completions_stream(
             let model_for_translator = original_model.clone();
             let cost_model = mapped_model.clone();
             let stream_timeout_secs = state.stream_timeout_secs;
+            let tool_engine = state.tool_engine.clone();
+            let anthropic_req_for_tools = anthropic_req.clone();
+            let client_for_tools = client.clone();
+            let omit_stream_options_for_tools = effective.omit_stream_options;
             let _permit = concurrency_permit;
 
             tokio::spawn(async move {
@@ -558,6 +562,9 @@ async fn chat_completions_stream(
                 let mut buffer = BytesMut::new();
                 let mut search_from: usize = 0;
                 let mut timed_out = false;
+                // Accumulate tool call fragments for collect-then-execute.
+                // Each entry: (id, function_name, arguments_json).
+                let mut accumulated_tool_calls: Vec<(String, String, String)> = Vec::new();
 
                 let stream_loop = async {
                     while let Some(chunk_result) = byte_stream.next().await {
@@ -586,9 +593,7 @@ async fn chat_completions_stream(
                                     let line = line.trim();
                                     if let Some(json_str) = line.strip_prefix("data: ") {
                                         if json_str == "[DONE]" {
-                                            // Emit [DONE] for OpenAI clients
-                                            let _ =
-                                                tx.send(Ok("data: [DONE]\n\n".to_string())).await;
+                                            // Defer [DONE] until after potential tool execution.
                                             continue;
                                         }
                                         // Parse OpenAI chunk, translate to Anthropic events,
@@ -598,6 +603,33 @@ async fn chat_completions_stream(
                                                 json_str,
                                             )
                                         {
+                                            // Accumulate tool call fragments from delta.
+                                            if let Some(choice) = chunk.choices.first() {
+                                                if let Some(ref tc_list) = choice.delta.tool_calls {
+                                                    for tc in tc_list {
+                                                        let idx = tc.index as usize;
+                                                        while accumulated_tool_calls.len() <= idx {
+                                                            accumulated_tool_calls.push((String::new(), String::new(), String::new()));
+                                                        }
+                                                        if let Some(ref id) = tc.id {
+                                                            if !id.is_empty() {
+                                                                accumulated_tool_calls[idx].0 = id.clone();
+                                                            }
+                                                        }
+                                                        if let Some(ref func) = tc.function {
+                                                            if let Some(ref name) = func.name {
+                                                                if !name.is_empty() {
+                                                                    accumulated_tool_calls[idx].1 = name.clone();
+                                                                }
+                                                            }
+                                                            if let Some(ref args) = func.arguments {
+                                                                accumulated_tool_calls[idx].2.push_str(args);
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+
                                             let anthropic_events =
                                                 stream_translator.process_chunk(&chunk);
                                             for event in &anthropic_events {
@@ -679,9 +711,200 @@ async fn chat_completions_stream(
                     }
                 }
 
-                if !translator.is_done() {
-                    let _ = tx.send(Ok("data: [DONE]\n\n".to_string())).await;
+                // Collect-then-execute: if the stream produced tool calls and we
+                // have a tool engine, execute auto-allowed tools and stream a
+                // follow-up backend response through the same channel.
+                if !accumulated_tool_calls.is_empty() {
+                    if let Some(ref engine) = tool_engine {
+                        let tool_calls: Vec<crate::tools::ToolCall> = accumulated_tool_calls
+                            .iter()
+                            .filter(|(_, name, _)| !name.is_empty())
+                            .map(|(id, name, args)| crate::tools::ToolCall {
+                                id: id.clone(),
+                                name: name.clone(),
+                                input: serde_json::from_str(args)
+                                    .unwrap_or(serde_json::Value::Null),
+                            })
+                            .collect();
+
+                        let (auto_exec, _pass_through) =
+                            crate::tools::execution::partition_tool_calls(
+                                &tool_calls,
+                                &engine.registry,
+                                &engine.policy,
+                            );
+
+                        if !auto_exec.is_empty() {
+                            let results = crate::tools::execution::execute_tool_calls(
+                                &auto_exec,
+                                engine.registry.clone(),
+                                &engine.policy,
+                                &engine.loop_config,
+                            )
+                            .await;
+
+                            // Build the assistant message from accumulated tool calls.
+                            let assistant_content: Vec<anyllm_translate::anthropic::ContentBlock> =
+                                tool_calls
+                                    .iter()
+                                    .map(|tc| anyllm_translate::anthropic::ContentBlock::ToolUse {
+                                        id: tc.id.clone(),
+                                        name: tc.name.clone(),
+                                        input: tc.input.clone(),
+                                    })
+                                    .collect();
+
+                            let mut follow_up_req = anthropic_req_for_tools;
+                            follow_up_req
+                                .messages
+                                .push(anyllm_translate::anthropic::InputMessage {
+                                    role: anyllm_translate::anthropic::Role::Assistant,
+                                    content: anyllm_translate::anthropic::Content::Blocks(
+                                        assistant_content,
+                                    ),
+                                });
+                            follow_up_req.messages.push(
+                                crate::tools::execution::tool_results_to_user_message(&results),
+                            );
+
+                            let mut follow_up_openai =
+                                mapping::message_map::anthropic_to_openai_request(&follow_up_req);
+                            follow_up_openai.model = cost_model.clone();
+                            follow_up_openai.stream = Some(true);
+                            if !omit_stream_options_for_tools {
+                                follow_up_openai.stream_options = Some(openai::StreamOptions {
+                                    include_usage: true,
+                                });
+                            }
+
+                            tracing::info!(
+                                tools_executed = results.len(),
+                                "streaming tool execution: starting follow-up backend call"
+                            );
+
+                            // Stream the follow-up response through the same tx channel.
+                            // Create a fresh translator pair for the follow-up stream.
+                            let mut follow_translator = ReverseStreamingTranslator::new(
+                                format!("chatcmpl-{}", uuid::Uuid::new_v4().as_simple()),
+                                model_for_translator.clone(),
+                            );
+                            let mut follow_stream_translator =
+                                mapping::streaming_map::StreamingTranslator::new(
+                                    model_for_translator.clone(),
+                                );
+
+                            match client_for_tools
+                                .chat_completion_stream(&follow_up_openai)
+                                .await
+                            {
+                                Ok((follow_resp, _follow_rate_limits)) => {
+                                    let mut follow_byte_stream = follow_resp.bytes_stream();
+                                    let mut follow_buffer = BytesMut::new();
+                                    let mut follow_search_from: usize = 0;
+
+                                    while let Some(chunk_result) =
+                                        follow_byte_stream.next().await
+                                    {
+                                        let bytes = match chunk_result {
+                                            Ok(b) => b,
+                                            Err(e) => {
+                                                tracing::error!(
+                                                    "follow-up stream read error: {e}"
+                                                );
+                                                break;
+                                            }
+                                        };
+                                        follow_buffer.extend_from_slice(&bytes);
+
+                                        while let Some((pos, delim_len)) =
+                                            find_double_newline(
+                                                &follow_buffer,
+                                                follow_search_from,
+                                            )
+                                        {
+                                            if let Ok(frame_str) =
+                                                std::str::from_utf8(&follow_buffer[..pos])
+                                            {
+                                                for line in frame_str.lines() {
+                                                    let line = line.trim();
+                                                    if let Some(json_str) =
+                                                        line.strip_prefix("data: ")
+                                                    {
+                                                        if json_str == "[DONE]" {
+                                                            continue;
+                                                        }
+                                                        if let Ok(chunk) = serde_json::from_str::<
+                                                            openai::ChatCompletionChunk,
+                                                        >(
+                                                            json_str
+                                                        ) {
+                                                            let events =
+                                                                follow_stream_translator
+                                                                    .process_chunk(&chunk);
+                                                            for event in &events {
+                                                                let oai_chunks =
+                                                                    follow_translator
+                                                                        .process_event(event);
+                                                                for oai_chunk in &oai_chunks {
+                                                                    if let Ok(json) =
+                                                                        serde_json::to_string(
+                                                                            oai_chunk,
+                                                                        )
+                                                                    {
+                                                                        if tx
+                                                                            .send(Ok(format!(
+                                                                                "data: {}\n\n",
+                                                                                json
+                                                                            )))
+                                                                            .await
+                                                                            .is_err()
+                                                                        {
+                                                                            return;
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            let _ =
+                                                follow_buffer.split_to(pos + delim_len);
+                                            follow_search_from = 0;
+                                        }
+                                        follow_search_from =
+                                            follow_buffer.len().saturating_sub(3);
+                                    }
+
+                                    // Emit finish events for the follow-up stream.
+                                    let follow_finish = follow_stream_translator.finish();
+                                    for event in &follow_finish {
+                                        let oai_chunks =
+                                            follow_translator.process_event(event);
+                                        for oai_chunk in &oai_chunks {
+                                            if let Ok(json) =
+                                                serde_json::to_string(oai_chunk)
+                                            {
+                                                let _ = tx
+                                                    .send(Ok(format!("data: {}\n\n", json)))
+                                                    .await;
+                                            }
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    tracing::warn!(
+                                        error = %e,
+                                        "follow-up streaming backend call after tool execution failed"
+                                    );
+                                }
+                            }
+                        }
+                    }
                 }
+
+                // Send final [DONE] after initial stream and any tool execution follow-up.
+                let _ = tx.send(Ok("data: [DONE]\n\n".to_string())).await;
 
                 // Extract token counts from the stream translator for cost tracking.
                 let usage = stream_translator.usage();
