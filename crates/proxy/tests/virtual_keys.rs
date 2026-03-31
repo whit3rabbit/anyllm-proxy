@@ -73,6 +73,12 @@ fn test_admin_router() -> (Router, admin::state::SharedState) {
     // Raise admin rate limit so parallel tests from 127.0.0.1 don't starve each other.
     admin::routes::set_admin_rpm(10_000);
     let state = shared_state();
+    // Pre-register the test CSRF token so the first mutating request passes.
+    // Tests that make multiple mutations must call reinsert_csrf(&state) before
+    // each additional mutation (one-time tokens are consumed on use).
+    state
+        .issued_csrf_tokens
+        .insert(TEST_CSRF_TOKEN.to_string(), ());
     let token = Arc::new("test-admin-token".to_string());
     let router = admin::routes::admin_router(state.clone(), token)
         // ConnectInfo extractor requires the service to be wrapped with
@@ -80,6 +86,14 @@ fn test_admin_router() -> (Router, admin::state::SharedState) {
         // MockConnectInfo so handlers can extract a fake peer address.
         .layer(MockConnectInfo(SocketAddr::from(([127, 0, 0, 1], 0))));
     (router, state)
+}
+
+/// Re-register the test CSRF token before a subsequent mutating request.
+/// The CSRF middleware consumes tokens on first use; call this between mutations.
+fn reinsert_csrf(state: &admin::state::SharedState) {
+    state
+        .issued_csrf_tokens
+        .insert(TEST_CSRF_TOKEN.to_string(), ());
 }
 
 #[tokio::test]
@@ -112,7 +126,7 @@ async fn create_key_returns_201_with_raw_key() {
 
 #[tokio::test]
 async fn list_keys_returns_created_keys() {
-    let (app, _state) = test_admin_router();
+    let (app, state) = test_admin_router();
 
     let create_req = Request::post("/admin/api/keys")
         .header("host", "localhost:9090")
@@ -125,6 +139,8 @@ async fn list_keys_returns_created_keys() {
         ))
         .unwrap();
     let _ = app.clone().oneshot(create_req).await.unwrap();
+    // GET does not consume a CSRF token; no reinsert needed here.
+    let _ = &state; // satisfy compiler: state used for reinsert if needed
 
     let list_req = Request::get("/admin/api/keys")
         .header("host", "localhost:9090")
@@ -171,6 +187,7 @@ async fn revoke_key_removes_from_dashmap() {
     let hash_bytes = admin::keys::hash_from_hex(&hash).unwrap();
     assert!(state.virtual_keys.contains_key(&hash_bytes));
 
+    reinsert_csrf(&state);
     let revoke_req = Request::delete(format!("/admin/api/keys/{id}"))
         .header("host", "localhost:9090")
         .header("authorization", "Bearer test-admin-token")
@@ -210,7 +227,7 @@ async fn revoke_nonexistent_key_returns_404() {
 
 #[tokio::test]
 async fn update_key_returns_200_with_updated_fields() {
-    let (app, _state) = test_admin_router();
+    let (app, state) = test_admin_router();
 
     // Create a key first.
     let create_req = Request::post("/admin/api/keys")
@@ -233,6 +250,7 @@ async fn update_key_returns_200_with_updated_fields() {
     .unwrap();
     let id = body["id"].as_i64().unwrap();
 
+    reinsert_csrf(&state);
     // Update description and rpm_limit.
     let update_req = Request::put(format!("/admin/api/keys/{id}"))
         .header("host", "localhost:9090")
@@ -284,7 +302,7 @@ async fn update_nonexistent_key_returns_404() {
 
 #[tokio::test]
 async fn update_revoked_key_returns_404() {
-    let (app, _state) = test_admin_router();
+    let (app, state) = test_admin_router();
 
     // Create then revoke.
     let create_req = Request::post("/admin/api/keys")
@@ -306,6 +324,7 @@ async fn update_revoked_key_returns_404() {
     .unwrap();
     let id = body["id"].as_i64().unwrap();
 
+    reinsert_csrf(&state);
     let revoke_req = Request::delete(format!("/admin/api/keys/{id}"))
         .header("host", "localhost:9090")
         .header("authorization", "Bearer test-admin-token")
@@ -316,6 +335,7 @@ async fn update_revoked_key_returns_404() {
     let resp = app.clone().oneshot(revoke_req).await.unwrap();
     assert_eq!(resp.status(), 200);
 
+    reinsert_csrf(&state);
     // Update should fail with 404.
     let update_req = Request::put(format!("/admin/api/keys/{id}"))
         .header("host", "localhost:9090")
@@ -358,6 +378,7 @@ async fn update_key_refreshes_dashmap() {
     let id = body["id"].as_i64().unwrap();
     let raw_key = body["key"].as_str().unwrap().to_string();
 
+    reinsert_csrf(&state);
     // Update rpm_limit via PUT.
     let update_req = Request::put(format!("/admin/api/keys/{id}"))
         .header("host", "localhost:9090")
@@ -479,13 +500,14 @@ async fn virtual_key_auth_and_revocation_lifecycle() {
 
     let client = Client::new();
 
-    // 1. Create a virtual key
+    // 1. Create a virtual key (fetch fresh CSRF token for each mutation)
+    let csrf = fetch_csrf(&client, &admin_url, admin_port).await;
     let resp = client
         .post(format!("{admin_url}/admin/api/keys"))
         .header("host", format!("localhost:{admin_port}"))
         .header("authorization", "Bearer admin-token")
-        .header("x-csrf-token", TEST_CSRF_TOKEN)
-        .header("cookie", TEST_CSRF_COOKIE)
+        .header("x-csrf-token", &csrf)
+        .header("cookie", format!("csrf_token={csrf}"))
         .json(&json!({"description": "lifecycle-test"}))
         .send()
         .await
@@ -510,12 +532,13 @@ async fn virtual_key_auth_and_revocation_lifecycle() {
     assert_eq!(resp.status(), 200, "virtual key should authenticate");
 
     // 3. Revoke the key
+    let csrf = fetch_csrf(&client, &admin_url, admin_port).await;
     let resp = client
         .delete(format!("{admin_url}/admin/api/keys/{key_id}"))
         .header("host", format!("localhost:{admin_port}"))
         .header("authorization", "Bearer admin-token")
-        .header("x-csrf-token", TEST_CSRF_TOKEN)
-        .header("cookie", TEST_CSRF_COOKIE)
+        .header("x-csrf-token", &csrf)
+        .header("cookie", format!("csrf_token={csrf}"))
         .send()
         .await
         .unwrap();
@@ -562,12 +585,13 @@ async fn rpm_limit_returns_429_after_exceeded() {
     let client = Client::new();
 
     // Create a key with rpm_limit: 2
+    let csrf = fetch_csrf(&client, &admin_url, admin_port).await;
     let resp = client
         .post(format!("{admin_url}/admin/api/keys"))
         .header("host", format!("localhost:{admin_port}"))
         .header("authorization", "Bearer admin-token2")
-        .header("x-csrf-token", TEST_CSRF_TOKEN)
-        .header("cookie", TEST_CSRF_COOKIE)
+        .header("x-csrf-token", &csrf)
+        .header("cookie", format!("csrf_token={csrf}"))
         .json(&json!({"description": "rate-limit-test", "rpm_limit": 2}))
         .send()
         .await
@@ -613,6 +637,18 @@ async fn rpm_limit_returns_429_after_exceeded() {
 // Budget enforcement tests (US5: T046)
 // ---------------------------------------------------------------------------
 
+/// Fetch a fresh server-issued CSRF token from the real admin server.
+async fn fetch_csrf(client: &Client, admin_url: &str, admin_port: u16) -> String {
+    let resp = client
+        .get(format!("{admin_url}/admin/csrf-token"))
+        .header("host", format!("localhost:{admin_port}"))
+        .send()
+        .await
+        .unwrap();
+    let body: serde_json::Value = resp.json().await.unwrap();
+    body["csrf_token"].as_str().unwrap().to_string()
+}
+
 /// Helper: create a key via admin API and return (raw_key, key_id).
 async fn create_key_via_admin(
     admin_url: &str,
@@ -621,12 +657,23 @@ async fn create_key_via_admin(
     body: serde_json::Value,
 ) -> (String, i64) {
     let client = Client::new();
+    // Fetch a fresh server-issued CSRF token (one-time use).
+    let csrf_resp = client
+        .get(format!("{admin_url}/admin/csrf-token"))
+        .header("host", format!("localhost:{admin_port}"))
+        .send()
+        .await
+        .unwrap();
+    let csrf_body: serde_json::Value = csrf_resp.json().await.unwrap();
+    let csrf_token = csrf_body["csrf_token"].as_str().unwrap().to_string();
+    let csrf_cookie = format!("csrf_token={csrf_token}");
+
     let resp = client
         .post(format!("{admin_url}/admin/api/keys"))
         .header("host", format!("localhost:{admin_port}"))
         .header("authorization", format!("Bearer {admin_token}"))
-        .header("x-csrf-token", TEST_CSRF_TOKEN)
-        .header("cookie", TEST_CSRF_COOKIE)
+        .header("x-csrf-token", &csrf_token)
+        .header("cookie", &csrf_cookie)
         .json(&body)
         .send()
         .await
