@@ -7,7 +7,7 @@ pub mod policy;
 pub mod registry;
 pub mod trace;
 
-pub use execution::{LoopConfig, ToolCall, ToolResult};
+pub use execution::{maybe_execute_tools, LoopConfig, ToolCall, ToolResult};
 pub use mcp::McpServerManager;
 pub use policy::{PolicyAction, PolicyRule, ToolExecutionPolicy};
 pub use registry::{Tool, ToolRegistry};

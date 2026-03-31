@@ -169,12 +169,9 @@ pub fn ensure_hmac_secret(conn: &Connection) -> Vec<u8> {
         return secret;
     }
 
-    // Generate 32 random bytes from two UUID v4s.
+    // Generate 256-bit CSPRNG secret directly.
     let mut buf = [0u8; 32];
-    let a = uuid::Uuid::new_v4();
-    let b = uuid::Uuid::new_v4();
-    buf[..16].copy_from_slice(a.as_bytes());
-    buf[16..].copy_from_slice(b.as_bytes());
+    getrandom::fill(&mut buf).expect("CSPRNG failed");
 
     conn.execute(
         "INSERT INTO settings (key, value) VALUES ('hmac_secret', ?1)",

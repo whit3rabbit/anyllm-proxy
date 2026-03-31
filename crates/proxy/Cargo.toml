@@ -31,6 +31,7 @@ hmac = "0.12"
 rusqlite = { version = "0.32", features = ["bundled"] }
 httpdate = "1"
 dashmap = "6"
+getrandom = "0.3"
 aws-sigv4 = { version = "1.4", features = ["sign-http"] }
 aws-credential-types = "1.2"
 aws-smithy-runtime-api = "1"
@@ -44,6 +45,10 @@ zeroize = "1"
 crc32fast = "1"
 
 [features]
+## Enables BashTool and ReadFileTool in the builtin tool registry.
+## These tools execute arbitrary shell commands and read arbitrary files as the
+## proxy process user. Do NOT enable in production without sandboxing.
+dangerous-builtin-tools = []
 redis = ["dep:redis"]
 qdrant = ["dep:qdrant-client"]
 otel = [

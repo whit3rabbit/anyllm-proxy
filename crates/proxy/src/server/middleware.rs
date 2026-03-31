@@ -285,10 +285,11 @@ pub async fn validate_auth(
                 }
             }
 
-            // RBAC: developer keys cannot access admin endpoints
+            // RBAC: developer keys cannot access admin endpoints.
+            // Case-insensitive to prevent bypass via `/Admin/`, `/ADMIN/`, etc.
             if meta.role == KeyRole::Developer {
-                let path = request.uri().path();
-                if path.starts_with("/admin/") || path.starts_with("/admin") {
+                let path = request.uri().path().to_ascii_lowercase();
+                if path.starts_with("/admin/") || path == "/admin" {
                     let err_body = serde_json::json!({
                         "error": {
                             "type": "permission_denied",
@@ -525,6 +526,17 @@ static TRUST_PROXY_HEADERS: LazyLock<bool> = LazyLock::new(|| {
         .unwrap_or(false)
 });
 
+/// Number of trusted proxy hops. The client IP is extracted as the Nth-from-right
+/// entry in X-Forwarded-For. Defaults to 1 (single reverse proxy).
+/// Set TRUSTED_PROXY_DEPTH=2 for chains like CDN -> LB -> proxy.
+static TRUSTED_PROXY_DEPTH: LazyLock<usize> = LazyLock::new(|| {
+    std::env::var("TRUSTED_PROXY_DEPTH")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+        .unwrap_or(1)
+        .max(1) // minimum 1
+});
+
 /// Check if an IP address is allowed by the configured allowlist.
 /// Returns true if no allowlist is set (open access).
 pub fn is_ip_allowed(ip: std::net::IpAddr) -> bool {
@@ -543,14 +555,20 @@ pub fn ip_allowlist_active() -> bool {
 /// Applied before auth so blocked IPs never reach authentication.
 pub async fn check_ip_allowlist(request: Request<Body>, next: Next) -> Result<Response, Response> {
     // Extract client IP from X-Forwarded-For (if trusted) or connection info.
+    // TRUSTED_PROXY_DEPTH controls which entry to pick: depth=1 (default) takes
+    // the rightmost (single proxy), depth=2 takes the second-from-right (two hops), etc.
     let client_ip = if *TRUST_PROXY_HEADERS {
-        // Take the *rightmost* IP: a trusted reverse proxy appends the real client IP.
-        // The leftmost value is attacker-controlled and must not be trusted.
+        let depth = *TRUSTED_PROXY_DEPTH;
         request
             .headers()
             .get("x-forwarded-for")
             .and_then(|v| v.to_str().ok())
-            .and_then(|s| s.rsplit(',').map(|p| p.trim()).find(|p| !p.is_empty()))
+            .and_then(|s| {
+                s.rsplit(',')
+                    .map(|p| p.trim())
+                    .filter(|p| !p.is_empty())
+                    .nth(depth - 1)
+            })
             .and_then(|s| s.parse::<std::net::IpAddr>().ok())
     } else {
         None
