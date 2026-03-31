@@ -37,7 +37,7 @@ async fn spawn_test_server_with_shared() -> String {
         anyllm_proxy::batch::db::init_batch_tables(&conn).unwrap();
     }
 
-    let app = routes::app_multi_with_shared(multi, Some(shared), None);
+    let app = routes::app_multi_with_shared(multi, Some(shared), None, None);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
@@ -204,7 +204,7 @@ async fn unsupported_backend_returns_501() {
         let conn = shared.db.lock().unwrap();
         anyllm_proxy::batch::db::init_batch_tables(&conn).unwrap();
     }
-    let app = routes::app_multi_with_shared(multi, Some(shared), None);
+    let app = routes::app_multi_with_shared(multi, Some(shared), None, None);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });

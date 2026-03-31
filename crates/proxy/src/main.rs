@@ -452,6 +452,7 @@ async fn main() {
         multi_config,
         admin_parts.as_ref().map(|(s, _, _)| s.clone()),
         model_router,
+        None, // Tool engine: wired in when config-driven setup is implemented
     );
 
     // --- Start servers ---

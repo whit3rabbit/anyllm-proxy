@@ -62,6 +62,15 @@ pub(crate) enum ResolvedModel {
     Legacy(String),
 }
 
+/// Shared state for tool execution, stored in AppState.
+#[derive(Clone)]
+pub struct ToolEngineState {
+    pub registry: Arc<crate::tools::ToolRegistry>,
+    pub policy: Arc<crate::tools::ToolExecutionPolicy>,
+    pub loop_config: crate::tools::LoopConfig,
+    pub mcp_manager: Option<Arc<crate::tools::McpServerManager>>,
+}
+
 /// Per-backend state shared across request handlers.
 ///
 /// In single-backend mode, one `AppState` serves all routes. In multi-backend mode,
@@ -96,6 +105,8 @@ pub struct AppState {
     pub model_router: Option<Arc<RwLock<crate::config::model_router::ModelRouter>>>,
     /// All backend states, for cross-backend model routing. None unless model_router is set.
     pub all_backends: Option<Arc<HashMap<String, AppState>>>,
+    /// Tool execution engine state. None when tool execution is not configured.
+    pub tool_engine: Option<Arc<ToolEngineState>>,
 }
 
 impl AppState {
@@ -196,7 +207,7 @@ pub fn app(config: Config) -> Router {
 /// Build the axum router from multi-backend configuration.
 /// Creates nested sub-routers for each configured backend.
 pub fn app_multi(config: MultiConfig) -> Router {
-    app_multi_with_shared(config, None, None)
+    app_multi_with_shared(config, None, None, None)
 }
 
 /// Build the axum router with optional shared admin state and model router.
@@ -204,6 +215,7 @@ pub fn app_multi_with_shared(
     config: MultiConfig,
     shared: Option<SharedState>,
     model_router: Option<Arc<RwLock<crate::config::model_router::ModelRouter>>>,
+    tool_engine: Option<Arc<ToolEngineState>>,
 ) -> Router {
     let mut backend_metrics: HashMap<String, Metrics> = HashMap::new();
     let mut router = Router::new();
@@ -256,6 +268,7 @@ pub fn app_multi_with_shared(
             model_router: model_router.clone(),
             // all_backends is set after the loop (needs all states built first).
             all_backends: None,
+            tool_engine: tool_engine.clone(),
         };
         let sub = backend_router(state.clone(), mode);
         backend_states.insert(name.clone(), (state, mode));
