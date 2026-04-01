@@ -54,8 +54,10 @@ pub(crate) async fn anthropic_passthrough(
         stream: bool,
         model: Option<String>,
     }
-    let peek = serde_json::from_slice::<BodyPeek>(&body)
-        .unwrap_or(BodyPeek { stream: false, model: None });
+    let peek = serde_json::from_slice::<BodyPeek>(&body).unwrap_or(BodyPeek {
+        stream: false,
+        model: None,
+    });
     let is_stream = peek.stream;
 
     // Enforce model allowlist for virtual keys.

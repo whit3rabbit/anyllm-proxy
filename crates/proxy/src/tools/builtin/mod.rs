@@ -25,7 +25,9 @@ use crate::tools::registry::ToolRegistry;
 /// When the feature is disabled (the default), this is a no-op.
 pub fn register_all(
     _registry: &mut ToolRegistry,
-    _builtin_configs: Option<&std::collections::HashMap<String, crate::config::simple::BuiltinToolConfig>>,
+    _builtin_configs: Option<
+        &std::collections::HashMap<String, crate::config::simple::BuiltinToolConfig>,
+    >,
 ) {
     #[cfg(feature = "dangerous-builtin-tools")]
     {

@@ -1,6 +1,6 @@
+use anyllm_client::http::{build_http_client, HttpClientConfig};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use anyllm_client::http::{build_http_client, HttpClientConfig};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
@@ -91,7 +91,10 @@ impl McpServerManager {
             url: url.to_string(),
             tools,
         };
-        self.servers.write().unwrap().insert(name.to_string(), server);
+        self.servers
+            .write()
+            .unwrap()
+            .insert(name.to_string(), server);
         Ok(())
     }
 

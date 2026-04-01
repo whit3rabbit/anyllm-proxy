@@ -587,7 +587,6 @@ fn row_to_job(conn: &Connection, batch_id: &str) -> Result<Option<BatchJob>, Que
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

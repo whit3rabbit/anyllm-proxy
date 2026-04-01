@@ -888,11 +888,11 @@ async fn messages(
                                         );
                                     oai_req.model = m;
                                     match c.chat_completion(&oai_req).await {
-                                        Ok((resp, _, _)) => Ok(
-                                            mapping::message_map::openai_to_anthropic_response(
+                                        Ok((resp, _, _)) => {
+                                            Ok(mapping::message_map::openai_to_anthropic_response(
                                                 &resp, &om,
-                                            ),
-                                        ),
+                                            ))
+                                        }
                                         Err(e) => Err(format!("{e}")),
                                     }
                                 }

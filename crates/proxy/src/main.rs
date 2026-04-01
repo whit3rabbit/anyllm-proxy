@@ -61,7 +61,6 @@ fn main() {
 }
 
 async fn async_main(args: Vec<String>) {
-
     // ---- Phase 3: Init tracing (needs RUST_LOG from env file) ----
     let env_filter = tracing_subscriber::EnvFilter::from_default_env();
     let (filter, reload_handle) = tracing_subscriber::reload::Layer::new(env_filter);

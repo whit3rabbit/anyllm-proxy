@@ -246,7 +246,9 @@ pub fn looks_like_jwt(credential: &str) -> bool {
         return false;
     }
     let is_base64url = |s: &str| {
-        !s.is_empty() && s.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+        !s.is_empty()
+            && s.bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
     };
     // splitn(4, '.') yields at most 4 parts: exactly 3 means two dots (valid JWT shape).
     let mut parts = credential.splitn(4, '.');
@@ -384,7 +386,9 @@ mod jwt_heuristic_tests {
     #[test]
     fn api_key_with_dots_rejected() {
         // API key with two dots but non-Base64url chars (e.g. '+')
-        assert!(!looks_like_jwt("sk-abc+def.ghi+jkl.mno+pqr0123456789abcdef"));
+        assert!(!looks_like_jwt(
+            "sk-abc+def.ghi+jkl.mno+pqr0123456789abcdef"
+        ));
     }
 
     #[test]
@@ -402,14 +406,14 @@ mod jwt_heuristic_tests {
 
     #[test]
     fn empty_segment_rejected() {
-        assert!(!looks_like_jwt(
-            "abc..xyz012345678901234567890123456789"
-        ));
+        assert!(!looks_like_jwt("abc..xyz012345678901234567890123456789"));
     }
 
     #[test]
     fn non_base64url_plus_slash_rejected() {
         // Base64 (not Base64url) chars '+' and '/'
-        assert!(!looks_like_jwt("abc+def.ghi/jkl.mno+pqr0000000000000000000"));
+        assert!(!looks_like_jwt(
+            "abc+def.ghi/jkl.mno+pqr0000000000000000000"
+        ));
     }
 }

@@ -29,7 +29,13 @@ impl std::fmt::Debug for HttpClientConfig {
                 "p12_identity",
                 &self.p12_identity.as_ref().map(|_| "[REDACTED]"),
             )
-            .field("ca_cert_pem", &self.ca_cert_pem.as_ref().map(|b| format!("{} bytes", b.len())))
+            .field(
+                "ca_cert_pem",
+                &self
+                    .ca_cert_pem
+                    .as_ref()
+                    .map(|b| format!("{} bytes", b.len())),
+            )
             .field("connect_timeout", &self.connect_timeout)
             .field("read_timeout", &self.read_timeout)
             .field("tcp_keepalive", &self.tcp_keepalive)

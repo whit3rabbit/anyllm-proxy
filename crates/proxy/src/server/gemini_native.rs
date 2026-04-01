@@ -54,11 +54,7 @@ pub(crate) async fn gemini_native_handler(
                 format!("Model '{}' is not allowed for this API key.", body.model),
                 None,
             );
-            return (
-                axum::http::StatusCode::FORBIDDEN,
-                axum::response::Json(err),
-            )
-                .into_response();
+            return (axum::http::StatusCode::FORBIDDEN, axum::response::Json(err)).into_response();
         }
     }
 

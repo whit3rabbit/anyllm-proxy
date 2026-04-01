@@ -373,7 +373,10 @@ pub fn admin_router(shared: SharedState, token: Arc<String>) -> Router {
         .route("/admin/api/mcp-servers/{name}", delete(remove_mcp_server))
         .with_state(shared.clone())
         // Innermost: CSRF check runs after auth succeeds.
-        .layer(middleware::from_fn_with_state(shared.clone(), validate_csrf))
+        .layer(middleware::from_fn_with_state(
+            shared.clone(),
+            validate_csrf,
+        ))
         .layer(middleware::from_fn_with_state(
             token.clone(),
             validate_admin_token,

@@ -426,17 +426,14 @@ fn not_found_response(msg: &str) -> Response {
 mod tests {
     #[test]
     fn validate_webhook_url_rejects_private_ip() {
-        let result = crate::config::validate_base_url(
-            "http://169.254.169.254/metadata",
-        );
+        let result = crate::config::validate_base_url("http://169.254.169.254/metadata");
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("private/loopback"));
     }
 
     #[test]
     fn validate_webhook_url_accepts_public_https() {
-        let result =
-            crate::config::validate_base_url("https://hooks.example.com/notify");
+        let result = crate::config::validate_base_url("https://hooks.example.com/notify");
         assert!(result.is_ok());
     }
 }
