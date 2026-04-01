@@ -80,6 +80,34 @@ pub fn validate_base_url(raw: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Log a warning if an infrastructure URL (QDRANT_URL, REDIS_URL) points at a
+/// cloud metadata endpoint. These URLs intentionally allow private IPs (Qdrant
+/// and Redis normally run on internal networks), but cloud metadata IPs
+/// (169.254.169.254) are never valid infrastructure targets and indicate a
+/// dangerous misconfiguration that could leak instance credentials.
+pub fn warn_if_cloud_metadata_url(var_name: &str, raw: &str) {
+    let Ok(parsed) = Url::parse(raw) else {
+        return;
+    };
+    let is_metadata = match parsed.host() {
+        Some(url::Host::Ipv4(v4)) => v4 == std::net::Ipv4Addr::new(169, 254, 169, 254),
+        Some(url::Host::Domain(d)) => {
+            let lower = d.to_ascii_lowercase();
+            lower == "metadata.google.internal" || lower == "instance-data"
+        }
+        _ => false,
+    };
+    if is_metadata {
+        tracing::error!(
+            env_var = %var_name,
+            url = %raw,
+            "SECURITY: {var_name} points at a cloud metadata endpoint. \
+             This will send application data to the instance metadata service \
+             and may expose IAM credentials. Fix {var_name} before proceeding."
+        );
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -158,5 +186,26 @@ mod tests {
     fn rejects_invalid_url() {
         let err = validate_base_url("not a url").unwrap_err();
         assert!(err.contains("invalid URL"));
+    }
+
+    // warn_if_cloud_metadata_url tests: these exercise detection logic.
+    // The function logs rather than returning, so we verify it does not panic.
+
+    #[test]
+    fn metadata_ip_detected() {
+        // Should not panic; in production this logs an error.
+        warn_if_cloud_metadata_url("QDRANT_URL", "http://169.254.169.254/");
+    }
+
+    #[test]
+    fn metadata_hostname_detected() {
+        warn_if_cloud_metadata_url("REDIS_URL", "http://metadata.google.internal/");
+    }
+
+    #[test]
+    fn normal_private_ip_not_flagged() {
+        // Normal infra URLs should not trigger the warning.
+        warn_if_cloud_metadata_url("QDRANT_URL", "http://10.0.0.5:6333");
+        warn_if_cloud_metadata_url("REDIS_URL", "redis://127.0.0.1:6379");
     }
 }

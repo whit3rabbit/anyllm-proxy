@@ -5,10 +5,11 @@ use std::net::IpAddr;
 use std::time::Duration;
 
 /// Configuration for building an HTTP client.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Default)]
 pub struct HttpClientConfig {
     /// PKCS#12 identity bytes and password for mTLS.
-    pub p12_identity: Option<(Vec<u8>, String)>,
+    /// Password wrapped in Zeroizing to clear from heap on drop.
+    pub p12_identity: Option<(Vec<u8>, zeroize::Zeroizing<String>)>,
     /// PEM-encoded CA certificate for verifying the backend server.
     pub ca_cert_pem: Option<Vec<u8>>,
     /// Connection timeout (default: 10s).
@@ -19,6 +20,22 @@ pub struct HttpClientConfig {
     pub tcp_keepalive: Option<Duration>,
     /// Enable SSRF-safe DNS resolution (default: true when `ssrf-protection` feature enabled).
     pub ssrf_protection: bool,
+}
+
+impl std::fmt::Debug for HttpClientConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("HttpClientConfig")
+            .field(
+                "p12_identity",
+                &self.p12_identity.as_ref().map(|_| "[REDACTED]"),
+            )
+            .field("ca_cert_pem", &self.ca_cert_pem.as_ref().map(|b| format!("{} bytes", b.len())))
+            .field("connect_timeout", &self.connect_timeout)
+            .field("read_timeout", &self.read_timeout)
+            .field("tcp_keepalive", &self.tcp_keepalive)
+            .field("ssrf_protection", &self.ssrf_protection)
+            .finish()
+    }
 }
 
 impl HttpClientConfig {

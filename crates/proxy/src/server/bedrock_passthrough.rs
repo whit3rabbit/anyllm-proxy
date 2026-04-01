@@ -19,7 +19,11 @@ use super::routes::AppState;
 /// Strips the `model` field from the body (Bedrock uses it in the URL),
 /// adds `anthropic_version`, and handles AWS Event Stream binary framing
 /// for streaming responses.
-pub(crate) async fn bedrock_passthrough(State(state): State<AppState>, body: Bytes) -> Response {
+pub(crate) async fn bedrock_passthrough(
+    State(state): State<AppState>,
+    vk_ctx: Option<axum::Extension<crate::server::middleware::VirtualKeyContext>>,
+    body: Bytes,
+) -> Response {
     state.metrics.record_request();
 
     let client = match &state.backend {
@@ -60,6 +64,18 @@ pub(crate) async fn bedrock_passthrough(State(state): State<AppState>, body: Byt
             None,
         );
         return (StatusCode::BAD_REQUEST, Json(err)).into_response();
+    }
+
+    // Enforce model allowlist policy for virtual keys.
+    if let Some(axum::Extension(ref ctx)) = vk_ctx {
+        if !crate::server::policy::is_model_allowed(&model_id, &ctx.allowed_models) {
+            let err = mapping::errors_map::create_anthropic_error(
+                anthropic::ErrorType::PermissionError,
+                format!("Model '{}' is not allowed for this API key.", model_id),
+                None,
+            );
+            return (StatusCode::FORBIDDEN, Json(err)).into_response();
+        }
     }
 
     // Map model name through model router or runtime config

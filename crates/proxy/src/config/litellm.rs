@@ -341,6 +341,20 @@ struct DeploymentSpec {
     weight: Option<u32>,
 }
 
+/// Extract `general_settings.master_key` from a LiteLLM YAML string without
+/// performing full config parsing. Used by the synchronous `fn main()` to apply
+/// the key via `set_var` before the tokio runtime spawns worker threads.
+pub fn extract_master_key(yaml: &str) -> Option<String> {
+    #[derive(Deserialize)]
+    struct Probe {
+        general_settings: Option<GeneralSettings>,
+    }
+    let probe: Probe = serde_yaml::from_str(yaml).ok()?;
+    let gs = probe.general_settings?;
+    let raw = gs.master_key?;
+    resolve_env_value(&raw).ok()
+}
+
 /// Determine the base URL for a deployment, applying provider-specific defaults.
 fn resolve_base_url(kind: &BackendKind, params: &LiteLLMParams) -> String {
     if let Some(ref url) = params.api_base {

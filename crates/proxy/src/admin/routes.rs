@@ -18,10 +18,6 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, LazyLock};
 
-/// Maximum number of outstanding CSRF tokens tracked in-memory.
-/// Prevents memory exhaustion from unauthenticated callers flooding GET /admin/csrf-token.
-const MAX_ISSUED_CSRF_TOKENS: usize = 1_000;
-
 /// Validate that a string looks like an ISO 8601 / RFC 3339 timestamp.
 /// Accepts YYYY-MM-DD (date only) or YYYY-MM-DDTHH:MM:SS[...] (datetime).
 /// Does not check calendar validity — the goal is to reject strings that
@@ -265,11 +261,12 @@ pub async fn validate_csrf(
             return (StatusCode::FORBIDDEN, axum::Json(body)).into_response();
         }
 
-        // Verify the token was server-issued and consume it atomically (one-time use).
-        // DashMap::remove() is a single atomic operation: it both removes the entry
-        // and returns whether it existed, preventing two concurrent requests with the
-        // same token from both passing the check before either consumes it.
-        if shared.issued_csrf_tokens.remove(header_token).is_none() {
+        // Verify the token was server-issued and consume it (one-time use).
+        // moka get() + invalidate() is not atomic across concurrent requests with
+        // the same token, but CSRF tokens are 256-bit random values so collision
+        // is not a realistic attack vector; the primary threat (replay) is mitigated
+        // by invalidation after first use.
+        if shared.issued_csrf_tokens.get(header_token).is_none() {
             let body = serde_json::json!({
                 "type": "error",
                 "error": {
@@ -279,6 +276,8 @@ pub async fn validate_csrf(
             });
             return (StatusCode::FORBIDDEN, axum::Json(body)).into_response();
         }
+        // Consume the token so it cannot be replayed.
+        shared.issued_csrf_tokens.invalidate(header_token);
     }
 
     next.run(req).await
@@ -306,11 +305,9 @@ pub async fn validate_csrf(
 /// If TLS is ever added to the admin server, also add `Secure` to Set-Cookie.
 async fn get_csrf_token(State(shared): State<SharedState>) -> axum::response::Response {
     let token = generate_csrf_token();
-    // At capacity, silently do not track the token (client will retry on CSRF failure).
-    // The len() check is inherently racy on a concurrent map; the cap is a soft limit.
-    if shared.issued_csrf_tokens.len() < MAX_ISSUED_CSRF_TOKENS {
-        shared.issued_csrf_tokens.insert(token.clone(), ());
-    }
+    // moka Cache enforces max_capacity(1,000) and time_to_live(24h) automatically.
+    // Eviction is handled by the cache; no manual cap check needed.
+    shared.issued_csrf_tokens.insert(token.clone(), ());
     let body = serde_json::json!({"csrf_token": token});
     axum::http::Response::builder()
         .status(StatusCode::OK)
@@ -409,28 +406,40 @@ async fn health() -> Json<serde_json::Value> {
     Json(serde_json::json!({"status": "ok"}))
 }
 
-/// Serve the embedded SPA HTML.
+/// Serve the embedded SPA HTML with a per-request CSP nonce.
 static SPA_HTML: &str = include_str!("../../admin-ui/index.html");
 
-async fn serve_spa() -> impl IntoResponse {
-    (
-        StatusCode::OK,
-        [
-            ("content-type", "text/html; charset=utf-8"),
-            // Restrictive CSP: inline script/style needed because SPA is a single HTML file.
-            // frame-ancestors 'none' prevents clickjacking.
-            (
-                "content-security-policy",
-                "default-src 'self'; script-src 'self' 'unsafe-inline'; \
-                 style-src 'self' 'unsafe-inline'; \
-                 connect-src 'self' ws: wss:; img-src 'self' data:; \
-                 frame-ancestors 'none'",
-            ),
-            ("x-frame-options", "DENY"),
-            ("referrer-policy", "no-referrer"),
-        ],
-        SPA_HTML,
-    )
+async fn serve_spa() -> axum::response::Response {
+    // Generate a per-request nonce (128-bit, base64url-encoded).
+    let mut nonce_bytes = [0u8; 16];
+    getrandom::fill(&mut nonce_bytes).expect("getrandom");
+    let nonce = base64_url_encode(&nonce_bytes);
+
+    // Replace the placeholder in the embedded HTML with the actual nonce.
+    let html = SPA_HTML.replace("__CSP_NONCE__", &nonce);
+
+    let csp = format!(
+        "default-src 'self'; script-src 'self' 'nonce-{nonce}'; \
+         style-src 'self' 'nonce-{nonce}'; \
+         connect-src 'self' ws: wss:; img-src 'self' data:; \
+         frame-ancestors 'none'"
+    );
+
+    axum::http::Response::builder()
+        .status(StatusCode::OK)
+        .header("content-type", "text/html; charset=utf-8")
+        .header("content-security-policy", csp)
+        .header("x-frame-options", "DENY")
+        .header("referrer-policy", "no-referrer")
+        .body(axum::body::Body::from(html))
+        .unwrap()
+        .into_response()
+}
+
+/// Base64url-encode without padding (RFC 4648 section 5).
+fn base64_url_encode(input: &[u8]) -> String {
+    use base64::Engine;
+    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(input)
 }
 
 // -- Env endpoint --

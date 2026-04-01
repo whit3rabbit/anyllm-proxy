@@ -6,7 +6,7 @@ mod tls;
 mod url_validation;
 
 pub use tls::TlsConfig;
-pub use url_validation::{is_private_ip, validate_base_url};
+pub use url_validation::{is_private_ip, validate_base_url, warn_if_cloud_metadata_url};
 
 use indexmap::IndexMap;
 use serde::Deserialize;
@@ -407,6 +407,24 @@ pub fn resolve_env_value(value: &str) -> Result<String, String> {
     } else {
         Ok(value.to_string())
     }
+}
+
+/// Extract the LiteLLM `general_settings.master_key` from the config file at
+/// `path`, if present. Returns `None` for non-YAML files, non-LiteLLM formats,
+/// missing files, or configs without a master key. This is intentionally
+/// lightweight: it reads only enough to find the key, without full config parsing.
+///
+/// Designed to be called from `fn main()` (single-threaded, before the tokio
+/// runtime) so the result can be applied via `set_var` without UB.
+pub fn extract_litellm_master_key(path: &str) -> Option<String> {
+    if !(path.ends_with(".yaml") || path.ends_with(".yml")) {
+        return None;
+    }
+    let yaml = std::fs::read_to_string(path).ok()?;
+    // Only LiteLLM format (model_list:) carries a master_key.
+    let probe: serde_yaml::Value = serde_yaml::from_str(&yaml).ok()?;
+    probe.get("model_list")?;
+    litellm::extract_master_key(&yaml)
 }
 
 /// Per-backend configuration. Each entry in `[backends.*]` deserializes into this.

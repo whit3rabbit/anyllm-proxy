@@ -5,10 +5,11 @@ use std::fmt;
 /// Optional mTLS configuration for the backend connection.
 /// Stores raw certificate bytes so Config remains Clone.
 /// Validated at construction time: bad certs cause startup panic.
+/// Password wrapped in Zeroizing so it is zeroed from heap on drop.
 #[derive(Clone, Default)]
 pub struct TlsConfig {
     /// Raw PKCS#12 bytes and password for client certificate authentication.
-    pub p12_identity: Option<(Vec<u8>, String)>,
+    pub p12_identity: Option<(Vec<u8>, zeroize::Zeroizing<String>)>,
     /// Raw PEM bytes for additional CA certificate to trust.
     pub ca_cert_pem: Option<Vec<u8>>,
 }
@@ -49,7 +50,7 @@ impl TlsConfig {
                 });
 
                 tracing::info!(path = %path, "loaded client certificate (P12)");
-                Some((bytes, password.to_string()))
+                Some((bytes, zeroize::Zeroizing::new(password.to_string())))
             }
             (Some(_), None) => {
                 panic!("TLS_CLIENT_CERT_P12 is set but TLS_CLIENT_CERT_PASSWORD is missing");

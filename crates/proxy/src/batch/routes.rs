@@ -120,6 +120,7 @@ fn default_completion_window() -> String {
 /// POST /v1/batches - Create a new batch job.
 pub async fn create_batch(
     State(state): State<AppState>,
+    vk_ctx: Option<axum::Extension<crate::server::middleware::VirtualKeyContext>>,
     Json(req): Json<CreateBatchRequest>,
 ) -> Response {
     // Check backend support: only openai and azure are supported
@@ -150,6 +151,18 @@ pub async fn create_batch(
         Ok(items) => items,
         Err(e) => return bad_request(&format!("Invalid JSONL: {e}")),
     };
+
+    // Enforce model allowlist policy for virtual keys against each batch item.
+    if let Some(axum::Extension(ref ctx)) = vk_ctx {
+        for item in &items {
+            if !crate::server::policy::is_model_allowed(&item.model, &ctx.allowed_models) {
+                return bad_request(&format!(
+                    "Model '{}' in batch item '{}' is not allowed for this API key.",
+                    item.model, item.custom_id
+                ));
+            }
+        }
+    }
 
     // Reject private/loopback/metadata targets to prevent SSRF.
     if let Some(ref url) = req.webhook_url {

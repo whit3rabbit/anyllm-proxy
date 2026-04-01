@@ -41,6 +41,17 @@ fn main() {
         }
     }
 
+    // Extract litellm master_key before the runtime starts (still single-threaded).
+    if std::env::var("PROXY_API_KEYS").is_err() {
+        if let Ok(ref config_path) = std::env::var("PROXY_CONFIG") {
+            if let Some(mk) = config::extract_litellm_master_key(config_path) {
+                // SAFETY: genuinely single-threaded here (no tokio runtime yet).
+                unsafe { std::env::set_var("PROXY_API_KEYS", &mk) };
+                eprintln!("anyllm_proxy: applied general_settings.master_key as PROXY_API_KEYS");
+            }
+        }
+    }
+
     // Now start the tokio runtime and enter the async main.
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -78,18 +89,10 @@ async fn async_main(args: Vec<String>) {
     let multi_config = load_result.multi_config;
     let model_router = load_result.model_router;
 
-    // Apply litellm master_key if PROXY_API_KEYS is still unset.
-    // NOTE: this is a read-only check followed by a set. The tokio runtime is
-    // running, but no worker tasks are spawned yet at this point (we haven't
-    // called tokio::spawn). Still, we avoid set_var here to be safe.
-    if let Some(ref mk) = load_result.litellm_master_key {
-        if std::env::var("PROXY_API_KEYS").is_err() {
-            // Store in a way the middleware can read without set_var.
-            // For now, use set_var since this runs before any spawns in practice.
-            // TODO: refactor PROXY_API_KEYS to use a config struct instead of env var.
-            unsafe { std::env::set_var("PROXY_API_KEYS", mk) };
-            tracing::info!("applied general_settings.master_key as PROXY_API_KEYS");
-        }
+    // litellm master_key was already applied in fn main() (single-threaded).
+    // Log confirmation if it was set.
+    if load_result.litellm_master_key.is_some() && std::env::var("PROXY_API_KEYS").is_ok() {
+        tracing::info!("general_settings.master_key active as PROXY_API_KEYS");
     }
     let listen_port = multi_config.listen_port;
 
@@ -160,6 +163,16 @@ async fn async_main(args: Vec<String>) {
             Err(e) => {
                 tracing::error!("OIDC discovery failed: {e}. Starting without OIDC auth.");
             }
+        }
+    }
+
+    // Warn if infrastructure URLs point at cloud metadata endpoints.
+    // QDRANT_URL and REDIS_URL intentionally allow private IPs (these services
+    // normally run on internal networks), but cloud metadata IPs (169.254.169.254)
+    // are never valid and indicate a dangerous misconfiguration.
+    for var_name in &["QDRANT_URL", "REDIS_URL"] {
+        if let Ok(url) = std::env::var(var_name) {
+            anyllm_proxy::config::warn_if_cloud_metadata_url(var_name, &url);
         }
     }
 
@@ -455,7 +468,12 @@ async fn async_main(args: Vec<String>) {
             mcp_manager: tool_engine_state
                 .as_ref()
                 .and_then(|s| s.mcp_manager.clone()),
-            issued_csrf_tokens: Arc::new(dashmap::DashMap::new()),
+            issued_csrf_tokens: Arc::new(
+                moka::sync::Cache::builder()
+                    .max_capacity(1_000)
+                    .time_to_live(std::time::Duration::from_secs(86400))
+                    .build(),
+            ),
         };
 
         // Admin token: use env var or generate 256-bit random hex written to a file.
