@@ -75,16 +75,19 @@ pub fn anthropic_to_gemini_request(
 
     // Tool config
     let tool_config = req.tool_choice.as_ref().map(|tc| {
-        let mode = match tc {
-            anthropic::ToolChoice::Auto { .. } => "AUTO",
-            anthropic::ToolChoice::Any { .. } => "ANY",
-            anthropic::ToolChoice::None => "NONE",
-            // Gemini has no forced-specific-tool mode; fall back to AUTO.
-            anthropic::ToolChoice::Tool { .. } => "AUTO",
+        let (mode, allowed) = match tc {
+            anthropic::ToolChoice::Auto { .. } => ("AUTO", None),
+            anthropic::ToolChoice::Any { .. } => ("ANY", None),
+            anthropic::ToolChoice::None => ("NONE", None),
+            // Gemini ANY + allowedFunctionNames restricts to a specific tool.
+            anthropic::ToolChoice::Tool { name, .. } => {
+                ("ANY", Some(vec![name.clone()]))
+            }
         };
         gemini::ToolConfig {
             function_calling_config: gemini::FunctionCallingConfig {
                 mode: mode.to_string(),
+                allowed_function_names: allowed,
             },
         }
     });
@@ -698,16 +701,17 @@ mod tests {
     }
 
     #[test]
-    fn tool_choice_specific_tool_maps_to_auto() {
+    fn tool_choice_specific_tool_maps_to_any_with_allowed_names() {
         let mut req = make_request(vec![user_text("test")]);
         req.tool_choice = Some(anthropic::ToolChoice::Tool {
             name: "get_weather".into(),
         });
         let gem = anthropic_to_gemini_request(&req);
-        // Gemini has no forced-tool mode, so we fall back to AUTO.
+        let fc = gem.tool_config.unwrap().function_calling_config;
+        assert_eq!(fc.mode, "ANY");
         assert_eq!(
-            gem.tool_config.unwrap().function_calling_config.mode,
-            "AUTO"
+            fc.allowed_function_names,
+            Some(vec!["get_weather".to_string()])
         );
     }
 

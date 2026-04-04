@@ -230,6 +230,7 @@ pub async fn validate_csrf(
 ) -> axum::response::Response {
     let method = req.method().clone();
 
+    // PATCH is included: partial updates mutate state just like PUT/DELETE.
     if matches!(
         method,
         axum::http::Method::POST
@@ -330,7 +331,7 @@ async fn get_csrf_token(State(shared): State<SharedState>) -> axum::response::Re
 
 /// Build the admin router.
 /// Token is used for auth middleware on all routes except /admin/health.
-pub fn admin_router(shared: SharedState, token: Arc<String>) -> Router {
+pub fn admin_router(shared: SharedState, token: Arc<zeroize::Zeroizing<String>>) -> Router {
     // Public routes (no auth).
     // /admin/csrf-token is public so the SPA can fetch a token before and after login.
     // Rate-limited to prevent unauthenticated flooding of the CSRF token map.
@@ -1843,7 +1844,7 @@ mod tests {
         // Raise rate limit so parallel unit tests don't interfere.
         set_admin_rpm(10_000);
         let shared = crate::admin::state::SharedState::new_for_test();
-        let token = Arc::new("test-token".to_string());
+        let token = Arc::new(zeroize::Zeroizing::new("test-token".to_string()));
         admin_router(shared, token)
     }
 
@@ -1969,7 +1970,7 @@ mod tests {
         let token_str = "a".repeat(64);
         // Pre-register the token as server-issued so validate_csrf can find it.
         shared.issued_csrf_tokens.insert(token_str.clone(), ());
-        let app = admin_router(shared, Arc::new("test-token".to_string()));
+        let app = admin_router(shared, Arc::new(zeroize::Zeroizing::new("test-token".to_string())));
         let req = Request::post("/admin/api/keys")
             .header("host", "localhost:9090")
             .header("authorization", "Bearer test-token")

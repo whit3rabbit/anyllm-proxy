@@ -8,6 +8,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use std::sync::Arc;
+use zeroize::Zeroizing;
 use subtle::ConstantTimeEq;
 
 /// Constant-time string comparison to prevent timing side-channels.
@@ -43,7 +44,7 @@ pub fn validate_csrf_tokens(from_header: &str, from_cookie: &str) -> bool {
 
 /// Axum middleware that validates the admin bearer token.
 pub async fn validate_admin_token(
-    token: axum::extract::State<Arc<String>>,
+    token: axum::extract::State<Arc<Zeroizing<String>>>,
     req: Request,
     next: Next,
 ) -> Response {
@@ -130,7 +131,7 @@ mod tests {
     use tower::ServiceExt;
 
     fn test_app(token: &str) -> Router {
-        let token = Arc::new(token.to_string());
+        let token = Arc::new(Zeroizing::new(token.to_string()));
         Router::new()
             .route("/protected", get(|| async { "ok" }))
             .layer(middleware::from_fn_with_state(

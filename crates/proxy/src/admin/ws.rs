@@ -15,7 +15,7 @@ use std::sync::Arc;
 /// Auth via the first WebSocket message to avoid leaking the token in URLs/logs.
 /// The client must send `{"token": "<admin_token>"}` as its first message.
 pub(crate) async fn ws_handler(
-    State((shared, expected_token)): State<(SharedState, Arc<String>)>,
+    State((shared, expected_token)): State<(SharedState, Arc<zeroize::Zeroizing<String>>)>,
     ws: WebSocketUpgrade,
 ) -> impl IntoResponse {
     ws.on_upgrade(move |socket| handle_ws(socket, shared, expected_token))
@@ -23,7 +23,7 @@ pub(crate) async fn ws_handler(
 }
 
 /// Authenticate via the first WebSocket message, then stream events.
-async fn handle_ws(mut socket: WebSocket, shared: SharedState, expected_token: Arc<String>) {
+async fn handle_ws(mut socket: WebSocket, shared: SharedState, expected_token: Arc<zeroize::Zeroizing<String>>) {
     // Wait for the first message containing the auth token.
     let authenticated =
         tokio::time::timeout(std::time::Duration::from_secs(5), socket.recv()).await;

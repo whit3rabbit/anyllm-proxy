@@ -33,10 +33,12 @@ impl LangfuseClient {
             tracing::error!(host = %host, error = %e, "LANGFUSE_HOST rejected (SSRF protection)");
             return None;
         }
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(5))
-            .build()
-            .expect("langfuse http client");
+        let client = anyllm_client::http::build_http_client(&anyllm_client::http::HttpClientConfig {
+            ssrf_protection: true,
+            connect_timeout: Some(std::time::Duration::from_secs(5)),
+            read_timeout: Some(std::time::Duration::from_secs(5)),
+            ..Default::default()
+        });
         Some(Arc::new(Self {
             public_key,
             secret_key,

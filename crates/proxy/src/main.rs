@@ -497,7 +497,7 @@ async fn async_main(args: Vec<String>) {
             }
             token
         });
-        let admin_token = Arc::new(admin_token);
+        let admin_token = Arc::new(zeroize::Zeroizing::new(admin_token));
 
         // Spawn periodic tasks: log retention and metrics snapshot broadcast.
         let retention_days: u32 = std::env::var("ADMIN_LOG_RETENTION_DAYS")
@@ -610,14 +610,27 @@ async fn async_main(args: Vec<String>) {
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty())
             .collect();
+        let webhook_queue = std::sync::Arc::new(
+            anyllm_batch_engine::webhook::sqlite::SqliteWebhookQueue::new(batch_db.clone()),
+        );
+        let webhook_client =
+            anyllm_client::http::build_http_client(&anyllm_client::http::HttpClientConfig {
+                ssrf_protection: true,
+                connect_timeout: Some(std::time::Duration::from_secs(10)),
+                read_timeout: Some(std::time::Duration::from_secs(30)),
+                ..Default::default()
+            });
+        let _webhook_handle = anyllm_batch_engine::webhook::dispatcher::start_dispatcher(
+            webhook_queue.clone(),
+            webhook_client,
+            anyllm_batch_engine::webhook::dispatcher::WebhookConfig::default(),
+        );
         Some(std::sync::Arc::new(anyllm_batch_engine::BatchEngine {
             queue: std::sync::Arc::new(anyllm_batch_engine::queue::sqlite::SqliteQueue::new(
                 batch_db.clone(),
             )),
-            file_store: anyllm_batch_engine::file_store::FileStore::new(batch_db.clone()),
-            webhook_queue: std::sync::Arc::new(
-                anyllm_batch_engine::webhook::sqlite::SqliteWebhookQueue::new(batch_db),
-            ),
+            file_store: anyllm_batch_engine::file_store::FileStore::new(batch_db),
+            webhook_queue,
             global_webhook_urls,
             webhook_signing_secret: std::env::var("BATCH_WEBHOOK_SIGNING_SECRET").ok(),
         }))

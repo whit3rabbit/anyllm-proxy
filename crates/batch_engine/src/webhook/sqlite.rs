@@ -2,7 +2,7 @@
 //! SQLite-backed webhook delivery queue.
 
 use super::{LeasedDelivery, WebhookDelivery, WebhookQueue};
-use crate::db::{format_epoch_iso8601, now_iso8601};
+use crate::db::{epoch_secs, format_epoch_iso8601, now_iso8601};
 use crate::error::QueueError;
 use async_trait::async_trait;
 use rusqlite::{params, Connection};
@@ -59,14 +59,7 @@ impl WebhookQueue for SqliteWebhookQueue {
             let conn = db.blocking_lock();
             let lease_id = format!("whl_{}", uuid::Uuid::new_v4());
             let now = now_iso8601();
-            let lease_expires = {
-                let secs = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs()
-                    + 60;
-                format_epoch_iso8601(secs)
-            };
+            let lease_expires = format_epoch_iso8601(epoch_secs() + 60);
 
             let result = conn.query_row(
                 "UPDATE webhook_delivery
@@ -133,14 +126,7 @@ impl WebhookQueue for SqliteWebhookQueue {
     async fn schedule_retry(&self, delivery_id: &str, delay: Duration) -> Result<(), QueueError> {
         let db = self.db.clone();
         let id = delivery_id.to_string();
-        let retry_at = {
-            let secs = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs()
-                + delay.as_secs();
-            format_epoch_iso8601(secs)
-        };
+        let retry_at = format_epoch_iso8601(epoch_secs() + delay.as_secs());
         tokio::task::spawn_blocking(move || {
             let conn = db.blocking_lock();
             conn.execute(

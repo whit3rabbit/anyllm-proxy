@@ -2,7 +2,6 @@
 //! BatchEngine: the main entry point for batch operations.
 //! Thin facade over JobQueue, FileStore, and WebhookQueue.
 
-use crate::db::now_iso8601;
 use crate::error::EngineError;
 use crate::file_store::FileStore;
 use crate::job::*;
@@ -29,7 +28,8 @@ impl<Q: JobQueue, W: WebhookQueue> BatchEngine<Q, W> {
 
         const DEFAULT_MAX_RETRIES: u8 = 3;
 
-        let now = now_iso8601();
+        let epoch = crate::db::epoch_secs();
+        let now = crate::db::format_epoch_iso8601(epoch);
         let batch_id = BatchId::new();
         let total = submission.items.len() as u32;
 
@@ -49,7 +49,8 @@ impl<Q: JobQueue, W: WebhookQueue> BatchEngine<Q, W> {
             created_at: now.clone(),
             started_at: None,
             completed_at: None,
-            expires_at: now.clone(), // TODO: add 24h
+            // 24h TTL matches the Anthropic batch API contract (results expire after 24h).
+            expires_at: crate::db::epoch_plus_hours_iso8601(epoch, 24),
         };
 
         let items: Vec<BatchItem> = submission
