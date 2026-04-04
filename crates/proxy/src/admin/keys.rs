@@ -297,6 +297,19 @@ pub fn period_reset_at(meta: &VirtualKeyMeta) -> Option<String> {
     Some(super::db::epoch_to_iso8601(boundary))
 }
 
+/// Compute `period_reset_at` from a database row where `budget_duration`
+/// is stored as a string ("daily" or "monthly").
+pub fn period_reset_at_from_row(row: &VirtualKeyRow) -> Option<String> {
+    let duration = match row.budget_duration.as_deref()? {
+        "daily" => BudgetDuration::Daily,
+        "monthly" => BudgetDuration::Monthly,
+        _ => return None,
+    };
+    let start = row.period_start.as_ref()?;
+    let boundary = next_period_boundary(start, duration)?;
+    Some(super::db::epoch_to_iso8601(boundary))
+}
+
 /// Row from the virtual_api_key table.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct VirtualKeyRow {
@@ -540,5 +553,34 @@ mod tests {
         assert!(check_and_reset_period(&mut meta));
         assert_eq!(meta.period_spend_usd, 0.0);
         assert!(meta.period_start.is_some());
+    }
+
+    #[test]
+    fn period_reset_at_from_row_daily() {
+        let row = VirtualKeyRow {
+            id: 1,
+            key_hash: String::new(),
+            key_prefix: "sk-vk1234".into(),
+            description: None,
+            created_at: "2026-04-01T00:00:00Z".into(),
+            expires_at: None,
+            revoked_at: None,
+            rpm_limit: None,
+            tpm_limit: None,
+            spend_limit: None,
+            total_spend: 0.0,
+            total_requests: 0,
+            total_tokens: 0,
+            role: "developer".into(),
+            max_budget_usd: Some(10.0),
+            budget_duration: Some("daily".into()),
+            period_start: Some("2026-04-04T00:00:00Z".into()),
+            period_spend_usd: 0.0,
+            total_input_tokens: 0,
+            total_output_tokens: 0,
+            allowed_models: None,
+        };
+        let reset = period_reset_at_from_row(&row);
+        assert_eq!(reset, Some("2026-04-05T00:00:00Z".to_string()));
     }
 }

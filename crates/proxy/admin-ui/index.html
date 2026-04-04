@@ -1377,13 +1377,19 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
           var barClass = pct >= 95 ? 'danger' : (pct >= 80 ? 'warn' : '');
           var budgetLabel = '$' + Number(k.max_budget_usd).toFixed(2) + (k.budget_duration ? ' / ' + k.budget_duration : '');
           var spendLabel = '$' + Number(periodSpend).toFixed(4) + ' used';
-          budgetCell = el('td', null, [
+          var budgetChildren = [
             el('div', {textContent: budgetLabel, style:{color:'#8b949e',fontSize:'11px'}}),
             el('div', {textContent: spendLabel, style:{fontSize:'11px'}}),
             el('div', {className: 'budget-bar'}, [
               el('div', {className: 'budget-bar-fill ' + barClass, style:{width: pct.toFixed(1) + '%'}})
             ])
-          ]);
+          ];
+          if (k.period_reset_at) {
+            var resetDate = new Date(k.period_reset_at);
+            var resetStr = resetDate.toLocaleDateString(undefined, {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+            budgetChildren.push(el('div', {style:{fontSize:'11px',color:'#8b949e',marginTop:'2px'}, textContent: 'Resets ' + resetStr}));
+          }
+          budgetCell = el('td', null, budgetChildren);
         } else {
           var spendAny = k.total_spend != null ? ('$' + Number(k.total_spend).toFixed(4)) : '--';
           budgetCell = el('td', {textContent: spendAny, style:{color:'#8b949e'}});

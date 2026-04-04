@@ -1300,6 +1300,7 @@ async fn list_keys(State(shared): State<SharedState>) -> axum::response::Respons
                         "max_budget_usd": k.max_budget_usd,
                         "budget_duration": k.budget_duration,
                         "period_spend_usd": k.period_spend_usd,
+                        "period_reset_at": crate::admin::keys::period_reset_at_from_row(k),
                         "allowed_models": k.allowed_models,
                     })
                 })

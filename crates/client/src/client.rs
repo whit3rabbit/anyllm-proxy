@@ -141,7 +141,8 @@ impl From<InternalError> for ClientError {
 pub struct ClientBuilder {
     base_url: Option<String>,
     api_key: Option<String>,
-    timeout: Option<std::time::Duration>,
+    connect_timeout: Option<std::time::Duration>,
+    request_timeout: Option<std::time::Duration>,
     read_timeout: Option<std::time::Duration>,
     max_retries: Option<u32>,
 }
@@ -152,7 +153,8 @@ impl ClientBuilder {
         Self {
             base_url: None,
             api_key: None,
-            timeout: None,
+            connect_timeout: None,
+            request_timeout: None,
             read_timeout: None,
             max_retries: None,
         }
@@ -170,9 +172,17 @@ impl ClientBuilder {
         self
     }
 
-    /// Set the connection timeout (default: 10s).
+    /// Set the TCP connection timeout (default: 10s).
+    pub fn connect_timeout(mut self, duration: std::time::Duration) -> Self {
+        self.connect_timeout = Some(duration);
+        self
+    }
+
+    /// Set the total request timeout — wall-clock limit from first byte sent to
+    /// last byte received. Unset by default; [`read_timeout`](Self::read_timeout)
+    /// already caps slow streaming responses.
     pub fn timeout(mut self, duration: std::time::Duration) -> Self {
-        self.timeout = Some(duration);
+        self.request_timeout = Some(duration);
         self
     }
 
@@ -183,15 +193,12 @@ impl ClientBuilder {
     }
 
     /// Set the maximum number of retries on 429/5xx (default: 3).
-    ///
-    /// Note: this value is stored for forward compatibility but the current
-    /// retry implementation uses the crate-level [`MAX_RETRIES`](crate::retry::MAX_RETRIES) constant.
     pub fn max_retries(mut self, n: u32) -> Self {
         self.max_retries = Some(n);
         self
     }
 
-    /// Build the [`Client`], returning an error if `base_url` is missing.
+    /// Build the [`Client`], returning an error if `base_url` is missing or `api_key` is empty.
     pub fn build(self) -> Result<Client, ClientError> {
         let base_url = self.base_url.ok_or_else(|| ClientError::ApiError {
             status: 0,
@@ -199,11 +206,24 @@ impl ClientBuilder {
             body: String::new(),
         })?;
 
+        if let Some(ref key) = self.api_key {
+            if key.is_empty() {
+                return Err(ClientError::ApiError {
+                    status: 0,
+                    message: "ClientBuilder: api_key is empty".to_string(),
+                    body: String::new(),
+                });
+            }
+        }
+
         let http_config = HttpClientConfig {
-            connect_timeout: self.timeout,
+            connect_timeout: self.connect_timeout,
+            request_timeout: self.request_timeout,
             read_timeout: self.read_timeout,
             ..HttpClientConfig::new()
         };
+
+        let max_retries = self.max_retries.unwrap_or(retry::MAX_RETRIES);
 
         let config = ClientConfig {
             chat_completions_url: base_url,
@@ -212,7 +232,9 @@ impl ClientBuilder {
             translation: TranslationConfig::default(),
         };
 
-        Ok(Client::new(config))
+        let mut client = Client::new(config);
+        client.max_retries = max_retries;
+        Ok(client)
     }
 }
 
@@ -242,13 +264,18 @@ impl Default for ClientBuilder {
 pub struct Client {
     http: reqwest::Client,
     config: ClientConfig,
+    max_retries: u32,
 }
 
 impl Client {
     /// Create a new client from configuration.
     pub fn new(config: ClientConfig) -> Self {
         let http = build_http_client(&config.http);
-        Self { http, config }
+        Self {
+            http,
+            config,
+            max_retries: retry::MAX_RETRIES,
+        }
     }
 
     /// Return a [`ClientBuilder`] for simplified construction.
@@ -273,7 +300,11 @@ impl Client {
     /// Create from an existing reqwest client and configuration.
     /// Useful when you want to share an HTTP client across multiple instances.
     pub fn with_http_client(http: reqwest::Client, config: ClientConfig) -> Self {
-        Self { http, config }
+        Self {
+            http,
+            config,
+            max_retries: retry::MAX_RETRIES,
+        }
     }
 
     fn auth(&self) -> retry::RequestAuth<'_> {
@@ -334,6 +365,7 @@ impl Client {
             &self.auth(),
             req,
             "backend",
+            self.max_retries,
         )
         .await
         .map_err(ClientError::from)?;
@@ -358,6 +390,7 @@ impl Client {
             &self.auth(),
             req,
             "backend",
+            self.max_retries,
         )
         .await
         .map_err(ClientError::from)?;
@@ -420,11 +453,31 @@ mod tests {
         let client = ClientBuilder::new()
             .base_url("https://api.openai.com/v1/chat/completions")
             .api_key("sk-test")
-            .timeout(std::time::Duration::from_secs(5))
+            .connect_timeout(std::time::Duration::from_secs(5))
+            .timeout(std::time::Duration::from_secs(120))
             .read_timeout(std::time::Duration::from_secs(30))
             .max_retries(2)
             .build();
         assert!(client.is_ok());
+    }
+
+    #[test]
+    fn client_builder_empty_api_key_rejected() {
+        let result = ClientBuilder::new()
+            .base_url("https://api.openai.com/v1/chat/completions")
+            .api_key("")
+            .build();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn client_builder_max_retries_stored() {
+        let client = ClientBuilder::new()
+            .base_url("https://api.openai.com/v1/chat/completions")
+            .max_retries(7)
+            .build()
+            .unwrap();
+        assert_eq!(client.max_retries, 7);
     }
 
     #[test]
