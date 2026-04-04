@@ -1046,7 +1046,7 @@ async fn get_requests(
     match crate::admin::state::with_db(&shared.db, move |conn| {
         crate::admin::db::query_request_log(
             conn,
-            limit,
+            limit + 1,
             offset,
             backend.as_deref(),
             since.as_deref(),
@@ -1057,11 +1057,18 @@ async fn get_requests(
     })
     .await
     {
-        Some(Ok(entries)) => Json(serde_json::json!({
-            "requests": entries,
-            "limit": limit,
-            "offset": offset,
-        })),
+        Some(Ok(mut entries)) => {
+            let has_more = entries.len() > limit as usize;
+            if has_more {
+                entries.truncate(limit as usize);
+            }
+            Json(serde_json::json!({
+                "requests": entries,
+                "limit": limit,
+                "offset": offset,
+                "has_more": has_more,
+            }))
+        }
         Some(Err(e)) => {
             tracing::error!(error = %e, "query_request_log failed");
             Json(serde_json::json!({
@@ -1696,7 +1703,7 @@ async fn get_audit_log(
     match crate::admin::state::with_db(&shared.db, move |conn| {
         crate::admin::db::query_audit_log(
             conn,
-            limit,
+            limit + 1,
             offset,
             action.as_deref(),
             target_type.as_deref(),
@@ -1706,11 +1713,18 @@ async fn get_audit_log(
     })
     .await
     {
-        Some(Ok(entries)) => Json(serde_json::json!({
-            "entries": entries,
-            "limit": limit,
-            "offset": offset,
-        })),
+        Some(Ok(mut entries)) => {
+            let has_more = entries.len() > limit as usize;
+            if has_more {
+                entries.truncate(limit as usize);
+            }
+            Json(serde_json::json!({
+                "entries": entries,
+                "limit": limit,
+                "offset": offset,
+                "has_more": has_more,
+            }))
+        }
         Some(Err(e)) => {
             tracing::error!(error = %e, "query_audit_log failed");
             Json(serde_json::json!({

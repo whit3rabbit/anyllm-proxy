@@ -1078,6 +1078,7 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
         requests.forEach(function(r) { feed.appendChild(makeRequestRow(r)); });
       }
       document.getElementById('page-info').textContent = 'Page ' + (currentPage + 1);
+      document.getElementById('next-page').disabled = !data.has_more;
     }).catch(function(e) { console.error('Requests load failed:', e); });
   }
 
@@ -1682,6 +1683,7 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
       clearChildren(container, false);
       var entries = data.entries || [];
       document.getElementById('audit-page-info').textContent = 'Page ' + (auditPage + 1);
+      document.getElementById('audit-next-page').disabled = !data.has_more;
       if (entries.length === 0) {
         var auditMsg = auditPage === 0 ? 'No audit entries yet.' : 'No results on this page';
         container.appendChild(el('div', {className: 'empty', textContent: auditMsg}));

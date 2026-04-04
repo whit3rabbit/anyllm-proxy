@@ -1095,3 +1095,55 @@ async fn add_model_rejects_unknown_backend() {
         body
     );
 }
+
+// ---------------------------------------------------------------------------
+// Pagination has_more field tests
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn get_requests_response_has_has_more_field() {
+    let (app, _state) = test_admin_router();
+    let req = Request::get("/admin/api/requests?limit=10&offset=0")
+        .header("host", "localhost:9090")
+        .header("authorization", "Bearer test-admin-token")
+        .body(Body::empty())
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), 200);
+    let body: serde_json::Value = serde_json::from_slice(
+        &axum::body::to_bytes(resp.into_body(), 1 << 20)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert!(
+        body.get("has_more").is_some(),
+        "response should include has_more field"
+    );
+    assert_eq!(body["has_more"], serde_json::Value::Bool(false));
+}
+
+#[tokio::test]
+async fn get_audit_response_has_has_more_field() {
+    let (app, _state) = test_admin_router();
+    let req = Request::get("/admin/api/audit?limit=10&offset=0")
+        .header("host", "localhost:9090")
+        .header("authorization", "Bearer test-admin-token")
+        .body(Body::empty())
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), 200);
+    let body: serde_json::Value = serde_json::from_slice(
+        &axum::body::to_bytes(resp.into_body(), 1 << 20)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert!(
+        body.get("has_more").is_some(),
+        "response should include has_more field"
+    );
+    assert_eq!(body["has_more"], serde_json::Value::Bool(false));
+}
