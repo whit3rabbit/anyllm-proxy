@@ -523,7 +523,6 @@ static STATIC_CLAUDE_MODELS: std::sync::LazyLock<Vec<serde_json::Value>> = std::
             serde_json::json!({"id": "claude-3-5-haiku-20241022",  "object": "model", "created": 1729555200, "owned_by": "anthropic", "display_name": "Claude 3.5 Haiku"}),
             // Claude 3
             serde_json::json!({"id": "claude-3-opus-20240229",     "object": "model", "created": 1709164800, "owned_by": "anthropic", "display_name": "Claude 3 Opus"}),
-            serde_json::json!({"id": "claude-3-sonnet-20240229",   "object": "model", "created": 1709164800, "owned_by": "anthropic", "display_name": "Claude 3 Sonnet"}),
             serde_json::json!({"id": "claude-3-haiku-20240307",    "object": "model", "created": 1709769600, "owned_by": "anthropic", "display_name": "Claude 3 Haiku"}),
         ]
     },
@@ -1214,4 +1213,21 @@ pub(crate) fn log_request(shared: &Option<SharedState>, entry: RequestLogEntry) 
 
 pub(crate) fn set_backend_error_kind(entry: &mut RequestLogEntry, error: &BackendError) {
     entry.error_kind = Some(error.error_kind().to_string());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn static_model_list_excludes_deprecated_sonnet() {
+        let ids: Vec<&str> = STATIC_CLAUDE_MODELS
+            .iter()
+            .filter_map(|m| m["id"].as_str())
+            .collect();
+        assert!(
+            !ids.contains(&"claude-3-sonnet-20240229"),
+            "claude-3-sonnet-20240229 is deprecated and must not appear in the model list"
+        );
+    }
 }
