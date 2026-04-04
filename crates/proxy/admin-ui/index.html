@@ -758,11 +758,26 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
   // -- WebSocket --
   var ws;
   var wsAuthenticated = false;
+  var wsRetries = 0;
+  var WS_MAX_RETRIES = 10;
+  var WS_BASE_DELAY_MS = 1000;
+
+  function scheduleWsReconnect() {
+    if (wsRetries >= WS_MAX_RETRIES) {
+      console.warn('WebSocket: max retries reached, giving up');
+      return;
+    }
+    var delay = Math.min(WS_BASE_DELAY_MS * Math.pow(2, wsRetries), 60000);
+    wsRetries++;
+    setTimeout(connectWs, delay);
+  }
+
   function connectWs() {
     var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
     wsAuthenticated = false;
     ws = new WebSocket(proto + '//' + location.host + '/admin/ws');
     ws.onopen = function() {
+      wsRetries = 0;
       // Authenticate via first message instead of query parameter.
       ws.send(JSON.stringify({token: TOKEN}));
     };
@@ -770,7 +785,7 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
       document.getElementById('ws-status').textContent = 'Disconnected';
       document.getElementById('ws-status').className = 'disconnected';
       wsAuthenticated = false;
-      setTimeout(connectWs, 3000);
+      scheduleWsReconnect();
     };
     ws.onmessage = function(e) {
       try {
