@@ -872,6 +872,16 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
     return Object.assign({}, authHeaders, {'X-CSRF-Token': _csrfToken});
   }
 
+  // Always fetches a fresh CSRF token before the mutating request so the
+  // one-time-use server token is never stale.
+  function mutatingFetch(url, opts) {
+    return fetchCsrfToken().then(function() {
+      if (!_csrfToken) return Promise.reject(new Error('Failed to obtain CSRF token'));
+      var reqOpts = Object.assign({}, opts, {headers: Object.assign({}, opts.headers || {}, mutatingHeaders())});
+      return fetch(url, reqOpts);
+    });
+  }
+
   // -- API fetch --
   function apiFetch(path) {
     return fetch(API + path, {headers: authHeaders}).then(function(r) { return r.json(); });
@@ -1156,7 +1166,7 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
       }
     });
 
-    fetch(API + '/config', {method:'PUT', headers: mutatingHeaders(), body: JSON.stringify(body)})
+    mutatingFetch(API + '/config', {method:'PUT', body: JSON.stringify(body)})
       .then(function(r) { return r.json(); })
       .then(function(result) {
         alert('Updated ' + (result.updated || 0) + ' settings');
@@ -1484,7 +1494,7 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
       submitBtn.textContent = 'Create';
     }
 
-    fetch(API + '/keys', {method: 'POST', headers: mutatingHeaders(), body: JSON.stringify(body)})
+    mutatingFetch(API + '/keys', {method: 'POST', body: JSON.stringify(body)})
       .then(function(r) {
         if (!r.ok) { return r.json().then(function(e) { throw new Error(e.error || ('HTTP ' + r.status)); }); }
         return r.json();
@@ -1516,7 +1526,7 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
 
   function revokeKey(id) {
     if (!confirm('Revoke this key? This cannot be undone.')) return;
-    fetch(API + '/keys/' + id, {method: 'DELETE', headers: mutatingHeaders()})
+    mutatingFetch(API + '/keys/' + id, {method: 'DELETE'})
       .then(function(r) {
         if (!r.ok) { return r.json().then(function(e) { throw new Error(e.error || ('HTTP ' + r.status)); }); }
         return r.json();
@@ -1592,7 +1602,7 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
     var saveBtn = document.getElementById('btn-submit-edit-key');
     saveBtn.disabled = true;
     saveBtn.textContent = 'Saving...';
-    fetch(API + '/keys/' + editKeyId, {method: 'PUT', headers: mutatingHeaders(), body: JSON.stringify(body)})
+    mutatingFetch(API + '/keys/' + editKeyId, {method: 'PUT', body: JSON.stringify(body)})
       .then(function(r) {
         if (!r.ok) { return r.json().then(function(e) { throw new Error(e.error || ('HTTP ' + r.status)); }); }
         return r.json();
@@ -1782,7 +1792,7 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
     submitBtn.disabled = true;
     submitBtn.textContent = 'Adding...';
 
-    fetch(API + '/models', {method: 'POST', headers: mutatingHeaders(), body: JSON.stringify(body)})
+    mutatingFetch(API + '/models', {method: 'POST', body: JSON.stringify(body)})
       .then(function(r) {
         if (!r.ok) { return r.json().then(function(e) { throw new Error(e.error || ('HTTP ' + r.status)); }); }
         return r.json();
@@ -1808,7 +1818,7 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
 
   function removeModel(name) {
     if (!confirm('Remove model "' + name + '"? This cannot be undone.')) return;
-    fetch(API + '/models/' + encodeURIComponent(name), {method: 'DELETE', headers: mutatingHeaders()})
+    mutatingFetch(API + '/models/' + encodeURIComponent(name), {method: 'DELETE'})
       .then(function(r) {
         if (!r.ok) { return r.json().then(function(e) { throw new Error(e.error || ('HTTP ' + r.status)); }); }
         return r.json();
@@ -1830,7 +1840,7 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
   document.getElementById('btn-submit-model').addEventListener('click', addModel);
 
   // Initial load: fetch CSRF token first so all subsequent mutating requests are protected.
-  fetchCsrfToken().then(function() { loadDashboard(); });
+  loadDashboard();
 })();
 </script>
 </body>
