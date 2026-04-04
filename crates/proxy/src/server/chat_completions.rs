@@ -693,31 +693,44 @@ async fn chat_completions_stream(
                     }
                 }
 
-                // Collect-then-execute: if the stream produced tool calls and we
-                // have a tool engine, execute auto-allowed tools and stream a
-                // follow-up backend response through the same channel.
+                // Collect-then-execute loop: bounded by engine.loop_config.max_iterations.
+                // Mirrors the non-streaming `maybe_execute_tools` loop so follow-up tool
+                // calls are not silently dropped.
                 if !accumulated_tool_calls.is_empty() {
                     if let Some(ref engine) = tool_engine {
-                        let tool_calls: Vec<crate::tools::ToolCall> = accumulated_tool_calls
-                            .iter()
-                            .filter(|(_, name, _)| !name.is_empty())
-                            .map(|(id, name, args)| crate::tools::ToolCall {
-                                id: id.clone(),
-                                name: name.clone(),
-                                input: serde_json::from_str(args)
-                                    .unwrap_or(serde_json::Value::Null),
-                            })
-                            .collect();
+                        let loop_start = std::time::Instant::now();
+                        let mut current_messages = anthropic_req_for_tools.messages.clone();
 
-                        let (auto_exec, _pass_through, denied) =
-                            crate::tools::execution::partition_tool_calls(
-                                &tool_calls,
-                                &engine.registry,
-                                &engine.policy,
-                            );
-                        let denied_results = crate::tools::execution::denied_tool_results(&denied);
+                        'tool_loop: for _iteration in 0..engine.loop_config.max_iterations {
+                            if loop_start.elapsed() > engine.loop_config.total_timeout {
+                                tracing::warn!("streaming tool loop: total timeout reached");
+                                break 'tool_loop;
+                            }
 
-                        if !auto_exec.is_empty() || !denied_results.is_empty() {
+                            let tool_calls: Vec<crate::tools::ToolCall> = accumulated_tool_calls
+                                .iter()
+                                .filter(|(_, name, _)| !name.is_empty())
+                                .map(|(id, name, args)| crate::tools::ToolCall {
+                                    id: id.clone(),
+                                    name: name.clone(),
+                                    input: serde_json::from_str(args)
+                                        .unwrap_or(serde_json::Value::Null),
+                                })
+                                .collect();
+
+                            let (auto_exec, _pass_through, denied) =
+                                crate::tools::execution::partition_tool_calls(
+                                    &tool_calls,
+                                    &engine.registry,
+                                    &engine.policy,
+                                );
+                            let denied_results =
+                                crate::tools::execution::denied_tool_results(&denied);
+
+                            if auto_exec.is_empty() && denied_results.is_empty() {
+                                break 'tool_loop;
+                            }
+
                             let mut results = crate::tools::execution::execute_tool_calls(
                                 &auto_exec,
                                 engine.registry.clone(),
@@ -740,18 +753,18 @@ async fn chat_completions_stream(
                                     })
                                     .collect();
 
-                            let mut follow_up_req = anthropic_req_for_tools;
-                            follow_up_req.messages.push(
-                                anyllm_translate::anthropic::InputMessage {
-                                    role: anyllm_translate::anthropic::Role::Assistant,
-                                    content: anyllm_translate::anthropic::Content::Blocks(
-                                        assistant_content,
-                                    ),
-                                },
-                            );
-                            follow_up_req.messages.push(
+                            current_messages.push(anyllm_translate::anthropic::InputMessage {
+                                role: anyllm_translate::anthropic::Role::Assistant,
+                                content: anyllm_translate::anthropic::Content::Blocks(
+                                    assistant_content,
+                                ),
+                            });
+                            current_messages.push(
                                 crate::tools::execution::tool_results_to_user_message(&results),
                             );
+
+                            let mut follow_up_req = anthropic_req_for_tools.clone();
+                            follow_up_req.messages = current_messages.clone();
 
                             let mut follow_up_openai =
                                 mapping::message_map::anthropic_to_openai_request(&follow_up_req);
@@ -765,10 +778,13 @@ async fn chat_completions_stream(
 
                             tracing::info!(
                                 tools_executed = results.len(),
+                                iteration = _iteration,
                                 "streaming tool execution: starting follow-up backend call"
                             );
 
-                            // Stream the follow-up response through the same tx channel.
+                            // Reset for this follow-up pass so we can detect new tool calls.
+                            accumulated_tool_calls = Vec::new();
+
                             // Create a fresh translator pair for the follow-up stream.
                             let mut follow_translator = ReverseStreamingTranslator::new(
                                 format!("chatcmpl-{}", uuid::Uuid::new_v4().as_simple()),
@@ -817,6 +833,56 @@ async fn chat_completions_stream(
                                                         >(
                                                             json_str
                                                         ) {
+                                                            // Accumulate tool calls for the
+                                                            // next iteration.
+                                                            if let Some(choice) =
+                                                                chunk.choices.first()
+                                                            {
+                                                                if let Some(ref tc_list) =
+                                                                    choice.delta.tool_calls
+                                                                {
+                                                                    for tc in tc_list {
+                                                                        let idx = tc.index as usize;
+                                                                        while accumulated_tool_calls
+                                                                            .len()
+                                                                            <= idx
+                                                                        {
+                                                                            accumulated_tool_calls
+                                                                                .push((
+                                                                                    String::new(),
+                                                                                    String::new(),
+                                                                                    String::new(),
+                                                                                ));
+                                                                        }
+                                                                        if let Some(ref id) = tc.id
+                                                                        {
+                                                                            if !id.is_empty() {
+                                                                                accumulated_tool_calls
+                                                                                    [idx]
+                                                                                    .0 = id.clone();
+                                                                            }
+                                                                        }
+                                                                        if let Some(ref func) =
+                                                                            tc.function
+                                                                        {
+                                                                            if let Some(ref name) =
+                                                                                func.name
+                                                                            {
+                                                                                if !name.is_empty()
+                                                                                {
+                                                                                    accumulated_tool_calls[idx].1 = name.clone();
+                                                                                }
+                                                                            }
+                                                                            if let Some(ref args) =
+                                                                                func.arguments
+                                                                            {
+                                                                                accumulated_tool_calls[idx].2.push_str(args);
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+
                                                             let events = follow_stream_translator
                                                                 .process_chunk(&chunk);
                                                             for event in &events {
@@ -867,11 +933,14 @@ async fn chat_completions_stream(
                                 Err(e) => {
                                     tracing::warn!(
                                         error = %e,
-                                        "follow-up streaming backend call after tool execution failed"
+                                        "follow-up streaming backend call failed"
                                     );
+                                    break 'tool_loop;
                                 }
                             }
-                        }
+                            // If accumulated_tool_calls is still empty after the follow-up
+                            // stream, the next iteration's early-exit check will break out.
+                        } // end 'tool_loop
                     }
                 }
 
