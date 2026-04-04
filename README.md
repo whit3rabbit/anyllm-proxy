@@ -45,7 +45,11 @@ Most users never leave simple mode. Start there.
 Point Claude Code at the proxy:
 
 ```bash
-ANTHROPIC_BASE_URL=http://localhost:3000 claude
+ANTHROPIC_BASE_URL=http://localhost:3000 \
+ANTHROPIC_AUTH_TOKEN=proxy-user \
+ANTHROPIC_API_KEY="" \
+CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 \
+claude
 ```
 
 ### Admin Web Interface (optional)
@@ -234,6 +238,20 @@ The proxy listens on `0.0.0.0:3000`. The admin dashboard (opt-in via `--webui`) 
 
 ## 1. Primary Use Case: Claude Code + Local LLMs
 
+Claude Code works with any OpenAI-compatible backend (GPT-4o, DeepSeek, Azure, LM Studio, vLLM) by pointing it at anyllm-proxy. Use these environment variables when launching Claude Code:
+
+```bash
+export ANTHROPIC_BASE_URL="http://localhost:3000"
+export ANTHROPIC_AUTH_TOKEN="proxy-user"
+export ANTHROPIC_API_KEY=""
+# Prevents Claude Code from hitting Anthropic's cloud telemetry endpoints
+export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1"
+
+claude
+```
+
+`ANTHROPIC_AUTH_TOKEN` is sent as the `Authorization: Bearer` header to the proxy. Set it to any non-empty string (or a real virtual key if you have auth enabled). `ANTHROPIC_API_KEY` must be explicitly cleared so Claude Code does not attempt direct Anthropic API calls.
+
 ### Example: Running with Ollama (DeepSeek / Qwen)
 
 ```bash
@@ -248,7 +266,11 @@ SMALL_MODEL=qwen2.5-coder:32b \
 cargo run -p anyllm_proxy &
 
 # 3. Use Claude Code targeting the local proxy
-ANTHROPIC_BASE_URL=http://localhost:3000 claude
+export ANTHROPIC_BASE_URL="http://localhost:3000"
+export ANTHROPIC_AUTH_TOKEN="proxy-user"
+export ANTHROPIC_API_KEY=""
+export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1"
+claude
 ```
 
 Use the same pattern for **LM Studio** (default port `1234`) or **vLLM** (default port `8000`) by substituting `OPENAI_BASE_URL`.
