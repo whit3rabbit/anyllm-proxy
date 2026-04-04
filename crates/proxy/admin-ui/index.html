@@ -856,9 +856,20 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
   // returned by GET /admin/csrf-token and echoes it in X-CSRF-Token on mutating requests.
   var _csrfToken = '';
 
+  function handleUnauthorized() {
+    sessionStorage.removeItem('admin_token');
+    TOKEN = '';
+    authHeaders = {};
+    document.getElementById('login-overlay').style.display = 'flex';
+    // Hide main UI the same way the logout button does (no #app element exists).
+    document.querySelector('.nav').style.display = 'none';
+    document.querySelectorAll('.tab').forEach(function(t) { t.style.display = 'none'; });
+  }
+
   function fetchCsrfToken() {
-    return fetch('/admin/csrf-token')
+    return fetch('/admin/csrf-token', {headers: authHeaders})
       .then(function(r) {
+        if (r.status === 401) { handleUnauthorized(); return Promise.reject(new Error('Unauthorized')); }
         if (r.ok) return r.json();
       })
       .then(function(data) {
@@ -884,7 +895,10 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
 
   // -- API fetch --
   function apiFetch(path) {
-    return fetch(API + path, {headers: authHeaders}).then(function(r) { return r.json(); });
+    return fetch(API + path, {headers: authHeaders}).then(function(r) {
+      if (r.status === 401) { handleUnauthorized(); return Promise.reject(new Error('Unauthorized')); }
+      return r.json();
+    });
   }
 
   // -- Dashboard --
