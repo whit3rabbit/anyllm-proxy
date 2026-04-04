@@ -1071,8 +1071,9 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
       var feed = document.getElementById('request-log');
       clearChildren(feed, true);
       var requests = data.requests || [];
-      if (requests.length === 0 && currentPage === 0) {
-        feed.appendChild(el('div', {className: 'empty', textContent: 'No requests yet'}));
+      if (requests.length === 0) {
+        var msg = currentPage === 0 ? 'No requests yet' : 'No results on this page';
+        feed.appendChild(el('div', {className: 'empty', textContent: msg}));
       } else {
         requests.forEach(function(r) { feed.appendChild(makeRequestRow(r)); });
       }
@@ -1675,8 +1676,9 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
       clearChildren(container, false);
       var entries = data.entries || [];
       document.getElementById('audit-page-info').textContent = 'Page ' + (auditPage + 1);
-      if (entries.length === 0 && auditPage === 0) {
-        container.appendChild(el('div', {className: 'empty', textContent: 'No audit entries yet.'}));
+      if (entries.length === 0) {
+        var auditMsg = auditPage === 0 ? 'No audit entries yet.' : 'No results on this page';
+        container.appendChild(el('div', {className: 'empty', textContent: auditMsg}));
         return;
       }
       var thead = el('thead', null, [
