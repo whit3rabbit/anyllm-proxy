@@ -28,13 +28,22 @@ pub fn format_epoch_iso8601(secs: u64) -> String {
     )
 }
 
+/// Current epoch seconds.
+pub fn epoch_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("system clock before Unix epoch")
+        .as_secs()
+}
+
 /// ISO 8601 timestamp for "now" in UTC.
 pub fn now_iso8601() -> String {
-    let secs = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
-    format_epoch_iso8601(secs)
+    format_epoch_iso8601(epoch_secs())
+}
+
+/// ISO 8601 timestamp for a given epoch + `hours` offset.
+pub fn epoch_plus_hours_iso8601(epoch: u64, hours: u64) -> String {
+    format_epoch_iso8601(epoch + hours * 3600)
 }
 
 /// Initialize all batch_engine tables.

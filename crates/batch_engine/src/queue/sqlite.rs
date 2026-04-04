@@ -2,7 +2,7 @@
 //! SQLite-backed JobQueue implementation.
 
 use super::{JobQueue, LeasedItem};
-use crate::db::{format_epoch_iso8601, now_iso8601};
+use crate::db::{epoch_secs, format_epoch_iso8601, now_iso8601};
 use crate::error::QueueError;
 use crate::job::*;
 use async_trait::async_trait;
@@ -193,14 +193,7 @@ impl JobQueue for SqliteQueue {
             let lease_id = format!("lease_{}", uuid::Uuid::new_v4());
             let now = now_iso8601();
             // Lease for 120 seconds.
-            let lease_expires = {
-                let secs = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs()
-                    + 120;
-                format_epoch_iso8601(secs)
-            };
+            let lease_expires = format_epoch_iso8601(epoch_secs() + 120);
 
             let result = conn.query_row(
                 "UPDATE batch_item
@@ -303,14 +296,7 @@ impl JobQueue for SqliteQueue {
         let db = self.db.clone();
         let id = id.0.clone();
         let error = error.to_string();
-        let retry_at = {
-            let secs = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs()
-                + delay.as_secs();
-            format_epoch_iso8601(secs)
-        };
+        let retry_at = format_epoch_iso8601(epoch_secs() + delay.as_secs());
 
         tokio::task::spawn_blocking(move || {
             let conn = db.blocking_lock();

@@ -555,8 +555,14 @@ pub fn ip_allowlist_active() -> bool {
 /// Applied before auth so blocked IPs never reach authentication.
 pub async fn check_ip_allowlist(request: Request<Body>, next: Next) -> Result<Response, Response> {
     // Extract client IP from X-Forwarded-For (if trusted) or connection info.
-    // TRUSTED_PROXY_DEPTH controls which entry to pick: depth=1 (default) takes
-    // the rightmost (single proxy), depth=2 takes the second-from-right (two hops), etc.
+    //
+    // XFF spoofing: attacker-controlled headers appear at the *left* of the list.
+    // Each hop's proxy appends the IP it received from, so the rightmost entry is
+    // added by our immediate (trusted) upstream. We iterate right-to-left with
+    // rsplit and skip (depth-1) entries to skip past our own trusted proxies.
+    // TRUSTED_PROXY_DEPTH=1 (default) selects the rightmost entry; depth=2
+    // selects the second-from-right for a two-hop CDN -> LB topology, etc.
+    // Using .last() would ignore depth; using .first() would trust the attacker.
     let client_ip = if *TRUST_PROXY_HEADERS {
         let depth = *TRUSTED_PROXY_DEPTH;
         request

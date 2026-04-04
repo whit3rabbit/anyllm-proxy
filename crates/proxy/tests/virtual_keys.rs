@@ -79,7 +79,7 @@ fn test_admin_router() -> (Router, admin::state::SharedState) {
     state
         .issued_csrf_tokens
         .insert(TEST_CSRF_TOKEN.to_string(), ());
-    let token = Arc::new("test-admin-token".to_string());
+    let token = Arc::new(zeroize::Zeroizing::new("test-admin-token".to_string()));
     let router = admin::routes::admin_router(state.clone(), token)
         // ConnectInfo extractor requires the service to be wrapped with
         // into_make_service_with_connect_info in production. In tests we use
@@ -485,7 +485,7 @@ async fn virtual_key_auth_and_revocation_lifecycle() {
     // Admin server uses shared VK map so create/revoke affect the same DashMap
     // the middleware checks.
     let state = shared_state();
-    let admin_app = admin::routes::admin_router(state, Arc::new("admin-token".to_string()));
+    let admin_app = admin::routes::admin_router(state, Arc::new(zeroize::Zeroizing::new("admin-token".to_string())));
     let admin_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let admin_port = admin_listener.local_addr().unwrap().port();
     let admin_url = format!("http://127.0.0.1:{admin_port}");
@@ -569,7 +569,7 @@ async fn rpm_limit_returns_429_after_exceeded() {
     let proxy_url = spawn_proxy_with_shared_vk(openai_config_with_base(&mock)).await;
 
     let state = shared_state();
-    let admin_app = admin::routes::admin_router(state, Arc::new("admin-token2".to_string()));
+    let admin_app = admin::routes::admin_router(state, Arc::new(zeroize::Zeroizing::new("admin-token2".to_string())));
     let admin_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let admin_port = admin_listener.local_addr().unwrap().port();
     let admin_url = format!("http://127.0.0.1:{admin_port}");
@@ -694,7 +694,7 @@ async fn spawn_test_servers(admin_token: &str) -> (String, String, u16) {
     let proxy_url = spawn_proxy_with_shared_vk(openai_config_with_base(&mock)).await;
 
     let state = shared_state();
-    let admin_app = admin::routes::admin_router(state, Arc::new(admin_token.to_string()));
+    let admin_app = admin::routes::admin_router(state, Arc::new(zeroize::Zeroizing::new(admin_token.to_string())));
     let admin_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let admin_port = admin_listener.local_addr().unwrap().port();
     let admin_url = format!("http://127.0.0.1:{admin_port}");

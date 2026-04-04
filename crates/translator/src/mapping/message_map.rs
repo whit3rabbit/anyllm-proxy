@@ -119,11 +119,22 @@ pub fn anthropic_to_openai_request(
     if req.top_k.is_some() {
         tracing::warn!("top_k parameter dropped: no OpenAI equivalent");
     }
-    if req.thinking.is_some() {
-        // Thinking config (budget_tokens) has no standard OpenAI equivalent.
-        // Thinking content blocks in messages ARE mapped to reasoning_content.
-        tracing::warn!("thinking config stripped: no standard OpenAI equivalent (thinking blocks in messages are preserved as reasoning_content)");
-    }
+    // Map Anthropic thinking config to OpenAI reasoning_effort (via extra).
+    // Thinking content blocks in messages are separately mapped to reasoning_content.
+    let reasoning_effort = match &req.thinking {
+        Some(crate::anthropic::ThinkingConfig::Enabled { budget_tokens }) => {
+            let effort = if *budget_tokens < 4_000 {
+                "low"
+            } else if *budget_tokens < 16_000 {
+                "medium"
+            } else {
+                "high"
+            };
+            tracing::info!(budget_tokens, reasoning_effort = effort, "thinking config mapped to reasoning_effort");
+            Some(effort)
+        }
+        _ => None,
+    };
 
     // OpenAI caps stop sequences at 4; empty array is invalid (requires 1-4 elements)
     let stop = req.stop_sequences.as_ref().and_then(|seqs| {
@@ -179,6 +190,14 @@ pub fn anthropic_to_openai_request(
         extra: req.extra.clone(),
     };
 
+    // Inject reasoning_effort if derived from thinking config and not already set.
+    if let Some(effort) = reasoning_effort {
+        oai_req
+            .extra
+            .entry("reasoning_effort")
+            .or_insert_with(|| serde_json::Value::String(effort.to_owned()));
+    }
+
     // Anthropic API returns single completions only; strip n to avoid
     // wasting tokens on choices that get discarded (only choices[0] is used).
     if let Some(n_val) = oai_req.extra.remove("n") {
@@ -187,14 +206,16 @@ pub fn anthropic_to_openai_request(
         }
     }
 
-    // o-series reasoning models (o1, o3, o4-mini, etc.) reject requests
-    // with both max_tokens and max_completion_tokens, require the
-    // "developer" role instead of "system", and reject non-default
-    // temperature/top_p values.
+    // o-series reasoning models require "developer" role instead of "system"
+    // and reject max_tokens (use max_completion_tokens instead).
+    // GA models (o1, o3, o3-mini) support temperature/top_p;
+    // preview/early models (o1-preview, o1-mini) do not.
     if is_o_series_model(&oai_req.model) {
         oai_req.max_tokens = None;
-        oai_req.temperature = None;
-        oai_req.top_p = None;
+        if is_o_series_no_temperature(&oai_req.model) {
+            oai_req.temperature = None;
+            oai_req.top_p = None;
+        }
         for msg in &mut oai_req.messages {
             if msg.role == openai::ChatRole::System {
                 msg.role = openai::ChatRole::Developer;
@@ -258,6 +279,13 @@ fn is_o_series_model(model: &str) -> bool {
         .unwrap_or(bytes.len());
     // After the digits: either end-of-string or a '-'.
     after_digits == bytes.len() || bytes[after_digits] == b'-'
+}
+
+/// Returns true for o-series models that do NOT support temperature/top_p.
+/// GA models (o1, o3, o3-mini, o4-mini) gained temperature support;
+/// only the early preview/mini variants (o1-preview, o1-mini) still reject it.
+fn is_o_series_no_temperature(model: &str) -> bool {
+    model.eq_ignore_ascii_case("o1-preview") || model.eq_ignore_ascii_case("o1-mini")
 }
 
 /// Convert a single Anthropic InputMessage into one or more OpenAI ChatMessages.
@@ -2222,22 +2250,43 @@ mod tests {
     }
 
     #[test]
-    fn o_series_strips_temperature() {
+    fn o_series_ga_preserves_temperature() {
+        // GA models (o1, o3, o3-mini) support temperature.
         let mut req = make_request("o3-mini", None);
         req.temperature = Some(0.7);
         let oai = anthropic_to_openai_request(&req);
         assert!(
-            oai.temperature.is_none(),
-            "o-series should strip temperature"
+            oai.temperature.is_some(),
+            "GA o-series should preserve temperature"
         );
     }
 
     #[test]
-    fn o_series_strips_top_p() {
+    fn o_series_preview_strips_temperature() {
+        // Early preview models (o1-preview, o1-mini) do not support temperature.
+        let mut req = make_request("o1-preview", None);
+        req.temperature = Some(0.7);
+        let oai = anthropic_to_openai_request(&req);
+        assert!(
+            oai.temperature.is_none(),
+            "o1-preview should strip temperature"
+        );
+    }
+
+    #[test]
+    fn o_series_preview_strips_top_p() {
         let mut req = make_request("o1-preview", None);
         req.top_p = Some(0.9);
         let oai = anthropic_to_openai_request(&req);
-        assert!(oai.top_p.is_none(), "o-series should strip top_p");
+        assert!(oai.top_p.is_none(), "o1-preview should strip top_p");
+    }
+
+    #[test]
+    fn o1_mini_strips_top_p() {
+        let mut req = make_request("o1-mini", None);
+        req.top_p = Some(0.9);
+        let oai = anthropic_to_openai_request(&req);
+        assert!(oai.top_p.is_none(), "o1-mini should strip top_p");
     }
 
     #[test]

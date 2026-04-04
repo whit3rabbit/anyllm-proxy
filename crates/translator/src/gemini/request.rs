@@ -195,9 +195,12 @@ pub struct ToolConfig {
 }
 
 /// Function calling mode: AUTO, NONE, or ANY.
+/// When mode is ANY with `allowed_function_names`, only those functions may be called.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FunctionCallingConfig {
     pub mode: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub allowed_function_names: Option<Vec<String>>,
 }
 
 /// Per-category safety threshold.
@@ -380,7 +383,7 @@ mod tests {
     #[test]
     fn tool_config_serializes_correctly() {
         let tc = ToolConfig {
-            function_calling_config: FunctionCallingConfig { mode: "ANY".into() },
+            function_calling_config: FunctionCallingConfig { mode: "ANY".into(), allowed_function_names: None },
         };
         let j = serde_json::to_value(&tc).unwrap();
         assert_eq!(j["functionCallingConfig"]["mode"], "ANY");

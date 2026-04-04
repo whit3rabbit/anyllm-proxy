@@ -229,8 +229,8 @@ pub fn parse_simple_yaml(yaml: &str) -> SimpleParsed {
             .api_key
             .clone()
             .unwrap_or_else(|| default_api_key_for_provider(&norm.provider, &kind));
-        let base_url = if norm.api_base.is_some() && kind == BackendKind::AzureOpenAI {
-            // Azure: build the full deployment URL from api_base + deployment + api_version
+        let base_url = if kind == BackendKind::AzureOpenAI {
+            // Azure always builds a full deployment URL (api_base or env var + deployment + version).
             default_base_url(&kind, &norm)
         } else {
             norm.api_base
@@ -556,12 +556,17 @@ fn default_base_url(kind: &BackendKind, entry: &NormalizedEntry) -> String {
                         "api_base field (or AZURE_OPENAI_ENDPOINT env var) required for azure provider",
                     )
                 });
-            let dep = entry.deployment.as_deref().unwrap_or("chat");
-            let version = entry.api_version.as_deref().unwrap_or("2024-10-21");
-            format!(
-                "{}/openai/deployments/{dep}/chat/completions?api-version={version}",
-                endpoint.trim_end_matches('/')
-            )
+            // Guard against double-appending if user provided a full deployment URL.
+            if endpoint.contains("/openai/deployments/") {
+                endpoint
+            } else {
+                let dep = entry.deployment.as_deref().unwrap_or("chat");
+                let version = entry.api_version.as_deref().unwrap_or("2024-10-21");
+                format!(
+                    "{}/openai/deployments/{dep}/chat/completions?api-version={version}",
+                    endpoint.trim_end_matches('/')
+                )
+            }
         }
         BackendKind::Bedrock => {
             // Bedrock doesn't use a URL — the region string is stored in base_url
