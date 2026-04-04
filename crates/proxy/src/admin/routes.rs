@@ -1563,6 +1563,17 @@ async fn add_model(
         }
     }
 
+    // Validate that backend_name refers to a configured backend.
+    if !shared.backend_metrics.contains_key(&body.backend_name) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "error": format!("unknown backend: {}", body.backend_name)
+            })),
+        )
+            .into_response();
+    }
+
     let deployment = std::sync::Arc::new(crate::config::model_router::Deployment::with_weight(
         body.backend_name.clone(),
         body.actual_model.clone(),

@@ -1038,3 +1038,60 @@ async fn new_key_defaults_to_developer_role() {
         .expect("our key should appear in list");
     assert_eq!(our_key["role"], "developer");
 }
+
+// ---------------------------------------------------------------------------
+// Model management validation tests
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn add_model_rejects_unknown_backend() {
+    use anyllm_proxy::config::model_router::ModelRouter;
+    use std::collections::HashMap;
+    use std::sync::RwLock;
+
+    admin::routes::set_admin_rpm(10_000);
+    let mut state = admin::state::SharedState::new_for_test();
+    // Give it a model_router so the handler passes the "no model router active" guard.
+    state.model_router = Some(Arc::new(RwLock::new(ModelRouter::new(HashMap::new()))));
+    // backend_metrics is empty by default — any backend_name should be rejected.
+    state
+        .issued_csrf_tokens
+        .insert(TEST_CSRF_TOKEN.to_string(), ());
+
+    let token = Arc::new(zeroize::Zeroizing::new("test-admin-token".to_string()));
+    let app = admin::routes::admin_router(state, token)
+        .layer(MockConnectInfo(SocketAddr::from(([127, 0, 0, 1], 0))));
+
+    let req = Request::post("/admin/api/models")
+        .header("host", "localhost:9090")
+        .header("authorization", "Bearer test-admin-token")
+        .header("content-type", "application/json")
+        .header("x-csrf-token", TEST_CSRF_TOKEN)
+        .header("cookie", TEST_CSRF_COOKIE)
+        .body(Body::from(
+            serde_json::to_string(&json!({
+                "model_name": "my-model",
+                "backend_name": "nonexistent",
+                "actual_model": "gpt-4o"
+            }))
+            .unwrap(),
+        ))
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), 400);
+    let body: serde_json::Value = serde_json::from_slice(
+        &axum::body::to_bytes(resp.into_body(), 1 << 20)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert!(
+        body["error"]
+            .as_str()
+            .unwrap_or("")
+            .contains("unknown backend"),
+        "expected 'unknown backend' in error, got: {:?}",
+        body
+    );
+}
