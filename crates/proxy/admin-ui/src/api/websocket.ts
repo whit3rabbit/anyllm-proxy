@@ -12,6 +12,10 @@ let stopped = false
 
 export function connectWs(): void {
   stopped = false
+  // If already open or mid-handshake, don't create a second socket.
+  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+    return
+  }
   attemptConnect()
 }
 

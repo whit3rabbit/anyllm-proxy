@@ -23,6 +23,10 @@ export async function apiFetch<T>(path: string, options?: RequestInit): Promise<
   return res.json() as Promise<T>
 }
 
+/**
+ * Send a state-mutating request, fetching a fresh CSRF token first.
+ * On 204 No Content, returns undefined. Declare T as void for DELETE/no-body endpoints.
+ */
 export async function mutatingFetch<T>(
   method: 'POST' | 'PUT' | 'DELETE' | 'PATCH',
   path: string,
