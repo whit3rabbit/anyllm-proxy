@@ -11,10 +11,43 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  test:
+  frontend:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: crates/proxy/admin-ui/package-lock.json
+      - name: Install dependencies
+        working-directory: crates/proxy/admin-ui
+        run: npm ci
+      - name: TypeScript check
+        working-directory: crates/proxy/admin-ui
+        run: npx tsc --noEmit
+      - name: Lint
+        working-directory: crates/proxy/admin-ui
+        run: npm run lint
+      - name: Build
+        working-directory: crates/proxy/admin-ui
+        run: npm run build
+      - name: Upload dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-ui-dist
+          path: crates/proxy/admin-ui/dist/
+
+  test:
+    needs: frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download dist
+        uses: actions/download-artifact@v4
+        with:
+          name: admin-ui-dist
+          path: crates/proxy/admin-ui/dist/
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
