@@ -20,7 +20,7 @@ function injectCspNonce() {
 }
 
 export default defineConfig({
-  plugins: [react(), viteSingleFile({ inlineScripts: false }), injectCspNonce()],
+  plugins: [react(), viteSingleFile(), injectCspNonce()],
   build: {
     outDir: 'dist',
     target: 'es2020',
