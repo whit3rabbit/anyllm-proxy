@@ -14,7 +14,6 @@ interface LineChartProps {
 
 export default function LineChart({
   series,
-  labels: _labels,
   gridColor = 'var(--border-sub)',
   height = 130,
 }: LineChartProps) {
