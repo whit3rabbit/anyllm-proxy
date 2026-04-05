@@ -44,7 +44,7 @@ export default function Keys() {
           </tbody>
         </table>
       )}
-      {editing && <KeyEditModal vk={editing} onClose={() => setEditing(null)} />}
+      {editing && <KeyEditModal key={editing.id} vk={editing} onClose={() => setEditing(null)} />}
     </div>
   )
 }

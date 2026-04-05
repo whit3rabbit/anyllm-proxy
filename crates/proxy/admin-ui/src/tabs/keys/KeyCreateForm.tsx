@@ -23,14 +23,16 @@ export default function KeyCreateForm({ onCreated }: { onCreated: (key: string) 
   return (
     <div className="form-group">
       <div className="form-label">Create Key</div>
-      <div className="form-row" style={{ flexWrap: 'wrap' }}>
-        <input placeholder="Description" value={desc} onChange={(e) => setDesc(e.target.value)} />
-        <input placeholder="Spend limit USD" type="number" value={spendLimit} onChange={(e) => setSpendLimit(e.target.value)} style={{ width: 120 }} />
-        <input placeholder="RPM limit" type="number" value={rpmLimit} onChange={(e) => setRpmLimit(e.target.value)} style={{ width: 100 }} />
-        <button className="btn btn-primary" onClick={handleSubmit} disabled={create.isPending}>
-          {create.isPending ? 'Creating…' : 'Create'}
-        </button>
-      </div>
+      <form onSubmit={(e) => { e.preventDefault(); handleSubmit() }}>
+        <div className="form-row" style={{ flexWrap: 'wrap' }}>
+          <input placeholder="Description" value={desc} onChange={(e) => setDesc(e.target.value)} />
+          <input placeholder="Spend limit USD" type="number" value={spendLimit} onChange={(e) => setSpendLimit(e.target.value)} style={{ width: 120 }} />
+          <input placeholder="RPM limit" type="number" value={rpmLimit} onChange={(e) => setRpmLimit(e.target.value)} style={{ width: 100 }} />
+          <button type="submit" className="btn btn-primary" disabled={create.isPending}>
+            {create.isPending ? 'Creating…' : 'Create'}
+          </button>
+        </div>
+      </form>
     </div>
   )
 }

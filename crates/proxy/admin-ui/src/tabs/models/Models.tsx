@@ -41,8 +41,8 @@ export default function Models() {
             <tr><th>Virtual Name</th><th>Model</th><th>Provider</th><th>Strategy</th><th></th></tr>
           </thead>
           <tbody>
-            {data.models.map((m, i) => (
-              <tr key={i}>
+            {data.models.map((m) => (
+              <tr key={`${m.name}-${m.model}`}>
                 <td className="mono">{m.name}</td>
                 <td className="mono">{m.model}</td>
                 <td className="dim">{m.provider}</td>

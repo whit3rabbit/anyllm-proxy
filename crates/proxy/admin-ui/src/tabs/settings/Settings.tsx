@@ -9,10 +9,8 @@ export default function Settings() {
   const del = useDeleteConfigOverride()
   const [form, setForm] = useState<Record<string, string>>({})
 
-  function handleSave(key: string) {
-    const val = form[key]
-    if (val === undefined) return
-    save.mutate({ [key]: val })
+  function handleSave(key: string, currentValue: string) {
+    save.mutate({ [key]: form[key] ?? currentValue })
   }
 
   return (
@@ -28,7 +26,7 @@ export default function Settings() {
                   value={form[entry.key] ?? entry.value}
                   onChange={(e) => setForm((f) => ({ ...f, [entry.key]: e.target.value }))}
                 />
-                <button className="btn btn-primary btn-sm" onClick={() => handleSave(entry.key)}>Save</button>
+                <button className="btn btn-primary btn-sm" onClick={() => handleSave(entry.key, entry.value)}>Save</button>
                 <button className="btn btn-secondary btn-sm" onClick={() => del.mutate(entry.key)}>Reset</button>
               </div>
             </div>
