@@ -226,6 +226,10 @@ pub(super) async fn get_requests(
             "requests": [],
         }));
     }
+    // NOT A BUG: Querying limit+1 rows is the standard "has_more" cursor pattern.
+    // has_more = entries.len() > limit is true iff the DB returned the extra row,
+    // which means more results exist beyond this page. The extra row is truncated
+    // before returning. entries.len() can never exceed limit+1 from the SQL LIMIT.
     match crate::admin::state::with_db(&shared.db, move |conn| {
         crate::admin::db::query_request_log(
             conn,

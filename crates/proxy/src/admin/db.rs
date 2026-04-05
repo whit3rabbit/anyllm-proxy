@@ -21,6 +21,10 @@ pub fn init_db(conn: &Connection) -> rusqlite::Result<()> {
     // WAL mode: better read concurrency (proxy reads while admin writes)
     // and crash recovery compared to the default rollback journal.
     conn.execute_batch("PRAGMA journal_mode=WAL;")?;
+    // Wait up to 5 seconds on a write lock before returning SQLITE_BUSY.
+    // Without this, concurrent writers (log flush task, batch processor, webhook
+    // dispatcher) fail immediately on write contention even with WAL mode.
+    conn.execute_batch("PRAGMA busy_timeout = 5000;")?;
     conn.execute_batch(
         "
         CREATE TABLE IF NOT EXISTS request_log (
@@ -1842,5 +1846,15 @@ mod tests {
         assert_eq!(failures[0].count, 2);
         assert_eq!(failures[0].avg_latency_ms, 600);
         assert!(failures[0].summary.starts_with("Upstream request"));
+    }
+
+    #[test]
+    fn init_db_sets_busy_timeout() {
+        let conn = Connection::open_in_memory().unwrap();
+        init_db(&conn).unwrap();
+        let timeout: i64 = conn
+            .query_row("PRAGMA busy_timeout", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(timeout, 5000, "busy_timeout must be 5000ms");
     }
 }

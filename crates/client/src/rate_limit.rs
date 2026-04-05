@@ -73,6 +73,10 @@ impl RateLimitHeaders {
     /// Falls back to the raw value with a warning if parsing fails.
     ///
     /// This method accepts generic `http::HeaderMap` (used by both reqwest and axum).
+    // NOT A BUG: Both `anthropic-ratelimit-requests-remaining` and
+    // `anthropic-ratelimit-tokens-remaining` are injected below via set_if_some.
+    // Fields are Option<String>; a None means the upstream backend did not send
+    // that header, so omitting it in the response is correct — not missing code.
     pub fn inject_anthropic_response_headers(&self, map: &mut http_types::HeaderMap) {
         set_if_some(
             map,

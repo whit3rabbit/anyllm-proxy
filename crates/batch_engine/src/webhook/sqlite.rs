@@ -8,7 +8,9 @@ use async_trait::async_trait;
 use rusqlite::{params, Connection};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::Mutex;
+// std::sync::Mutex is the correct primitive here: rusqlite is synchronous,
+// and these locks are only acquired inside spawn_blocking (never across .await).
+use std::sync::Mutex;
 
 /// SQLite-backed webhook delivery queue.
 #[derive(Clone)]
@@ -27,7 +29,7 @@ impl WebhookQueue for SqliteWebhookQueue {
     async fn enqueue(&self, delivery: WebhookDelivery) -> Result<(), QueueError> {
         let db = self.db.clone();
         tokio::task::spawn_blocking(move || {
-            let conn = db.blocking_lock();
+            let conn = db.lock().unwrap();
             let payload_str = serde_json::to_string(&delivery.payload)
                 .map_err(|e| QueueError::Storage(e.to_string()))?;
             conn.execute(
@@ -56,7 +58,7 @@ impl WebhookQueue for SqliteWebhookQueue {
     async fn claim_next(&self) -> Result<Option<LeasedDelivery>, QueueError> {
         let db = self.db.clone();
         tokio::task::spawn_blocking(move || {
-            let conn = db.blocking_lock();
+            let conn = db.lock().unwrap();
             let lease_id = format!("whl_{}", uuid::Uuid::new_v4());
             let now = now_iso8601();
             let lease_expires = format_epoch_iso8601(epoch_secs() + 60);
@@ -110,7 +112,7 @@ impl WebhookQueue for SqliteWebhookQueue {
         let db = self.db.clone();
         let id = delivery_id.to_string();
         tokio::task::spawn_blocking(move || {
-            let conn = db.blocking_lock();
+            let conn = db.lock().unwrap();
             conn.execute(
                 "UPDATE webhook_delivery SET status = 'delivered', delivered_at = ?1,
                     lease_id = NULL, lease_expires_at = NULL
@@ -128,7 +130,7 @@ impl WebhookQueue for SqliteWebhookQueue {
         let id = delivery_id.to_string();
         let retry_at = format_epoch_iso8601(epoch_secs() + delay.as_secs());
         tokio::task::spawn_blocking(move || {
-            let conn = db.blocking_lock();
+            let conn = db.lock().unwrap();
             conn.execute(
                 "UPDATE webhook_delivery SET status = 'pending', next_retry_at = ?1,
                     lease_id = NULL, lease_expires_at = NULL
@@ -145,7 +147,7 @@ impl WebhookQueue for SqliteWebhookQueue {
         let db = self.db.clone();
         let id = delivery_id.to_string();
         tokio::task::spawn_blocking(move || {
-            let conn = db.blocking_lock();
+            let conn = db.lock().unwrap();
             conn.execute(
                 "UPDATE webhook_delivery SET status = 'dead_letter',
                     lease_id = NULL, lease_expires_at = NULL
@@ -161,7 +163,7 @@ impl WebhookQueue for SqliteWebhookQueue {
     async fn reclaim_expired_leases(&self) -> Result<u32, QueueError> {
         let db = self.db.clone();
         tokio::task::spawn_blocking(move || {
-            let conn = db.blocking_lock();
+            let conn = db.lock().unwrap();
             let now = now_iso8601();
             let count = conn.execute(
                 "UPDATE webhook_delivery SET status = 'pending', lease_id = NULL, lease_expires_at = NULL

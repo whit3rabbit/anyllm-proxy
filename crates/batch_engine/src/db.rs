@@ -48,6 +48,11 @@ pub fn epoch_plus_hours_iso8601(epoch: u64, hours: u64) -> String {
 
 /// Initialize all batch_engine tables.
 pub fn init_batch_engine_tables(conn: &Connection) -> rusqlite::Result<()> {
+    // WAL mode and a 5-second busy timeout are set here even though the admin
+    // init_db sets them on the same file, because this connection handle is
+    // separate and PRAGMAs are per-connection. Both are idempotent.
+    conn.execute_batch("PRAGMA journal_mode=WAL;")?;
+    conn.execute_batch("PRAGMA busy_timeout = 5000;")?;
     conn.execute_batch(
         "
         CREATE TABLE IF NOT EXISTS batch_job (
@@ -252,5 +257,15 @@ mod tests {
         assert!(ts.ends_with('Z'));
         assert!(ts.contains('T'));
         assert_eq!(ts.len(), 20); // "YYYY-MM-DDTHH:MM:SSZ"
+    }
+
+    #[test]
+    fn init_sets_busy_timeout() {
+        let conn = Connection::open_in_memory().unwrap();
+        init_batch_engine_tables(&conn).unwrap();
+        let timeout: i64 = conn
+            .query_row("PRAGMA busy_timeout", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(timeout, 5000, "busy_timeout must be 5000ms");
     }
 }

@@ -36,7 +36,7 @@ async fn make_test_batch_engine() -> std::sync::Arc<
     };
     let conn = rusqlite::Connection::open_in_memory().unwrap();
     init_batch_engine_tables(&conn).unwrap();
-    let db = std::sync::Arc::new(tokio::sync::Mutex::new(conn));
+    let db = std::sync::Arc::new(std::sync::Mutex::new(conn));
     std::sync::Arc::new(BatchEngine {
         queue: std::sync::Arc::new(SqliteQueue::new(db.clone())),
         file_store: FileStore::new(db.clone()),

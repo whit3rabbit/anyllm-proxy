@@ -7,30 +7,37 @@ use tracing_subscriber::prelude::*;
 /// the multi-thread tokio runtime has spawned worker threads.
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let env_file_path = args
-        .windows(2)
-        .find(|w| w[0] == "--env-file")
-        .map(|w| w[1].as_str())
-        .or_else(|| {
-            if std::path::Path::new(".anyllm.env").exists() {
-                Some(".anyllm.env")
-            } else {
-                None
-            }
-        });
-    let env_file_vars = env_file_path.map(parse_env_file).unwrap_or_default();
 
-    // SAFETY: genuinely single-threaded here (no tokio runtime yet).
-    unsafe {
-        for (key, val) in &env_file_vars {
-            std::env::set_var(key, val);
+    // When spawned as a proxy child by the "run" subcommand, env vars are already
+    // inherited from the parent process; skip env file loading to avoid duplicate messages.
+    let is_run_child = std::env::var("_ANYLLM_RUN_CHILD").is_ok();
+
+    if !is_run_child {
+        let env_file_path = args
+            .windows(2)
+            .find(|w| w[0] == "--env-file")
+            .map(|w| w[1].as_str())
+            .or_else(|| {
+                if std::path::Path::new(".anyllm.env").exists() {
+                    Some(".anyllm.env")
+                } else {
+                    None
+                }
+            });
+        let env_file_vars = env_file_path.map(parse_env_file).unwrap_or_default();
+
+        // SAFETY: genuinely single-threaded here (no tokio runtime yet).
+        unsafe {
+            for (key, val) in &env_file_vars {
+                std::env::set_var(key, val);
+            }
         }
-    }
-    if !env_file_vars.is_empty() {
-        eprintln!(
-            "anyllm_proxy: loaded {} variable(s) from env file",
-            env_file_vars.len()
-        );
+        if !env_file_vars.is_empty() {
+            eprintln!(
+                "anyllm_proxy: loaded {} variable(s) from env file",
+                env_file_vars.len()
+            );
+        }
     }
 
     // Compute and apply LiteLLM env aliases (still single-threaded).
@@ -50,6 +57,20 @@ fn main() {
                 eprintln!("anyllm_proxy: applied general_settings.master_key as PROXY_API_KEYS");
             }
         }
+    }
+
+    // Detect "run" subcommand: anyllm_proxy [proxy_opts...] run <command> [args...]
+    // Starts the proxy in the background and launches <command> with the proxy's
+    // ANTHROPIC_* env vars pre-configured, then exits when <command> exits.
+    if let Some(run_idx) = args.iter().position(|a| a == "run") {
+        let tool_argv: Vec<String> = args[run_idx + 1..].to_vec();
+        if tool_argv.is_empty() {
+            eprintln!("usage: anyllm_proxy [--env-file FILE] run <command> [args...]");
+            std::process::exit(1);
+        }
+        // Proxy args: everything between the binary name and "run".
+        let proxy_args: Vec<String> = args[1..run_idx].to_vec();
+        std::process::exit(run_subcommand(proxy_args, tool_argv));
     }
 
     // Now start the tokio runtime and enter the async main.
@@ -147,9 +168,12 @@ async fn async_main(args: Vec<String>) {
                 // Background task: refresh JWKS every 60 minutes.
                 tokio::spawn(async move {
                     let mut interval = tokio::time::interval(std::time::Duration::from_secs(3600));
-                    interval.tick().await; // skip immediate tick
+                    // NOT A BUG: tokio::time::interval fires immediately on creation.
+                    // Consuming the first tick here skips that immediate fire so the
+                    // first actual refresh happens after 60 minutes, not at startup.
+                    interval.tick().await; // consume immediate first tick
                     loop {
-                        interval.tick().await;
+                        interval.tick().await; // wait 60 minutes between refreshes
                         if let Err(e) = config.refresh_jwks().await {
                             tracing::warn!("JWKS refresh failed: {e}");
                         } else {
@@ -575,7 +599,8 @@ async fn async_main(args: Vec<String>) {
 
         // Bind admin listener; spawned after the shutdown channel is created below.
         let admin_app = admin::routes::admin_router(shared.clone(), admin_token);
-        let admin_addr = format!("127.0.0.1:{admin_port}");
+        let admin_bind = std::env::var("ADMIN_BIND").unwrap_or_else(|_| "127.0.0.1".into());
+        let admin_addr = format!("{admin_bind}:{admin_port}");
         let admin_listener = tokio::net::TcpListener::bind(&admin_addr)
             .await
             .unwrap_or_else(|e| panic!("failed to bind admin to {admin_addr}: {e}"));
@@ -603,7 +628,7 @@ async fn async_main(args: Vec<String>) {
             .expect("failed to migrate old batch tables");
         anyllm_batch_engine::db::init_batch_engine_tables(&batch_conn)
             .expect("failed to initialize batch engine tables");
-        let batch_db = std::sync::Arc::new(tokio::sync::Mutex::new(batch_conn));
+        let batch_db = std::sync::Arc::new(std::sync::Mutex::new(batch_conn));
         let global_webhook_urls: Vec<String> = std::env::var("BATCH_WEBHOOK_URLS")
             .unwrap_or_default()
             .split(',')
@@ -887,6 +912,191 @@ async fn shutdown_signal() {
         ctrl_c.await.expect("failed to listen for Ctrl+C");
         tracing::info!("received Ctrl+C, starting graceful shutdown");
     }
+}
+
+// ---------------------------------------------------------------------------
+// "run" subcommand helpers
+// ---------------------------------------------------------------------------
+
+/// Derives the auth token for the spawned tool from PROXY_API_KEYS (first
+/// comma-separated entry), falling back to "proxy-user" if unset.
+fn derive_auth_token() -> String {
+    std::env::var("PROXY_API_KEYS")
+        .ok()
+        .and_then(|keys| {
+            keys.split(',')
+                .next()
+                .map(|k| k.trim().to_string())
+                .filter(|k| !k.is_empty())
+        })
+        .unwrap_or_else(|| "proxy-user".to_string())
+}
+
+/// Returns the env vars to inject into the spawned tool.
+///
+/// Supported tools and their configurations:
+/// - `claude`    — Claude Code: Bearer auth via ANTHROPIC_AUTH_TOKEN, clears ANTHROPIC_API_KEY
+/// - `aider`     — Aider: both Anthropic and OpenAI vars (user picks mode via --model)
+/// - `codex`     — OpenAI Codex CLI: OpenAI-format vars
+/// - `goose`     — Block Goose: GOOSE_PROVIDER__ namespace (requires GOOSE_PROVIDER__TYPE in env)
+/// - `opencode`  — OpenCode: inline JSON config via OPENCODE_CONFIG_CONTENT
+/// - `gemini`    — Gemini CLI: GEMINI_BASE_URL + GEMINI_API_KEY (sent as x-goog-api-key)
+/// - default     — Any Anthropic-compatible CLI (cursor, windsurf, cline, etc.): standard vars
+fn tool_env_vars(tool: &str, proxy_url: &str, auth_token: &str) -> Vec<(&'static str, String)> {
+    // OpenAI client libs expect the base URL to include /v1; they append /chat/completions.
+    let openai_base = format!("{proxy_url}/v1");
+
+    let tool_name = std::path::Path::new(tool)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or(tool);
+
+    match tool_name {
+        "claude" => vec![
+            ("ANTHROPIC_BASE_URL", proxy_url.to_string()),
+            ("ANTHROPIC_AUTH_TOKEN", auth_token.to_string()),
+            // Must be cleared; otherwise Claude Code falls back to direct Anthropic API.
+            ("ANTHROPIC_API_KEY", String::new()),
+            ("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "1".to_string()),
+        ],
+        "aider" => vec![
+            ("ANTHROPIC_BASE_URL", proxy_url.to_string()),
+            ("ANTHROPIC_API_KEY", auth_token.to_string()),
+            // OpenAI backend: select with `aider --model openai/<model>`
+            ("AIDER_OPENAI_API_BASE", openai_base),
+            ("OPENAI_API_KEY", auth_token.to_string()),
+        ],
+        "codex" => vec![
+            ("OPENAI_BASE_URL", openai_base),
+            ("OPENAI_API_KEY", auth_token.to_string()),
+        ],
+        "goose" => vec![
+            // GOOSE_PROVIDER__TYPE must already be set (e.g., GOOSE_PROVIDER__TYPE=anthropic).
+            ("GOOSE_PROVIDER__HOST", proxy_url.to_string()),
+            ("GOOSE_PROVIDER__API_KEY", auth_token.to_string()),
+        ],
+        "opencode" => {
+            // OPENCODE_CONFIG_CONTENT is highest priority; avoids needing a config file on disk.
+            // Uses @ai-sdk/openai-compatible (bundled with opencode) against the proxy's /v1 endpoint.
+            let config_json = serde_json::json!({
+                "provider": {
+                    "anyllm": {
+                        "npm": "@ai-sdk/openai-compatible",
+                        "options": {
+                            "baseURL": format!("{proxy_url}/v1"),
+                            "apiKey": auth_token
+                        },
+                        "models": {
+                            "claude-sonnet-4-6":  {"name": "Claude Sonnet 4.6"},
+                            "claude-haiku-4-5":   {"name": "Claude Haiku 4.5"},
+                            "gpt-4o":             {"name": "GPT-4o"},
+                            "gpt-4o-mini":        {"name": "GPT-4o Mini"}
+                        }
+                    }
+                },
+                "model": "anyllm/claude-sonnet-4-6"
+            });
+            vec![("OPENCODE_CONFIG_CONTENT", config_json.to_string())]
+        }
+        "gemini" => vec![
+            ("GEMINI_BASE_URL", proxy_url.to_string()),
+            // Sent as x-goog-api-key; the proxy auth middleware accepts that header.
+            ("GEMINI_API_KEY", auth_token.to_string()),
+        ],
+        _ => vec![
+            // Default: standard Anthropic vars (cursor, windsurf, cline, etc.)
+            ("ANTHROPIC_BASE_URL", proxy_url.to_string()),
+            ("ANTHROPIC_API_KEY", auth_token.to_string()),
+        ],
+    }
+}
+
+/// Polls TCP port `port` on 127.0.0.1 until it accepts a connection or
+/// `max_wait_ms` elapses. Returns true if the port became reachable.
+fn wait_for_port(port: u16, max_wait_ms: u64) -> bool {
+    use std::net::{SocketAddr, TcpStream};
+    use std::time::{Duration, Instant};
+    let addr: SocketAddr = format!("127.0.0.1:{port}").parse().expect("valid addr");
+    let deadline = Instant::now() + Duration::from_millis(max_wait_ms);
+    loop {
+        if TcpStream::connect_timeout(&addr, Duration::from_millis(100)).is_ok() {
+            return true;
+        }
+        if Instant::now() >= deadline {
+            return false;
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+}
+
+/// Implements `anyllm_proxy run <tool> [args...]`:
+///
+/// 1. Spawns the proxy as a background child process (re-executes self).
+/// 2. Waits for the proxy to accept connections on its configured port.
+/// 3. Spawns the requested tool with ANTHROPIC_* env vars pointing at the proxy.
+/// 4. Waits for the tool to exit, kills the proxy, and returns the tool's exit code.
+fn run_subcommand(proxy_args: Vec<String>, tool_argv: Vec<String>) -> i32 {
+    let listen_port: u16 = std::env::var("LISTEN_PORT")
+        .ok()
+        .and_then(|p| p.parse().ok())
+        .unwrap_or(3000);
+    let auth_token = derive_auth_token();
+    let proxy_url = format!("http://localhost:{listen_port}");
+
+    // Re-execute this binary as the proxy server in the background.
+    let proxy_exe = match std::env::current_exe() {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("anyllm_proxy: cannot locate own executable: {e}");
+            return 1;
+        }
+    };
+
+    let mut proxy_child = match std::process::Command::new(&proxy_exe)
+        .args(&proxy_args)
+        // Signal child to skip env file loading (vars are already inherited).
+        .env("_ANYLLM_RUN_CHILD", "1")
+        .stderr(std::process::Stdio::inherit())
+        .stdout(std::process::Stdio::inherit())
+        .spawn()
+    {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("anyllm_proxy: failed to start proxy: {e}");
+            return 1;
+        }
+    };
+
+    // Wait up to 10 seconds for the proxy to start accepting connections.
+    eprintln!("anyllm_proxy: waiting for proxy on port {listen_port}...");
+    if !wait_for_port(listen_port, 10_000) {
+        eprintln!("anyllm_proxy: proxy did not start within 10 seconds on port {listen_port}");
+        let _ = proxy_child.kill();
+        let _ = proxy_child.wait();
+        return 1;
+    }
+
+    let env_vars = tool_env_vars(&tool_argv[0], &proxy_url, &auth_token);
+
+    // Spawn the tool, inheriting all env vars from the parent and overlaying the
+    // proxy-specific ones. stdin/stdout/stderr pass through unchanged.
+    let exit_code = match std::process::Command::new(&tool_argv[0])
+        .args(&tool_argv[1..])
+        .envs(env_vars)
+        .status()
+    {
+        Ok(s) => s.code().unwrap_or(1),
+        Err(e) => {
+            eprintln!("anyllm_proxy: failed to run '{}': {e}", tool_argv[0]);
+            1
+        }
+    };
+
+    // Shut down the proxy child.
+    let _ = proxy_child.kill();
+    let _ = proxy_child.wait();
+
+    exit_code
 }
 
 #[cfg(test)]

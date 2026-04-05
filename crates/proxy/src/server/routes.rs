@@ -231,16 +231,29 @@ fn backend_router(state: AppState, mode: HandlerMode) -> Router<GlobalState> {
             post(crate::batch::routes::cancel_batch),
         );
 
+    // Gemini CLI input routes: accept native generateContent/streamGenerateContent format
+    // on every backend. The handler translates to Anthropic format internally.
+    let gemini_input_routes: Router<AppState> = Router::new().route(
+        "/v1beta/models/{model_action}",
+        post(super::gemini_input::gemini_input_handler),
+    );
+
     let api_routes = match mode {
-        HandlerMode::Anthropic => common_routes.route("/v1/messages", post(anthropic_passthrough)),
-        HandlerMode::Bedrock => common_routes.route(
-            "/v1/messages",
-            post(super::bedrock_passthrough::bedrock_passthrough),
-        ),
-        HandlerMode::GeminiNative => common_routes.route(
-            "/v1/messages",
-            post(super::gemini_native::gemini_native_handler),
-        ),
+        HandlerMode::Anthropic => common_routes
+            .route("/v1/messages", post(anthropic_passthrough))
+            .merge(gemini_input_routes),
+        HandlerMode::Bedrock => common_routes
+            .route(
+                "/v1/messages",
+                post(super::bedrock_passthrough::bedrock_passthrough),
+            )
+            .merge(gemini_input_routes),
+        HandlerMode::GeminiNative => common_routes
+            .route(
+                "/v1/messages",
+                post(super::gemini_native::gemini_native_handler),
+            )
+            .merge(gemini_input_routes),
         HandlerMode::Translate => common_routes
             .route("/v1/messages", post(messages))
             .route(
@@ -271,7 +284,8 @@ fn backend_router(state: AppState, mode: HandlerMode) -> Router<GlobalState> {
                 post(super::images::image_generations),
             )
             .route("/v1/rerank", post(rerank))
-            .route("/v1/completions", post(completions)),
+            .route("/v1/completions", post(completions))
+            .merge(gemini_input_routes),
     };
 
     api_routes

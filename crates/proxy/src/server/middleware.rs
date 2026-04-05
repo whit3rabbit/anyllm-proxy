@@ -135,6 +135,10 @@ static ALLOWED_KEY_HASHES: LazyLock<Vec<[u8; 32]>> = LazyLock::new(|| {
                  Set PROXY_API_KEYS to restrict access."
             );
         } else {
+            // NOT A BUG: When neither PROXY_API_KEYS nor PROXY_OPEN_RELAY is set,
+            // the proxy REJECTS all requests with 401. This is a misconfiguration
+            // warning, not a silent open relay. PROXY_OPEN_RELAY=true must be
+            // explicitly set to accept unauthenticated traffic.
             tracing::error!(
                 "PROXY_API_KEYS is not set and PROXY_OPEN_RELAY is not enabled. \
                  The proxy will reject all requests. Set PROXY_API_KEYS or \
@@ -165,8 +169,10 @@ pub async fn validate_auth(
     mut request: Request<Body>,
     next: Next,
 ) -> Result<Response, Response> {
+    // Accept x-api-key (Anthropic), x-goog-api-key (Gemini CLI), or Authorization: Bearer.
     let api_key = headers
         .get("x-api-key")
+        .or_else(|| headers.get("x-goog-api-key"))
         .and_then(|v| v.to_str().ok())
         .map(|s| s.to_string());
     let bearer_token = headers
@@ -563,6 +569,10 @@ pub async fn check_ip_allowlist(request: Request<Body>, next: Next) -> Result<Re
     // TRUSTED_PROXY_DEPTH=1 (default) selects the rightmost entry; depth=2
     // selects the second-from-right for a two-hop CDN -> LB topology, etc.
     // Using .last() would ignore depth; using .first() would trust the attacker.
+    //
+    // NOT A BUG: X-Forwarded-For is only read when TRUST_PROXY_HEADERS=true.
+    // Without it this block is skipped entirely and ConnectInfo is used instead,
+    // so there is no XFF spoofing risk in the default (no reverse proxy) setup.
     let client_ip = if *TRUST_PROXY_HEADERS {
         let depth = *TRUSTED_PROXY_DEPTH;
         request

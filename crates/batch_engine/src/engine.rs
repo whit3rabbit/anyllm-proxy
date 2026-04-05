@@ -197,7 +197,7 @@ mod tests {
     use crate::webhook::sqlite::SqliteWebhookQueue;
     use rusqlite::Connection;
     use std::sync::Arc;
-    use tokio::sync::Mutex;
+    use std::sync::Mutex;
 
     async fn test_engine() -> BatchEngine<SqliteQueue, SqliteWebhookQueue> {
         let conn = Connection::open_in_memory().unwrap();

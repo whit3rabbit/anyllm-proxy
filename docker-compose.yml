@@ -1,0 +1,72 @@
+# docker-compose.yml
+#
+# Quick start:
+#   cp .env.example .env          # add OPENAI_API_KEY (or other backend key)
+#   docker compose up             # proxy on :3000
+#
+# Enable admin UI (persists token to /data/.admin_token):
+#   WEBUI=1 docker compose up     # or set WEBUI=1 in .env; admin on localhost:3001
+#
+# Enable Redis (distributed rate limiting; requires binary built with --features redis):
+#   docker compose --profile redis up
+#
+# Docker-internal backend URLs — use service names, not localhost:
+#   OPENAI_BASE_URL=http://ollama:11434/v1     (if adding an ollama service below)
+#   REDIS_URL=redis://redis:6379               (redis profile)
+#   OPENAI_BASE_URL=http://vllm:8000/v1        (local vLLM deployment)
+#
+# Adding a local backend (example):
+#   services:
+#     ollama:
+#       image: ollama/ollama
+#       volumes: [ollama_data:/root/.ollama]
+#   volumes:
+#     ollama_data:
+
+services:
+  proxy:
+    build: .
+    # Uncomment to use a pre-built image instead of building locally:
+    # image: followthewhit3rabbit/anyllm-proxy:latest
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # Bind admin UI to all interfaces inside the container so Docker port
+      # mapping works. The host-side 127.0.0.1:3001 binding below limits
+      # external exposure to localhost on the Docker host.
+      ADMIN_BIND: "0.0.0.0"
+      ADMIN_DB_PATH: /data/admin.db
+      ADMIN_TOKEN_PATH: /data/.admin_token
+      # WEBUI: "1"             # uncomment to always enable admin UI
+      # PROXY_CONFIG: /config/config.yaml
+    ports:
+      - "3000:3000"
+      # Admin UI: only reachable from localhost on the Docker host
+      - "127.0.0.1:3001:3001"
+    volumes:
+      - proxy_data:/data
+      # Bind-mount a local config directory (read-only):
+      # - ./config:/config:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  # Redis is opt-in. Start with: docker compose --profile redis up
+  # Set REDIS_URL=redis://redis:6379 in .env to connect the proxy.
+  redis:
+    image: redis:7-alpine
+    profiles:
+      - redis
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+volumes:
+  proxy_data:
+  redis_data:

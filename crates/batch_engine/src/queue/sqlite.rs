@@ -9,7 +9,9 @@ use async_trait::async_trait;
 use rusqlite::{params, Connection};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::Mutex;
+// std::sync::Mutex is the correct primitive here: rusqlite is synchronous,
+// and these locks are only acquired inside spawn_blocking (never across .await).
+use std::sync::Mutex;
 
 /// SQLite-backed job queue. Suitable for single-instance deployments.
 #[derive(Clone)]
@@ -31,7 +33,7 @@ impl JobQueue for SqliteQueue {
         let items: Vec<BatchItem> = items.to_vec();
 
         tokio::task::spawn_blocking(move || {
-            let conn = db.blocking_lock();
+            let conn = db.lock().unwrap();
             let tx = conn.unchecked_transaction()?;
 
             tx.execute(
@@ -90,7 +92,7 @@ impl JobQueue for SqliteQueue {
         let id = id.0.clone();
 
         tokio::task::spawn_blocking(move || {
-            let conn = db.blocking_lock();
+            let conn = db.lock().unwrap();
             row_to_job(&conn, &id)
         })
         .await
@@ -106,7 +108,7 @@ impl JobQueue for SqliteQueue {
         let db = self.db.clone();
         let cursor = cursor.map(|s| s.to_string());
         tokio::task::spawn_blocking(move || {
-            let conn = db.blocking_lock();
+            let conn = db.lock().unwrap();
             let mut sql = String::from(
                 "SELECT batch_id, status, execution_mode, provider, priority,
                     key_id, input_file_id, webhook_url, metadata,
@@ -145,7 +147,7 @@ impl JobQueue for SqliteQueue {
         let db = self.db.clone();
         let id = id.0.clone();
         tokio::task::spawn_blocking(move || {
-            let conn = db.blocking_lock();
+            let conn = db.lock().unwrap();
             let mut stmt =
                 conn.prepare("SELECT status FROM batch_job WHERE batch_id = ?1")?;
             let status_str: Option<String> = stmt
@@ -189,7 +191,7 @@ impl JobQueue for SqliteQueue {
     async fn claim_next_item(&self) -> Result<Option<LeasedItem>, QueueError> {
         let db = self.db.clone();
         tokio::task::spawn_blocking(move || {
-            let conn = db.blocking_lock();
+            let conn = db.lock().unwrap();
             let lease_id = format!("lease_{}", uuid::Uuid::new_v4());
             let now = now_iso8601();
             // Lease for 120 seconds.
@@ -254,7 +256,7 @@ impl JobQueue for SqliteQueue {
         let status_code = result.status_code;
 
         tokio::task::spawn_blocking(move || {
-            let conn = db.blocking_lock();
+            let conn = db.lock().unwrap();
             conn.execute(
                 "UPDATE batch_item SET status = 'succeeded', result_status = ?1,
                     result_body = ?2, lease_id = NULL, lease_expires_at = NULL,
@@ -274,7 +276,7 @@ impl JobQueue for SqliteQueue {
         let error = error.to_string();
 
         tokio::task::spawn_blocking(move || {
-            let conn = db.blocking_lock();
+            let conn = db.lock().unwrap();
             conn.execute(
                 "UPDATE batch_item SET status = 'failed', last_error = ?1,
                     lease_id = NULL, lease_expires_at = NULL, completed_at = ?2
@@ -299,7 +301,7 @@ impl JobQueue for SqliteQueue {
         let retry_at = format_epoch_iso8601(epoch_secs() + delay.as_secs());
 
         tokio::task::spawn_blocking(move || {
-            let conn = db.blocking_lock();
+            let conn = db.lock().unwrap();
             conn.execute(
                 "UPDATE batch_item SET status = 'pending', last_error = ?1,
                     next_retry_at = ?2, lease_id = NULL, lease_expires_at = NULL
@@ -317,7 +319,7 @@ impl JobQueue for SqliteQueue {
         let id = id.0.clone();
 
         tokio::task::spawn_blocking(move || {
-            let conn = db.blocking_lock();
+            let conn = db.lock().unwrap();
             conn.execute(
                 "INSERT OR IGNORE INTO batch_dead_letter (item_id, batch_id, custom_id, request_body, last_error, attempts, failed_at)
                  SELECT item_id, batch_id, custom_id, request_body, last_error, attempts, ?1
@@ -335,7 +337,7 @@ impl JobQueue for SqliteQueue {
         let id = id.0.clone();
 
         tokio::task::spawn_blocking(move || {
-            let conn = db.blocking_lock();
+            let conn = db.lock().unwrap();
             let count: i64 = conn.query_row(
                 "SELECT COUNT(*) FROM batch_item
                  WHERE batch_id = ?1 AND status NOT IN ('succeeded', 'failed', 'cancelled')",
@@ -353,7 +355,7 @@ impl JobQueue for SqliteQueue {
         let id = id.0.clone();
 
         tokio::task::spawn_blocking(move || {
-            let conn = db.blocking_lock();
+            let conn = db.lock().unwrap();
             // Count final item states.
             let (succeeded, failed, cancelled): (i64, i64, i64) = conn.query_row(
                 "SELECT
@@ -381,7 +383,7 @@ impl JobQueue for SqliteQueue {
     async fn get_native_jobs_in_progress(&self) -> Result<Vec<BatchJob>, QueueError> {
         let db = self.db.clone();
         tokio::task::spawn_blocking(move || {
-            let conn = db.blocking_lock();
+            let conn = db.lock().unwrap();
             let mut stmt = conn.prepare(
                 "SELECT batch_id, status, execution_mode, provider, priority,
                     key_id, input_file_id, webhook_url, metadata,
@@ -401,7 +403,7 @@ impl JobQueue for SqliteQueue {
     async fn reclaim_expired_leases(&self) -> Result<u32, QueueError> {
         let db = self.db.clone();
         tokio::task::spawn_blocking(move || {
-            let conn = db.blocking_lock();
+            let conn = db.lock().unwrap();
             let now = now_iso8601();
             let count = conn.execute(
                 "UPDATE batch_item SET status = 'pending', lease_id = NULL, lease_expires_at = NULL
@@ -427,7 +429,7 @@ impl JobQueue for SqliteQueue {
         let counts = counts.clone();
 
         tokio::task::spawn_blocking(move || {
-            let conn = db.blocking_lock();
+            let conn = db.lock().unwrap();
             conn.execute(
                 "UPDATE batch_job SET
                     processing = ?1, succeeded = ?2, failed = ?3,
@@ -453,7 +455,7 @@ impl JobQueue for SqliteQueue {
         let batch_id = batch_id.0.clone();
 
         tokio::task::spawn_blocking(move || {
-            let conn = db.blocking_lock();
+            let conn = db.lock().unwrap();
             let mut stmt = conn.prepare(
                 "SELECT item_id, batch_id, custom_id, status, model, request_body,
                     source_format, result_status, result_body, attempts,

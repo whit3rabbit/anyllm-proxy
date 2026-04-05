@@ -4,6 +4,8 @@ pub mod audio;
 mod bedrock_passthrough;
 /// OpenAI Chat Completions input handler (POST /v1/chat/completions).
 mod chat_completions;
+/// Gemini native input handler (POST /v1beta/models/{model}:generateContent from gemini-cli).
+pub mod gemini_input;
 /// Gemini native generateContent handler (POST /v1/messages when GEMINI_API_FORMAT=native).
 mod gemini_native;
 /// Image generation passthrough handler.

@@ -49,6 +49,31 @@ All implementation phases are complete.
 - Azure OpenAI backend: wired up via `BACKEND=azure`; not tested against live API. Run with `AZURE_OPENAI_API_KEY=... cargo test --test live_azure -- --ignored --test-threads=1`
 - Live API integration tests exist (`crates/proxy/tests/live_api.rs`) but are `#[ignore]` by default; run with `OPENAI_API_KEY=sk-... cargo test --test live_api -- --ignored --test-threads=1`
 
+## Docker
+
+Published to Docker Hub as `followthewhit3rabbit/anyllm-proxy` on version tags.
+
+```bash
+# Pull and run (proxy only)
+docker run -e OPENAI_API_KEY=sk-... -p 3000:3000 followthewhit3rabbit/anyllm-proxy:latest
+
+# With admin UI
+docker run -e OPENAI_API_KEY=sk-... -e WEBUI=1 -e ADMIN_BIND=0.0.0.0 \
+  -p 3000:3000 -p 127.0.0.1:3001:3001 followthewhit3rabbit/anyllm-proxy:latest
+
+# docker-compose (recommended)
+cp .env.example .env   # set OPENAI_API_KEY
+docker compose up
+```
+
+Key Docker env vars:
+- `WEBUI=1` or `ADMIN=1`: enable admin UI (also requires `ADMIN_BIND=0.0.0.0` when in Docker)
+- `ADMIN_BIND`: bind address for admin server (default `127.0.0.1`; set `0.0.0.0` in Docker)
+- `ADMIN_DB_PATH`: SQLite path (default `admin.db` in CWD; compose sets `/data/admin.db`)
+- `ADMIN_TOKEN_PATH`: where the auto-generated admin token is written (compose sets `/data/.admin_token`)
+
+CI: `.github/workflows/docker.yml` builds linux/amd64 + linux/arm64 on native runners, merges into a multi-arch manifest. Requires `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` secrets in the repo.
+
 ## Build and Test
 
 ```bash

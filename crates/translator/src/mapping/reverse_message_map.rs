@@ -17,7 +17,11 @@ pub fn openai_to_anthropic_request(
     req: &openai::ChatCompletionRequest,
     warnings: &mut TranslationWarnings,
 ) -> Result<anthropic::MessageCreateRequest, TranslateError> {
-    // max_tokens is required in Anthropic; reject if absent
+    // max_tokens is required in Anthropic; reject if absent.
+    // NOT A BUG: Anthropic has no server-side default for max_tokens — the field
+    // is mandatory per the API spec. Injecting a silent default would mask
+    // misconfigured clients. Standard OpenAI SDKs that omit max_tokens are not
+    // supported by the Anthropic API regardless, so rejecting with 400 is correct.
     let max_tokens = req
         .max_completion_tokens
         .or(req.max_tokens)

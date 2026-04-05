@@ -5,7 +5,9 @@ use crate::db::now_iso8601;
 use crate::error::QueueError;
 use rusqlite::{params, Connection};
 use std::sync::Arc;
-use tokio::sync::Mutex;
+// std::sync::Mutex is the correct primitive here: rusqlite is synchronous,
+// and these locks are only acquired inside spawn_blocking (never across .await).
+use std::sync::Mutex;
 
 /// Batch file metadata (without content blob).
 #[derive(Debug, Clone)]
@@ -44,7 +46,7 @@ impl FileStore {
         let byte_size = content.len() as i64;
 
         tokio::task::spawn_blocking(move || {
-            let conn = db.blocking_lock();
+            let conn = db.lock().unwrap();
             conn.execute(
                 "INSERT INTO batch_file (file_id, key_id, purpose, filename, byte_size, line_count, content, created_at)
                  VALUES (?1, ?2, 'batch', ?3, ?4, ?5, ?6, ?7)",
@@ -62,7 +64,7 @@ impl FileStore {
         let file_id = file_id.to_string();
 
         tokio::task::spawn_blocking(move || {
-            let conn = db.blocking_lock();
+            let conn = db.lock().unwrap();
             let mut stmt = conn.prepare(
                 "SELECT file_id, byte_size, line_count, filename, created_at FROM batch_file WHERE file_id = ?1",
             )?;
@@ -89,7 +91,7 @@ impl FileStore {
         let file_id = file_id.to_string();
 
         tokio::task::spawn_blocking(move || {
-            let conn = db.blocking_lock();
+            let conn = db.lock().unwrap();
             let mut stmt = conn.prepare("SELECT content FROM batch_file WHERE file_id = ?1")?;
             let mut rows = stmt.query(params![file_id])?;
             if let Some(row) = rows.next()? {

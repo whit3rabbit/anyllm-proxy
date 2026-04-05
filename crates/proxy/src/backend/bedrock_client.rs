@@ -279,7 +279,10 @@ pub mod eventstream {
         let prelude_crc_stored = u32::from_be_bytes([buf[8], buf[9], buf[10], buf[11]]);
         let prelude_crc_computed = crc32fast::hash(&buf[..8]);
         if prelude_crc_stored != prelude_crc_computed {
-            let _ = buf.split_to(total_len);
+            // Do NOT advance the buffer: total_len came from the same bytes that
+            // failed the CRC check and is therefore untrustworthy. Splitting by
+            // a corrupted length would permanently misalign the frame decoder.
+            // Return the error directly so the caller closes the connection.
             return Err(format!(
                 "event stream prelude CRC mismatch: stored={prelude_crc_stored:#010x} computed={prelude_crc_computed:#010x}"
             ));
@@ -423,6 +426,25 @@ mod tests {
         let mut buf = BytesMut::from(frame.as_slice());
         let result = eventstream::decode_frame(&mut buf);
         assert!(result.is_err(), "bad prelude CRC must be rejected");
+    }
+
+    #[test]
+    fn decode_frame_prelude_crc_failure_does_not_advance_buffer() {
+        // total_len comes from the first 4 bytes of the frame, which are covered
+        // by the prelude CRC. If the prelude CRC fails, total_len is untrustworthy
+        // and must NOT be used to advance the buffer. The caller closes the connection.
+        let payload = b"{}";
+        let mut frame = build_frame(b"", payload);
+        let original_len = frame.len();
+        frame[8] ^= 0xFF; // corrupt prelude CRC byte
+        let mut buf = BytesMut::from(frame.as_slice());
+        let result = eventstream::decode_frame(&mut buf);
+        assert!(result.is_err());
+        assert_eq!(
+            buf.len(),
+            original_len,
+            "buffer must not be consumed when prelude CRC fails (total_len is untrustworthy)"
+        );
     }
 
     #[test]
