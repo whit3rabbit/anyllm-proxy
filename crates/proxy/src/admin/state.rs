@@ -55,6 +55,8 @@ pub struct SharedState {
     /// (one-time use). moka Cache enforces a hard cap of 1,000 entries and a
     /// 24-hour TTL, preventing unbounded growth from unauthenticated callers.
     pub issued_csrf_tokens: Arc<moka::sync::Cache<String, ()>>,
+    /// Unix timestamp of admin server startup; used by /admin/api/uptime.
+    pub started_at: std::time::SystemTime,
 }
 
 /// Run a synchronous closure against the SQLite connection on the blocking
@@ -100,6 +102,13 @@ pub enum AdminEvent {
     /// Config changed via admin UI.
     #[serde(rename = "config_changed")]
     ConfigChanged { key: String, value: String },
+    /// Pushed when a backend flips up<->down so the Uptime tab refreshes immediately.
+    #[serde(rename = "backend_health_changed")]
+    BackendHealthChanged {
+        backend: String,
+        status: String,
+        latency_ms: Option<u64>,
+    },
 }
 
 /// Data recorded for each proxied request. Stored in SQLite and broadcast
@@ -165,6 +174,7 @@ impl SharedState {
                     .time_to_live(Duration::from_secs(86400))
                     .build(),
             ),
+            started_at: std::time::SystemTime::now(),
         }
     }
 }

@@ -41,3 +41,8 @@ Thumbs.db
 # Script caches and venv
 scripts/.cache/
 scripts/.venv/
+
+# Admin UI build artifacts
+crates/proxy/admin-ui/node_modules/
+# dist/ is committed so `include_str!` works at compile time without a build step
+# crates/proxy/admin-ui/dist/

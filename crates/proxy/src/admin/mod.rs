@@ -2,6 +2,8 @@
 pub mod auth;
 /// SQLite persistence for request logs and config overrides.
 pub mod db;
+/// Background health-checker: probes backends every 30 seconds.
+pub mod health_check;
 /// Virtual API key generation, hashing, and rate limit state.
 pub mod keys;
 /// Admin HTTP router: config management, request log queries, metrics.

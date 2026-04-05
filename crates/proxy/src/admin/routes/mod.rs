@@ -6,6 +6,8 @@ pub mod keys;
 pub mod logs;
 pub mod mcp;
 pub mod models;
+pub mod traffic;
+pub mod uptime;
 
 use crate::admin::auth::{
     extract_csrf_cookie, generate_csrf_token, validate_admin_token, validate_csrf_tokens,
@@ -407,6 +409,8 @@ pub fn admin_router(shared: SharedState, token: Arc<zeroize::Zeroizing<String>>)
             "/admin/api/mcp-servers/{name}",
             delete(mcp::remove_mcp_server),
         )
+        .route("/admin/api/traffic", get(traffic::get_traffic))
+        .route("/admin/api/uptime", get(uptime::get_uptime))
         .with_state(shared.clone())
         // Innermost: CSRF check runs after auth succeeds.
         .layer(middleware::from_fn_with_state(
@@ -446,7 +450,7 @@ async fn health() -> Json<serde_json::Value> {
 }
 
 /// Serve the embedded SPA HTML with a per-request CSP nonce.
-static SPA_HTML: &str = include_str!("../../../admin-ui/index.html");
+static SPA_HTML: &str = include_str!("../../../admin-ui/dist/index.html");
 
 async fn serve_spa() -> axum::response::Response {
     // Generate a per-request nonce (128-bit, base64url-encoded).

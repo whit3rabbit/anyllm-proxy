@@ -44,6 +44,7 @@ jsonwebtoken = "10"
 ipnetwork = "0.20"
 zeroize = "1"
 crc32fast = "1"
+chrono = { version = "0.4", features = ["serde"] }
 
 [features]
 ## Enables BashTool and ReadFileTool in the builtin tool registry.
