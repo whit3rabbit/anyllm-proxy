@@ -115,10 +115,18 @@ pub(super) async fn get_uptime(State(shared): State<SharedState>) -> Json<Uptime
             })
             .collect();
 
+        let down_days = proxy_history.iter().filter(|d| d.status == "down").count();
+        let total_days = proxy_history.len();
+        let proxy_uptime_pct = if total_days == 0 {
+            100.0
+        } else {
+            (total_days - down_days) as f64 / total_days as f64 * 100.0
+        };
+
         UptimeResponse {
             proxy: ProxyUptimeInfo {
                 started_at,
-                uptime_pct_30d: 100.0,
+                uptime_pct_30d: proxy_uptime_pct,
                 history: proxy_history,
             },
             backends,

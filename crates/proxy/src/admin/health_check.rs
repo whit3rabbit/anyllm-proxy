@@ -21,7 +21,8 @@ async fn probe_backend(client: &reqwest::Client, base_url: &str) -> (bool, Optio
     {
         Ok(resp) => {
             let latency = start.elapsed().as_millis() as u64;
-            let is_up = resp.status().is_success() || resp.status().as_u16() == 401;
+            let status = resp.status().as_u16();
+            let is_up = resp.status().is_success() || matches!(status, 401 | 403 | 404);
             (is_up, Some(latency))
         }
         Err(_) => (false, None),

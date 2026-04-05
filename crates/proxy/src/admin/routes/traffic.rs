@@ -23,6 +23,7 @@ pub struct RouteMetrics {
     path: String,
     requests_per_min: f64,
     error_rate: f64,
+    avg_request_bytes: f64,
     p95_latency_ms: i64,
     total_requests: i64,
 }
@@ -70,7 +71,8 @@ fn query_traffic(conn: &rusqlite::Connection, window_hours: u32) -> Option<Traff
                     COALESCE(model_mapped, backend) AS path,
                     COUNT(*) AS total,
                     SUM(CASE WHEN status_code >= 400 THEN 1 ELSE 0 END) AS errors,
-                    COUNT(*) * 1.0 / ?1 AS rpm
+                    COUNT(*) * 1.0 / ?1 AS rpm,
+                    AVG(latency_ms) AS avg_latency
                  FROM request_log
                  WHERE timestamp >= ?2
                  GROUP BY path
@@ -83,6 +85,7 @@ fn query_traffic(conn: &rusqlite::Connection, window_hours: u32) -> Option<Traff
                 let total: i64 = r.get(1)?;
                 let errors: i64 = r.get(2)?;
                 let rpm: f64 = r.get(3)?;
+                let avg_latency: f64 = r.get::<_, Option<f64>>(4)?.unwrap_or(0.0);
                 Ok(RouteMetrics {
                     path,
                     requests_per_min: rpm,
@@ -91,6 +94,7 @@ fn query_traffic(conn: &rusqlite::Connection, window_hours: u32) -> Option<Traff
                     } else {
                         0.0
                     },
+                    avg_request_bytes: avg_latency,
                     p95_latency_ms: 0,
                     total_requests: total,
                 })
