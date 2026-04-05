@@ -81,7 +81,13 @@ impl ClientConfigBuilder {
     pub fn build(self) -> ClientConfig {
         ClientConfig {
             chat_completions_url: self.backend_url,
-            auth: self.auth.unwrap_or(Auth::Bearer(String::new())),
+            auth: self.auth.unwrap_or_else(|| {
+                tracing::warn!(
+                    "ClientConfig built without auth credentials; \
+                     requests will be sent with an empty Bearer token"
+                );
+                Auth::Bearer(String::new())
+            }),
             http: self.http.unwrap_or_default(),
             translation: self.translation.unwrap_or_default(),
         }

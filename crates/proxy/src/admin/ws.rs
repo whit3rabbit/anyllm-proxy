@@ -23,7 +23,11 @@ pub(crate) async fn ws_handler(
 }
 
 /// Authenticate via the first WebSocket message, then stream events.
-async fn handle_ws(mut socket: WebSocket, shared: SharedState, expected_token: Arc<zeroize::Zeroizing<String>>) {
+async fn handle_ws(
+    mut socket: WebSocket,
+    shared: SharedState,
+    expected_token: Arc<zeroize::Zeroizing<String>>,
+) {
     // Wait for the first message containing the auth token.
     let authenticated =
         tokio::time::timeout(std::time::Duration::from_secs(5), socket.recv()).await;

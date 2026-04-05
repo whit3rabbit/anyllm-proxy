@@ -38,8 +38,9 @@ pub async fn send_with_retry<E: RetryableError>(
     auth: &RequestAuth<'_>,
     body: &impl Serialize,
     label: &str,
+    max_retries: u32,
 ) -> Result<reqwest::Response, E> {
-    for attempt in 0..=MAX_RETRIES {
+    for attempt in 0..=max_retries {
         let rb = apply_auth(client.post(url).json(body), auth);
         let response = rb.send().await.map_err(E::from_request)?;
         let status = response.status().as_u16();
@@ -48,13 +49,13 @@ pub async fn send_with_retry<E: RetryableError>(
             return Ok(response);
         }
 
-        if attempt < MAX_RETRIES && is_retryable(status) {
+        if attempt < max_retries && is_retryable(status) {
             let retry_after = parse_retry_after(response.headers());
             let delay = backoff_delay(attempt, retry_after);
             tracing::warn!(
                 status,
                 attempt = attempt + 1,
-                max_retries = MAX_RETRIES,
+                max_retries,
                 delay_ms = delay.as_millis() as u64,
                 "retryable error from {label}, backing off"
             );
@@ -72,7 +73,7 @@ pub async fn send_with_retry<E: RetryableError>(
         return Err(E::from_api_response(status, &text));
     }
 
-    unreachable!("loop runs MAX_RETRIES+1 times and always returns")
+    unreachable!("loop runs max_retries+1 times and always returns")
 }
 
 /// Check if a status code is retryable (408, 429, or 5xx).
@@ -86,9 +87,13 @@ pub fn parse_retry_after(headers: &reqwest::header::HeaderMap) -> Option<Duratio
         .get("retry-after")
         .and_then(|v| v.to_str().ok())
         .map(|s| s.trim().to_string())?;
-    // Fast path: integer seconds
+    // Integer seconds (most common case).
     if let Ok(secs) = value.parse::<u64>() {
         return Some(Duration::from_secs(secs));
+    }
+    // Fractional seconds (e.g. "1.5" from some backends).
+    if let Ok(secs) = value.parse::<f64>() {
+        return Some(Duration::from_secs_f64(secs.max(0.0)));
     }
     // HTTP date (RFC 7231). Past dates return None (no wait needed).
     let date = httpdate::parse_http_date(&value).ok()?;
@@ -187,6 +192,14 @@ mod tests {
             "Mon, 01 Jan 2024 00:00:00 GMT".parse().unwrap(),
         );
         assert_eq!(parse_retry_after(&headers), None);
+    }
+
+    #[test]
+    fn parse_retry_after_fractional_seconds() {
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert("retry-after", "1.5".parse().unwrap());
+        let dur = parse_retry_after(&headers);
+        assert_eq!(dur, Some(Duration::from_secs_f64(1.5)));
     }
 
     #[test]

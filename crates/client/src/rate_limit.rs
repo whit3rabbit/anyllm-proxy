@@ -324,6 +324,10 @@ mod tests {
             .unwrap()
             .to_str()
             .unwrap();
+        // inject_anthropic_response_headers uses SystemTime::now() internally so we
+        // can only check the format here, not the exact value. The formatter itself
+        // is tested end-to-end with exact expected values in
+        // openai_duration_to_iso8601_at_pinned_time below.
         assert!(
             req_reset.contains('T') && req_reset.ends_with('Z'),
             "expected ISO 8601 timestamp, got: {req_reset}"

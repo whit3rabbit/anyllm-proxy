@@ -53,7 +53,15 @@ pub(crate) async fn send_with_retry<E: RetryableError>(
             value: key,
         },
     };
-    anyllm_client::retry::send_with_retry(client, url, &request_auth, body, label).await
+    anyllm_client::retry::send_with_retry(
+        client,
+        url,
+        &request_auth,
+        body,
+        label,
+        anyllm_client::retry::MAX_RETRIES,
+    )
+    .await
 }
 
 /// Backend-agnostic client for dispatching requests to OpenAI, Vertex, Gemini, or Anthropic.

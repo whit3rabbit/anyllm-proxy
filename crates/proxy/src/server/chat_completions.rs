@@ -17,10 +17,8 @@ use axum::{
 use bytes::BytesMut;
 use futures::StreamExt;
 
-use super::routes::{
-    inject_degradation_header, log_request, set_backend_error_kind, AppState, ConcurrencyPermit,
-    RequestCtx,
-};
+use super::routes::{inject_degradation_header, log_request, set_backend_error_kind, RequestCtx};
+use super::state::{AppState, ConcurrencyPermit};
 
 /// OpenAI-shaped error response body.
 fn openai_error_response(message: &str, error_type: &str, status: StatusCode) -> Response {

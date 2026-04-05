@@ -3,10 +3,12 @@
 use anyllm_translate::anthropic::streaming::StreamEvent;
 use anyllm_translate::mapping;
 use anyllm_translate::openai::ChatCompletionChunk;
-use futures::Stream;
+use bytes::BytesMut;
+use futures::{SinkExt, Stream, StreamExt};
 use pin_project_lite::pin_project;
 
 use crate::error::ClientError;
+use crate::sse::{find_double_newline, SseError, MAX_SSE_BUFFER_SIZE};
 
 pin_project! {
     /// A stream that reads SSE frames from a reqwest response, translates
@@ -22,44 +24,80 @@ impl SseTranslatingStream {
         let (mut tx, rx) = futures::channel::mpsc::channel(32);
 
         // Spawn a task to read SSE frames and translate them.
+        // Uses send().await instead of try_send() to respect backpressure:
+        // try_send drops events silently when the channel is full.
         tokio::spawn(async move {
             let mut translator = mapping::streaming_map::StreamingTranslator::new(model);
             let mut done = false;
 
-            let result = crate::sse::read_sse_stream(
-                response,
-                |json_str| {
-                    if json_str == "[DONE]" {
-                        done = true;
-                        return Some(translator.finish());
-                    }
-                    match serde_json::from_str::<ChatCompletionChunk>(json_str) {
-                        Ok(chunk) => Some(translator.process_chunk(&chunk)),
-                        Err(e) => {
-                            tracing::debug!("failed to parse streaming chunk: {e}");
-                            None
-                        }
-                    }
-                },
-                |events| {
-                    for event in events {
-                        // Block on send; if receiver is dropped, stop.
-                        if tx.try_send(Ok(event.clone())).is_err() {
-                            return false;
-                        }
-                    }
-                    true
-                },
-            )
-            .await;
+            let mut stream = response.bytes_stream();
+            let mut buffer = BytesMut::new();
+            let mut search_from = 0usize;
 
-            if let Err(e) = result {
-                let _ = tx.try_send(Err(ClientError::Sse(e)));
-            } else if !done {
-                // Stream ended without [DONE]; flush remaining events.
-                let events = translator.finish();
-                for event in events {
-                    if tx.try_send(Ok(event)).is_err() {
+            while let Some(chunk_result) = stream.next().await {
+                let bytes = match chunk_result {
+                    Ok(b) => b,
+                    Err(e) => {
+                        let _ = tx.send(Err(ClientError::Sse(SseError::ReadError(e)))).await;
+                        return;
+                    }
+                };
+                buffer.extend_from_slice(&bytes);
+
+                if buffer.len() > MAX_SSE_BUFFER_SIZE {
+                    let _ = tx
+                        .send(Err(ClientError::Sse(SseError::BufferOverflow)))
+                        .await;
+                    return;
+                }
+
+                while let Some((pos, delim_len)) = find_double_newline(&buffer, search_from) {
+                    let events = match std::str::from_utf8(&buffer[..pos]) {
+                        Ok(frame_str) => {
+                            let mut events = Vec::new();
+                            for line in frame_str.lines() {
+                                let line = line.trim();
+                                if let Some(json_str) = line.strip_prefix("data: ") {
+                                    if json_str == "[DONE]" {
+                                        done = true;
+                                        events.extend(translator.finish());
+                                    } else {
+                                        match serde_json::from_str::<ChatCompletionChunk>(json_str)
+                                        {
+                                            Ok(chunk) => {
+                                                events.extend(translator.process_chunk(&chunk))
+                                            }
+                                            Err(e) => {
+                                                tracing::debug!(
+                                                    "failed to parse streaming chunk: {e}"
+                                                );
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            events
+                        }
+                        Err(e) => {
+                            tracing::warn!("skipping non-UTF-8 SSE frame: {e}");
+                            vec![]
+                        }
+                    };
+                    let _ = buffer.split_to(pos + delim_len);
+                    search_from = 0;
+
+                    for event in events {
+                        if tx.send(Ok(event)).await.is_err() {
+                            return; // receiver dropped
+                        }
+                    }
+                }
+                search_from = buffer.len().saturating_sub(3);
+            }
+
+            if !done {
+                for event in translator.finish() {
+                    if tx.send(Ok(event)).await.is_err() {
                         break;
                     }
                 }

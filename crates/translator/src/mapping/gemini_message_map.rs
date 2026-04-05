@@ -15,6 +15,61 @@ use crate::util::ids::{generate_message_id, generate_tool_use_id};
 // Request direction: Anthropic -> Gemini
 // ---------------------------------------------------------------------------
 
+/// Compute degradation warnings for a Gemini-bound request.
+///
+/// Call before translating to surface features that are silently dropped during
+/// Anthropic → Gemini translation. Emit the result as an `x-anyllm-degradation`
+/// response header so clients can detect lossy translations.
+pub fn compute_gemini_request_warnings(
+    req: &anthropic::MessageCreateRequest,
+) -> crate::mapping::warnings::TranslationWarnings {
+    use crate::mapping::warnings::TranslationWarnings;
+    let mut w = TranslationWarnings::default();
+
+    // Single pass: collect all per-block warning flags at once.
+    let mut has_thinking = false;
+    let mut has_document = false;
+    let mut has_url_image = false;
+    for msg in &req.messages {
+        if let anthropic::Content::Blocks(blocks) = &msg.content {
+            for b in blocks {
+                match b {
+                    // Thinking/RedactedThinking: no Gemini Content equivalent.
+                    anthropic::ContentBlock::Thinking { .. }
+                    | anthropic::ContentBlock::RedactedThinking { .. } => has_thinking = true,
+                    // Document blocks have no Gemini equivalent.
+                    anthropic::ContentBlock::Document { .. } => has_document = true,
+                    // URL-type images: Gemini only accepts inline base64 data.
+                    anthropic::ContentBlock::Image { source }
+                        if source.source_type != "base64" =>
+                    {
+                        has_url_image = true
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+    if has_thinking {
+        w.add("thinking_blocks");
+    }
+    if has_document {
+        w.add("document_blocks");
+    }
+    if has_url_image {
+        w.add("url_images");
+    }
+
+    // cache_control on system blocks is dropped; Gemini has no prompt-caching API.
+    if let Some(anthropic::System::Blocks(blocks)) = &req.system {
+        if blocks.iter().any(|b| b.cache_control.is_some()) {
+            w.add("cache_control");
+        }
+    }
+
+    w
+}
+
 /// Convert an Anthropic `MessageCreateRequest` into a Gemini `GenerateContentRequest`.
 ///
 /// Maps `thinking_config` to `generationConfig.thinkingConfig` for Gemini 2.5
@@ -75,14 +130,25 @@ pub fn anthropic_to_gemini_request(
 
     // Tool config
     let tool_config = req.tool_choice.as_ref().map(|tc| {
+        if matches!(
+            tc,
+            anthropic::ToolChoice::Auto {
+                disable_parallel_tool_use: Some(true)
+            } | anthropic::ToolChoice::Any {
+                disable_parallel_tool_use: Some(true)
+            }
+        ) {
+            tracing::warn!(
+                "disable_parallel_tool_use=true is not supported by Gemini; \
+                 parallel tool calls may still occur"
+            );
+        }
         let (mode, allowed) = match tc {
             anthropic::ToolChoice::Auto { .. } => ("AUTO", None),
             anthropic::ToolChoice::Any { .. } => ("ANY", None),
             anthropic::ToolChoice::None => ("NONE", None),
             // Gemini ANY + allowedFunctionNames restricts to a specific tool.
-            anthropic::ToolChoice::Tool { name, .. } => {
-                ("ANY", Some(vec![name.clone()]))
-            }
+            anthropic::ToolChoice::Tool { name, .. } => ("ANY", Some(vec![name.clone()])),
         };
         gemini::ToolConfig {
             function_calling_config: gemini::FunctionCallingConfig {
@@ -161,6 +227,20 @@ pub fn merge_consecutive_roles(contents: Vec<gemini::Content>) -> Vec<gemini::Co
         }
         merged.push(c);
     }
+
+    // Gemini requires the first content turn to have role "user". An Anthropic
+    // client may legally send an assistant-first conversation (for few-shot
+    // prompting). Prepend a dummy user turn so Gemini does not return a 400.
+    if merged.first().and_then(|c| c.role.as_deref()) == Some("model") {
+        merged.insert(
+            0,
+            gemini::Content {
+                role: Some("user".to_string()),
+                parts: vec![gemini::Part::text(String::new())],
+            },
+        );
+    }
+
     merged
 }
 
@@ -211,10 +291,15 @@ fn content_block_to_part(
             content,
             is_error,
         } => {
-            let name = tool_id_map
-                .get(tool_use_id)
-                .cloned()
-                .unwrap_or_else(|| "unknown_tool".into());
+            let Some(name) = tool_id_map.get(tool_use_id).cloned() else {
+                // Gemini requires the function name to match a declared FunctionDeclaration.
+                // Emitting an unknown name causes a 400; drop the result instead.
+                tracing::warn!(
+                    tool_use_id,
+                    "dropping ToolResult: tool_use_id not found in tool_id_map"
+                );
+                return None;
+            };
 
             let response_value = tool_result_to_json(content, *is_error);
             Some(gemini::Part::function_response(name, response_value))
@@ -235,12 +320,19 @@ fn tool_result_to_json(
     let text = match content {
         Some(anthropic::ToolResultContent::Text(s)) => s.clone(),
         Some(anthropic::ToolResultContent::Blocks(blocks)) => {
-            // Concatenate text blocks; other block types become "[non-text]".
+            // Concatenate text blocks; other block types (e.g., images) cannot be
+            // represented in Gemini FunctionResponse and are replaced with a placeholder.
             blocks
                 .iter()
                 .map(|b| match b {
                     anthropic::ContentBlock::Text { text } => text.clone(),
-                    _ => "[non-text]".into(),
+                    _ => {
+                        tracing::warn!(
+                            "tool_result contains non-text block; \
+                             replacing with \"[non-text]\" placeholder for Gemini"
+                        );
+                        "[non-text]".into()
+                    }
                 })
                 .collect::<Vec<_>>()
                 .join("\n")
@@ -496,8 +588,13 @@ mod tests {
             },
         ])]);
         let gem = anthropic_to_gemini_request(&req);
-        let part = &gem.contents[0].parts[0];
-        let fc = part.function_call.as_ref().unwrap();
+        // A dummy user turn is prepended because Gemini requires user-first; model is at [1].
+        let model_content = gem
+            .contents
+            .iter()
+            .find(|c| c.role.as_deref() == Some("model"))
+            .expect("should have a model turn");
+        let fc = model_content.parts[0].function_call.as_ref().unwrap();
         assert_eq!(fc.name, "get_weather");
         assert_eq!(fc.args, json!({"city": "London"}));
         // No id field on Gemini FunctionCallData.
@@ -518,11 +615,15 @@ mod tests {
             }]),
         ]);
         let gem = anthropic_to_gemini_request(&req);
-        // Second content (user role) should have a function_response part
+        // Find the user content that contains the function_response (not the dummy
+        // empty user turn that was prepended for Gemini's user-first requirement).
         let user_content = gem
             .contents
             .iter()
-            .find(|c| c.role.as_deref() == Some("user"))
+            .find(|c| {
+                c.role.as_deref() == Some("user")
+                    && c.parts.first().and_then(|p| p.function_response.as_ref()).is_some()
+            })
             .unwrap();
         let fr = user_content.parts[0].function_response.as_ref().unwrap();
         assert_eq!(fr.name, "get_weather");
@@ -547,14 +648,20 @@ mod tests {
         let user_content = gem
             .contents
             .iter()
-            .find(|c| c.role.as_deref() == Some("user"))
+            .find(|c| {
+                c.role.as_deref() == Some("user")
+                    && c.parts.first().and_then(|p| p.function_response.as_ref()).is_some()
+            })
             .unwrap();
         let fr = user_content.parts[0].function_response.as_ref().unwrap();
         assert_eq!(fr.response, json!({"error": "timeout"}));
     }
 
     #[test]
-    fn tool_result_unknown_id_uses_unknown_tool() {
+    fn tool_result_unknown_id_is_dropped() {
+        // A ToolResult whose tool_use_id is not in the tool_id_map must be dropped
+        // rather than emitting "unknown_tool", which would cause a Gemini 400.
+        // When the only block in a message is dropped, the whole message is omitted.
         let req = make_request(vec![user_blocks(vec![
             anthropic::ContentBlock::ToolResult {
                 tool_use_id: "toolu_missing".into(),
@@ -563,8 +670,11 @@ mod tests {
             },
         ])]);
         let gem = anthropic_to_gemini_request(&req);
-        let fr = gem.contents[0].parts[0].function_response.as_ref().unwrap();
-        assert_eq!(fr.name, "unknown_tool");
+        // The message has no valid parts, so it is omitted entirely from contents.
+        assert!(
+            gem.contents.is_empty(),
+            "unknown ToolResult should be dropped; resulting empty message should be omitted"
+        );
     }
 
     #[test]
@@ -579,8 +689,14 @@ mod tests {
             },
         ])]);
         let gem = anthropic_to_gemini_request(&req);
-        assert_eq!(gem.contents[0].parts.len(), 1);
-        assert_eq!(gem.contents[0].parts[0].text.as_deref(), Some("Answer"));
+        // A dummy user turn is prepended; find the model turn by role.
+        let model_content = gem
+            .contents
+            .iter()
+            .find(|c| c.role.as_deref() == Some("model"))
+            .expect("should have a model turn");
+        assert_eq!(model_content.parts.len(), 1);
+        assert_eq!(model_content.parts[0].text.as_deref(), Some("Answer"));
     }
 
     #[test]
@@ -594,8 +710,14 @@ mod tests {
             },
         ])]);
         let gem = anthropic_to_gemini_request(&req);
-        assert_eq!(gem.contents[0].parts.len(), 1);
-        assert_eq!(gem.contents[0].parts[0].text.as_deref(), Some("Visible"));
+        // A dummy user turn is prepended; find the model turn by role.
+        let model_content = gem
+            .contents
+            .iter()
+            .find(|c| c.role.as_deref() == Some("model"))
+            .expect("should have a model turn");
+        assert_eq!(model_content.parts.len(), 1);
+        assert_eq!(model_content.parts[0].text.as_deref(), Some("Visible"));
     }
 
     #[test]

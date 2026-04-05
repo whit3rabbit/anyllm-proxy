@@ -2,8 +2,14 @@
 
 use anyllm_proxy::config::MultiConfig;
 
+// Both tests mutate PROXY_CONFIG. Serialize them to prevent races when the
+// test binary runs tests in parallel (the default).
+static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 #[test]
 fn load_dispatches_simple_format_by_models_key() {
+    let _guard = ENV_LOCK.lock().unwrap();
+
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("routing.yaml");
     std::fs::write(
@@ -44,6 +50,8 @@ routing_strategy: least-busy
 
 #[test]
 fn load_litellm_format_unchanged() {
+    let _guard = ENV_LOCK.lock().unwrap();
+
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("litellm.yaml");
     std::fs::write(

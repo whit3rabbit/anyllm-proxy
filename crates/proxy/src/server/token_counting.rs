@@ -5,7 +5,7 @@ use axum::{http::StatusCode, response::IntoResponse, Json};
 use std::sync::LazyLock;
 use tiktoken_rs::CoreBPE;
 
-use super::routes::AnthropicJson;
+use super::state::AnthropicJson;
 
 /// GPT-4o tokenizer (o200k_base), the closest available approximation to
 /// Anthropic's tokenizer. This endpoint is inherently approximate since we

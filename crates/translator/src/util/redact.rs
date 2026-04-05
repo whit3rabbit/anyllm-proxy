@@ -5,6 +5,11 @@
 /// Returns "****" for strings shorter than 12 characters (too short to redact safely).
 /// Uses char_indices() instead of byte offsets because API keys may contain
 /// multi-byte UTF-8 characters; byte slicing would panic at non-char boundaries.
+///
+/// # Note
+/// Redacted values are for display/logging only and may collide: two different
+/// keys with identical first and last 4 characters produce the same redacted string.
+/// Never use redacted values as cache keys, metric labels, or unique identifiers.
 pub fn redact_secret(s: &str) -> String {
     let char_count = s.chars().count();
     if char_count < 12 {

@@ -1,6 +1,6 @@
 // Image generation passthrough handler: forward requests to the backend unchanged.
 
-use crate::server::routes::AppState;
+use crate::server::state::AppState;
 use axum::{
     extract::State,
     http::{header, HeaderMap, StatusCode},

@@ -10,6 +10,17 @@ use crate::anthropic::streaming::{DeltaUsage, MessageStartData};
 use crate::gemini::response::{FinishReason, GenerateContentResponse};
 use crate::util;
 
+/// Reset `prev_len` to 0 if `current_len` has shrunk, and log a warning.
+/// Gemini safety filtering can retroactively truncate accumulated text between
+/// chunks; without this reset the subsequent diff would produce no delta,
+/// silently losing the remaining content.
+fn guard_shrinkage(current_len: usize, prev_len: &mut usize, warn_msg: &str) {
+    if current_len < *prev_len {
+        tracing::warn!(prev = *prev_len, current = current_len, "{warn_msg}");
+        *prev_len = 0;
+    }
+}
+
 /// State machine that converts Gemini streaming responses (full accumulated text)
 /// into Anthropic SSE delta events by diffing against previous state.
 pub struct GeminiStreamingTranslator {
@@ -82,6 +93,13 @@ impl GeminiStreamingTranslator {
         }
 
         // Thought delta: diff against what we already emitted.
+        // Guard against shrinkage (e.g., Gemini safety filtering retroactively
+        // truncates text between chunks). Reset baseline so future diffs stay valid.
+        guard_shrinkage(
+            current_thought.len(),
+            &mut self.prev_thought_len,
+            "Gemini thought text shrank — resetting diff baseline",
+        );
         if current_thought.len() > self.prev_thought_len {
             if !self.thought_block_open {
                 events.push(anthropic::StreamEvent::ContentBlockStart {
@@ -104,6 +122,12 @@ impl GeminiStreamingTranslator {
         }
 
         // Text delta: diff against what we already emitted.
+        // Guard against shrinkage (safety filtering may truncate cumulative text).
+        guard_shrinkage(
+            current_text.len(),
+            &mut self.prev_text_len,
+            "Gemini text shrank — possible safety truncation; resetting diff baseline",
+        );
         if current_text.len() > self.prev_text_len {
             // Close the thought block before opening the text block.
             if self.thought_block_open {
@@ -111,6 +135,8 @@ impl GeminiStreamingTranslator {
                     index: self.content_block_index,
                 });
                 self.thought_block_open = false;
+                // Increment so the following text block gets the next index.
+                // Thought and text blocks occupy distinct slots per Anthropic SSE spec.
                 self.content_block_index += 1;
             }
             if !self.text_block_open {
@@ -122,7 +148,12 @@ impl GeminiStreamingTranslator {
                 });
                 self.text_block_open = true;
             }
-            let delta_text = &current_text[self.prev_text_len..];
+            // floor_char_boundary clamps to a valid char boundary in case
+            // Gemini adjusts text between chunks; a naive byte slice would
+            // panic if prev_text_len lands mid-codepoint.
+            let safe_start =
+                current_text.floor_char_boundary(self.prev_text_len.min(current_text.len()));
+            let delta_text = &current_text[safe_start..];
             events.push(anthropic::StreamEvent::ContentBlockDelta {
                 index: self.content_block_index,
                 delta: anthropic::streaming::Delta::TextDelta {
@@ -263,6 +294,17 @@ impl GeminiStreamingTranslator {
     ) {
         if self.finished {
             return;
+        }
+
+        // Close any open thought block. Can happen if Gemini sends a thought-only
+        // response with no answer text and no tool calls (finishReason arrives while
+        // thought_block_open is still true).
+        if self.thought_block_open {
+            events.push(anthropic::StreamEvent::ContentBlockStop {
+                index: self.content_block_index,
+            });
+            self.thought_block_open = false;
+            self.content_block_index += 1;
         }
 
         // Close any open text block

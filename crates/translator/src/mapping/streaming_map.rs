@@ -378,8 +378,12 @@ pub fn map_finish_reason(reason: &openai::FinishReason) -> anthropic::StopReason
         // the refusal handling path above.
         openai::FinishReason::ContentFilter => anthropic::StopReason::EndTurn,
         openai::FinishReason::FunctionCall => anthropic::StopReason::ToolUse,
-        // Provider-specific reasons (e.g. DeepSeek "insufficient_system_resource")
-        openai::FinishReason::Unknown => anthropic::StopReason::EndTurn,
+        // Provider-specific reasons (e.g. DeepSeek "insufficient_system_resource").
+        // Log so the unknown value is visible without breaking callers.
+        openai::FinishReason::Unknown => {
+            tracing::warn!("unknown OpenAI finish_reason received; treating as end_turn");
+            anthropic::StopReason::EndTurn
+        }
     }
 }
 

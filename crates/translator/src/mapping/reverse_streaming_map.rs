@@ -149,6 +149,9 @@ impl ReverseStreamingTranslator {
                         id: self.message_id.clone(),
                         object: "chat.completion.chunk".to_string(),
                         model: self.model.clone(),
+                        // OpenAI streaming spec: the usage chunk intentionally has
+                        // choices: []. Some community parsers assume choices[0] always
+                        // exists; those parsers are non-compliant with the spec.
                         choices: vec![],
                         usage: Some(openai::ChatUsage {
                             prompt_tokens: input,

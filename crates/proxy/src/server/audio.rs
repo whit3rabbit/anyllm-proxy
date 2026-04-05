@@ -1,7 +1,7 @@
 // Audio passthrough handlers: forward requests to the backend unchanged.
 // Supports /v1/audio/transcriptions (multipart) and /v1/audio/speech (JSON -> binary).
 
-use crate::server::routes::AppState;
+use crate::server::state::AppState;
 use axum::{
     extract::State,
     http::{header, HeaderMap, StatusCode},

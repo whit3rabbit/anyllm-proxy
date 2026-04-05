@@ -12,7 +12,7 @@
 
 use anyllm_proxy::config::{self, Config};
 use anyllm_proxy::server::routes;
-use serde_json::{json, Value};
+use serde_json::json;
 use tokio::net::TcpListener;
 
 fn azure_test_config() -> Config {

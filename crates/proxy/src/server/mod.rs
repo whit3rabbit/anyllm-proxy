@@ -18,6 +18,8 @@ mod passthrough;
 pub mod policy;
 /// Axum router setup and request handlers for all API endpoints.
 pub mod routes;
+/// Shared state types for request handlers (AppState, AnthropicJson, ResolvedModel, etc.).
+pub mod state;
 /// SSE response helpers for Anthropic-format streaming.
 pub mod sse;
 /// SSE streaming handler with pre-stream error propagation and backpressure.

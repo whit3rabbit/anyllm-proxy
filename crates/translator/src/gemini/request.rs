@@ -383,7 +383,10 @@ mod tests {
     #[test]
     fn tool_config_serializes_correctly() {
         let tc = ToolConfig {
-            function_calling_config: FunctionCallingConfig { mode: "ANY".into(), allowed_function_names: None },
+            function_calling_config: FunctionCallingConfig {
+                mode: "ANY".into(),
+                allowed_function_names: None,
+            },
         };
         let j = serde_json::to_value(&tc).unwrap();
         assert_eq!(j["functionCallingConfig"]["mode"], "ANY");

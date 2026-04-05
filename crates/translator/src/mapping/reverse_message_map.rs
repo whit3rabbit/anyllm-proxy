@@ -278,14 +278,27 @@ pub fn compute_openai_request_warnings(req: &openai::ChatCompletionRequest) -> T
 fn extract_text_content(content: &Option<openai::ChatContent>) -> String {
     match content {
         Some(openai::ChatContent::Text(s)) => s.clone(),
-        Some(openai::ChatContent::Parts(parts)) => parts
-            .iter()
-            .filter_map(|p| match p {
-                openai::ChatContentPart::Text { text } => Some(text.as_str()),
-                _ => None,
-            })
-            .collect::<Vec<_>>()
-            .join(""),
+        Some(openai::ChatContent::Parts(parts)) => {
+            let mut had_non_text = false;
+            let text = parts
+                .iter()
+                .filter_map(|p| match p {
+                    openai::ChatContentPart::Text { text } => Some(text.as_str()),
+                    _ => {
+                        had_non_text = true;
+                        None
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("");
+            if had_non_text {
+                tracing::warn!(
+                    "message contains non-text content parts (image/file); \
+                     only text parts are extracted as plain text"
+                );
+            }
+            text
+        }
         None => String::new(),
     }
 }
@@ -324,7 +337,11 @@ fn convert_openai_content_to_anthropic(
 fn convert_assistant_to_anthropic(msg: &openai::ChatMessage) -> anthropic::Content {
     let mut blocks = Vec::new();
 
-    // Map reasoning_content to thinking block
+    // Map reasoning_content to thinking block.
+    // signature is always None because OpenAI does not emit Anthropic-style
+    // cryptographic signatures. Anthropic will reject thinking blocks passed
+    // back in tool-result continuations without a valid signature — callers
+    // must strip thinking blocks from history when using the reverse path.
     if let Some(ref reasoning) = msg.reasoning_content {
         if !reasoning.is_empty() {
             blocks.push(anthropic::ContentBlock::Thinking {

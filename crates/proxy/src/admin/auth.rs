@@ -8,8 +8,8 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use std::sync::Arc;
-use zeroize::Zeroizing;
 use subtle::ConstantTimeEq;
+use zeroize::Zeroizing;
 
 /// Constant-time string comparison to prevent timing side-channels.
 pub(super) fn constant_time_eq(a: &str, b: &str) -> bool {

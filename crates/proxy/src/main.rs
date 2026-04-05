@@ -1,4 +1,4 @@
-use anyllm_proxy::{admin, config, server::routes, tools};
+use anyllm_proxy::{admin, config, server::{routes, state}, tools};
 use std::sync::Arc;
 use tracing_subscriber::prelude::*;
 
@@ -195,7 +195,7 @@ async fn async_main(args: Vec<String>) {
     // Build tool engine state from config, if tool sections were present.
     // Only constructed when at least one of tool_execution / builtin_tools / mcp_servers
     // is present in the config file, to avoid overhead when tools are unused.
-    let tool_engine_state: Option<Arc<routes::ToolEngineState>> = if let Some(tc) =
+    let tool_engine_state: Option<Arc<state::ToolEngineState>> = if let Some(tc) =
         load_result.tool_config.filter(|tc| tc.has_any())
     {
         let simple_config_shell = config::simple::SimpleConfig {
@@ -276,7 +276,7 @@ async fn async_main(args: Vec<String>) {
             "tool execution engine initialized"
         );
 
-        Some(Arc::new(routes::ToolEngineState {
+        Some(Arc::new(state::ToolEngineState {
             registry: Arc::new(registry),
             policy: Arc::new(policy),
             loop_config,

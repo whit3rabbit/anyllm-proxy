@@ -14,6 +14,9 @@ pub struct HttpClientConfig {
     pub ca_cert_pem: Option<Vec<u8>>,
     /// Connection timeout (default: 10s).
     pub connect_timeout: Option<Duration>,
+    /// Total request timeout — wall-clock limit from first byte sent to last byte received.
+    /// Unset by default; read_timeout already caps slow responses.
+    pub request_timeout: Option<Duration>,
     /// Read timeout (default: 900s, generous for reasoning models).
     pub read_timeout: Option<Duration>,
     /// TCP keepalive interval (default: 60s).
@@ -37,6 +40,7 @@ impl std::fmt::Debug for HttpClientConfig {
                     .map(|b| format!("{} bytes", b.len())),
             )
             .field("connect_timeout", &self.connect_timeout)
+            .field("request_timeout", &self.request_timeout)
             .field("read_timeout", &self.read_timeout)
             .field("tcp_keepalive", &self.tcp_keepalive)
             .field("ssrf_protection", &self.ssrf_protection)
@@ -80,6 +84,10 @@ pub fn build_http_client(config: &HttpClientConfig) -> Client {
         .connect_timeout(connect_timeout)
         .read_timeout(read_timeout)
         .tcp_keepalive(tcp_keepalive);
+
+    if let Some(rt) = config.request_timeout {
+        builder = builder.timeout(rt);
+    }
 
     #[cfg(feature = "ssrf-protection")]
     if config.ssrf_protection {
@@ -153,12 +161,20 @@ pub fn is_private_ip(ip: IpAddr) -> bool {
         }
         IpAddr::V6(v6) => {
             let seg0 = v6.segments()[0];
+            let seg1 = v6.segments()[1];
             v6.is_loopback()
                 || v6.is_unspecified()
                 // Unique Local Addresses (fc00::/7): covers fc00:: through fdff::
                 || (seg0 & 0xfe00) == 0xfc00
                 // Link-Local addresses (fe80::/10): covers fe80:: through febf::
                 || (seg0 & 0xffc0) == 0xfe80
+                // Discard prefix (RFC 6666, 100::/64): defense-in-depth.
+                || (seg0 == 0x0100
+                    && seg1 == 0x0000
+                    && v6.segments()[2] == 0
+                    && v6.segments()[3] == 0)
+                // Documentation range (RFC 3849, 2001:db8::/32): never in production.
+                || (seg0 == 0x2001 && seg1 == 0x0db8)
                 // IPv4-mapped (::ffff:x.x.x.x): check recursively against IPv4 rules
                 || matches!(v6.to_ipv4_mapped(), Some(v4) if is_private_ip(IpAddr::V4(v4)))
         }
@@ -232,6 +248,24 @@ mod tests {
         assert!(is_private_ip("fe80::1".parse().unwrap()));
         assert!(is_private_ip("fe80::dead:beef".parse().unwrap()));
         assert!(is_private_ip("febf::1".parse().unwrap()));
+    }
+
+    #[test]
+    fn private_ipv6_discard_prefix() {
+        // RFC 6666: 100::/64
+        assert!(is_private_ip("100::".parse().unwrap()));
+        assert!(is_private_ip("100::1".parse().unwrap()));
+        // Outside /64 should not match
+        assert!(!is_private_ip("100:0:0:1::".parse().unwrap()));
+    }
+
+    #[test]
+    fn private_ipv6_documentation() {
+        // RFC 3849: 2001:db8::/32
+        assert!(is_private_ip("2001:db8::1".parse().unwrap()));
+        assert!(is_private_ip("2001:db8:1234:5678::1".parse().unwrap()));
+        // Outside /32 should not match
+        assert!(!is_private_ip("2001:db9::1".parse().unwrap()));
     }
 
     #[test]

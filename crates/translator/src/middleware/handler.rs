@@ -15,6 +15,7 @@ use tokio_stream::wrappers::ReceiverStream;
 
 use crate::anthropic::streaming::StreamEvent;
 use crate::anthropic::{self, MessageCreateRequest};
+use crate::error::TranslateError;
 use crate::mapping::{errors_map, streaming_map};
 use crate::translate;
 
@@ -37,7 +38,7 @@ async fn handle_non_streaming(state: Arc<MiddlewareState>, body: MessageCreateRe
 
     let openai_req = match translate::translate_request(&body, &state.config.translation) {
         Ok(req) => req,
-        Err(e) => return translation_error_response(&e.to_string()),
+        Err(e) => return translation_error_response(&e),
     };
 
     match state.client.chat_completion(&openai_req).await {
@@ -245,13 +246,21 @@ async fn send_events(tx: &mpsc::Sender<Result<Event, Infallible>>, events: &[Str
 
 // --- Error response helpers ---
 
-fn translation_error_response(message: &str) -> Response {
-    let err = errors_map::create_anthropic_error(
-        anthropic::ErrorType::InvalidRequestError,
-        message.to_string(),
-        None,
-    );
-    (StatusCode::BAD_REQUEST, Json(err)).into_response()
+fn translation_error_response(err: &TranslateError) -> Response {
+    let (status, error_type) = match err {
+        // User errors: bad model name or missing required field.
+        TranslateError::UnknownModel(_) | TranslateError::MissingField(_) => (
+            StatusCode::BAD_REQUEST,
+            anthropic::ErrorType::InvalidRequestError,
+        ),
+        // Internal translation failure — not the caller's fault.
+        TranslateError::Translation(_) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            anthropic::ErrorType::ApiError,
+        ),
+    };
+    let body = errors_map::create_anthropic_error(error_type, err.to_string(), None);
+    (status, Json(body)).into_response()
 }
 
 fn forwarding_error_response(error: ForwardingError) -> Response {

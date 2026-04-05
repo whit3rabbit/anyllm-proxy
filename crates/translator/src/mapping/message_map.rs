@@ -130,7 +130,11 @@ pub fn anthropic_to_openai_request(
             } else {
                 "high"
             };
-            tracing::info!(budget_tokens, reasoning_effort = effort, "thinking config mapped to reasoning_effort");
+            tracing::info!(
+                budget_tokens,
+                reasoning_effort = effort,
+                "thinking config mapped to reasoning_effort"
+            );
             Some(effort)
         }
         _ => None,
@@ -206,16 +210,13 @@ pub fn anthropic_to_openai_request(
         }
     }
 
-    // o-series reasoning models require "developer" role instead of "system"
-    // and reject max_tokens (use max_completion_tokens instead).
-    // GA models (o1, o3, o3-mini) support temperature/top_p;
-    // preview/early models (o1-preview, o1-mini) do not.
+    // o-series reasoning models require "developer" role instead of "system",
+    // reject max_tokens (use max_completion_tokens instead), and reject
+    // temperature/top_p — all variants, including GA releases.
     if is_o_series_model(&oai_req.model) {
         oai_req.max_tokens = None;
-        if is_o_series_no_temperature(&oai_req.model) {
-            oai_req.temperature = None;
-            oai_req.top_p = None;
-        }
+        oai_req.temperature = None;
+        oai_req.top_p = None;
         for msg in &mut oai_req.messages {
             if msg.role == openai::ChatRole::System {
                 msg.role = openai::ChatRole::Developer;
@@ -279,13 +280,6 @@ fn is_o_series_model(model: &str) -> bool {
         .unwrap_or(bytes.len());
     // After the digits: either end-of-string or a '-'.
     after_digits == bytes.len() || bytes[after_digits] == b'-'
-}
-
-/// Returns true for o-series models that do NOT support temperature/top_p.
-/// GA models (o1, o3, o3-mini, o4-mini) gained temperature support;
-/// only the early preview/mini variants (o1-preview, o1-mini) still reject it.
-fn is_o_series_no_temperature(model: &str) -> bool {
-    model.eq_ignore_ascii_case("o1-preview") || model.eq_ignore_ascii_case("o1-mini")
 }
 
 /// Convert a single Anthropic InputMessage into one or more OpenAI ChatMessages.
@@ -2250,20 +2244,20 @@ mod tests {
     }
 
     #[test]
-    fn o_series_ga_preserves_temperature() {
-        // GA models (o1, o3, o3-mini) support temperature.
+    fn o_series_ga_strips_temperature() {
+        // All o-series models (including GA variants like o3-mini) reject temperature.
         let mut req = make_request("o3-mini", None);
         req.temperature = Some(0.7);
         let oai = anthropic_to_openai_request(&req);
         assert!(
-            oai.temperature.is_some(),
-            "GA o-series should preserve temperature"
+            oai.temperature.is_none(),
+            "o3-mini should strip temperature (all o-series reject it)"
         );
     }
 
     #[test]
     fn o_series_preview_strips_temperature() {
-        // Early preview models (o1-preview, o1-mini) do not support temperature.
+        // All o-series models including early previews do not support temperature.
         let mut req = make_request("o1-preview", None);
         req.temperature = Some(0.7);
         let oai = anthropic_to_openai_request(&req);

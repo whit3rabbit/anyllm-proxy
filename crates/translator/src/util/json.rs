@@ -11,28 +11,26 @@ pub fn parse_json_lenient(s: &str) -> Value {
     serde_json::from_str(s).unwrap_or_else(|_| Value::String(s.to_string()))
 }
 
-/// Strip markdown code fences that local LLMs (DeepSeek, Qwen) sometimes wrap
-/// around tool call argument JSON. Handles ```json, ```JSON, and bare ```.
+/// Strip markdown code fences that local LLMs (DeepSeek, Qwen, Qwen-coder, etc.)
+/// sometimes wrap around tool call argument JSON.
+/// Handles ` ```json `, ` ```python `, ` ```javascript `, bare ` ``` `, and any
+/// other language tag — anything up to the first newline after the opening fence.
 fn strip_markdown_code_fence(s: &str) -> &str {
     let s = s.trim();
-    if let Some(rest) = s.strip_prefix("```") {
-        // Skip optional language tag on the opening fence line
-        let rest = rest
-            .strip_prefix("json")
-            .or_else(|| rest.strip_prefix("JSON"))
-            .unwrap_or(rest);
-        // Strip the newline after the opening fence line
-        let rest = rest
-            .strip_prefix('\n')
-            .or_else(|| rest.strip_prefix("\r\n"))
-            .unwrap_or(rest);
-        // Strip trailing closing fence
-        let rest = rest.trim_end();
-        let rest = rest.strip_suffix("```").unwrap_or(rest);
-        rest.trim()
+    let Some(rest) = s.strip_prefix("```") else {
+        return s;
+    };
+    // Skip the optional language tag: everything up to (and including) the first newline.
+    let rest = if let Some(newline_pos) = rest.find('\n') {
+        &rest[newline_pos + 1..]
     } else {
-        s
-    }
+        // No newline — opening fence with no body; return as-is.
+        return rest;
+    };
+    // Strip trailing closing fence.
+    let rest = rest.trim_end();
+    let rest = rest.strip_suffix("```").unwrap_or(rest);
+    rest.trim()
 }
 
 /// Parse an OpenAI tool call `arguments` string into a JSON object suitable
@@ -148,6 +146,18 @@ mod tests {
     fn strip_fence_json_uppercase() {
         let input = "```JSON\n{\"a\": 1}\n```";
         assert_eq!(strip_markdown_code_fence(input), r#"{"a": 1}"#);
+    }
+
+    #[test]
+    fn strip_fence_python_tag() {
+        let input = "```python\n{\"a\": 1}\n```";
+        assert_eq!(strip_markdown_code_fence(input), r#"{"a": 1}"#);
+    }
+
+    #[test]
+    fn strip_fence_javascript_tag() {
+        let input = "```javascript\n{\"key\": \"val\"}\n```";
+        assert_eq!(strip_markdown_code_fence(input), r#"{"key": "val"}"#);
     }
 
     #[test]

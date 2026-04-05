@@ -132,64 +132,86 @@ pub fn openai_tool_choice_to_anthropic(tc: &openai::ChatToolChoice) -> anthropic
 ///
 /// OpenAI strict mode requires:
 /// - All properties of object schemas listed in `required`.
-/// - `additionalProperties: false` on all object schemas.
+/// - `additionalProperties: false` on all object schemas (including nested objects
+///   inside `anyOf`, `oneOf`, `allOf`, `items`, `$defs`, and `definitions`).
 ///
-/// Applied recursively to nested object schemas.
-/// Non-object schemas are returned unchanged.
-pub fn normalize_schema_for_strict(mut schema: serde_json::Value) -> serde_json::Value {
-    if schema.get("type").and_then(|t| t.as_str()) != Some("object") {
-        return schema;
-    }
+/// Applied recursively through all schema combinators, not just direct properties.
+pub fn normalize_schema_for_strict(schema: serde_json::Value) -> serde_json::Value {
+    let mut schema = schema;
 
     let Some(obj) = schema.as_object_mut() else {
         return schema;
     };
 
-    // Set additionalProperties: false.
-    obj.insert(
-        "additionalProperties".to_string(),
-        serde_json::Value::Bool(false),
-    );
-
-    // Collect all property keys.
-    let prop_keys: Vec<String> = obj
-        .get("properties")
-        .and_then(|p| p.as_object())
-        .map(|p| p.keys().cloned().collect())
-        .unwrap_or_default();
-
-    if !prop_keys.is_empty() {
-        // Merge with any existing required array.
-        let existing: std::collections::HashSet<String> = obj
-            .get("required")
-            .and_then(|r| r.as_array())
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                    .collect()
-            })
-            .unwrap_or_default();
-
-        let mut merged: Vec<String> = prop_keys.into_iter().chain(existing).collect();
-        merged.sort();
-        merged.dedup();
-
+    // Apply object constraints only when this schema is explicitly type:object.
+    if obj.get("type").and_then(|t| t.as_str()) == Some("object") {
         obj.insert(
-            "required".to_string(),
-            serde_json::Value::Array(merged.into_iter().map(serde_json::Value::String).collect()),
+            "additionalProperties".to_string(),
+            serde_json::Value::Bool(false),
         );
 
-        // Recurse into nested object properties.
-        if let Some(props) = obj.get_mut("properties").and_then(|p| p.as_object_mut()) {
-            for prop_val in props.values_mut() {
-                if prop_val.get("type").and_then(|t| t.as_str()) == Some("object") {
-                    *prop_val = normalize_schema_for_strict(prop_val.clone());
-                }
+        let prop_keys: Vec<String> = obj
+            .get("properties")
+            .and_then(|p| p.as_object())
+            .map(|p| p.keys().cloned().collect())
+            .unwrap_or_default();
+
+        if !prop_keys.is_empty() {
+            let existing: std::collections::HashSet<String> = obj
+                .get("required")
+                .and_then(|r| r.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect()
+                })
+                .unwrap_or_default();
+
+            let mut merged: Vec<String> = prop_keys.into_iter().chain(existing).collect();
+            merged.sort();
+            merged.dedup();
+
+            obj.insert(
+                "required".to_string(),
+                serde_json::Value::Array(
+                    merged.into_iter().map(serde_json::Value::String).collect(),
+                ),
+            );
+        }
+    }
+
+    // Recurse into all properties (regardless of their type — they may be combinators).
+    if let Some(props) = obj.get_mut("properties").and_then(|p| p.as_object_mut()) {
+        for prop_val in props.values_mut() {
+            *prop_val = normalize_schema_for_strict(prop_val.clone());
+        }
+    }
+
+    // Recurse into anyOf / oneOf / allOf schema combinators.
+    for key in ["anyOf", "oneOf", "allOf"] {
+        if let Some(arr) = obj.get_mut(key).and_then(|v| v.as_array_mut()) {
+            for item in arr.iter_mut() {
+                *item = normalize_schema_for_strict(item.clone());
             }
         }
     }
 
-    serde_json::Value::Object(obj.clone())
+    // Recurse into array item schemas.
+    if let Some(items) = obj.get("items").cloned() {
+        let normalized = normalize_schema_for_strict(items);
+        obj.insert("items".to_string(), normalized);
+    }
+
+    // Recurse into $defs / definitions.
+    for key in ["$defs", "definitions"] {
+        if let Some(defs) = obj.get_mut(key).and_then(|v| v.as_object_mut()) {
+            for def_val in defs.values_mut() {
+                *def_val = normalize_schema_for_strict(def_val.clone());
+            }
+        }
+    }
+
+    schema
 }
 
 /// Apply strict mode to the single tool that is being forced via tool_choice.
@@ -209,13 +231,22 @@ pub fn apply_strict_to_forced_tool(tools: &mut [serde_json::Value], forced_name:
             if let Some(obj) = function.as_object_mut() {
                 obj.insert("strict".to_string(), serde_json::Value::Bool(true));
 
-                // Normalize parameter schema in place.
-                if let Some(params) = obj.get("parameters").cloned() {
-                    obj.insert(
-                        "parameters".to_string(),
-                        normalize_schema_for_strict(params),
-                    );
-                }
+                // OpenAI strict mode requires parameters to be a valid object schema.
+                // If absent or null (e.g., a no-argument tool), coerce to the minimal
+                // valid schema; an absent/null parameters field with strict:true causes a 400.
+                let params = obj
+                    .get("parameters")
+                    .cloned()
+                    .filter(|v| !v.is_null())
+                    .unwrap_or_else(|| {
+                        serde_json::json!({
+                            "type": "object",
+                            "properties": {},
+                            "required": [],
+                            "additionalProperties": false
+                        })
+                    });
+                obj.insert("parameters".to_string(), normalize_schema_for_strict(params));
             }
             // Tool names are unique; stop after the first match.
             break;

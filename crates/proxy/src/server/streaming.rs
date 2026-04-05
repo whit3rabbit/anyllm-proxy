@@ -9,7 +9,8 @@ use futures::stream::Stream;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
-use super::routes::{log_request, set_backend_error_kind, AppState, RequestCtx};
+use super::routes::{log_request, set_backend_error_kind, RequestCtx};
+use super::state::AppState;
 
 /// Send translated stream events over the SSE channel. Returns false if client disconnected.
 pub(super) async fn send_events(
@@ -154,7 +155,7 @@ pub(crate) async fn messages_stream(
     body: anthropic::MessageCreateRequest,
     ctx: RequestCtx,
     mapped_model: String,
-    concurrency_permit: Option<super::routes::ConcurrencyPermit>,
+    concurrency_permit: Option<super::state::ConcurrencyPermit>,
     vk_ctx: Option<crate::server::middleware::VirtualKeyContext>,
 ) -> Result<
     (

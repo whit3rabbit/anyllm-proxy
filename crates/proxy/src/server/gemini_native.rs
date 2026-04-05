@@ -4,12 +4,12 @@
 // calls the Gemini API, and translates responses back to Anthropic format.
 
 use crate::backend::{BackendClient, BackendError};
-use crate::server::routes::{AnthropicJson, AppState};
+use crate::server::state::{AnthropicJson, AppState};
 use crate::server::streaming::{read_sse_frames, send_events, StreamOutcome};
 use anyllm_translate::anthropic;
 use anyllm_translate::gemini::response::GenerateContentResponse;
 use anyllm_translate::mapping::gemini_message_map::{
-    anthropic_to_gemini_request, gemini_to_anthropic_response,
+    anthropic_to_gemini_request, compute_gemini_request_warnings, gemini_to_anthropic_response,
 };
 use anyllm_translate::mapping::gemini_streaming_map::GeminiStreamingTranslator;
 use axum::{
@@ -141,7 +141,15 @@ pub(crate) async fn gemini_native_handler(
             Ok(gresp) => {
                 state.metrics.record_success();
                 let anthropic_resp = gemini_to_anthropic_response(&gresp, &original_model);
-                (StatusCode::OK, Json(anthropic_resp)).into_response()
+                let mut response = (StatusCode::OK, Json(anthropic_resp)).into_response();
+                if state.expose_degradation_warnings {
+                    let warnings = compute_gemini_request_warnings(&body);
+                    crate::server::routes::inject_degradation_header(
+                        response.headers_mut(),
+                        &warnings,
+                    );
+                }
+                response
             }
             Err(e) => {
                 state.metrics.record_error();

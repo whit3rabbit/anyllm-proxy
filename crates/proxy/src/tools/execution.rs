@@ -270,7 +270,7 @@ use crate::tools::trace::{IterationTrace, LoopTrace, TerminationReason, ToolCall
 
 /// Engine state needed by `maybe_execute_tools`. Re-exported alias so callers
 /// do not need to reach into `server::routes`.
-pub use crate::server::routes::ToolEngineState;
+pub use crate::server::state::ToolEngineState;
 
 /// Process an LLM response for tool execution. If auto-executable tool calls
 /// are found, executes them and makes follow-up backend calls in a bounded loop.

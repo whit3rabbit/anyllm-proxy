@@ -13,7 +13,7 @@ use axum::{
 use bytes::BytesMut;
 use futures::StreamExt;
 
-use super::routes::AppState;
+use super::state::AppState;
 
 /// Bedrock passthrough handler for POST /v1/messages.
 /// Strips the `model` field from the body (Bedrock uses it in the URL),
@@ -80,8 +80,8 @@ pub(crate) async fn bedrock_passthrough(
 
     // Map model name through model router or runtime config
     let mapped_model = match state.resolve_model(&model_id) {
-        super::routes::ResolvedModel::Routed { model, .. } => model,
-        super::routes::ResolvedModel::AllAtLimit => {
+        super::state::ResolvedModel::Routed { model, .. } => model,
+        super::state::ResolvedModel::AllAtLimit => {
             let err = anyllm_translate::mapping::errors_map::create_anthropic_error(
                 anyllm_translate::anthropic::ErrorType::RateLimitError,
                 "all deployments for this model are at their RPM limit".to_string(),
@@ -89,7 +89,7 @@ pub(crate) async fn bedrock_passthrough(
             );
             return (StatusCode::TOO_MANY_REQUESTS, Json(err)).into_response();
         }
-        super::routes::ResolvedModel::Legacy(m) => m,
+        super::state::ResolvedModel::Legacy(m) => m,
     };
 
     let is_stream = parsed
