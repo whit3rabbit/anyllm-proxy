@@ -9,7 +9,7 @@ export default function RouteTable({ routes }: { routes: RouteMetrics[] }) {
           <th>Route</th>
           <th>Req/min</th>
           <th>Error rate</th>
-          <th>Avg payload</th>
+          <th>Avg latency</th>
           <th>P95 latency</th>
           <th>Total</th>
         </tr>
@@ -22,7 +22,7 @@ export default function RouteTable({ routes }: { routes: RouteMetrics[] }) {
             <td className="mono" style={{ color: r.error_rate > 0.05 ? 'var(--err)' : r.error_rate > 0.01 ? 'var(--warn)' : undefined }}>
               {(r.error_rate * 100).toFixed(1)}%
             </td>
-            <td className="mono">{formatBytes(r.avg_request_bytes)}</td>
+            <td className="mono">{r.avg_latency_ms.toFixed(0)}ms</td>
             <td className="mono">{r.p95_latency_ms}ms</td>
             <td className="mono">{r.total_requests.toLocaleString()}</td>
           </tr>
@@ -32,8 +32,3 @@ export default function RouteTable({ routes }: { routes: RouteMetrics[] }) {
   )
 }
 
-function formatBytes(n: number) {
-  if (n < 1024) return `${n}B`
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)}KB`
-  return `${(n / (1024 * 1024)).toFixed(1)}MB`
-}

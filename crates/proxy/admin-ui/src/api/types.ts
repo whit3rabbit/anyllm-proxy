@@ -162,7 +162,7 @@ export interface RouteMetrics {
   path: string
   requests_per_min: number
   error_rate: number
-  avg_request_bytes: number
+  avg_latency_ms: number
   p95_latency_ms: number
   total_requests: number
 }

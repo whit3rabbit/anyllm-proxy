@@ -23,7 +23,7 @@ pub struct RouteMetrics {
     path: String,
     requests_per_min: f64,
     error_rate: f64,
-    avg_request_bytes: f64,
+    avg_latency_ms: f64,
     p95_latency_ms: i64,
     total_requests: i64,
 }
@@ -94,7 +94,7 @@ fn query_traffic(conn: &rusqlite::Connection, window_hours: u32) -> Option<Traff
                     } else {
                         0.0
                     },
-                    avg_request_bytes: avg_latency,
+                    avg_latency_ms: avg_latency,
                     p95_latency_ms: 0,
                     total_requests: total,
                 })
