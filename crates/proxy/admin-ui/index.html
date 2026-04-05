@@ -5,126 +5,167 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Proxy Admin</title>
 <style nonce="__CSP_NONCE__">
+@import url('https://fonts.bunny.net/css?family=dm-sans:wght@400;500;600&family=dm-mono:wght@400;500&display=swap');
+:root{
+  --bg-base:#131516;--bg-raised:#1a1d1f;--bg-sunken:#0e1011;--bg-hover:#22272a;
+  --border:#2a2f33;--border-sub:#1f2428;
+  --text-1:#e8e3d9;--text-2:#7a8088;--text-3:#4e545b;
+  --accent:#e8a030;--accent-dim:rgba(232,160,48,0.12);--accent-bdr:rgba(232,160,48,0.35);
+  --ok:#4caf6e;--ok-dim:rgba(76,175,110,0.12);
+  --warn:#d4922b;--warn-dim:rgba(212,146,43,0.12);
+  --err:#e05252;--err-dim:rgba(224,82,82,0.12);
+  --font-ui:"DM Sans",ui-sans-serif,system-ui,sans-serif;
+  --font-mono:"DM Mono","JetBrains Mono",ui-monospace,SFMono-Regular,monospace;
+  --r:2px;--rm:3px;
+}
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:#0d1117;color:#c9d1d9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:14px}
-a{color:#4a9eff;text-decoration:none}
-.nav{display:flex;border-bottom:1px solid #30363d;background:#161b22;position:sticky;top:0;z-index:10}
-.nav-item{padding:10px 20px;cursor:pointer;color:#8b949e;border-bottom:2px solid transparent}
-.nav-item.active{color:#4a9eff;border-bottom-color:#4a9eff;font-weight:600}
-.nav-item:hover{color:#c9d1d9}
-.nav-right{margin-left:auto;padding:10px 20px;font-size:12px}
-.connected{color:#3fb950}.disconnected{color:#f85149}
-.tab{display:none;padding:16px;max-width:1200px;margin:0 auto}
+body{background:var(--bg-base);color:var(--text-1);font-family:var(--font-ui);font-size:14px}
+a{color:var(--accent);text-decoration:none}
+/* Nav */
+.nav{display:flex;align-items:stretch;border-bottom:1px solid var(--border);background:var(--bg-raised);position:sticky;top:0;z-index:10}
+.nav-brand{padding:0 16px 0 14px;font-family:var(--font-mono);font-size:13px;font-weight:600;color:var(--accent);border-right:1px solid var(--border);display:flex;align-items:center;letter-spacing:0.02em}
+.nav-item{padding:11px 16px;cursor:pointer;color:var(--text-2);border-bottom:2px solid transparent;font-size:13px;font-weight:500;white-space:nowrap}
+.nav-item.active{color:var(--text-1);border-bottom-color:var(--accent);font-weight:600}
+.nav-item:hover{color:var(--text-1)}
+.nav-right{margin-left:auto;padding:0 16px;font-size:12px;display:flex;align-items:center}
+/* WS status dot */
+#ws-status::before{content:'';display:inline-block;width:5px;height:5px;border-radius:50%;margin-right:6px;vertical-align:middle}
+.connected{color:var(--ok)}.connected::before{background:var(--ok);animation:pulse 2s ease-in-out infinite}
+.disconnected{color:var(--err)}.disconnected::before{background:var(--err)}
+@keyframes pulse{0%,100%{opacity:0.9}50%{opacity:0.4}}
+/* Layout */
+.tab{display:none;padding:14px 20px;max-width:1400px;margin:0 auto}
 .tab.active{display:block}
-.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1px;background:#30363d;border-radius:6px;overflow:hidden;margin-bottom:16px}
-.stat{padding:12px;background:#161b22;text-align:center}
-.stat-label{color:#8b949e;font-size:10px;text-transform:uppercase;letter-spacing:0.5px}
-.stat-value{font-size:24px;margin-top:4px;font-weight:600}
-.backend-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:16px}
-.card{padding:12px;background:#161b22;border:1px solid #30363d;border-radius:6px}
+/* Stats */
+.stats-row{display:flex;border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:14px;background:var(--bg-raised)}
+.stat{flex:1;padding:12px 14px;border-right:1px solid var(--border)}
+.stat:last-child{border-right:none}
+.stat-label{color:var(--text-2);font-size:10px;text-transform:uppercase;letter-spacing:0.07em}
+.stat-value{font-family:var(--font-mono);font-size:22px;margin-top:3px;font-weight:500}
+/* Backend cards */
+.backend-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:14px}
+.card{padding:12px;background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--rm)}
 .card-header{display:flex;justify-content:space-between;align-items:center}
-.card-name{color:#4a9eff;font-weight:600}
-.card-body{margin-top:8px;color:#8b949e;font-size:12px}
-.section-label{color:#8b949e;font-size:11px;text-transform:uppercase;margin-bottom:8px;letter-spacing:0.5px}
-.feed{background:#161b22;border:1px solid #30363d;border-radius:6px;overflow:hidden;max-height:400px;overflow-y:auto}
-.feed-header,.feed-row{display:grid;grid-template-columns:140px 50px 80px 1fr 65px 55px 55px;padding:6px 12px;font-size:12px}
-.feed-header{background:#1c2128;color:#8b949e;border-bottom:1px solid #30363d;position:sticky;top:0}
-.feed-row{border-bottom:1px solid #21262d;cursor:pointer}
-.feed-row:last-child{border-bottom:none}
-.feed-row:hover{background:#1c2128}
-.feed-detail{padding:12px 16px;background:#0d1117;border-bottom:1px solid #21262d;font-size:12px;display:grid;grid-template-columns:120px 1fr;gap:4px 12px}
-.feed-detail .label{color:#8b949e}
-.feed-detail .val{color:#c9d1d9;font-family:monospace;word-break:break-all}
-.feed-detail .error-msg{color:#f85149;grid-column:1/-1;margin-top:4px;padding:6px;background:rgba(248,81,73,0.1);border-radius:4px}
-.streaming-badge{font-size:9px;padding:1px 4px;border-radius:2px;background:rgba(74,158,255,0.2);color:#4a9eff;margin-left:4px}
-.status-2xx{color:#3fb950}.status-4xx{color:#d29922}.status-5xx{color:#f85149}
-.form-group{margin-bottom:16px;padding:12px;background:#161b22;border:1px solid #30363d;border-radius:6px}
-.form-label{font-weight:600;margin-bottom:4px}
-.form-hint{color:#8b949e;font-size:11px;margin-bottom:8px}
-.form-row{display:flex;gap:8px;align-items:center;margin-top:8px}
-input,select{background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:6px 10px;border-radius:4px;font-size:13px}
-input:focus,select:focus{outline:none;border-color:#4a9eff}
-.btn{padding:8px 16px;border-radius:6px;cursor:pointer;font-size:13px;border:1px solid;font-weight:500}
-.btn-primary{background:#238636;border-color:#2ea043;color:white}
-.btn-secondary{background:#30363d;border-color:#484f58;color:#c9d1d9}
-.btn:hover{opacity:0.9}
-.badge{font-size:10px;padding:2px 6px;border-radius:3px}
-.badge-override{background:rgba(245,166,35,0.2);color:#d29922}
-.readonly-section{opacity:0.7;padding:12px;background:#161b22;border:1px solid #30363d;border-radius:6px}
-.model-grid{display:grid;grid-template-columns:120px 1fr;gap:8px;align-items:center;margin-top:8px}
-.model-grid .label{color:#8b949e}
+.card-name{color:var(--accent);font-weight:600;font-family:var(--font-mono);font-size:13px}
+.card-body{margin-top:8px;color:var(--text-2);font-size:12px}
+/* Section */
+.section-label{color:var(--text-2);font-size:10px;text-transform:uppercase;margin-bottom:8px;letter-spacing:0.07em;font-weight:500}
 .section-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
-.warn{color:#d29922}
-.error{color:#f85149}
-.empty{text-align:center;padding:40px;color:#8b949e}
-.pagination{display:flex;gap:8px;margin-top:12px;align-items:center}
+/* Feed */
+.feed{background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;max-height:400px;overflow-y:auto}
+.feed-header,.feed-row{display:grid;grid-template-columns:140px 50px 80px 1fr 65px 55px 55px;padding:6px 12px;font-size:12px}
+.feed-header{background:var(--bg-hover);color:var(--text-2);border-bottom:1px solid var(--border);position:sticky;top:0;font-size:10px;text-transform:uppercase;letter-spacing:0.06em}
+.feed-row{border-bottom:1px solid var(--border-sub);cursor:pointer}
+.feed-row:last-child{border-bottom:none}
+.feed-row:hover{background:var(--bg-hover)}
+.feed-detail{padding:12px 16px;background:var(--bg-sunken);border-bottom:1px solid var(--border-sub);border-left:2px solid var(--accent);font-size:12px;display:grid;grid-template-columns:120px 1fr;gap:4px 12px}
+.feed-detail .label{color:var(--text-2);font-size:10px;text-transform:uppercase;letter-spacing:0.05em}
+.feed-detail .val{color:var(--text-1);font-family:var(--font-mono);word-break:break-all}
+.feed-detail .error-msg{color:var(--err);grid-column:1/-1;margin-top:4px;padding:6px;background:var(--err-dim);border-left:2px solid var(--err);border-radius:var(--r)}
+.streaming-badge{font-size:9px;padding:1px 5px;border-radius:1px;background:var(--accent-dim);color:var(--accent);border:1px solid var(--accent-bdr);margin-left:4px}
+.status-2xx{color:var(--ok)}.status-4xx{color:var(--warn)}.status-5xx{color:var(--err)}
+/* Forms */
+.form-group{margin-bottom:14px;padding:12px;background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--rm)}
+.form-label{font-weight:600;margin-bottom:4px}
+.form-hint{color:var(--text-2);font-size:11px;margin-bottom:8px}
+.form-row{display:flex;gap:8px;align-items:center;margin-top:8px}
+input,select{background:var(--bg-sunken);border:1px solid var(--border);color:var(--text-1);padding:6px 10px;border-radius:var(--r);font-size:13px;font-family:var(--font-ui)}
+input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-dim)}
+button[disabled]{opacity:0.55;cursor:not-allowed}
+/* Buttons */
+.btn{padding:7px 14px;border-radius:var(--r);cursor:pointer;font-size:13px;border:1px solid;font-weight:500;font-family:var(--font-ui);transition:none}
+.btn-primary{background:transparent;border-color:var(--accent);color:var(--accent)}
+.btn-primary:hover{background:var(--accent-dim)}
+.btn-secondary{background:transparent;border-color:var(--border);color:var(--text-2)}
+.btn-secondary:hover{border-color:var(--text-2);color:var(--text-1)}
+.btn-danger{background:transparent;border-color:var(--err);color:var(--err)}
+.btn-danger:hover{background:var(--err-dim)}
+.btn-sm{padding:3px 7px;font-size:11px}
+/* Badges */
+.badge{font-size:10px;padding:2px 5px;border-radius:1px;font-family:var(--font-mono)}
+.badge-override{background:var(--warn-dim);color:var(--warn)}
+.badge-active{background:var(--ok-dim);color:var(--ok)}
+.badge-revoked{background:var(--err-dim);color:var(--err)}
+.badge-expired{background:var(--warn-dim);color:var(--warn)}
+/* Misc */
+.readonly-section{opacity:0.75;padding:12px;background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--rm)}
+.model-grid{display:grid;grid-template-columns:120px 1fr;gap:8px;align-items:center;margin-top:8px}
+.model-grid .label{color:var(--text-2)}
+.warn{color:var(--warn)}
+.error{color:var(--err)}
+.empty{text-align:center;padding:40px;color:var(--text-2)}
+.pagination{display:flex;gap:8px;margin-top:12px;align-items:center;font-size:13px;color:var(--text-2)}
+/* Operator / Charts */
 .operator-controls{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap}
-.operator-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-bottom:16px}
-.chart-card{padding:12px;background:#161b22;border:1px solid #30363d;border-radius:6px;min-height:210px}
-.chart-card.wide{grid-column:1/-1}
+.operator-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1px;margin-bottom:14px;background:var(--border);border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+.chart-card{padding:12px;background:var(--bg-raised);min-height:210px}
+.chart-card.wide{grid-column:1/-1;border-top:1px solid var(--border)}
 .chart-header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:10px}
-.chart-title{font-size:12px;text-transform:uppercase;letter-spacing:0.5px;color:#8b949e}
-.chart-value{font-size:20px;font-weight:600;color:#c9d1d9}
-.chart-subtitle{font-size:11px;color:#8b949e}
+.chart-title{font-size:10px;text-transform:uppercase;letter-spacing:0.07em;color:var(--text-2);font-weight:500}
+.chart-value{font-size:20px;font-weight:500;color:var(--text-1);font-family:var(--font-mono)}
+.chart-subtitle{font-size:11px;color:var(--text-2)}
 .chart-svg{width:100%;height:130px;display:block}
-.chart-grid-line{stroke:#21262d;stroke-width:1}
-.chart-line{fill:none;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
-.chart-line.secondary{stroke-width:1.8;opacity:0.85}
-.chart-area{fill-opacity:0.14}
-.chart-axis{display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:#8b949e}
+.chart-grid-line{stroke:var(--border-sub);stroke-width:1}
+.chart-line{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.chart-line.secondary{stroke-width:1.5;opacity:0.8}
+.chart-area{fill-opacity:0.08}
+.chart-axis{display:flex;justify-content:space-between;margin-top:6px;font-size:10px;color:var(--text-3);font-family:var(--font-mono)}
+/* Failure table */
 .failure-table{width:100%;border-collapse:collapse;font-size:12px}
-.failure-table th,.failure-table td{padding:8px 10px;text-align:left;border-bottom:1px solid #21262d;vertical-align:top}
-.failure-table th{color:#8b949e;font-size:10px;text-transform:uppercase;letter-spacing:0.5px}
-.failure-summary{max-width:340px;color:#c9d1d9}
-.timeline-list{display:flex;flex-direction:column;gap:10px}
-.timeline-item{padding:10px;border:1px solid #21262d;border-radius:6px;background:#0d1117}
-.timeline-item:hover{border-color:#30363d}
+.failure-table th,.failure-table td{padding:7px 10px;text-align:left;border-bottom:1px solid var(--border-sub);vertical-align:top}
+.failure-table th{color:var(--text-2);font-size:10px;text-transform:uppercase;letter-spacing:0.06em;font-weight:500}
+.failure-summary{max-width:340px;color:var(--text-1)}
+/* Timeline */
+.timeline-list{display:flex;flex-direction:column;gap:8px}
+.timeline-item{padding:10px;border:1px solid var(--border-sub);border-radius:var(--r);background:var(--bg-sunken)}
+.timeline-item:hover{border-color:var(--border)}
 .timeline-meta{display:grid;grid-template-columns:90px 52px 88px 1fr 70px;gap:8px;align-items:center;font-size:12px;margin-bottom:8px}
-.timeline-track{height:10px;border-radius:999px;background:#161b22;overflow:hidden}
-.timeline-bar{height:100%;min-width:4px;border-radius:999px}
-.timeline-caption{display:flex;justify-content:space-between;gap:8px;margin-top:6px;font-size:11px;color:#8b949e}
-.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
-/* Login overlay */
-.login-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:#0d1117;display:flex;align-items:center;justify-content:center;z-index:1000}
-.login-card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:32px;width:320px}
-.login-title{font-size:18px;font-weight:600;margin-bottom:24px;text-align:center;color:#c9d1d9}
-.login-card input[type="password"]{width:100%;padding:8px 12px;margin-bottom:12px;font-size:14px;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;border-radius:4px}
-.login-card input[type="password"]:focus{outline:none;border-color:#4a9eff}
+.timeline-track{height:6px;border-radius:0;background:var(--border);overflow:hidden}
+.timeline-bar{height:100%;min-width:4px;border-radius:0}
+.timeline-caption{display:flex;justify-content:space-between;gap:8px;margin-top:6px;font-size:11px;color:var(--text-2)}
+/* Utility */
+.mono{font-family:var(--font-mono)}
+.dim{color:var(--text-2)}
+.accent{color:var(--accent)}
+.ok{color:var(--ok)}
+/* Login */
+.login-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:var(--bg-base);display:flex;align-items:center;justify-content:center;z-index:1000}
+.login-card{background:var(--bg-raised);border:1px solid var(--border);border-top:2px solid var(--accent);border-radius:var(--rm);padding:32px;width:320px}
+.login-title{font-family:var(--font-mono);font-size:15px;font-weight:500;margin-bottom:24px;color:var(--text-1)}
+.login-title .prompt{color:var(--accent)}
+.login-card input[type="password"]{width:100%;padding:8px 12px;margin-bottom:12px;font-size:14px;background:var(--bg-sunken);border:1px solid var(--border);color:var(--text-1);border-radius:var(--r)}
+.login-card input[type="password"]:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-dim)}
 .login-card .btn{width:100%;padding:10px;font-size:14px}
-.login-error{color:#f85149;font-size:12px;margin-top:8px;min-height:16px}
+.login-error{color:var(--err);font-size:12px;margin-top:8px;min-height:16px}
 /* Keys tab */
 .keys-grid{width:100%;border-collapse:collapse;font-size:12px}
-.keys-grid th,.keys-grid td{padding:8px 10px;text-align:left;border-bottom:1px solid #21262d}
-.keys-grid th{background:#1c2128;color:#8b949e;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;position:sticky;top:0}
-.keys-grid tr:hover td{background:#161b22}
-.badge-active{background:rgba(63,185,80,0.2);color:#3fb950;font-size:10px;padding:2px 6px;border-radius:3px}
-.badge-revoked{background:rgba(248,81,73,0.2);color:#f85149;font-size:10px;padding:2px 6px;border-radius:3px}
-.badge-expired{background:rgba(210,153,34,0.2);color:#d29922;font-size:10px;padding:2px 6px;border-radius:3px}
-.btn-danger{background:#da3633;border-color:#f85149;color:white}
-.btn-sm{padding:3px 8px;font-size:11px;border-radius:4px}
-.key-result{background:#0d1117;border:1px solid #3fb950;border-radius:6px;padding:12px;margin-bottom:12px;font-family:monospace;font-size:12px;word-break:break-all}
-.key-result-label{color:#3fb950;font-size:11px;margin-bottom:4px;font-weight:600}
-/* Budget progress bar */
-.budget-bar{height:6px;border-radius:3px;background:#30363d;margin-top:4px;overflow:hidden;min-width:60px}
-.budget-bar-fill{height:100%;border-radius:3px;background:#3fb950;transition:width 0.3s}
-.budget-bar-fill.warn{background:#d29922}.budget-bar-fill.danger{background:#f85149}
-/* Tag chips (allowed_models) */
-.tag-input-area{display:flex;flex-wrap:wrap;gap:4px;padding:4px;background:#0d1117;border:1px solid #30363d;border-radius:4px;min-height:34px;align-items:center;cursor:text}
-.tag-input-area:focus-within{border-color:#4a9eff}
-.chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;background:rgba(74,158,255,0.15);border:1px solid rgba(74,158,255,0.3);border-radius:12px;font-size:11px;color:#4a9eff}
-.chip-remove{cursor:pointer;color:#8b949e;font-size:13px;line-height:1}
-.chip-remove:hover{color:#f85149}
-.tag-input-bare{background:none;border:none;outline:none;color:#c9d1d9;font-size:13px;min-width:80px;padding:2px 4px;flex:1}
-/* Modal overlay */
-.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:100}
-.modal{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:20px;width:460px;max-width:95vw;max-height:90vh;overflow-y:auto}
-.modal-title{font-weight:600;font-size:15px;margin-bottom:16px;color:#c9d1d9}
+.keys-grid th,.keys-grid td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--border-sub)}
+.keys-grid th{background:var(--bg-hover);color:var(--text-2);font-size:10px;text-transform:uppercase;letter-spacing:0.06em;font-weight:500;position:sticky;top:0}
+.keys-grid tr:hover td{background:var(--bg-hover)}
+/* Budget bar */
+.budget-bar{height:4px;border-radius:0;background:var(--border);margin-top:4px;overflow:hidden;min-width:60px}
+.budget-bar-fill{height:100%;background:var(--ok);transition:width 0.3s}
+.budget-bar-fill.warn{background:var(--warn)}.budget-bar-fill.danger{background:var(--err)}
+/* Tag chips */
+.tag-input-area{display:flex;flex-wrap:wrap;gap:4px;padding:4px;background:var(--bg-sunken);border:1px solid var(--border);border-radius:var(--r);min-height:34px;align-items:center;cursor:text}
+.tag-input-area:focus-within{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-dim)}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;background:var(--bg-hover);border:1px solid var(--border);border-radius:var(--r);font-size:11px;color:var(--text-1)}
+.chip-remove{cursor:pointer;color:var(--text-3);font-size:13px;line-height:1}
+.chip-remove:hover{color:var(--err)}
+.tag-input-bare{background:none;border:none;outline:none;color:var(--text-1);font-size:13px;min-width:80px;padding:2px 4px;flex:1;font-family:var(--font-ui)}
+/* Key result */
+.key-result{background:var(--bg-sunken);border:1px solid var(--border);border-left:3px solid var(--ok);border-radius:var(--r);padding:12px;margin-bottom:12px;font-family:var(--font-mono);font-size:12px;word-break:break-all}
+.key-result-label{color:var(--ok);font-size:11px;margin-bottom:4px;font-weight:600}
+/* Modal */
+.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:100}
+.modal{background:var(--bg-raised);border:1px solid var(--border);border-top:2px solid var(--accent);border-radius:var(--rm);padding:20px;width:460px;max-width:95vw;max-height:90vh;overflow-y:auto}
+.modal-title{font-weight:600;font-size:15px;margin-bottom:16px;color:var(--text-1)}
 </style>
 </head>
 <body>
 <div id="login-overlay" class="login-overlay" style="display:none">
   <div class="login-card">
-    <div class="login-title">Proxy Admin</div>
+    <div class="login-title"><span class="prompt">&gt;&nbsp;</span>proxy admin</div>
     <form id="login-form">
       <input type="password" id="login-token" placeholder="Admin token" autocomplete="current-password">
       <button type="submit" class="btn btn-primary" id="login-submit">Sign in</button>
@@ -133,6 +174,7 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
   </div>
 </div>
 <div class="nav">
+  <div class="nav-brand">anyllm</div>
   <div class="nav-item active" data-tab="dashboard">Dashboard</div>
   <div class="nav-item" data-tab="requests">Request Log</div>
   <div class="nav-item" data-tab="settings">Settings</div>
@@ -153,9 +195,9 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
   </div>
   <div class="stats-row" style="margin-bottom:16px">
     <div class="stat"><div class="stat-label">Streams Started</div><div class="stat-value" id="stat-streams-started">0</div></div>
-    <div class="stat"><div class="stat-label">Completed</div><div class="stat-value" id="stat-streams-completed" style="color:#3fb950">0</div></div>
-    <div class="stat"><div class="stat-label">Failed</div><div class="stat-value" id="stat-streams-failed" style="color:#f85149">0</div></div>
-    <div class="stat"><div class="stat-label">Client Disconnects</div><div class="stat-value" id="stat-streams-disconnected" style="color:#d29922">0</div></div>
+    <div class="stat"><div class="stat-label">Completed</div><div class="stat-value ok" id="stat-streams-completed">0</div></div>
+    <div class="stat"><div class="stat-label">Failed</div><div class="stat-value" style="color:var(--err)" id="stat-streams-failed">0</div></div>
+    <div class="stat"><div class="stat-label">Client Disconnects</div><div class="stat-value" style="color:var(--warn)" id="stat-streams-disconnected">0</div></div>
   </div>
   <div class="operator-controls">
     <div class="section-label" style="margin-bottom:0">Operator View</div>
@@ -271,7 +313,7 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
   </div>
   <div class="section-label" style="margin-top:24px">Environment <span class="error">(requires restart to change)</span></div>
   <div class="readonly-section" id="readonly-config">
-    <div style="color:#8b949e;font-size:12px">Loading...</div>
+    <div style="color:var(--text-2);font-size:12px">Loading...</div>
   </div>
 </div>
 
@@ -285,40 +327,40 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
     <div class="section-label">Virtual API Keys</div>
     <button class="btn btn-primary" id="btn-create-key">Create Key</button>
   </div>
-  <div id="key-create-form" style="display:none;background:#161b22;border:1px solid #30363d;border-radius:6px;padding:16px;margin-bottom:16px">
-    <div style="font-weight:600;margin-bottom:12px;color:#c9d1d9">New Virtual Key</div>
+  <div id="key-create-form" style="display:none;background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--rm);padding:16px;margin-bottom:16px">
+    <div style="font-weight:600;margin-bottom:12px;color:var(--text-1)">New Virtual Key</div>
     <div id="key-result-area" style="display:none">
       <div class="key-result-label">Key created. Copy it now -- it will not be shown again.</div>
       <div class="key-result" id="key-result-value"></div>
       <button class="btn btn-secondary btn-sm" id="btn-copy-key" style="margin-bottom:12px">Copy</button>
     </div>
     <div class="model-grid" style="grid-template-columns:140px 1fr;gap:8px;align-items:center">
-      <div style="color:#8b949e">Description:</div>
+      <div style="color:var(--text-2)">Description:</div>
       <input type="text" id="key-description" placeholder="e.g. team-ml" style="width:100%">
-      <div style="color:#8b949e">Role:</div>
+      <div style="color:var(--text-2)">Role:</div>
       <select id="key-role" style="width:100%">
         <option value="developer">developer</option>
         <option value="admin">admin</option>
       </select>
-      <div style="color:#8b949e">RPM Limit:</div>
+      <div style="color:var(--text-2)">RPM Limit:</div>
       <input type="number" id="key-rpm" placeholder="blank = unlimited" min="1" style="width:100%">
-      <div style="color:#8b949e">TPM Limit:</div>
+      <div style="color:var(--text-2)">TPM Limit:</div>
       <input type="number" id="key-tpm" placeholder="blank = unlimited" min="1" style="width:100%">
-      <div style="color:#8b949e">Max Budget ($):</div>
+      <div style="color:var(--text-2)">Max Budget ($):</div>
       <input type="number" id="key-budget" placeholder="blank = unlimited" min="0" step="0.01" style="width:100%">
-      <div style="color:#8b949e">Budget Period:</div>
+      <div style="color:var(--text-2)">Budget Period:</div>
       <select id="key-budget-period" style="width:100%">
         <option value="">lifetime</option>
         <option value="daily">daily</option>
         <option value="monthly">monthly</option>
       </select>
-      <div style="color:#8b949e">Expires At:</div>
+      <div style="color:var(--text-2)">Expires At:</div>
       <input type="datetime-local" id="key-expires" style="width:100%">
-      <div style="color:#8b949e;align-self:start;padding-top:6px">Allowed Models:</div>
+      <div style="color:var(--text-2);align-self:start;padding-top:6px">Allowed Models:</div>
       <div>
         <div id="key-allowlist-area" class="tag-input-area" onclick="document.getElementById('key-allowlist-input').focus()"></div>
-        <input type="text" id="key-allowlist-input" class="tag-input-bare" placeholder="e.g. gpt-4o or claude-* then Enter" style="display:block;width:100%;margin-top:4px;background:#0d1117;border:1px solid #30363d;border-radius:4px;padding:5px 8px;color:#c9d1d9">
-        <div style="color:#8b949e;font-size:11px;margin-top:3px">Press Enter to add. Supports exact names and prefix/* wildcards. Blank = all models allowed.</div>
+        <input type="text" id="key-allowlist-input" class="tag-input-bare" placeholder="e.g. gpt-4o or claude-* then Enter" style="display:block;width:100%;margin-top:4px;background:var(--bg-sunken);border:1px solid var(--border);border-radius:var(--r);padding:5px 8px;color:var(--text-1)">
+        <div style="color:var(--text-2);font-size:11px;margin-top:3px">Press Enter to add. Supports exact names and prefix/* wildcards. Blank = all models allowed.</div>
       </div>
     </div>
     <div style="display:flex;gap:8px;margin-top:12px">
@@ -330,28 +372,28 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
   <div id="key-edit-modal" style="display:none" class="modal-backdrop">
     <div class="modal">
       <div class="modal-title">Edit Key</div>
-      <div style="font-size:11px;color:#8b949e;margin-bottom:12px">Role is immutable. Revoke and recreate to change role.</div>
+      <div style="font-size:11px;color:var(--text-2);margin-bottom:12px">Role is immutable. Revoke and recreate to change role.</div>
       <div class="model-grid" style="grid-template-columns:140px 1fr;gap:8px;align-items:center">
-        <div style="color:#8b949e">Description:</div>
+        <div style="color:var(--text-2)">Description:</div>
         <input type="text" id="edit-key-description" style="width:100%">
-        <div style="color:#8b949e">RPM Limit:</div>
+        <div style="color:var(--text-2)">RPM Limit:</div>
         <input type="number" id="edit-key-rpm" placeholder="blank = unlimited" min="1" style="width:100%">
-        <div style="color:#8b949e">TPM Limit:</div>
+        <div style="color:var(--text-2)">TPM Limit:</div>
         <input type="number" id="edit-key-tpm" placeholder="blank = unlimited" min="1" style="width:100%">
-        <div style="color:#8b949e">Max Budget ($):</div>
+        <div style="color:var(--text-2)">Max Budget ($):</div>
         <input type="number" id="edit-key-budget" placeholder="blank = unlimited" min="0" step="0.01" style="width:100%">
-        <div style="color:#8b949e">Budget Period:</div>
+        <div style="color:var(--text-2)">Budget Period:</div>
         <select id="edit-key-budget-period" style="width:100%">
           <option value="">lifetime</option>
           <option value="daily">daily</option>
           <option value="monthly">monthly</option>
         </select>
-        <div style="color:#8b949e">Expires At:</div>
+        <div style="color:var(--text-2)">Expires At:</div>
         <input type="datetime-local" id="edit-key-expires" style="width:100%">
-        <div style="color:#8b949e;align-self:start;padding-top:6px">Allowed Models:</div>
+        <div style="color:var(--text-2);align-self:start;padding-top:6px">Allowed Models:</div>
         <div>
           <div id="edit-key-allowlist-area" class="tag-input-area" onclick="document.getElementById('edit-key-allowlist-input').focus()"></div>
-          <input type="text" id="edit-key-allowlist-input" class="tag-input-bare" placeholder="model name then Enter" style="display:block;width:100%;margin-top:4px;background:#0d1117;border:1px solid #30363d;border-radius:4px;padding:5px 8px;color:#c9d1d9">
+          <input type="text" id="edit-key-allowlist-input" class="tag-input-bare" placeholder="model name then Enter" style="display:block;width:100%;margin-top:4px;background:var(--bg-sunken);border:1px solid var(--border);border-radius:var(--r);padding:5px 8px;color:var(--text-1)">
         </div>
       </div>
       <div style="display:flex;gap:8px;margin-top:16px">
@@ -360,7 +402,7 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
       </div>
     </div>
   </div>
-  <div style="background:#161b22;border:1px solid #30363d;border-radius:6px;overflow:auto">
+  <div style="background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--rm);overflow:auto">
     <div id="keys-table-container">
       <div class="empty" id="keys-empty">Loading...</div>
     </div>
@@ -372,20 +414,20 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
     <div class="section-label">Model Routing</div>
     <button class="btn btn-primary" id="btn-add-deployment">Add Deployment</button>
   </div>
-  <div id="model-add-form" style="display:none;background:#161b22;border:1px solid #30363d;border-radius:6px;padding:16px;margin-bottom:16px">
-    <div style="font-weight:600;margin-bottom:12px;color:#c9d1d9">New Deployment</div>
+  <div id="model-add-form" style="display:none;background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--rm);padding:16px;margin-bottom:16px">
+    <div style="font-weight:600;margin-bottom:12px;color:var(--text-1)">New Deployment</div>
     <div class="model-grid" style="grid-template-columns:140px 1fr;gap:8px;align-items:center">
-      <div style="color:#8b949e">Model Name:</div>
+      <div style="color:var(--text-2)">Model Name:</div>
       <input type="text" id="model-name" placeholder="e.g. gpt-4o" style="width:100%">
-      <div style="color:#8b949e">Backend:</div>
+      <div style="color:var(--text-2)">Backend:</div>
       <input type="text" id="model-backend" placeholder="e.g. openai" style="width:100%">
-      <div style="color:#8b949e">Actual Model:</div>
+      <div style="color:var(--text-2)">Actual Model:</div>
       <input type="text" id="model-actual" placeholder="e.g. gpt-4o-2024-08-06" style="width:100%">
-      <div style="color:#8b949e">RPM (optional):</div>
+      <div style="color:var(--text-2)">RPM (optional):</div>
       <input type="number" id="model-rpm" placeholder="blank = unlimited" min="1" style="width:100%">
-      <div style="color:#8b949e">TPM (optional):</div>
+      <div style="color:var(--text-2)">TPM (optional):</div>
       <input type="number" id="model-tpm" placeholder="blank = unlimited" min="1" style="width:100%">
-      <div style="color:#8b949e">Weight:</div>
+      <div style="color:var(--text-2)">Weight:</div>
       <input type="number" id="model-weight" value="1" min="1" style="width:100%">
     </div>
     <div style="display:flex;gap:8px;margin-top:12px">
@@ -393,8 +435,8 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
       <button class="btn btn-secondary" id="btn-cancel-model">Cancel</button>
     </div>
   </div>
-  <div id="models-strategy" style="color:#8b949e;font-size:12px;margin-bottom:8px"></div>
-  <div style="background:#161b22;border:1px solid #30363d;border-radius:6px;overflow:auto">
+  <div id="models-strategy" style="color:var(--text-2);font-size:12px;margin-bottom:8px"></div>
+  <div style="background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--rm);overflow:auto">
     <div id="models-table-container">
       <div class="empty" id="models-empty">Loading...</div>
     </div>
@@ -422,7 +464,7 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
       <button class="btn btn-secondary" id="btn-audit-refresh">Refresh</button>
     </div>
   </div>
-  <div style="background:#161b22;border:1px solid #30363d;border-radius:6px;overflow:auto">
+  <div style="background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--rm);overflow:auto">
     <div id="audit-table-container">
       <div class="empty" id="audit-empty">Loading...</div>
     </div>
@@ -538,10 +580,10 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
       el('div', {textContent: formatTime(r.timestamp)}),
       el('div', {className: statusClass(r.status_code), textContent: String(r.status_code)}),
       el('div', {textContent: r.backend || '--'}),
-      el('div', {style:{color:'#8b949e'}}, modelChildren),
+      el('div', {style:{color:'var(--text-2)'}}, modelChildren),
       el('div', {textContent: formatLatency(r.latency_ms)}),
-      el('div', {textContent: r.input_tokens ? String(r.input_tokens) : '--', style:{color:'#8b949e'}}),
-      el('div', {textContent: r.output_tokens ? String(r.output_tokens) : '--', style:{color:'#8b949e'}})
+      el('div', {textContent: r.input_tokens ? String(r.input_tokens) : '--', style:{color:'var(--text-2)'}}),
+      el('div', {textContent: r.output_tokens ? String(r.output_tokens) : '--', style:{color:'var(--text-2)'}})
     ]);
     if (clickable && r.request_id) {
       row.addEventListener('click', function() { toggleRequestDetail(row, r.request_id); });
@@ -672,7 +714,7 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
     var list = el('div', {className: 'timeline-list'}, null);
     items.forEach(function(item) {
       var widthPct = Math.max(4, Math.round(((item.latency_ms || 0) / maxLatency) * 100));
-      var barColor = item.status_code >= 500 ? '#f85149' : (item.status_code >= 400 ? '#d29922' : '#3fb950');
+      var barColor = item.status_code >= 500 ? '#e05252' : (item.status_code >= 400 ? '#d4922b' : '#4caf6e');
       var timelineItem = el('div', {className: 'timeline-item'}, [
         el('div', {className: 'timeline-meta'}, [
           el('div', {textContent: formatTime(item.finished_at)}),
@@ -814,7 +856,7 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
   document.getElementById('btn-pause-feed').addEventListener('click', function() {
     feedPaused = !feedPaused;
     this.textContent = feedPaused ? 'Resume' : 'Pause';
-    this.style.borderColor = feedPaused ? '#d29922' : '#484f58';
+    this.style.borderColor = feedPaused ? 'var(--warn)' : 'var(--border)';
   });
   document.getElementById('obs-window').addEventListener('change', loadObservability);
   document.getElementById('obs-backend').addEventListener('change', loadObservability);
@@ -853,7 +895,7 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
       var pct = (data.error_rate * 100).toFixed(1) + '%';
       var errEl = document.getElementById('stat-error-rate');
       errEl.textContent = pct;
-      errEl.style.color = data.error_rate > 0.05 ? '#f85149' : '#3fb950';
+      errEl.style.color = data.error_rate > 0.05 ? 'var(--err)' : 'var(--ok)';
     }
     if (data.requests_per_second != null) {
       document.getElementById('stat-rpm').textContent = (data.requests_per_second * 60).toFixed(0);
@@ -929,7 +971,7 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
         var pct = (metrics.error_rate * 100).toFixed(1) + '%';
         var errEl = document.getElementById('stat-error-rate');
         errEl.textContent = pct;
-        errEl.style.color = metrics.error_rate > 0.05 ? '#f85149' : '#3fb950';
+        errEl.style.color = metrics.error_rate > 0.05 ? 'var(--err)' : 'var(--ok)';
       }
       // Streaming metrics from the total aggregate
       updateDashboardMetrics(metrics);
@@ -995,8 +1037,8 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
         'obs-chart-requests',
         series,
         [
-          {color: '#4a9eff', getValue: function(point) { return point.requests_total || 0; }},
-          {color: '#f85149', getValue: function(point) { return point.requests_error || 0; }}
+          {color: '#e8a030', getValue: function(point) { return point.requests_total || 0; }},
+          {color: '#e05252', getValue: function(point) { return point.requests_error || 0; }}
         ],
         axisStart, axisEnd
       );
@@ -1005,8 +1047,8 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
         'obs-chart-tokens',
         series,
         [
-          {color: '#3fb950', getValue: function(point) { return point.input_tokens || 0; }},
-          {color: '#d29922', getValue: function(point) { return point.output_tokens || 0; }}
+          {color: '#4caf6e', getValue: function(point) { return point.input_tokens || 0; }},
+          {color: '#6eb5c0', getValue: function(point) { return point.output_tokens || 0; }}
         ],
         axisStart, axisEnd
       );
@@ -1014,7 +1056,7 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
       renderLineChart(
         'obs-chart-cost',
         series,
-        [{color: '#56d4dd', getValue: function(point) { return point.cost_usd || 0; }}],
+        [{color: '#c87dd4', getValue: function(point) { return point.cost_usd || 0; }}],
         axisStart, axisEnd
       );
 
@@ -1094,10 +1136,10 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
       el('div', {className: statusClass(r.status_code), textContent: String(r.status_code)}),
       el('div', {textContent: r.backend || '--'}),
       el('div', {textContent: keyLabel, style:{color:'#8b949e',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}),
-      el('div', {style:{color:'#8b949e'}}, modelChildren),
+      el('div', {style:{color:'var(--text-2)'}}, modelChildren),
       el('div', {textContent: formatLatency(r.latency_ms)}),
-      el('div', {textContent: r.input_tokens ? String(r.input_tokens) : '--', style:{color:'#8b949e'}}),
-      el('div', {textContent: r.output_tokens ? String(r.output_tokens) : '--', style:{color:'#8b949e'}})
+      el('div', {textContent: r.input_tokens ? String(r.input_tokens) : '--', style:{color:'var(--text-2)'}}),
+      el('div', {textContent: r.output_tokens ? String(r.output_tokens) : '--', style:{color:'var(--text-2)'}})
     ]);
     if (r.request_id) {
       row.addEventListener('click', function() { toggleRequestDetail(row, r.request_id); });
@@ -1174,7 +1216,7 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
         var grid = el('div', {className: 'model-grid'}, [bigLabel, bigInput, smallLabel, smallInput]);
         var nameBadge = (overrideKeys.some(function(k) { return k.startsWith(name + '.'); }))
           ? el('span', {className: 'badge badge-override', textContent: 'overridden', style:{marginLeft:'6px'}}) : null;
-        var nameEl = el('div', {className: 'form-label'}, [el('span', {style:{color:'#4a9eff'}, textContent: name})].concat(nameBadge ? [nameBadge] : []));
+        var nameEl = el('div', {className: 'form-label'}, [el('span', {className:'accent mono', textContent: name})].concat(nameBadge ? [nameBadge] : []));
         var group = el('div', {className: 'form-group'}, [nameEl, grid]);
         form.appendChild(group);
       });
@@ -1237,7 +1279,7 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
           if (val == null) return;
           rows.push(el('div', {className: 'model-grid', style:{marginTop:'4px'}}, [
             el('div', {className: 'label', textContent: k + ':'}),
-            el('div', {textContent: String(val), style:{fontFamily:'monospace',fontSize:'12px',color:'#c9d1d9'}})
+            el('div', {textContent: String(val), style:{fontFamily:'monospace',fontSize:'12px',color:'var(--text-1)'}})
           ]));
         });
         if (rows.length === 0) return;
@@ -1263,7 +1305,7 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
       var failPolicy = data['RATE_LIMIT_FAIL_POLICY'] || 'open (default)';
       secCard.appendChild(el('div', {className: 'model-grid', style:{marginTop:'0'}}, [
         el('div', {className: 'label', textContent: 'IP Allowlist:'}),
-        el('div', {textContent: ipVal || 'not set (all IPs allowed)', style:{fontFamily:'monospace',fontSize:'12px',color: ipVal ? '#c9d1d9' : '#8b949e'}}),
+        el('div', {textContent: ipVal || 'not set (all IPs allowed)', style:{fontFamily:'monospace',fontSize:'12px',color: ipVal ? 'var(--text-1)' : 'var(--text-2)'}}),
         el('div', {className: 'label', textContent: 'Rate Limit Fail Policy:'}),
         el('div', {textContent: failPolicy, style:{fontFamily:'monospace',fontSize:'12px'}})
       ]));
@@ -1393,7 +1435,7 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
           budgetCell = el('td', null, budgetChildren);
         } else {
           var spendAny = k.total_spend != null ? ('$' + Number(k.total_spend).toFixed(4)) : '--';
-          budgetCell = el('td', {textContent: spendAny, style:{color:'#8b949e'}});
+          budgetCell = el('td', {textContent: spendAny, style:{color:'var(--text-2)'}});
         }
 
         // Allowed models chips
@@ -1408,7 +1450,7 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
         }
 
         // Prefix as link → filter requests
-        var prefixLink = el('a', {textContent: k.key_prefix || '--', style:{fontFamily:'monospace',cursor:'pointer',color:'#4a9eff'}});
+        var prefixLink = el('a', {textContent: k.key_prefix || '--', className:'mono accent', style:{cursor:'pointer'}});
         prefixLink.addEventListener('click', (function(kid) {
           return function() {
             // Switch to Request Log tab with this key pre-filtered
@@ -1446,9 +1488,9 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
         actionTd.appendChild(spendBtn);
         var row = el('tr', null, [
           el('td', null, [prefixLink]),
-          el('td', {textContent: k.description || '--', style:{color:'#8b949e'}}),
+          el('td', {textContent: k.description || '--', style:{color:'var(--text-2)'}}),
           el('td', {textContent: k.role || 'developer'}),
-          el('td', {textContent: rpmTpm, style:{color:'#8b949e'}}),
+          el('td', {textContent: rpmTpm, style:{color:'var(--text-2)'}}),
           budgetCell,
           el('td', {textContent: String(k.total_requests || 0)}),
           modelsCell,
@@ -1702,11 +1744,11 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
       entries.forEach(function(e) {
         var targetText = e.target_type + (e.target_id ? ' #' + e.target_id : '');
         tbody.appendChild(el('tr', null, [
-          el('td', {textContent: e.timestamp || '--', style:{fontFamily:'monospace',fontSize:'11px',color:'#8b949e'}}),
-          el('td', {textContent: e.action || '--', style:{fontFamily:'monospace',color:'#4a9eff'}}),
-          el('td', {textContent: targetText, style:{color:'#8b949e'}}),
-          el('td', {textContent: e.detail || '--', style:{color:'#c9d1d9',maxWidth:'300px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}),
-          el('td', {textContent: e.source_ip || '--', style:{color:'#8b949e',fontFamily:'monospace',fontSize:'11px'}})
+          el('td', {textContent: e.timestamp || '--', className:'mono dim', style:{fontSize:'11px'}}),
+          el('td', {textContent: e.action || '--', className:'mono accent'}),
+          el('td', {textContent: targetText, className:'dim'}),
+          el('td', {textContent: e.detail || '--', style:{maxWidth:'300px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}),
+          el('td', {textContent: e.source_ip || '--', className:'mono dim', style:{fontSize:'11px'}})
         ]));
       });
       container.appendChild(el('table', {className: 'keys-grid'}, [thead, tbody]));
@@ -1791,7 +1833,7 @@ input:focus,select:focus{outline:none;border-color:#4a9eff}
         var actionTd = el('td', null, [removeBtn]);
         var row = el('tr', null, [
           el('td', {textContent: m.model_name, style:{fontFamily:'monospace'}}),
-          el('td', {textContent: String(m.deployments || 0), style:{color:'#8b949e'}}),
+          el('td', {textContent: String(m.deployments || 0), style:{color:'var(--text-2)'}}),
           actionTd
         ]);
         tbody.appendChild(row);

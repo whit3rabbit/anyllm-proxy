@@ -198,8 +198,15 @@ async fn bedrock_stream(
             loop {
                 match eventstream::decode_frame(&mut event_buf) {
                     Err(e) => {
-                        tracing::warn!(error = %e, "Bedrock event stream CRC mismatch, dropping frame");
-                        // Buffer was already advanced past the bad frame; continue.
+                        // On prelude CRC failure the decoder does NOT advance the buffer
+                        // (total_len is untrustworthy), so continuing the inner loop
+                        // would call decode_frame on the same bytes indefinitely.
+                        // On message CRC failure the buffer is advanced, but the frame
+                        // is corrupt regardless. Either way, close the connection per
+                        // the decoder's contract ("caller closes the connection").
+                        tracing::error!(error = %e, "Bedrock event stream CRC error; closing connection");
+                        metrics.record_error();
+                        return;
                     }
                     Ok(None) => break, // no complete frame yet
                     Ok(Some(payload)) => {

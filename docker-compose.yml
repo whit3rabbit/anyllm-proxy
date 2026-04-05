@@ -38,6 +38,16 @@ services:
       ADMIN_BIND: "0.0.0.0"
       ADMIN_DB_PATH: /data/admin.db
       ADMIN_TOKEN_PATH: /data/.admin_token
+      # Admin token — choose one approach:
+      #
+      # Option 1 (recommended): set a strong fixed token in .env or here.
+      #   Generate: openssl rand -hex 32
+      #   Token persists across restarts; no need to retrieve after each start.
+      # ADMIN_TOKEN: ""
+      #
+      # Option 2 (auto-generate): leave ADMIN_TOKEN unset.
+      #   A new random token is written to /data/.admin_token on every restart.
+      #   Retrieve it: docker compose exec proxy cat /data/.admin_token
       # WEBUI: "1"             # uncomment to always enable admin UI
       # PROXY_CONFIG: /config/config.yaml
     ports:

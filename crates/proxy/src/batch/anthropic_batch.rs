@@ -67,8 +67,26 @@ pub(crate) async fn create_anthropic_batch(
         }
     };
 
-    // Derive model name from first request (all should use the same model after mapping).
+    // Derive model name from first request. Anthropic's batch API allows mixed
+    // models in theory, but OpenAI's batch API requires all requests to use the
+    // same model. Reject mixed-model batches here rather than letting OpenAI
+    // reject them with an opaque error.
     let model = req.requests[0].params.model.clone();
+    if let Some(mismatched) = req
+        .requests
+        .iter()
+        .find(|r| r.params.model != model)
+    {
+        return error_response(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            ErrorType::InvalidRequestError,
+            &format!(
+                "All requests in a batch must use the same model. \
+                 First request uses '{}', but another uses '{}'.",
+                model, mismatched.params.model
+            ),
+        );
+    }
 
     // Translate Anthropic JSONL to OpenAI JSONL.
     let openai_jsonl = translate_batch_to_openai_jsonl(&req.requests);

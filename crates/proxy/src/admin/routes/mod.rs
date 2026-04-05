@@ -234,6 +234,12 @@ async fn reject_cross_origin(
 /// on first use (one-time token), preventing replay across multiple mutating requests.
 /// Returns 403 with a descriptive error if the token is missing, mismatched, or unknown.
 /// Applied inside validate_admin_token so unauthenticated requests are rejected first.
+///
+/// Long-lived sessions: the admin SPA fetches a fresh token before every mutating
+/// request (not once at login), so sessions open for more than 24 h still work as
+/// long as the browser can reach GET /admin/csrf-token. Both the cookie and the
+/// server-side entry expire after 24 h; if the cookie is gone the next mutation
+/// returns 403 until the page is refreshed.
 pub async fn validate_csrf(
     axum::extract::State(shared): axum::extract::State<SharedState>,
     req: axum::extract::Request,
@@ -453,7 +459,8 @@ async fn serve_spa() -> axum::response::Response {
 
     let csp = format!(
         "default-src 'self'; script-src 'self' 'nonce-{nonce}'; \
-         style-src 'self' 'nonce-{nonce}'; \
+         style-src 'self' 'nonce-{nonce}' https://fonts.bunny.net; \
+         font-src https://fonts.bunny.net; \
          connect-src 'self' ws: wss:; img-src 'self' data:; \
          frame-ancestors 'none'"
     );

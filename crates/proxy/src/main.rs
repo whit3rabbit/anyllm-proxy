@@ -469,11 +469,15 @@ async fn async_main(args: Vec<String>) {
             loop {
                 interval.tick().await;
                 let now = anyllm_proxy::admin::keys::now_ms();
-                // Check and prune old rate limit states
-                for entry in virtual_keys_pruner.iter() {
-                    let _ = entry.rate_state.check_rpm(0, now);
-                    let _ = entry.rate_state.check_tpm(0, now);
-                }
+                // Single pass: slide rate-limit windows forward (frees old
+                // buckets) and drop expired keys. Without active eviction,
+                // expired keys accumulate in the DashMap until next auth use.
+                let now_secs = (now / 1000) as i64;
+                virtual_keys_pruner.retain(|_, v| {
+                    let _ = v.rate_state.check_rpm(0, now);
+                    let _ = v.rate_state.check_tpm(0, now);
+                    v.expires_at.is_none_or(|exp| now_secs < exp)
+                });
             }
         });
 
@@ -500,27 +504,46 @@ async fn async_main(args: Vec<String>) {
         };
 
         // Admin token: use env var or generate 256-bit random hex written to a file.
-        let admin_token = std::env::var("ADMIN_TOKEN").unwrap_or_else(|_| {
-            let mut buf = [0u8; 32];
-            getrandom::fill(&mut buf).expect("getrandom failed");
-            let token = hex::encode(buf);
-            let token_path = resolve_admin_token_path();
-            let token_path = token_path.to_string_lossy().to_string();
-            // Write token to file with restrictive permissions instead of stderr,
-            // because stderr is captured by container log drivers in production.
-            if let Err(e) = write_token_file(&token_path, &token) {
-                // Do not print the token to stderr: container log drivers capture
-                // stderr and persist it in centralized logging systems.
-                panic!(
-                    "Cannot write admin token to {token_path}: {e}. \
-                     Set ADMIN_TOKEN env var explicitly or ensure the path is writable."
-                );
-            } else {
-                // Log the path, not the token itself.
-                tracing::info!(path = %token_path, "generated admin token written to file (set ADMIN_TOKEN env var to avoid this)");
+        let admin_token = match std::env::var("ADMIN_TOKEN") {
+            Ok(t) => {
+                if t.len() < 32 {
+                    tracing::warn!(
+                        len = t.len(),
+                        "ADMIN_TOKEN is shorter than 32 characters; \
+                         use a longer random value to reduce brute-force risk \
+                         (generate one with: openssl rand -hex 32)"
+                    );
+                }
+                t
             }
-            token
-        });
+            Err(_) => {
+                let mut buf = [0u8; 32];
+                getrandom::fill(&mut buf).expect("getrandom failed");
+                let token = hex::encode(buf);
+                let token_path = resolve_admin_token_path();
+                let token_path = token_path.to_string_lossy().to_string();
+                // Write token to file with restrictive permissions instead of stderr,
+                // because stderr is captured by container log drivers in production.
+                if let Err(e) = write_token_file(&token_path, &token) {
+                    // Do not print the token to stderr: container log drivers capture
+                    // stderr and persist it in centralized logging systems.
+                    panic!(
+                        "Cannot write admin token to {token_path}: {e}. \
+                         Set ADMIN_TOKEN env var explicitly or ensure the path is writable."
+                    );
+                } else {
+                    // Log the path and retrieval command, not the token itself.
+                    // A new token is generated on every restart; set ADMIN_TOKEN for a fixed value.
+                    tracing::info!(
+                        path = %token_path,
+                        "admin token written to file — \
+                         retrieve with: cat {token_path} \
+                         | set ADMIN_TOKEN env var to use a fixed token across restarts"
+                    );
+                }
+                token
+            }
+        };
         let admin_token = Arc::new(zeroize::Zeroizing::new(admin_token));
 
         // Spawn periodic tasks: log retention and metrics snapshot broadcast.

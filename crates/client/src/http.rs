@@ -91,7 +91,13 @@ pub fn build_http_client(config: &HttpClientConfig) -> Client {
 
     #[cfg(feature = "ssrf-protection")]
     if config.ssrf_protection {
-        builder = builder.dns_resolver(std::sync::Arc::new(SsrfSafeDnsResolver));
+        // Disable redirects in addition to DNS filtering. The DNS resolver only
+        // intercepts hostname lookups; a redirect to a bare IP (e.g.,
+        // http://169.254.169.254/) bypasses DNS entirely, so the SSRF-safe
+        // resolver would never be called and the redirect would be followed.
+        builder = builder
+            .dns_resolver(std::sync::Arc::new(SsrfSafeDnsResolver))
+            .redirect(reqwest::redirect::Policy::none());
     }
 
     builder.build().expect("failed to build HTTP client")

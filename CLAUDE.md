@@ -33,7 +33,7 @@ All implementation phases are complete.
 - Audit log: admin config mutations recorded in SQLite `audit_log` table
 - Spend alerts: webhook notifications at 80% / 95% / 100% of key budget
 - Model allowlist: per-key policy with exact match and `prefix/*` wildcard
-- Admin UI: login form (sessionStorage), virtual keys tab, models tab, request detail view, cost column, feed pause + filter
+- Admin UI: requires `--webui` or `--admin` CLI flag to start (or `WEBUI=1`/`ADMIN=1` env via docker-entrypoint.sh); login form (sessionStorage), virtual keys tab, models tab, request detail view, cost column, feed pause + filter
 - Security hardening: plaintext HTTP startup warning, 1MB admin body limit, CSP header, model name validation
 - Security fixes (2026-03-30 audit): `AWS_ACCESS_KEY_ID`/`GOOGLE_ACCESS_TOKEN` redacted in env endpoint; admin rate limiter uses sliding window; all audit entries include `source_ip`; OIDC discovery and webhook callbacks use SSRF-safe HTTP client and validate URLs against private IP ranges; CSRF public-route decision documented; non-Unix token file warning already present
 - Model mapping and lossy-translation warnings
@@ -102,6 +102,11 @@ OPENAI_API_KEY=sk-... cargo run -p anyllm_proxy
 - `OPENAI_BASE_URL`: OpenAI base URL (default: `https://api.openai.com`)
 - `OPENAI_API_FORMAT`: OpenAI API format: `chat` (default, Chat Completions) or `responses` (Responses API). Only relevant when BACKEND=openai.
 - `LISTEN_PORT`: Server port (default: `3000`)
+- `ADMIN_PORT`: Admin server port (default: `3001`; must differ from `LISTEN_PORT`)
+- `ADMIN_BIND`: Admin server bind address (default: `127.0.0.1`; set `0.0.0.0` in Docker)
+- `ADMIN_DB_PATH`: SQLite database path (default: `admin.db` in CWD)
+- `ADMIN_TOKEN_PATH`: Path for auto-generated admin token file (default: `.admin_token` in CWD)
+- `DISABLE_ADMIN`: Set to `1` to force-disable admin UI even when `--webui` flag is passed
 - `BIG_MODEL`: Backend model for sonnet/opus requests (default: `gpt-4o` for OpenAI, `gemini-2.5-pro` for Vertex/Gemini)
 - `SMALL_MODEL`: Backend model for haiku requests (default: `gpt-4o-mini` for OpenAI, `gemini-2.5-flash` for Vertex/Gemini)
 - `RUST_LOG`: Tracing filter (e.g., `info`, `anyllm_proxy=debug`)

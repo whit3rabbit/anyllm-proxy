@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # ── Stage 1: install cargo-chef ──────────────────────────────────────────────
-FROM rust:1.85-alpine AS chef
+FROM rust:1-alpine AS chef
 RUN apk add --no-cache musl-dev openssl-dev openssl-libs-static
 RUN cargo install cargo-chef --locked
 WORKDIR /app
@@ -21,6 +21,7 @@ COPY --from=planner /app/recipe.json recipe.json
 RUN cargo chef cook --release --recipe-path recipe.json -p anyllm_proxy
 COPY Cargo.toml Cargo.lock ./
 COPY crates crates
+COPY assets assets
 RUN cargo build --release -p anyllm_proxy
 
 # ── Stage 4: minimal Alpine runtime ──────────────────────────────────────────
