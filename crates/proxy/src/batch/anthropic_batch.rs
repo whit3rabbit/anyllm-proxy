@@ -72,11 +72,7 @@ pub(crate) async fn create_anthropic_batch(
     // same model. Reject mixed-model batches here rather than letting OpenAI
     // reject them with an opaque error.
     let model = req.requests[0].params.model.clone();
-    if let Some(mismatched) = req
-        .requests
-        .iter()
-        .find(|r| r.params.model != model)
-    {
+    if let Some(mismatched) = req.requests.iter().find(|r| r.params.model != model) {
         return error_response(
             StatusCode::UNPROCESSABLE_ENTITY,
             ErrorType::InvalidRequestError,

@@ -26,7 +26,7 @@ All implementation phases are complete.
 - Gemini native path: direct `generateContent` API, non-streaming + streaming SSE with full-response diffing
 - Strict tool calling: sets `strict: true` on the forced tool when `tool_choice: {type: "tool", name: "X"}`
 - Langfuse integration: native tracing when `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` set, or via config `callbacks: ["langfuse"]`
-- CSRF protection: admin state-mutating endpoints require `X-CSRF-Token` header (double-submit cookie pattern)
+- CSRF protection: admin state-mutating endpoints require `X-CSRF-Token` header (double-submit cookie pattern). Tokens are **one-time-use**: fetch a fresh token from `GET /admin/csrf-token` before each POST/PUT/DELETE — the SPA does this, and any script must too.
 - Per-entry cache TTL: `MemoryCache` enforces per-entry TTL via moka `Expiry` trait
 - Configurable Redis fail policy: `RATE_LIMIT_FAIL_POLICY=open|closed` (default: open)
 - Cost tracking: `record_cost()` wired into all paths; `key_id` + `cost_usd` in request log
@@ -36,6 +36,7 @@ All implementation phases are complete.
 - Admin UI: requires `--webui` or `--admin` CLI flag to start (or `WEBUI=1`/`ADMIN=1` env via docker-entrypoint.sh); login form (sessionStorage), virtual keys tab, models tab, request detail view, cost column, feed pause + filter
 - Security hardening: plaintext HTTP startup warning, 1MB admin body limit, CSP header, model name validation
 - Security fixes (2026-03-30 audit): `AWS_ACCESS_KEY_ID`/`GOOGLE_ACCESS_TOKEN` redacted in env endpoint; admin rate limiter uses sliding window; all audit entries include `source_ip`; OIDC discovery and webhook callbacks use SSRF-safe HTTP client and validate URLs against private IP ranges; CSRF public-route decision documented; non-Unix token file warning already present
+- Admin rate limiter: 10 RPM per source IP (60-second sliding window, in-memory). Resets on process restart. `set_admin_rpm()` overrides the limit for tests.
 - Model mapping and lossy-translation warnings
 - `POST /v1/embeddings` passthrough: forwards directly to the backend with no translation; works with OpenAI, Vertex, Gemini (`gemini-embedding-exp-03-07`), and vLLM/HuggingFace models. Not mounted for the Anthropic passthrough backend.
 - `x-anyllm-degradation` response header: set when features are silently dropped during translation (opt-in via `ANYLLM_DEGRADATION_WARNINGS=true`; auto-enabled when `PROXY_CONFIG` is set). Examples: `top_k`, `thinking_config`, `cache_control`, `document_blocks`, `stop_sequences_truncated`
@@ -74,12 +75,23 @@ Key Docker env vars:
 
 CI: `.github/workflows/docker.yml` builds linux/amd64 + linux/arm64 on native runners, merges into a multi-arch manifest. Requires `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` secrets in the repo.
 
+## Docker Smoke Tests
+
+Local test stack (no real API key needed):
+```bash
+docker compose -f docker-compose.test.yml up -d --build
+timeout 60 sh -c 'until curl -sf http://localhost:3000/health; do sleep 2; done'
+bash scripts/docker-smoke-test.sh    # 9 checks: health, auth, models, virtual key lifecycle
+docker compose -f docker-compose.test.yml down -v
+```
+Uses `.env.example.test` (`PROXY_OPEN_RELAY=true`, `ADMIN_TOKEN=test-admin-token-docker-smoke-0000`). Also runs automatically in CI via `.github/workflows/docker.yml`.
+
 ## Build and Test
 
 ```bash
 cargo build                          # build everything
 cargo build --features otel          # with OpenTelemetry support
-cargo test                           # run all tests (~906 tests, 8 ignored)
+cargo test                           # run all tests (~1081 tests, 10 ignored)
 cargo test -p anyllm_client     # client crate only
 cargo test -p anyllm_translate  # translator crate only
 cargo test -p anyllm_proxy      # proxy crate only
@@ -210,6 +222,15 @@ Pure translation logic, no IO. Key modules:
 - **`util/`**: JSON helpers, ID generation (uuid v4), secret redaction
 - **`config.rs`**: Translator-level configuration, **`error.rs`**: Error types, **`translate.rs`**: Top-level translation entry points
 
+### `crates/batch_engine` (lib: `anyllm_batch_engine`)
+HTTP-agnostic batch orchestration engine: job queue, file storage, webhook delivery. The proxy crate wires this into axum routes. Key modules:
+- **`engine.rs`**: `BatchEngine` — top-level orchestrator
+- **`job.rs`**: Job types and state machine
+- **`queue.rs`**: Job queue
+- **`file_store.rs`**: File storage for batch inputs/outputs
+- **`webhook.rs`**: Webhook delivery for job completion events
+- **`validation.rs`**: JSONL input validation (`validate_jsonl`)
+
 ### `crates/proxy` (bin: `anyllm_proxy`)
 HTTP proxy built on axum + reqwest:
 - **`config/`**: Env-based configuration (`mod.rs`), TLS client cert setup (`tls.rs`), URL validation (`url_validation.rs`)
@@ -228,7 +249,7 @@ HTTP proxy built on axum + reqwest:
 - **`admin/`**: Admin server (localhost-only) with config management, WebSocket live updates (`ws.rs`), token auth (`auth.rs`, `db.rs`, `mod.rs`, `routes.rs`, `state.rs`)
 - **`admin/keys.rs`**: Virtual key generation (SHA-256 hashed, `sk-vk` prefix), `VirtualKeyMeta`, `RateLimitState` (sliding window RPM/TPM)
 - **`admin/routes.rs`**: Admin API endpoints including POST/GET/DELETE `/admin/api/keys` for virtual key CRUD
-- **`admin-ui/`**: Static admin UI served by the admin server (`index.html`)
+- **`admin-ui/`** (`crates/proxy/admin-ui/`): React 19 + TypeScript SPA built with Vite. Build: `cd crates/proxy/admin-ui && npm run build`. Tabs: dashboard, keys, models, requests, traffic, uptime, audit, backends, settings.
 - **`metrics/`**: Request count, success/error tracking, exposed via GET /metrics
 - **`otel.rs`**: OpenTelemetry initialization behind `#[cfg(feature = "otel")]`; `OtelGuard` shuts down the provider on drop
 
@@ -307,12 +328,6 @@ Provider API key defaults (used when `api_key` is not specified in the entry):
 
 - OpenAI API spec: https://github.com/openai/openai-openapi/blob/manual_spec/openapi.yaml (very large, ~70k+ lines). See https://simonwillison.net/2024/Dec/22/openai-openapi/ for context on the spec's size and structure. Do not attempt to load the full spec into context; reference specific sections as needed.
 
-## Recent Changes
-- 001-litellm-parity: Added Rust stable (1.83+, workspace edition 2021)
-- 20260325-120000-litellm-gap-fill: Added POST /v1/chat/completions (OpenAI format input), Azure OpenAI backend (BACKEND=azure), virtual key management (admin API + DashMap cache), per-key RPM/TPM rate limiting, Rust client v0.2.0 (ClientBuilder + ToolBuilder + messages_stream), optional OpenTelemetry export (--features otel), ReverseStreamingTranslator in translator crate, reverse translation functions openai_to_anthropic_request / anthropic_to_openai_response
-- parity-gaps: Routing strategies (least-busy, latency-based, weighted), dynamic model management admin API, /v1/models enrichment, IP allowlisting (CIDR, X-Forwarded-For), webhook callbacks
-- 20260327: Gemini native generateContent path; Anthropic batch API (/v1/messages/batches); strict tool calling; Langfuse integration; CSRF protection; per-entry cache TTL; Redis fail policy; cost tracking + audit log + spend alerts + model allowlist; admin UI overhaul; security hardening; jsonwebtoken CVE fix
-
 ## Active Technologies
 - Rust stable (1.83+, workspace edition 2021) (001-litellm-parity)
-- SQLite (existing, extended with new tables); Redis (optional Tier 1 cache); Qdran (001-litellm-parity)
+- SQLite (existing, extended with new tables); Redis (optional rate-limit/cache backend); Qdrant (optional semantic cache, `--features qdrant`, requires `QDRANT_URL`)

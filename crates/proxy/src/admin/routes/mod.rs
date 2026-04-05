@@ -53,10 +53,7 @@ pub(super) fn is_valid_timestamp(s: &str) -> bool {
 
 /// Returns the name of the first `since`/`until` parameter that fails timestamp
 /// validation, or `None` if both are valid (or absent).
-pub(super) fn check_time_range(
-    since: Option<&str>,
-    until: Option<&str>,
-) -> Option<&'static str> {
+pub(super) fn check_time_range(since: Option<&str>, until: Option<&str>) -> Option<&'static str> {
     if since.is_some_and(|s| !is_valid_timestamp(s)) {
         return Some("since");
     }
@@ -435,7 +432,8 @@ pub fn admin_router(shared: SharedState, token: Arc<zeroize::Zeroizing<String>>)
     // SPA serving (no auth required, token passed via query param in browser).
     let spa_route = Router::new()
         .route("/admin/", get(serve_spa))
-        .route("/admin", get(serve_spa));
+        .route("/admin", get(serve_spa))
+        .route("/", get(|| async { axum::response::Redirect::permanent("/admin/") }));
 
     // Merge all routes.
     public

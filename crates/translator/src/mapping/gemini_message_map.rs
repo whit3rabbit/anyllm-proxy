@@ -40,9 +40,7 @@ pub fn compute_gemini_request_warnings(
                     // Document blocks have no Gemini equivalent.
                     anthropic::ContentBlock::Document { .. } => has_document = true,
                     // URL-type images: Gemini only accepts inline base64 data.
-                    anthropic::ContentBlock::Image { source }
-                        if source.source_type != "base64" =>
-                    {
+                    anthropic::ContentBlock::Image { source } if source.source_type != "base64" => {
                         has_url_image = true
                     }
                     _ => {}
@@ -488,9 +486,7 @@ pub fn gemini_to_anthropic_request(
 
     // Generation config
     let gc = req.generation_config.as_ref();
-    let max_tokens = gc
-        .and_then(|g| g.max_output_tokens)
-        .unwrap_or(8192);
+    let max_tokens = gc.and_then(|g| g.max_output_tokens).unwrap_or(8192);
     let temperature = gc.and_then(|g| g.temperature);
     let top_p = gc.and_then(|g| g.top_p);
     let top_k = gc.and_then(|g| g.top_k);
@@ -517,16 +513,12 @@ pub fn gemini_to_anthropic_request(
     let tool_choice = req.tool_config.as_ref().map(|tc| {
         match tc.function_calling_config.mode.as_str() {
             "NONE" => anthropic::ToolChoice::None,
-            "ANY" => {
-                match tc.function_calling_config.allowed_function_names.as_deref() {
-                    Some([name]) => anthropic::ToolChoice::Tool {
-                        name: name.clone(),
-                    },
-                    _ => anthropic::ToolChoice::Any {
-                        disable_parallel_tool_use: None,
-                    },
-                }
-            }
+            "ANY" => match tc.function_calling_config.allowed_function_names.as_deref() {
+                Some([name]) => anthropic::ToolChoice::Tool { name: name.clone() },
+                _ => anthropic::ToolChoice::Any {
+                    disable_parallel_tool_use: None,
+                },
+            },
             // AUTO or anything else
             _ => anthropic::ToolChoice::Auto {
                 disable_parallel_tool_use: None,
@@ -863,7 +855,10 @@ mod tests {
             .iter()
             .find(|c| {
                 c.role.as_deref() == Some("user")
-                    && c.parts.first().and_then(|p| p.function_response.as_ref()).is_some()
+                    && c.parts
+                        .first()
+                        .and_then(|p| p.function_response.as_ref())
+                        .is_some()
             })
             .unwrap();
         let fr = user_content.parts[0].function_response.as_ref().unwrap();
@@ -891,7 +886,10 @@ mod tests {
             .iter()
             .find(|c| {
                 c.role.as_deref() == Some("user")
-                    && c.parts.first().and_then(|p| p.function_response.as_ref()).is_some()
+                    && c.parts
+                        .first()
+                        .and_then(|p| p.function_response.as_ref())
+                        .is_some()
             })
             .unwrap();
         let fr = user_content.parts[0].function_response.as_ref().unwrap();

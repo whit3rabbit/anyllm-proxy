@@ -246,7 +246,10 @@ pub fn apply_strict_to_forced_tool(tools: &mut [serde_json::Value], forced_name:
                             "additionalProperties": false
                         })
                     });
-                obj.insert("parameters".to_string(), normalize_schema_for_strict(params));
+                obj.insert(
+                    "parameters".to_string(),
+                    normalize_schema_for_strict(params),
+                );
             }
             // Tool names are unique; stop after the first match.
             break;

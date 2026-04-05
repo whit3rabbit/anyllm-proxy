@@ -127,19 +127,25 @@ pub fn init_db(conn: &Connection) -> rusqlite::Result<()> {
         );
         CREATE INDEX IF NOT EXISTS idx_health_checks_backend_time
             ON health_checks (backend, checked_at DESC);
+        -- Separate checked_at index for the prune DELETE (no leading backend column).
+        CREATE INDEX IF NOT EXISTS idx_health_checks_checked_at
+            ON health_checks (checked_at);
         ",
     )?;
 
     Ok(())
 }
 
-/// Prune health_checks rows older than 31 days. Called each write cycle.
-pub fn prune_health_checks(conn: &Connection) -> rusqlite::Result<()> {
-    let cutoff = std::time::SystemTime::now()
+fn now_unix_secs() -> i64 {
+    std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs() as i64
-        - 31 * 24 * 3600;
+}
+
+/// Prune health_checks rows older than 31 days. Called each write cycle.
+pub fn prune_health_checks(conn: &Connection) -> rusqlite::Result<()> {
+    let cutoff = now_unix_secs() - 31 * 24 * 3600;
     conn.execute("DELETE FROM health_checks WHERE checked_at < ?1", [cutoff])?;
     Ok(())
 }
@@ -151,13 +157,9 @@ pub fn insert_health_check(
     status: &str,
     latency_ms: Option<u64>,
 ) -> rusqlite::Result<()> {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs() as i64;
     conn.execute(
         "INSERT INTO health_checks (backend, checked_at, status, latency_ms) VALUES (?1, ?2, ?3, ?4)",
-        rusqlite::params![backend, now, status, latency_ms.map(|v| v as i64)],
+        rusqlite::params![backend, now_unix_secs(), status, latency_ms.map(|v| v as i64)],
     )?;
     prune_health_checks(conn)?;
     Ok(())
@@ -165,11 +167,7 @@ pub fn insert_health_check(
 
 /// Returns the uptime percentage for a backend over the last 30 days.
 pub fn backend_uptime_pct(conn: &Connection, backend: &str) -> rusqlite::Result<f64> {
-    let cutoff = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs() as i64
-        - 30 * 24 * 3600;
+    let cutoff = now_unix_secs() - 30 * 24 * 3600;
     let total: i64 = conn
         .query_row(
             "SELECT COUNT(*) FROM health_checks WHERE backend = ?1 AND checked_at >= ?2",
@@ -195,11 +193,7 @@ pub fn backend_history_30d(
     conn: &Connection,
     backend: &str,
 ) -> rusqlite::Result<Vec<(String, String)>> {
-    let cutoff = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs() as i64
-        - 30 * 24 * 3600;
+    let cutoff = now_unix_secs() - 30 * 24 * 3600;
     let mut stmt = conn.prepare(
         "SELECT
             date(checked_at, 'unixepoch') AS day,

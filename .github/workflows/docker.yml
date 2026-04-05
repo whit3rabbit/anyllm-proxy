@@ -46,12 +46,10 @@ jobs:
 
       - name: Smoke test (docker compose)
         run: |
-          printf 'PROXY_OPEN_RELAY=true\nWEBUI=1\n' > .env
-          docker compose up -d
-          timeout 30 sh -c 'until curl -sf http://localhost:3000/health; do sleep 1; done'
-          curl -sf http://localhost:3000/health | grep -q '"status":"ok"'
-          curl -sf http://localhost:3001/admin/health | grep -q '"status":"ok"'
-          docker compose down -v
+          docker compose -f docker-compose.test.yml up -d
+          timeout 60 sh -c 'until curl -sf http://localhost:3000/health; do sleep 2; done'
+          bash scripts/docker-smoke-test.sh
+          docker compose -f docker-compose.test.yml down -v
 
   build:
     name: Build (${{ matrix.platform }})

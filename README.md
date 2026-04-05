@@ -54,35 +54,63 @@ claude
 
 ### Admin Web Interface (optional)
 
-Pass `--webui` (or `--admin`) to also start the admin dashboard on `127.0.0.1:3001`. The dashboard has the following tabs:
-
-- **Dashboard:** Live RPM, error rate, P50/P95 latency, per-backend cards, and a filterable live request feed.
-- **Request Log:** Historical request log with filters (backend, status, key, date range), paginated, with per-request cost and token detail.
-- **Settings:** Mutable config (log level, log_bodies, per-backend model mappings), read-only env vars (secrets masked), and **Export .env** to generate a `.anyllm.env` template.
-- **Backends:** Configured backends and their settings.
-- **Access Control:** Virtual key CRUD — create, edit (RPM/TPM limits, budget, expiry, model allowlist), and revoke keys without restarting.
-- **Models:** Add/remove model routing deployments (LiteLLM config mode only).
-- **Audit:** Log of all admin config mutations and key lifecycle events.
+Pass `--webui` (or `--admin`) to start the admin dashboard alongside the proxy:
 
 ```bash
 anyllm_proxy --webui
-# Proxy API: http://localhost:3000
+# Proxy:     http://localhost:3000
 # Admin UI:  http://127.0.0.1:3001/admin/?token=$(cat .admin_token)
 ```
 
-The dashboard's Settings tab shows all active environment variables (API keys masked) and has an **Export .env** button that generates a `.anyllm.env` template you can edit and reuse. To use a custom port or a fixed token:
+The admin server binds to `127.0.0.1:3001` by default (localhost only). The dashboard tabs:
+
+- **Dashboard:** Live RPM, error rate, P50/P95 latency, per-backend cards, filterable live request feed.
+- **Request Log:** Historical log with filters (backend, status, key, date range), paginated, with per-request cost and token detail.
+- **Access Control:** Virtual key CRUD — create, edit (RPM/TPM limits, budget, expiry, model allowlist), revoke without restarting.
+- **Backends:** Configured backends and their status.
+- **Models:** Add/remove model routing deployments (LiteLLM config mode only).
+- **Audit:** All admin config mutations and key lifecycle events.
+- **Settings:** Mutable config (log level, log_bodies, model mappings), read-only env vars (secrets masked), **Export .env** to generate a `.anyllm.env` template.
+
+**Token:** On first start an admin token is auto-generated and written to `.admin_token`. Pass it as `?token=` in the URL or `Authorization: Bearer` for API calls. To set a fixed token instead:
 
 ```bash
-ADMIN_PORT=4000 ADMIN_TOKEN=mysecret anyllm_proxy --webui
+ADMIN_TOKEN=mysecret anyllm_proxy --webui
+# Generate a strong token: openssl rand -hex 32
 ```
 
-To force-disable the admin even when the flag is present (useful in automated environments):
+**Custom port / disable:**
 
 ```bash
-DISABLE_ADMIN=1 anyllm_proxy --webui   # admin will NOT start
+ADMIN_PORT=4000 anyllm_proxy --webui          # change port
+DISABLE_ADMIN=1 anyllm_proxy --webui          # do not start admin even when flag is present
 ```
 
-Additional admin env vars: `ADMIN_DB_PATH` (SQLite file, default: `admin.db`), `ADMIN_TOKEN_PATH` (where the generated token is written, default: `.admin_token`), `ADMIN_LOG_RETENTION_DAYS` (request log retention, default: `7`).
+**Docker:** The admin server must be reachable from outside the container. Set `ADMIN_BIND=0.0.0.0` and expose the port:
+
+```bash
+docker run -e OPENAI_API_KEY=sk-... -e WEBUI=1 -e ADMIN_BIND=0.0.0.0 \
+  -p 3000:3000 -p 127.0.0.1:3001:3001 followthewhit3rabbit/anyllm-proxy:latest
+
+# docker-compose (recommended — see docker-compose.yml)
+docker compose up
+# Token: docker compose exec proxy cat /data/.admin_token
+```
+
+**Admin env vars summary:**
+
+| Variable | Default | Description |
+|---|---|---|
+| `ADMIN_PORT` | `3001` | Admin server port |
+| `ADMIN_BIND` | `127.0.0.1` | Bind address (`0.0.0.0` in Docker) |
+| `ADMIN_TOKEN` | auto-generated | Fixed token (min 32 chars recommended) |
+| `ADMIN_TOKEN_PATH` | `.admin_token` | Where the auto-generated token is written |
+| `ADMIN_DB_PATH` | `admin.db` | SQLite database path |
+| `ADMIN_LOG_RETENTION_DAYS` | `7` | Request log retention |
+| `DISABLE_ADMIN` | — | Set to `1` to force-disable |
+| `WEBUI` / `ADMIN` | — | Docker entrypoint shorthand for `--webui` |
+
+**CSRF:** State-mutating admin API calls (POST/PUT/DELETE) require an `X-CSRF-Token` header. Fetch a one-time token from `GET /admin/csrf-token` before each mutating request. The SPA handles this automatically; scripts must do it explicitly. Admin endpoints are rate-limited to 10 requests/minute per IP.
 
 ## Advanced Mode
 
@@ -333,13 +361,11 @@ ANTHROPIC_BASE_URL=http://localhost:3000/deepseek_api claude
 
 ### The Admin Dashboard
 
-Start the proxy with `--webui`, then open:
+See [Admin Web Interface](#admin-web-interface-optional) for the full reference. When using a LiteLLM config, the **Models** tab lets you add/remove deployments live. All mutations are recorded in the **Audit** tab.
 
 ```bash
 open http://127.0.0.1:3001/admin/?token=$(cat .admin_token)
 ```
-
-The dashboard tabs are described under [Admin Web Interface](#admin-web-interface-optional) above. When using a LiteLLM config, the **Models** tab lets you add/remove deployments without editing the config file. All config mutations (model changes, key creation/revocation) are recorded in the **Audit** tab.
 
 ---
 

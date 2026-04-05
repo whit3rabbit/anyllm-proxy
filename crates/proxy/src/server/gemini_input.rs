@@ -6,12 +6,9 @@
 // Gemini-format responses. This allows the gemini CLI to point at the proxy via
 // GEMINI_BASE_URL without any client-side changes.
 
-use crate::backend::{
-    BackendClient, BackendError, MAX_SSE_BUFFER_SIZE,
-    find_double_newline,
-};
 use crate::backend::anthropic_client::AnthropicClientError;
 use crate::backend::bedrock_client::BedrockClientError;
+use crate::backend::{find_double_newline, BackendClient, BackendError, MAX_SSE_BUFFER_SIZE};
 use crate::server::routes::backend_error_to_response;
 use crate::server::state::AppState;
 use anyllm_translate::anthropic;
@@ -137,30 +134,43 @@ async fn call_backend_non_streaming(
             let mut openai_req = message_map::anthropic_to_openai_request(req);
             openai_req.model = mapped_model.to_string();
             let (openai_resp, _status, _rate_limits) = client.chat_completion(&openai_req).await?;
-            Ok(message_map::openai_to_anthropic_response(&openai_resp, &original_model))
+            Ok(message_map::openai_to_anthropic_response(
+                &openai_resp,
+                &original_model,
+            ))
         }
         BackendClient::OpenAIResponses(client) => {
             let mut openai_req = message_map::anthropic_to_openai_request(req);
             openai_req.model = mapped_model.to_string();
             let (openai_resp, _status, _rate_limits) = client.chat_completion(&openai_req).await?;
-            Ok(message_map::openai_to_anthropic_response(&openai_resp, &original_model))
+            Ok(message_map::openai_to_anthropic_response(
+                &openai_resp,
+                &original_model,
+            ))
         }
         BackendClient::GeminiNative(client) => {
             // Already have Gemini types; translate Anthropic -> Gemini, call, translate back.
             let gemini_req_out =
                 anyllm_translate::mapping::gemini_message_map::anthropic_to_gemini_request(req);
-            let gemini_resp = client.generate_content(&gemini_req_out, mapped_model).await?;
-            Ok(anyllm_translate::mapping::gemini_message_map::gemini_to_anthropic_response(
-                &gemini_resp,
-                &original_model,
-            ))
+            let gemini_resp = client
+                .generate_content(&gemini_req_out, mapped_model)
+                .await?;
+            Ok(
+                anyllm_translate::mapping::gemini_message_map::gemini_to_anthropic_response(
+                    &gemini_resp,
+                    &original_model,
+                ),
+            )
         }
         BackendClient::Anthropic(client) => {
-            let body = serde_json::to_vec(req)
-                .map_err(|e| BackendError::Anthropic(AnthropicClientError::Transport(e.to_string())))?;
+            let body = serde_json::to_vec(req).map_err(|e| {
+                BackendError::Anthropic(AnthropicClientError::Transport(e.to_string()))
+            })?;
             let (resp_bytes, _rate_limits) = client.forward(body.into(), &[]).await?;
-            let resp: anthropic::MessageResponse = serde_json::from_slice(&resp_bytes)
-                .map_err(|e| BackendError::Anthropic(AnthropicClientError::Transport(e.to_string())))?;
+            let resp: anthropic::MessageResponse =
+                serde_json::from_slice(&resp_bytes).map_err(|e| {
+                    BackendError::Anthropic(AnthropicClientError::Transport(e.to_string()))
+                })?;
             Ok(resp)
         }
         BackendClient::Bedrock(client) => {
@@ -198,14 +208,15 @@ async fn gemini_stream(
                 let _deployment = deployment;
                 metrics.record_stream_started();
 
-                let (response, _rate_limits) = match client.chat_completion_stream(&openai_req).await {
-                    Ok(v) => v,
-                    Err(e) => {
-                        metrics.record_error();
-                        tracing::error!("gemini input stream backend error: {e}");
-                        return;
-                    }
-                };
+                let (response, _rate_limits) =
+                    match client.chat_completion_stream(&openai_req).await {
+                        Ok(v) => v,
+                        Err(e) => {
+                            metrics.record_error();
+                            tracing::error!("gemini input stream backend error: {e}");
+                            return;
+                        }
+                    };
 
                 let mut buffer = BytesMut::new();
                 let mut translator = streaming_map::StreamingTranslator::new(model.clone());
@@ -215,7 +226,10 @@ async fn gemini_stream(
                 'outer: while let Some(chunk) = byte_stream.next().await {
                     let bytes = match chunk {
                         Ok(b) => b,
-                        Err(e) => { tracing::error!("stream read error: {e}"); break; }
+                        Err(e) => {
+                            tracing::error!("stream read error: {e}");
+                            break;
+                        }
                     };
                     buffer.extend_from_slice(&bytes);
 
@@ -238,12 +252,18 @@ async fn gemini_stream(
                                         }
                                     };
                                     for ev in &events {
-                                        if let Some(gemini_chunk) = anthropic_event_to_gemini_chunk(ev, &model) {
+                                        if let Some(gemini_chunk) =
+                                            anthropic_event_to_gemini_chunk(ev, &model)
+                                        {
                                             let data = match serde_json::to_string(&gemini_chunk) {
                                                 Ok(s) => s,
                                                 Err(_) => continue,
                                             };
-                                            if tx.send(Ok(Event::default().data(data))).await.is_err() {
+                                            if tx
+                                                .send(Ok(Event::default().data(data)))
+                                                .await
+                                                .is_err()
+                                            {
                                                 break 'outer;
                                             }
                                         }
@@ -274,8 +294,9 @@ async fn gemini_stream(
                         gemini_message_map::anthropic_to_gemini_response(&anthropic_resp);
                     let data = serde_json::to_string(&gemini_resp).unwrap_or_default();
                     // Single SSE event containing the full response.
-                    let stream =
-                        futures::stream::once(async move { Ok::<_, std::convert::Infallible>(Event::default().data(data)) });
+                    let stream = futures::stream::once(async move {
+                        Ok::<_, std::convert::Infallible>(Event::default().data(data))
+                    });
                     Sse::new(stream).into_response()
                 }
                 Err(e) => {

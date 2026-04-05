@@ -1,0 +1,27 @@
+# docker-compose.test.yml
+#
+# Ephemeral test stack — no real API key required.
+# Usage:
+#   docker compose -f docker-compose.test.yml up -d --build
+#   bash scripts/docker-smoke-test.sh
+#   docker compose -f docker-compose.test.yml down -v
+
+services:
+  proxy:
+    build: .
+    env_file: .env.example.test
+    environment:
+      # Bind admin to all interfaces so Docker port mapping reaches it.
+      # Host-side 127.0.0.1:3001 binding limits external exposure.
+      ADMIN_BIND: "0.0.0.0"
+      # Ephemeral DB — no named volume needed for tests.
+      ADMIN_DB_PATH: /tmp/test-admin.db
+    ports:
+      - "3000:3000"
+      - "127.0.0.1:3001:3001"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 5s

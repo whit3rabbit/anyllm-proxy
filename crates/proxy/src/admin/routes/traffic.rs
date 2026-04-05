@@ -105,23 +105,37 @@ fn query_traffic(conn: &rusqlite::Connection, window_hours: u32) -> Option<Traff
         collected
     };
 
-    // P95 per route via percentile-offset query.
-    for r in routes.iter_mut() {
-        let path_c = r.path.clone();
-        if let Ok(mut stmt) = conn.prepare(
-            "SELECT latency_ms FROM request_log
-             WHERE timestamp >= ?1 AND COALESCE(model_mapped, backend) = ?2
-             ORDER BY latency_ms
-             LIMIT 1 OFFSET CAST(0.95 * (
-                 SELECT COUNT(*) FROM request_log
-                 WHERE timestamp >= ?1 AND COALESCE(model_mapped, backend) = ?2
-             ) AS INTEGER)",
-        ) {
-            if let Ok(p95) = stmt.query_row(
-                rusqlite::params![since_str, path_c],
-                |row| row.get::<_, i64>(0),
-            ) {
-                r.p95_latency_ms = p95;
+    // P95 per route via a single window-function pass (avoids N correlated subqueries).
+    {
+        let mut stmt = conn
+            .prepare(
+                "SELECT path, latency_ms FROM (
+                    SELECT COALESCE(model_mapped, backend) AS path,
+                           latency_ms,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY COALESCE(model_mapped, backend)
+                               ORDER BY latency_ms
+                           ) AS rn,
+                           COUNT(*) OVER (
+                               PARTITION BY COALESCE(model_mapped, backend)
+                           ) AS total
+                    FROM request_log
+                    WHERE timestamp >= ?1
+                )
+                WHERE rn = CAST(total * 0.95 AS INTEGER) + 1",
+            )
+            .ok();
+        if let Some(ref mut stmt) = stmt {
+            if let Ok(mapped) = stmt.query_map(rusqlite::params![since_str], |r| {
+                Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?))
+            }) {
+                let p95_map: std::collections::HashMap<String, i64> =
+                    mapped.filter_map(|r| r.ok()).collect();
+                for r in routes.iter_mut() {
+                    if let Some(&p95) = p95_map.get(&r.path) {
+                        r.p95_latency_ms = p95;
+                    }
+                }
             }
         }
     }

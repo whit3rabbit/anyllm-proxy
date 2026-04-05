@@ -1,4 +1,8 @@
-use anyllm_proxy::{admin, config, server::{routes, state}, tools};
+use anyllm_proxy::{
+    admin, config,
+    server::{routes, state},
+    tools,
+};
 use std::sync::Arc;
 use tracing_subscriber::prelude::*;
 
@@ -83,7 +87,8 @@ fn main() {
 
 async fn async_main(args: Vec<String>) {
     // ---- Phase 3: Init tracing (needs RUST_LOG from env file) ----
-    let env_filter = tracing_subscriber::EnvFilter::from_default_env();
+    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
     let (filter, reload_handle) = tracing_subscriber::reload::Layer::new(env_filter);
 
     #[cfg(feature = "otel")]
@@ -546,6 +551,9 @@ async fn async_main(args: Vec<String>) {
             }
         };
         let admin_token = Arc::new(zeroize::Zeroizing::new(admin_token));
+
+        // Print token to stdout (not tracing) so it's easy to copy without cat.
+        println!("Admin token: {}", admin_token.as_str());
 
         // Spawn periodic tasks: log retention and metrics snapshot broadcast.
         let retention_days: u32 = std::env::var("ADMIN_LOG_RETENTION_DAYS")

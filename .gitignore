@@ -19,6 +19,9 @@ Thumbs.db
 .env.*
 !.env.example
 !.env.example.test
+.anyllm.env
+.anyllm.env.*
+!.anyllm.env.example
 
 # Debug
 *.pdb
@@ -26,6 +29,8 @@ Thumbs.db
 # Admin server artifacts
 .admin_token
 *.db
+*.db-shm
+*.db-wal
 
 # TLS certificates and keys
 *.p12

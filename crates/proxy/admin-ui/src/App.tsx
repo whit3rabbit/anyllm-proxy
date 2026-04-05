@@ -19,9 +19,32 @@ type Tab = 'dashboard' | 'requests' | 'settings' | 'backends' | 'keys' | 'models
 
 export default function App() {
   const token = useAuthStore((s) => s.token)
+  const login = useAuthStore((s) => s.login)
   const lastEvent = useWsStore((s) => s.lastEvent)
   const qc = useQueryClient()
   const [activeTab, setActiveTab] = useState<Tab>('dashboard')
+  const [bootstrapping, setBootstrapping] = useState(true)
+
+  // On mount: if ?token= is in the URL and no token is stored, validate and log in.
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    const urlToken = params.get('token')
+    if (urlToken && !token) {
+      fetch('/admin/api/metrics', {
+        headers: { Authorization: `Bearer ${urlToken}` },
+      })
+        .then((res) => {
+          if (res.ok) {
+            login(urlToken)
+            history.replaceState(null, '', location.pathname)
+          }
+        })
+        .catch(() => {})
+        .finally(() => setBootstrapping(false))
+    } else {
+      setBootstrapping(false)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps -- intentionally runs once on mount
 
   useEffect(() => {
     if (token) {
@@ -41,6 +64,7 @@ export default function App() {
     }
   }, [lastEvent, qc])
 
+  if (bootstrapping) return null
   if (!token) return <LoginPage />
 
   return (

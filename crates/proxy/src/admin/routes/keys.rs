@@ -80,9 +80,7 @@ pub(super) async fn create_key(
                         }),
                         rpm_limit: body.rpm_limit,
                         tpm_limit: body.tpm_limit,
-                        rate_state: std::sync::Arc::new(
-                            super::super::keys::RateLimitState::new(),
-                        ),
+                        rate_state: std::sync::Arc::new(super::super::keys::RateLimitState::new()),
                         role,
                         max_budget_usd: body.max_budget_usd,
                         budget_duration: body
@@ -140,9 +138,7 @@ pub(super) async fn create_key(
 }
 
 /// GET /admin/api/keys -- list all virtual keys.
-pub(super) async fn list_keys(
-    State(shared): State<SharedState>,
-) -> axum::response::Response {
+pub(super) async fn list_keys(State(shared): State<SharedState>) -> axum::response::Response {
     let result =
         super::super::state::with_db(&shared.db, super::super::db::list_virtual_keys).await;
     match result {
