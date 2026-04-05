@@ -40,3 +40,7 @@ Thumbs.db
 # Script caches and venv
 scripts/.cache/
 scripts/.venv/
+
+# Admin UI build artifacts
+crates/proxy/admin-ui/node_modules/
+crates/proxy/admin-ui/dist/
