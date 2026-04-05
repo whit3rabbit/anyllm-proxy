@@ -183,7 +183,7 @@ export interface TrafficResponse {
 
 export interface HistoryDay {
   date: string
-  status: 'up' | 'down' | 'degraded'
+  status: 'up' | 'down' | 'degraded' | 'no-data'
 }
 
 export interface ProxyUptimeInfo {
