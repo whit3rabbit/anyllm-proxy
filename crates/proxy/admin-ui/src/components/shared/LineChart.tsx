@@ -58,7 +58,7 @@ export default function LineChart({
           stroke={gridColor}
         />
       ))}
-      {series.map((s) => {
+      {series.map((s, i) => {
         if (s.data.length < 2) return null
         const points = s.data.map((v, i) => `${x(i)},${y(v)}`).join(' ')
         const areaPoints = [
@@ -67,7 +67,7 @@ export default function LineChart({
           `${x(s.data.length - 1)},${PAD.top + innerH}`,
         ].join(' ')
         return (
-          <g key={s.label}>
+          <g key={i}>
             <polygon
               className="chart-area"
               points={areaPoints}
