@@ -441,6 +441,7 @@ mod tests {
                     .time_to_live(std::time::Duration::from_secs(86400))
                     .build(),
             ),
+            started_at: std::time::SystemTime::now(),
         };
 
         let vk_ctx = VirtualKeyContext {

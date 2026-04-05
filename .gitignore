@@ -43,4 +43,5 @@ scripts/.venv/
 
 # Admin UI build artifacts
 crates/proxy/admin-ui/node_modules/
-crates/proxy/admin-ui/dist/
+# dist/ is committed so `include_str!` works at compile time without a build step
+# crates/proxy/admin-ui/dist/

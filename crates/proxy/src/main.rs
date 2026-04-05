@@ -497,6 +497,7 @@ async fn async_main(args: Vec<String>) {
                     .time_to_live(std::time::Duration::from_secs(86400))
                     .build(),
             ),
+            started_at: std::time::SystemTime::now(),
         };
 
         // Admin token: use env var or generate 256-bit random hex written to a file.
@@ -596,6 +597,16 @@ async fn async_main(args: Vec<String>) {
                     .send(admin::state::AdminEvent::MetricsSnapshot(snapshot));
             }
         });
+
+        // Spawn background health checker with a snapshot of backend base URLs.
+        // base_url lives in BackendConfig (not RuntimeConfig), so we snapshot
+        // it here once at startup rather than storing it in SharedState.
+        let backend_urls: Vec<(String, String)> = multi_config
+            .backends
+            .iter()
+            .map(|(name, bc)| (name.clone(), bc.base_url.clone()))
+            .collect();
+        admin::health_check::spawn(shared.clone(), backend_urls);
 
         // Bind admin listener; spawned after the shutdown channel is created below.
         let admin_app = admin::routes::admin_router(shared.clone(), admin_token);
