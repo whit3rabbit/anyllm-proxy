@@ -12,6 +12,7 @@ pub struct BatchId(pub String);
 pub struct ItemId(pub String);
 
 impl BatchId {
+    /// Generate a new unique batch ID in the format `batch_<uuid>`.
     pub fn new() -> Self {
         Self(format!("batch_{}", uuid::Uuid::new_v4()))
     }
@@ -24,6 +25,7 @@ impl Default for BatchId {
 }
 
 impl ItemId {
+    /// Generate a new unique item ID in the format `item_<uuid>`.
     pub fn new() -> Self {
         Self(format!("item_{}", uuid::Uuid::new_v4()))
     }
@@ -61,6 +63,7 @@ pub enum BatchStatus {
 }
 
 impl BatchStatus {
+    /// Return the snake_case string representation used in API responses and SQLite storage.
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Queued => "queued",
@@ -73,6 +76,8 @@ impl BatchStatus {
         }
     }
 
+    /// Parse a status string from SQLite storage. Unknown values fall back to `Failed`
+    /// so stale rows written by a future version do not cause a deserialization panic.
     pub fn from_str_status(s: &str) -> Self {
         match s {
             "queued" => Self::Queued,
@@ -106,6 +111,7 @@ pub enum ExecutionMode {
 }
 
 impl ExecutionMode {
+    /// Return the short string label stored in SQLite and returned in API responses.
     pub fn as_str(&self) -> &str {
         match self {
             Self::Native { .. } => "native",
@@ -113,6 +119,7 @@ impl ExecutionMode {
         }
     }
 
+    /// Return the provider name for native-mode batches, or `None` for proxy-native.
     pub fn provider(&self) -> Option<&str> {
         match self {
             Self::Native { provider } => Some(provider),
@@ -170,6 +177,7 @@ pub struct BatchItem {
     pub completed_at: Option<String>,
 }
 
+/// Lifecycle status of a single item within a batch.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ItemStatus {
@@ -181,6 +189,7 @@ pub enum ItemStatus {
 }
 
 impl ItemStatus {
+    /// Return the snake_case string label used in SQLite and API responses.
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Pending => "pending",
@@ -191,6 +200,7 @@ impl ItemStatus {
         }
     }
 
+    /// Parse an item status from SQLite. Unknown values fall back to `Failed`.
     pub fn from_str_status(s: &str) -> Self {
         match s {
             "pending" => Self::Pending,
@@ -202,6 +212,7 @@ impl ItemStatus {
         }
     }
 
+    /// Returns true when no further state transitions are possible.
     pub fn is_terminal(&self) -> bool {
         matches!(self, Self::Succeeded | Self::Failed | Self::Cancelled)
     }
@@ -215,6 +226,8 @@ pub struct BatchItemRequest {
     pub source_format: SourceFormat,
 }
 
+/// The request format of the original client submission.
+/// Used by the proxy-native executor to choose the correct translation path.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SourceFormat {

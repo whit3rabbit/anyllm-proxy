@@ -1,16 +1,22 @@
 use std::time::Duration;
 
+/// What the proxy does when a tool call matches a policy rule.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PolicyAction {
-    Allow,       // auto-execute server-side
-    Deny,        // reject the tool call, return error to LLM
-    PassThrough, // pass to client for execution
+    /// Execute the tool server-side and return the result to the LLM.
+    Allow,
+    /// Reject the tool call; return a structured error to the LLM so it can recover.
+    Deny,
+    /// Forward the tool call to the client without executing it (default for builtin tools).
+    PassThrough,
 }
 
+/// A single named-tool policy rule. `tool_name` supports trailing `*` wildcards.
 #[derive(Debug, Clone)]
 pub struct PolicyRule {
     pub tool_name: String,
     pub action: PolicyAction,
+    /// Per-tool execution timeout. Overrides the global `tool_timeout_secs` when set.
     pub timeout: Option<Duration>,
     pub max_concurrency: Option<usize>,
 }
@@ -25,6 +31,8 @@ impl PolicyRule {
     }
 }
 
+/// Tool execution policy: a default action plus an ordered list of override rules.
+/// Rules are evaluated in order; first match wins.
 #[derive(Debug, Clone)]
 pub struct ToolExecutionPolicy {
     pub default_action: PolicyAction,
@@ -32,6 +40,8 @@ pub struct ToolExecutionPolicy {
 }
 
 impl ToolExecutionPolicy {
+    /// Return the action that applies to `tool_name`. Evaluates rules in order;
+    /// falls back to `default_action` when no rule matches.
     pub fn resolve(&self, tool_name: &str) -> PolicyAction {
         for rule in &self.rules {
             if rule.matches(tool_name) {
@@ -41,6 +51,8 @@ impl ToolExecutionPolicy {
         self.default_action
     }
 
+    /// Return the first matching rule for `tool_name`, or `None` if none match.
+    /// Used to retrieve per-tool settings (e.g., timeout) after resolving the action.
     pub fn find_rule(&self, tool_name: &str) -> Option<&PolicyRule> {
         self.rules.iter().find(|r| r.matches(tool_name))
     }

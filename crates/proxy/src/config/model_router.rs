@@ -51,6 +51,7 @@ pub struct Deployment {
 }
 
 impl Deployment {
+    /// Create a deployment with a default weight of 1.
     pub fn new(
         backend_name: String,
         actual_model: String,
@@ -60,6 +61,8 @@ impl Deployment {
         Self::with_weight(backend_name, actual_model, rpm_limit, tpm_limit, 1)
     }
 
+    /// Create a deployment with an explicit weight (minimum 1, floored if 0).
+    /// Higher weight means proportionally more traffic in weighted round-robin.
     pub fn with_weight(
         backend_name: String,
         actual_model: String,
@@ -176,10 +179,12 @@ pub struct ModelRouter {
 }
 
 impl ModelRouter {
+    /// Create a router with the default routing strategy (round-robin).
     pub fn new(routes: HashMap<String, Vec<Arc<Deployment>>>) -> Self {
         Self::with_strategy(routes, RoutingStrategy::default())
     }
 
+    /// Create a router with an explicit routing strategy.
     pub fn with_strategy(
         routes: HashMap<String, Vec<Arc<Deployment>>>,
         strategy: RoutingStrategy,

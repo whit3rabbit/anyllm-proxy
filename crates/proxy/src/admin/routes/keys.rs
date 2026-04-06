@@ -7,6 +7,7 @@ use axum::{
 };
 use std::net::SocketAddr;
 
+/// Request body for `POST /admin/api/keys`.
 #[derive(serde::Deserialize)]
 pub(super) struct CreateKeyRequest {
     description: Option<String>,

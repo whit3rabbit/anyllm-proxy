@@ -57,6 +57,7 @@ pub struct Part {
 }
 
 impl Part {
+    /// Create a plain text part.
     pub fn text(t: impl Into<String>) -> Self {
         Self {
             text: Some(t.into()),
@@ -64,6 +65,7 @@ impl Part {
         }
     }
 
+    /// Create a function-call part (tool call from the model).
     pub fn function_call(name: impl Into<String>, args: serde_json::Value) -> Self {
         Self {
             function_call: Some(FunctionCallData {
@@ -74,6 +76,7 @@ impl Part {
         }
     }
 
+    /// Create a function-response part (tool result sent back to the model).
     pub fn function_response(name: impl Into<String>, response: serde_json::Value) -> Self {
         Self {
             function_response: Some(FunctionResponseData {
@@ -84,6 +87,7 @@ impl Part {
         }
     }
 
+    /// Create an inline binary data part (e.g. base64-encoded image for multimodal input).
     pub fn inline_data(mime_type: impl Into<String>, data: impl Into<String>) -> Self {
         Self {
             inline_data: Some(InlineData {

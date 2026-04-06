@@ -31,6 +31,7 @@ pub struct WebhookHandle {
 }
 
 impl WebhookHandle {
+    /// Signal the dispatcher to stop and wait for its task to exit.
     pub async fn shutdown(self) {
         self.shutdown.cancel();
         let _ = self.join_handle.await;

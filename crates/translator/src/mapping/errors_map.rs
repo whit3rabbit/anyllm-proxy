@@ -1,4 +1,7 @@
-// Error and stop_reason mapping
+//! Error type and HTTP status mapping between Anthropic and OpenAI error shapes.
+//!
+//! All functions are stateless — they convert between error representations without
+//! any network calls or side effects.
 
 use crate::anthropic;
 use crate::openai;

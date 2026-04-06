@@ -6,8 +6,8 @@ export interface Metrics {
   successful_requests: number
   failed_requests: number
   requests_per_minute: number
-  p50_latency_ms: number
-  p95_latency_ms: number
+  p50_latency_ms: number | null
+  p95_latency_ms: number | null
   error_rate: number
   streams_started: number
   streams_completed: number
@@ -204,6 +204,24 @@ export interface BackendUptimeInfo {
 export interface UptimeResponse {
   proxy: ProxyUptimeInfo
   backends: BackendUptimeInfo[]
+}
+
+// --- Env file import / export ---
+
+export interface EnvWarning {
+  line: number | null
+  key: string | null
+  message: string
+}
+
+export interface EnvImportResponse {
+  applied: number
+  warnings: EnvWarning[]
+}
+
+export interface EnvImportError {
+  hard_errors: string[]
+  warnings: EnvWarning[]
 }
 
 // --- WebSocket events ---

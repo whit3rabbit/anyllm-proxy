@@ -15,6 +15,7 @@ pub enum RateLimitFailPolicy {
 }
 
 impl RateLimitFailPolicy {
+    /// Parse a fail-policy string. `"closed"` or `"deny"` maps to `Closed`; anything else is `Open`.
     pub fn from_env_str(s: &str) -> Self {
         match s.to_lowercase().as_str() {
             "closed" | "deny" => Self::Closed,
@@ -22,6 +23,7 @@ impl RateLimitFailPolicy {
         }
     }
 
+    /// Read `RATE_LIMIT_FAIL_POLICY` from the environment and parse it. Defaults to `Open`.
     pub fn from_env() -> Self {
         std::env::var("RATE_LIMIT_FAIL_POLICY")
             .map(|v| Self::from_env_str(&v))

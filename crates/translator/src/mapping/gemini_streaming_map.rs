@@ -1,9 +1,13 @@
-// Gemini streaming state machine: full-response diffing -> Anthropic SSE events.
-//
-// Gemini's streamGenerateContent sends FULL accumulated GenerateContentResponse
-// objects per SSE event (not incremental deltas like OpenAI). This state machine
-// diffs each response against the previous state to produce Anthropic-format
-// delta events.
+//! Gemini streaming state machine: full-response diffing -> Anthropic SSE events.
+//!
+//! Gemini's `streamGenerateContent` sends FULL accumulated `GenerateContentResponse`
+//! objects per SSE event (not incremental deltas like OpenAI). This state machine
+//! diffs each response against the previous state to produce Anthropic-format
+//! delta events.
+//!
+//! The key challenge: Gemini may retroactively shorten text between chunks when safety
+//! filters activate mid-stream. `guard_shrinkage` detects and resets the diff baseline
+//! so subsequent deltas remain valid (at the cost of that chunk's content being dropped).
 
 use crate::anthropic;
 use crate::anthropic::streaming::{DeltaUsage, MessageStartData};
@@ -42,6 +46,7 @@ pub struct GeminiStreamingTranslator {
 }
 
 impl GeminiStreamingTranslator {
+    /// Create a new translator for the given model name.
     pub fn new(model: String) -> Self {
         Self {
             model,
@@ -266,6 +271,7 @@ impl GeminiStreamingTranslator {
         events
     }
 
+    /// Returns true after `finish_reason` has been seen. Caller should stop feeding responses.
     pub fn is_finished(&self) -> bool {
         self.finished
     }

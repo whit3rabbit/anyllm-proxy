@@ -8,6 +8,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
+/// Query parameters for `GET /admin/api/traffic`.
 #[derive(Deserialize)]
 pub struct TrafficQuery {
     #[serde(default = "default_window")]
@@ -18,6 +19,7 @@ fn default_window() -> u32 {
     6
 }
 
+/// Per-route aggregate metrics for the traffic overview table.
 #[derive(Serialize)]
 pub struct RouteMetrics {
     path: String,
@@ -28,6 +30,7 @@ pub struct RouteMetrics {
     total_requests: i64,
 }
 
+/// One data point in the traffic timeseries chart.
 #[derive(Serialize)]
 pub struct TrafficSeriesPoint {
     bucket_start: i64,
@@ -35,6 +38,7 @@ pub struct TrafficSeriesPoint {
     requests: i64,
 }
 
+/// Response body for `GET /admin/api/traffic`.
 #[derive(Serialize)]
 pub struct TrafficResponse {
     window_hours: u32,
@@ -42,6 +46,7 @@ pub struct TrafficResponse {
     series: Vec<TrafficSeriesPoint>,
 }
 
+/// GET /admin/api/traffic — returns per-route metrics and timeseries for the Traffic tab.
 pub(super) async fn get_traffic(
     State(shared): State<SharedState>,
     Query(q): Query<TrafficQuery>,

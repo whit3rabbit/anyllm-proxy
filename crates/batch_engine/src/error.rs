@@ -3,6 +3,7 @@
 
 use thiserror::Error;
 
+/// Top-level error type returned by `BatchEngine` operations.
 #[derive(Debug, Error)]
 pub enum EngineError {
     #[error("batch not found: {0}")]
@@ -21,6 +22,7 @@ pub enum EngineError {
     Backend(String),
 }
 
+/// Storage-layer errors returned by `JobQueue` and `WebhookQueue` implementations.
 #[derive(Debug, Error)]
 pub enum QueueError {
     #[error("not found")]

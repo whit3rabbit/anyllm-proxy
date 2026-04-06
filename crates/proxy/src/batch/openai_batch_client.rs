@@ -16,6 +16,7 @@ pub struct OpenAIBatchClient {
 }
 
 impl OpenAIBatchClient {
+    /// Create a client using the given API key and base URL (e.g., `https://api.openai.com`).
     pub fn new(api_key: String, base_url: String) -> Self {
         Self {
             client: Client::new(),
@@ -24,10 +25,12 @@ impl OpenAIBatchClient {
         }
     }
 
+    /// Absolute URL for `POST /v1/files` (file upload and listing).
     pub fn files_url(&self) -> String {
         format!("{}/v1/files", self.base_url.trim_end_matches('/'))
     }
 
+    /// Absolute URL for `POST /v1/batches` (batch creation and listing).
     pub fn batches_url(&self) -> String {
         format!("{}/v1/batches", self.base_url.trim_end_matches('/'))
     }

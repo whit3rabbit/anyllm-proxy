@@ -5,19 +5,24 @@ use crate::admin::state::{with_db, SharedState};
 use axum::{extract::State, Json};
 use serde::Serialize;
 
+/// One day in the 30-day health history calendar.
 #[derive(Serialize)]
 pub struct HistoryDay {
     date: String,
+    /// `"up"`, `"down"`, or `"unknown"`.
     status: String,
 }
 
+/// Proxy process uptime summary.
 #[derive(Serialize)]
 pub struct ProxyUptimeInfo {
+    /// Unix timestamp of admin server startup.
     started_at: u64,
     uptime_pct_30d: f64,
     history: Vec<HistoryDay>,
 }
 
+/// Per-backend uptime summary for the Uptime tab.
 #[derive(Serialize)]
 pub struct BackendUptimeInfo {
     name: String,
@@ -28,12 +33,14 @@ pub struct BackendUptimeInfo {
     history: Vec<HistoryDay>,
 }
 
+/// Response body for `GET /admin/api/uptime`.
 #[derive(Serialize)]
 pub struct UptimeResponse {
     proxy: ProxyUptimeInfo,
     backends: Vec<BackendUptimeInfo>,
 }
 
+/// GET /admin/api/uptime — returns proxy and per-backend uptime stats for the Uptime tab.
 pub(super) async fn get_uptime(State(shared): State<SharedState>) -> Json<UptimeResponse> {
     let started_at = shared
         .started_at

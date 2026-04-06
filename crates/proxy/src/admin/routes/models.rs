@@ -56,6 +56,7 @@ pub(super) struct AddModelRequest {
     weight: u32,
 }
 
+/// Default weight for a new deployment when none is specified in the request body.
 pub(super) fn default_weight() -> u32 {
     1
 }

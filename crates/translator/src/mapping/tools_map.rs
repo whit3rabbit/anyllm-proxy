@@ -1,4 +1,7 @@
-// Tool definition and tool_choice mapping
+//! Tool definition and tool_choice mapping between Anthropic and OpenAI APIs.
+//!
+//! Covers: tool definitions, tool_choice, strict-mode schema normalization,
+//! Gemini schema sanitization, and tool result/call content block conversion.
 
 use crate::anthropic;
 use crate::openai;

@@ -19,6 +19,7 @@ pub struct SqliteWebhookQueue {
 }
 
 impl SqliteWebhookQueue {
+    /// Create a webhook queue backed by the given shared SQLite connection.
     pub fn new(db: Arc<Mutex<Connection>>) -> Self {
         Self { db }
     }

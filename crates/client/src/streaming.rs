@@ -20,6 +20,8 @@ pin_project! {
 }
 
 impl SseTranslatingStream {
+    /// Spawn a background task that reads SSE frames from `response` and translates
+    /// OpenAI chunks to Anthropic `StreamEvent`s via a bounded channel (capacity 32).
     pub(crate) fn new(response: reqwest::Response, model: String) -> Self {
         let (mut tx, rx) = futures::channel::mpsc::channel(32);
 

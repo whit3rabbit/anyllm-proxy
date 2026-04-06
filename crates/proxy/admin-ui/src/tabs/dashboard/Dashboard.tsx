@@ -18,11 +18,11 @@ export default function Dashboard() {
         </div>
         <div className="stat">
           <div className="stat-label">P50 Latency</div>
-          <div className="stat-value">{m ? `${m.p50_latency_ms}ms` : '—'}</div>
+          <div className="stat-value">{m ? `${m.p50_latency_ms ?? 0}ms` : '—'}</div>
         </div>
         <div className="stat">
           <div className="stat-label">P95 Latency</div>
-          <div className="stat-value">{m ? `${m.p95_latency_ms}ms` : '—'}</div>
+          <div className="stat-value">{m ? `${m.p95_latency_ms ?? 0}ms` : '—'}</div>
         </div>
         <div className="stat">
           <div className="stat-label">Total Requests</div>

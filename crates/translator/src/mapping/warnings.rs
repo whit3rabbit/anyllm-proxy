@@ -1,3 +1,9 @@
+//! Translation degradation notices surfaced as `x-anyllm-degradation` response headers.
+//!
+//! When features (top_k, cache_control, document blocks, etc.) are silently dropped
+//! during Anthropic->OpenAI translation, the proxy injects a comma-separated header
+//! listing what was lost. Opt-in via `ANYLLM_DEGRADATION_WARNINGS=true`.
+
 /// Collects feature degradation notices produced during request translation.
 ///
 /// Returned to the proxy layer so it can inject an `x-anyllm-degradation` response
@@ -9,10 +15,12 @@ pub struct TranslationWarnings {
 }
 
 impl TranslationWarnings {
+    /// Record a dropped feature. `feature` should be a short kebab-case label (e.g. `"top_k"`).
     pub fn add(&mut self, feature: &'static str) {
         self.items.push(feature);
     }
 
+    /// Returns true if no features were dropped.
     pub fn is_empty(&self) -> bool {
         self.items.is_empty()
     }

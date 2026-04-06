@@ -1,4 +1,8 @@
-// Anthropic <-> OpenAI message mapping
+//! Anthropic <-> OpenAI message/content mapping.
+//!
+//! Stateless conversion functions: `anthropic_to_openai_request` (forward translation),
+//! `openai_to_anthropic_request` and `anthropic_to_openai_response` (reverse translation).
+//! All functions are pure — no I/O, no side effects.
 
 use crate::anthropic;
 use crate::mapping::{streaming_map, tools_map, usage_map, warnings::TranslationWarnings};
@@ -121,6 +125,9 @@ pub fn anthropic_to_openai_request(
     }
     // Map Anthropic thinking config to OpenAI reasoning_effort (via extra).
     // Thinking content blocks in messages are separately mapped to reasoning_content.
+    // Thresholds (4 k / 16 k tokens) are proxy-inferred approximations; OpenAI does not
+    // document exact token counts for each effort level. Chosen to match common usage:
+    //   low  ≈ quick CoT drafts (< 4 k), medium ≈ standard reasoning, high ≈ extended thinking.
     let reasoning_effort = match &req.thinking {
         Some(crate::anthropic::ThinkingConfig::Enabled { budget_tokens }) => {
             let effort = if *budget_tokens < 4_000 {

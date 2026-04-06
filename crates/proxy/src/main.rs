@@ -52,6 +52,25 @@ fn main() {
         }
     }
 
+    // Load any env vars previously imported via the admin UI (persisted in SQLite).
+    // Runs after .anyllm.env so the file still takes precedence over DB imports,
+    // and before the async runtime to keep set_var single-threaded safe.
+    if !is_run_child {
+        let db_path = std::env::var("ADMIN_DB_PATH").unwrap_or_else(|_| "admin.db".to_string());
+        let db_vars = load_env_from_sqlite(&db_path);
+        if !db_vars.is_empty() {
+            unsafe {
+                for (key, val) in &db_vars {
+                    std::env::set_var(key, val);
+                }
+            }
+            eprintln!(
+                "anyllm_proxy: applied {} variable(s) from admin DB env import",
+                db_vars.len()
+            );
+        }
+    }
+
     // Extract litellm master_key before the runtime starts (still single-threaded).
     if std::env::var("PROXY_API_KEYS").is_err() {
         if let Ok(ref config_path) = std::env::var("PROXY_CONFIG") {
@@ -589,39 +608,44 @@ async fn async_main(args: Vec<String>) {
                 if snapshot_shared.events_tx.receiver_count() == 0 {
                     continue;
                 }
-                let mut backends = std::collections::HashMap::new();
                 let mut aggregate = anyllm_proxy::metrics::MetricsSnapshot::default();
-                for (name, m) in snapshot_shared.backend_metrics.iter() {
+                for (_, m) in snapshot_shared.backend_metrics.iter() {
                     let snap = m.snapshot();
                     aggregate.requests_total += snap.requests_total;
                     aggregate.requests_error += snap.requests_error;
                     aggregate.requests_success += snap.requests_success;
-                    backends.insert(name.clone(), snap);
+                    aggregate.streams_started += snap.streams_started;
+                    aggregate.streams_completed += snap.streams_completed;
+                    aggregate.streams_failed += snap.streams_failed;
+                    aggregate.streams_client_disconnected += snap.streams_client_disconnected;
                 }
                 let error_rate = aggregate.error_rate();
-                // Count requests in the last 60 seconds for RPS.
-                let rps = {
-                    let db = snapshot_shared.db.clone();
-                    let now_secs = std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_secs();
-                    let since = now_secs.saturating_sub(60);
-                    tokio::task::spawn_blocking(move || {
-                        let conn = db.lock().unwrap_or_else(|e| e.into_inner());
-                        admin::db::count_requests_since(&conn, since).unwrap_or(0)
-                    })
-                    .await
-                    .unwrap_or(0) as f64
-                        / 60.0
-                };
+                // Count requests in the last 60 seconds for RPM.
+                let now_secs = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs();
+                let since = now_secs.saturating_sub(60);
+                let rpm = admin::state::with_db(&snapshot_shared.db, move |conn| {
+                    admin::db::count_requests_since(conn, since).unwrap_or(0)
+                })
+                .await
+                .unwrap_or(0) as f64;
+
                 let snapshot = admin::state::MetricsSnapshotData {
-                    backends,
-                    latency_p50_ms: None, // Computed on demand by REST endpoint
-                    latency_p95_ms: None,
-                    latency_p99_ms: None,
-                    requests_per_second: rps,
+                    total_requests: aggregate.requests_total,
+                    successful_requests: aggregate.requests_success,
+                    failed_requests: aggregate.requests_error,
+                    requests_per_minute: rpm,
+                    // Latency percentiles require a heavier DB query; omit from WS
+                    // snapshots (available from GET /admin/api/metrics on demand).
+                    p50_latency_ms: None,
+                    p95_latency_ms: None,
                     error_rate,
+                    streams_started: aggregate.streams_started,
+                    streams_completed: aggregate.streams_completed,
+                    streams_failed: aggregate.streams_failed,
+                    streams_client_disconnected: aggregate.streams_client_disconnected,
                 };
                 let _ = snapshot_shared
                     .events_tx
@@ -796,94 +820,80 @@ async fn async_main(args: Vec<String>) {
     tracing::info!("server shut down gracefully");
 }
 
-/// Interpret backslash escapes in double-quoted dotenv values.
-/// Handles: \n (newline), \t (tab), \r (carriage return), \\ (backslash), \" (double quote).
-/// Other backslash sequences are passed through unchanged.
-fn unescape_double_quoted(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    let mut chars = s.chars();
-    while let Some(c) = chars.next() {
-        if c == '\\' {
-            match chars.next() {
-                Some('n') => out.push('\n'),
-                Some('t') => out.push('\t'),
-                Some('r') => out.push('\r'),
-                Some('\\') => out.push('\\'),
-                Some('"') => out.push('"'),
-                Some(other) => {
-                    out.push('\\');
-                    out.push(other);
-                }
-                None => out.push('\\'),
-            }
-        } else {
-            out.push(c);
-        }
-    }
-    out
-}
-
 /// Parse a `.env`-format file and return `(key, value)` pairs to set.
 ///
-/// Rules:
-/// - `KEY=VALUE` sets the variable. Surrounding whitespace is trimmed.
-/// - Values may be optionally wrapped in `"double"` or `'single'` quotes.
-/// - Lines starting with `#` (after trimming) are comments.
-/// - Already-set environment variables are skipped; the real
-///   environment always takes precedence over the file.
-/// - `export KEY=VALUE` syntax is supported (the `export` prefix is stripped).
-///
-/// Returns pairs that should be applied via `set_var` in the consolidated block.
+/// Delegates parsing to `anyllm_proxy::env_parser::parse_env_content` (pure, no side effects).
+/// Hard errors are printed to stderr and result in an empty list; warnings are printed as-is.
+/// Already-set environment variables are skipped so the real environment always wins.
 /// Compatible with Docker `--env-file` and standard dotenv tooling.
 fn parse_env_file(path: &str) -> Vec<(String, String)> {
     let content = match std::fs::read_to_string(path) {
         Ok(c) => c,
         Err(e) => {
-            // Print directly; tracing isn't initialized yet.
             eprintln!("anyllm_proxy: could not read env file '{path}': {e}");
             return Vec::new();
         }
     };
 
-    let mut pairs = Vec::new();
-    for (lineno, raw) in content.lines().enumerate() {
-        let line = raw.trim();
-        if line.is_empty() || line.starts_with('#') {
-            continue;
-        }
-        // Strip optional `export ` prefix.
-        let line = line.strip_prefix("export ").map(str::trim).unwrap_or(line);
-        let Some((key, val)) = line.split_once('=') else {
-            eprintln!(
-                "anyllm_proxy: {path}:{}: ignoring malformed line (no '=')",
-                lineno + 1
-            );
-            continue;
-        };
-        let key = key.trim();
-        if key.is_empty() {
-            continue;
-        }
-        // Strip optional surrounding quotes from the value.
-        // Double-quoted: process backslash escapes (\n, \t, \r, \\, \").
-        // Single-quoted: literal content only (POSIX behavior, no escapes).
-        let val = val.trim();
-        let owned_val: String;
-        let val: &str = if val.starts_with('"') && val.ends_with('"') && val.len() >= 2 {
-            owned_val = unescape_double_quoted(&val[1..val.len() - 1]);
-            &owned_val
-        } else if val.starts_with('\'') && val.ends_with('\'') && val.len() >= 2 {
-            owned_val = val[1..val.len() - 1].to_string();
-            &owned_val
-        } else {
-            val
-        };
-        // Only include if not already present so the real environment wins.
-        if std::env::var(key).is_err() {
-            pairs.push((key.to_string(), val.to_string()));
-        }
+    let result = anyllm_proxy::env_parser::parse_env_content(&content);
+
+    for err in &result.hard_errors {
+        eprintln!("anyllm_proxy: {path}: {err}");
     }
-    pairs
+    if !result.hard_errors.is_empty() {
+        return Vec::new();
+    }
+
+    for warn in &result.warnings {
+        let loc = warn
+            .line
+            .map(|l| format!(":{l}"))
+            .unwrap_or_default();
+        eprintln!("anyllm_proxy: {path}{loc}: {}", warn.message);
+    }
+
+    result
+        .pairs
+        .into_iter()
+        .filter(|p| std::env::var(&p.key).is_err())
+        .map(|p| (p.key, p.value))
+        .collect()
+}
+
+/// Load env vars previously imported via the admin UI from the SQLite `env_import` table.
+///
+/// Opens the database synchronously (rusqlite is sync) before the tokio runtime starts,
+/// so `set_var` remains single-threaded safe. Skips keys already present in the environment
+/// (real env and .anyllm.env take precedence). Silently succeeds if the DB or table does
+/// not yet exist (first run before any import).
+fn load_env_from_sqlite(db_path: &str) -> Vec<(String, String)> {
+    let conn = match rusqlite::Connection::open(db_path) {
+        Ok(c) => c,
+        Err(e) => {
+            // Benign when the DB file doesn't exist yet (first run).
+            // Log for any other open failure (permissions, corruption, etc.).
+            if std::path::Path::new(db_path).exists() {
+                eprintln!("anyllm_proxy: could not open DB '{db_path}' for env import: {e}");
+            }
+            return Vec::new();
+        }
+    };
+
+    // The env_import table is created by init_db() during normal startup.
+    // If the proxy has never run with a DB, the table won't exist yet.
+    let rows: Vec<(String, String)> = match conn.prepare(
+        "SELECT key, value FROM env_import ORDER BY key",
+    ) {
+        Ok(mut stmt) => stmt
+            .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))
+            .and_then(|mapped| mapped.collect())
+            .unwrap_or_default(),
+        Err(_) => return Vec::new(), // Table doesn't exist yet
+    };
+
+    rows.into_iter()
+        .filter(|(key, _)| std::env::var(key).is_err())
+        .collect()
 }
 
 /// Resolve admin token file path from `ADMIN_TOKEN_PATH` env var,

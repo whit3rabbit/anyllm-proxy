@@ -42,6 +42,7 @@ Thumbs.db
 .claude/
 .cook/
 .worktrees/
+.playwright-mcp/
 
 # Script caches and venv
 scripts/.cache/

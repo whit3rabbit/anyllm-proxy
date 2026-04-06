@@ -104,6 +104,8 @@ pub fn pricing() -> &'static ModelPricing {
     &PRICING
 }
 
+/// A single pricing record loaded from the JSON pricing table.
+/// `model_pattern` supports exact match and longest-prefix matching.
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct ModelPricingEntry {
     pub model_pattern: String,
@@ -112,6 +114,7 @@ pub struct ModelPricingEntry {
     pub provider: String,
 }
 
+/// The full model pricing table. Loaded at startup from embedded JSON or `MODEL_PRICING_FILE`.
 pub struct ModelPricing {
     entries: Vec<ModelPricingEntry>,
 }

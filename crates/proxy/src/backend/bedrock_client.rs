@@ -73,10 +73,12 @@ impl BedrockClient {
         }
     }
 
+    /// The model ID used for sonnet/opus-class requests.
     pub fn big_model(&self) -> &str {
         &self.big_model
     }
 
+    /// The model ID used for haiku-class requests.
     pub fn small_model(&self) -> &str {
         &self.small_model
     }

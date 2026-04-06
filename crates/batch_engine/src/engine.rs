@@ -10,15 +10,29 @@ use crate::webhook::{WebhookDelivery, WebhookQueue};
 use std::sync::Arc;
 
 /// The main batch engine. Holds references to queue, file store, and webhook queue.
+///
+/// Each concern is separated into its own abstraction:
+/// - `queue` owns job/item lifecycle and worker lease management.
+/// - `file_store` owns JSONL file storage (referenced by job input_file_id).
+/// - `webhook_queue` owns durable outbound webhook delivery with retry.
+///
+/// The three abstractions share a single SQLite connection via `Arc<Mutex<Connection>>`
+/// so they can participate in the same ACID transaction without an external coordinator.
 pub struct BatchEngine<Q: JobQueue, W: WebhookQueue> {
     pub queue: Arc<Q>,
     pub file_store: FileStore,
     pub webhook_queue: Arc<W>,
+    /// Global webhook URLs notified on every batch event. Supplemented by per-batch URLs.
     pub global_webhook_urls: Vec<String>,
+    /// Optional HMAC signing secret for webhook payloads (X-Signature-256 header).
     pub webhook_signing_secret: Option<String>,
 }
 
 impl<Q: JobQueue, W: WebhookQueue> BatchEngine<Q, W> {
+    /// Validate the submission, create a `BatchJob` and its `BatchItem` list, enqueue both,
+    /// and fire a `batch.queued` webhook. Returns the created job on success.
+    ///
+    /// Fails if the referenced `input_file_id` does not exist in the file store.
     pub async fn submit(&self, submission: BatchSubmission) -> Result<BatchJob, EngineError> {
         self.file_store
             .get_meta(&submission.input_file_id)

@@ -13,6 +13,8 @@ use super::state::AnthropicJson;
 static TOKENIZER: LazyLock<CoreBPE> =
     LazyLock::new(|| tiktoken_rs::o200k_base().expect("failed to load o200k_base tokenizer"));
 
+/// Approximate token count for an Anthropic request using the GPT-4o tokenizer.
+/// Inherently approximate: uses tiktoken (o200k_base), not the real Anthropic tokenizer.
 pub(crate) async fn count_tokens(
     AnthropicJson(body): AnthropicJson<anthropic::MessageCreateRequest>,
 ) -> axum::response::Response {

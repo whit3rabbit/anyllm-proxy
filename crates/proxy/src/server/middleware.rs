@@ -84,10 +84,12 @@ impl AuthMode {
             .unwrap_or(Self::Both)
     }
 
+    /// Returns true when virtual key / static API key authentication is accepted.
     pub fn allows_key_auth(&self) -> bool {
         matches!(self, AuthMode::KeysOnly | AuthMode::Both)
     }
 
+    /// Returns true when OIDC/JWT bearer token authentication is accepted.
     pub fn allows_oidc(&self) -> bool {
         matches!(self, AuthMode::OidcOnly | AuthMode::Both)
     }

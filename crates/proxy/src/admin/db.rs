@@ -133,7 +133,44 @@ pub fn init_db(conn: &Connection) -> rusqlite::Result<()> {
         ",
     )?;
 
+    // env_import: key-value pairs written by the admin UI import endpoint.
+    // Read back at startup (before the async runtime) to apply as env vars.
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS env_import (
+            key         TEXT PRIMARY KEY,
+            value       TEXT NOT NULL,
+            imported_at TEXT NOT NULL
+        );",
+    )?;
+
     Ok(())
+}
+
+/// Upsert a batch of env-file key-value pairs into the `env_import` table.
+/// Existing keys are overwritten; `imported_at` is set to the current UTC timestamp.
+/// All rows are written in a single transaction for atomicity and performance.
+pub fn upsert_env_import(conn: &mut Connection, pairs: &[(String, String)]) -> rusqlite::Result<()> {
+    let now = chrono_now();
+    let tx = conn.transaction()?;
+    {
+        let mut stmt = tx.prepare(
+            "INSERT INTO env_import (key, value, imported_at)
+             VALUES (?1, ?2, ?3)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value, imported_at = excluded.imported_at",
+        )?;
+        for (key, value) in pairs {
+            stmt.execute(rusqlite::params![key, value, now])?;
+        }
+    }
+    tx.commit()
+}
+
+/// Return all rows from `env_import` as (key, value) pairs.
+/// Used during startup to apply persisted imports before the async runtime starts.
+pub fn list_env_import(conn: &Connection) -> rusqlite::Result<Vec<(String, String)>> {
+    let mut stmt = conn.prepare("SELECT key, value FROM env_import ORDER BY key")?;
+    let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
+    rows.collect()
 }
 
 fn now_unix_secs() -> i64 {
@@ -316,6 +353,7 @@ impl StatusFilter {
     }
 }
 
+/// Query the request log with optional filters. Returns rows newest-first.
 #[allow(clippy::too_many_arguments)]
 pub fn query_request_log(
     conn: &Connection,
@@ -462,16 +500,20 @@ pub fn count_requests_since(conn: &Connection, since_epoch: u64) -> rusqlite::Re
     Ok(count.max(0) as u64)
 }
 
+/// One time-bucket in the request timeseries (1-minute granularity).
 #[derive(Debug, Clone, serde::Serialize, PartialEq)]
 pub struct ObservabilityBucket {
     pub bucket_start: String,
+    #[serde(rename = "requests")]
     pub requests_total: u64,
+    #[serde(rename = "errors")]
     pub requests_error: u64,
     pub input_tokens: u64,
     pub output_tokens: u64,
     pub cost_usd: f64,
 }
 
+/// A single request entry in the waterfall timeline view.
 #[derive(Debug, Clone, serde::Serialize, PartialEq)]
 pub struct ObservabilityTimelineItem {
     pub request_id: String,
@@ -490,6 +532,7 @@ pub struct ObservabilityTimelineItem {
     pub error_kind: Option<String>,
 }
 
+/// An aggregated failure group for the failure-breakdown panel.
 #[derive(Debug, Clone, serde::Serialize, PartialEq)]
 pub struct ObservabilityFailureItem {
     pub error_kind: Option<String>,
@@ -525,6 +568,7 @@ fn append_common_filters(
     }
 }
 
+/// Aggregate request log into 1-minute buckets for the timeseries chart.
 pub fn query_request_timeseries(
     conn: &Connection,
     since: &str,
@@ -564,6 +608,7 @@ pub fn query_request_timeseries(
     rows.collect()
 }
 
+/// Fetch individual request entries for the waterfall timeline view (newest first).
 pub fn query_request_timeline(
     conn: &Connection,
     since: &str,
@@ -615,6 +660,7 @@ pub fn query_request_timeline(
     rows.collect()
 }
 
+/// Group recent failures by (error_kind, backend, model, status_code) for the failure-breakdown panel.
 pub fn query_failure_breakdown(
     conn: &Connection,
     since: &str,

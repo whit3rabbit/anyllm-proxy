@@ -10,6 +10,8 @@
 use crate::admin::state::RequestLogEntry;
 use std::sync::Arc;
 
+/// HTTP client for Langfuse's batch ingestion API.
+/// Constructed once and shared via `Arc`. Send is fire-and-forget.
 pub struct LangfuseClient {
     pub(crate) public_key: String,
     pub(crate) secret_key: String,

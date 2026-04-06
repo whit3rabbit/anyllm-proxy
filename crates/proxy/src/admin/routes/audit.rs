@@ -4,6 +4,7 @@ use axum::{
     Json,
 };
 
+/// Query parameters for `GET /admin/api/audit`.
 #[derive(serde::Deserialize)]
 pub(super) struct AuditQuery {
     limit: Option<u32>,

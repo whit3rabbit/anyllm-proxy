@@ -49,6 +49,8 @@ impl std::fmt::Debug for HttpClientConfig {
 }
 
 impl HttpClientConfig {
+    /// Create an `HttpClientConfig` with SSRF protection enabled when the
+    /// `ssrf-protection` feature is active, and all other options at default.
     pub fn new() -> Self {
         Self {
             ssrf_protection: cfg!(feature = "ssrf-protection"),

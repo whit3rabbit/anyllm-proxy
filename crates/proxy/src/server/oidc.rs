@@ -258,6 +258,7 @@ pub fn looks_like_jwt(credential: &str) -> bool {
     }
 }
 
+/// Errors produced during OIDC discovery, JWKS fetch, or JWT validation.
 #[derive(Debug)]
 pub enum OidcError {
     Http(String),

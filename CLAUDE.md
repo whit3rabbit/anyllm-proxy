@@ -12,7 +12,7 @@ All implementation phases are complete.
 
 **Working (verified):**
 - Build: `cargo build` clean, `cargo clippy -- -D warnings` clean
-- Tests: ~906 tests passing, 8 ignored (live API)
+- Tests: ~1098 tests passing, 10 ignored (live API)
 - Full Anthropic Messages API translation: non-streaming, streaming SSE, tool calling, file/document blocks
 - `POST /v1/chat/completions` input: accepts OpenAI Chat Completions format, returns OpenAI format (unblocks all OpenAI-native clients)
 - Azure OpenAI backend: `BACKEND=azure` with deployment-scoped URL and `api-key` header
@@ -91,7 +91,7 @@ Uses `.env.example.test` (`PROXY_OPEN_RELAY=true`, `ADMIN_TOKEN=test-admin-token
 ```bash
 cargo build                          # build everything
 cargo build --features otel          # with OpenTelemetry support
-cargo test                           # run all tests (~1081 tests, 10 ignored)
+cargo test                           # run all tests (~1098 tests, 10 ignored)
 cargo test -p anyllm_client     # client crate only
 cargo test -p anyllm_translate  # translator crate only
 cargo test -p anyllm_proxy      # proxy crate only
@@ -192,7 +192,7 @@ mcp_servers:
 
 ## Architecture
 
-Cargo workspace with three crates:
+Cargo workspace with four crates:
 
 ### `crates/client` (lib: `anyllm_client`) v0.2.0
 High-level async HTTP client (Anthropic-in, Anthropic-out). Depends on `anyllm_translate` for translation logic. Key modules:
@@ -249,7 +249,9 @@ HTTP proxy built on axum + reqwest:
 - **`admin/`**: Admin server (localhost-only) with config management, WebSocket live updates (`ws.rs`), token auth (`auth.rs`, `db.rs`, `mod.rs`, `routes.rs`, `state.rs`)
 - **`admin/keys.rs`**: Virtual key generation (SHA-256 hashed, `sk-vk` prefix), `VirtualKeyMeta`, `RateLimitState` (sliding window RPM/TPM)
 - **`admin/routes.rs`**: Admin API endpoints including POST/GET/DELETE `/admin/api/keys` for virtual key CRUD
-- **`admin-ui/`** (`crates/proxy/admin-ui/`): React 19 + TypeScript SPA built with Vite. Build: `cd crates/proxy/admin-ui && npm run build`. Tabs: dashboard, keys, models, requests, traffic, uptime, audit, backends, settings.
+- **`admin/routes/env.rs`**: `POST /admin/api/env/import` (multipart `.anyllm.env` upload, max 64 KB) and `GET /admin/api/env/export` (downloads current effective env). Uses `env_parser.rs` for pure parsing/validation.
+- **`env_parser.rs`** (crate root): Pure env-file parser — no I/O, no `set_var`. Exports `parse_env_content`, `escape_for_env_file`, `KNOWN_KEYS`. Safe to call from tests.
+- **`admin-ui/`** (`crates/proxy/admin-ui/`): React 19 + TypeScript SPA built with Vite. Build: `cd crates/proxy/admin-ui && npm run build`. Tabs: dashboard, keys, models, requests, traffic, uptime, audit, backends, settings. The settings tab includes `.anyllm.env` file import (multipart upload) and export (download); importing sets a restart-pending banner in sessionStorage.
 - **`metrics/`**: Request count, success/error tracking, exposed via GET /metrics
 - **`otel.rs`**: OpenTelemetry initialization behind `#[cfg(feature = "otel")]`; `OtelGuard` shuts down the provider on drop
 

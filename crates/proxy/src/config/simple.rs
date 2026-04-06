@@ -330,6 +330,8 @@ pub fn parse_simple_yaml(yaml: &str) -> SimpleParsed {
 // ---------------------------------------------------------------------------
 
 impl SimpleConfig {
+    /// Convert the YAML tool configuration into the in-memory `ToolExecutionPolicy` + `LoopConfig`
+    /// used at request time. Called once at startup after the config file is parsed.
     pub fn build_tool_config(
         &self,
     ) -> (crate::tools::ToolExecutionPolicy, crate::tools::LoopConfig) {

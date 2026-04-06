@@ -54,6 +54,11 @@ pub struct McpServerManager {
 }
 
 impl McpServerManager {
+    /// Create a new manager with an SSRF-safe HTTP client.
+    ///
+    /// Uses a custom DNS resolver to prevent DNS rebinding attacks where a domain
+    /// passes the registration-time URL check but later resolves to a private/metadata
+    /// IP (e.g., 169.254.169.254) after DNS TTL expiry.
     pub fn new() -> Self {
         // Use SSRF-safe DNS resolver to prevent DNS rebinding attacks where a
         // domain passes the registration-time URL check but later resolves to a
@@ -69,6 +74,9 @@ impl McpServerManager {
         }
     }
 
+    /// Register an MCP server with its pre-discovered tools. Replaces any existing
+    /// registration with the same name. Uses `_blocking` suffix because it acquires
+    /// `std::sync::RwLock` guards (not async-safe across `.await` points).
     pub fn register_server_blocking(
         &self,
         name: &str,
@@ -98,6 +106,7 @@ impl McpServerManager {
         Ok(())
     }
 
+    /// Remove an MCP server and deregister all its tools from the routing map.
     pub fn remove_server_blocking(&self, name: &str) {
         if let Some(server) = self.servers.write().unwrap().remove(name) {
             let mut tool_map = self.tool_to_server.write().unwrap();
@@ -107,10 +116,12 @@ impl McpServerManager {
         }
     }
 
+    /// Return a snapshot of all registered MCP servers with their tool lists.
     pub fn list_servers_blocking(&self) -> Vec<McpServer> {
         self.servers.read().unwrap().values().cloned().collect()
     }
 
+    /// Return the server name that owns the given prefixed tool name (`mcp_{server}_{tool}`).
     pub fn find_server_for_tool_blocking(&self, prefixed_name: &str) -> Option<String> {
         self.tool_to_server
             .read()
@@ -119,6 +130,8 @@ impl McpServerManager {
             .cloned()
     }
 
+    /// Convert all registered MCP tools to Anthropic `Tool` definitions for injection
+    /// into the LLM request. Prefixes each tool name with `mcp_{server}_` to avoid collisions.
     pub fn as_anthropic_tools_blocking(&self) -> Vec<anyllm_translate::anthropic::Tool> {
         let servers = self.servers.read().unwrap();
         let mut result = Vec::new();

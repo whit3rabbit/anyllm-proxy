@@ -1033,6 +1033,7 @@ pub(crate) fn log_request(shared: &Option<SharedState>, entry: RequestLogEntry) 
     }
 }
 
+/// Populate `entry.error_kind` from a `BackendError` for operator-visible failure classification.
 pub(crate) fn set_backend_error_kind(entry: &mut RequestLogEntry, error: &BackendError) {
     entry.error_kind = Some(error.error_kind().to_string());
 }

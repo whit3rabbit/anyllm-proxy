@@ -7,11 +7,10 @@ use axum::{
 };
 
 /// GET /admin/api/metrics -- current metrics snapshot.
+/// Response shape matches the TypeScript `Metrics` interface in admin-ui/src/api/types.ts.
 pub(super) async fn get_metrics(State(shared): State<SharedState>) -> Json<serde_json::Value> {
-    let mut backends = serde_json::Map::new();
     let mut aggregate = crate::metrics::MetricsSnapshot::default();
-
-    for (name, m) in shared.backend_metrics.iter() {
+    for (_, m) in shared.backend_metrics.iter() {
         let snap = m.snapshot();
         aggregate.requests_total += snap.requests_total;
         aggregate.requests_success += snap.requests_success;
@@ -20,36 +19,44 @@ pub(super) async fn get_metrics(State(shared): State<SharedState>) -> Json<serde
         aggregate.streams_completed += snap.streams_completed;
         aggregate.streams_failed += snap.streams_failed;
         aggregate.streams_client_disconnected += snap.streams_client_disconnected;
-        backends.insert(
-            name.clone(),
-            serde_json::to_value(&snap).unwrap_or_default(),
-        );
     }
 
-    let (p50, p95, p99) = crate::admin::state::with_db(&shared.db, compute_latency_percentiles)
-        .await
-        .unwrap_or((None, None, None));
+    let now_secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let since_60s = now_secs.saturating_sub(60);
+
+    // Run both DB queries concurrently — both are read-only and independent.
+    let (percentiles, rpm_count) = tokio::join!(
+        crate::admin::state::with_db(&shared.db, compute_latency_percentiles),
+        crate::admin::state::with_db(&shared.db, move |conn| {
+            crate::admin::db::count_requests_since(conn, since_60s).unwrap_or(0)
+        }),
+    );
+    let (p50, p95, _p99) = percentiles.unwrap_or((None, None, None));
+    let rpm = rpm_count.unwrap_or(0) as f64;
 
     Json(serde_json::json!({
-        "backends": backends,
-        "total": {
-            "requests_total": aggregate.requests_total,
-            "requests_success": aggregate.requests_success,
-            "requests_error": aggregate.requests_error,
-            "streams_started": aggregate.streams_started,
-            "streams_completed": aggregate.streams_completed,
-            "streams_failed": aggregate.streams_failed,
-            "streams_client_disconnected": aggregate.streams_client_disconnected,
-        },
-        "latency_p50_ms": p50,
-        "latency_p95_ms": p95,
-        "latency_p99_ms": p99,
+        "total_requests": aggregate.requests_total,
+        "successful_requests": aggregate.requests_success,
+        "failed_requests": aggregate.requests_error,
+        "requests_per_minute": rpm,
+        "p50_latency_ms": p50.unwrap_or(0),
+        "p95_latency_ms": p95.unwrap_or(0),
         "error_rate": aggregate.error_rate(),
+        "streams_started": aggregate.streams_started,
+        "streams_completed": aggregate.streams_completed,
+        "streams_failed": aggregate.streams_failed,
+        "streams_client_disconnected": aggregate.streams_client_disconnected,
     }))
 }
 
+/// Query parameters for `GET /admin/api/observability/overview`.
 #[derive(serde::Deserialize)]
 pub(super) struct ObservabilityQuery {
+    /// Accepted as `window` (used by the admin SPA) or `hours` (legacy alias).
+    window: Option<u32>,
     hours: Option<u32>,
     backend: Option<String>,
     key_id: Option<i64>,
@@ -58,16 +65,16 @@ pub(super) struct ObservabilityQuery {
 }
 
 /// GET /admin/api/observability/overview -- request rollups for the operator dashboard.
+/// Response shape matches the TypeScript `ObservabilityResponse` interface.
 pub(super) async fn get_observability_overview(
     State(shared): State<SharedState>,
     Query(params): Query<ObservabilityQuery>,
 ) -> Json<serde_json::Value> {
-    let hours = params.hours.unwrap_or(6).clamp(1, 168);
+    let hours = params.window.or(params.hours).unwrap_or(6).clamp(1, 168);
     let timeline_limit = params.timeline_limit.unwrap_or(40).clamp(10, 200);
     let failure_limit = params.failure_limit.unwrap_or(12).clamp(1, 100);
-    let backend = params
-        .backend
-        .filter(|value| !value.is_empty() && value.len() <= 128);
+    let backend = params.backend.filter(|v| !v.is_empty() && v.len() <= 128);
+    let backend_str = backend.as_deref().unwrap_or("").to_string();
     let key_id = params.key_id;
 
     let now_epoch = std::time::SystemTime::now()
@@ -76,86 +83,61 @@ pub(super) async fn get_observability_overview(
         .as_secs();
     let since = crate::admin::db::epoch_to_iso8601(now_epoch.saturating_sub(hours as u64 * 3600));
     let until = crate::admin::db::now_iso8601();
-    let until_display = until.clone();
 
-    match crate::admin::state::with_db(&shared.db, move |conn| {
+    let result = crate::admin::state::with_db(&shared.db, move |conn| {
         let series = crate::admin::db::query_request_timeseries(
-            conn,
-            &since,
-            Some(&until),
-            backend.as_deref(),
-            key_id,
+            conn, &since, Some(&until), backend.as_deref(), key_id,
         )?;
         let timeline = crate::admin::db::query_request_timeline(
-            conn,
-            &since,
-            Some(&until),
-            backend.as_deref(),
-            key_id,
-            timeline_limit,
+            conn, &since, Some(&until), backend.as_deref(), key_id, timeline_limit,
         )?;
         let failures = crate::admin::db::query_failure_breakdown(
-            conn,
-            &since,
-            Some(&until),
-            backend.as_deref(),
-            key_id,
-            failure_limit,
+            conn, &since, Some(&until), backend.as_deref(), key_id, failure_limit,
         )?;
         Ok::<_, rusqlite::Error>((series, timeline, failures))
     })
-    .await
-    {
-        Some(Ok((series, timeline, failures))) => {
-            let totals = series.iter().fold(
-                (0u64, 0u64, 0u64, 0u64, 0.0f64),
-                |(requests_total, requests_error, input_tokens, output_tokens, cost_usd),
-                 bucket| {
-                    (
-                        requests_total + bucket.requests_total,
-                        requests_error + bucket.requests_error,
-                        input_tokens + bucket.input_tokens,
-                        output_tokens + bucket.output_tokens,
-                        cost_usd + bucket.cost_usd,
-                    )
-                },
-            );
+    .await;
 
+    match result {
+        Some(Ok((series, timeline, failures))) => {
+            let (total_requests, total_errors, total_input_tokens, total_output_tokens, total_cost_usd) =
+                series.iter().fold(
+                    (0u64, 0u64, 0u64, 0u64, 0.0f64),
+                    |(req, err, inp, out, cost), b| {
+                        (req + b.requests_total, err + b.requests_error,
+                         inp + b.input_tokens, out + b.output_tokens, cost + b.cost_usd)
+                    },
+                );
             Json(serde_json::json!({
                 "window_hours": hours,
-                "generated_at": until_display,
-                "totals": {
-                    "requests_total": totals.0,
-                    "requests_error": totals.1,
-                    "input_tokens": totals.2,
-                    "output_tokens": totals.3,
-                    "cost_usd": totals.4,
-                    "error_rate": if totals.0 == 0 {
-                        0.0
-                    } else {
-                        totals.1 as f64 / totals.0 as f64
-                    },
-                },
+                "backend": backend_str,
+                "total_requests": total_requests,
+                "total_errors": total_errors,
+                "total_input_tokens": total_input_tokens,
+                "total_output_tokens": total_output_tokens,
+                "total_cost_usd": total_cost_usd,
                 "series": series,
                 "timeline": timeline,
                 "failures": failures,
             }))
         }
-        Some(Err(e)) => {
-            tracing::error!(error = %e, "query observability overview failed");
+        other => {
+            if let Some(Err(e)) = other {
+                tracing::error!(error = %e, "query observability overview failed");
+            }
             Json(serde_json::json!({
-                "error": "internal database error",
-                "series": [],
-                "timeline": [],
-                "failures": [],
+                "window_hours": hours,
+                "backend": backend_str,
+                "total_requests": 0u64,
+                "total_errors": 0u64,
+                "total_input_tokens": 0u64,
+                "total_output_tokens": 0u64,
+                "total_cost_usd": 0.0f64,
+                "series": serde_json::Value::Array(vec![]),
+                "timeline": serde_json::Value::Array(vec![]),
+                "failures": serde_json::Value::Array(vec![]),
             }))
         }
-        None => Json(serde_json::json!({
-            "error": "task panicked",
-            "series": [],
-            "timeline": [],
-            "failures": [],
-        })),
     }
 }
 
@@ -196,6 +178,7 @@ pub(super) fn compute_latency_percentiles(
     (Some(p(50.0)), Some(p(95.0)), Some(p(99.0)))
 }
 
+/// Query parameters for `GET /admin/api/requests`.
 #[derive(serde::Deserialize)]
 pub(super) struct RequestsQuery {
     limit: Option<u32>,

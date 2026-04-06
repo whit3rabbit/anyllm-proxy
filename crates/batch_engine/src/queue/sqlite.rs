@@ -20,6 +20,7 @@ pub struct SqliteQueue {
 }
 
 impl SqliteQueue {
+    /// Create a queue backed by the given shared SQLite connection.
     pub fn new(db: Arc<Mutex<Connection>>) -> Self {
         Self { db }
     }

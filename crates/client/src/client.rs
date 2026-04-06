@@ -38,6 +38,7 @@ pub struct ClientConfig {
 }
 
 impl ClientConfig {
+    /// Return a builder for constructing a `ClientConfig` with method chaining.
     pub fn builder() -> ClientConfigBuilder {
         ClientConfigBuilder::default()
     }
@@ -78,6 +79,7 @@ impl ClientConfigBuilder {
         self
     }
 
+    /// Finalize the builder into a `ClientConfig`. Missing fields use secure defaults.
     pub fn build(self) -> ClientConfig {
         ClientConfig {
             chat_completions_url: self.backend_url,

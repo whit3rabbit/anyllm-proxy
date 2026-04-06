@@ -1,9 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { apiFetch, mutatingFetch } from './client'
+import { apiFetch, mutatingFetch, mutatingFetchMultipart } from './client'
+import { useAuthStore } from '../store/auth'
 import type {
   Metrics, RequestsResponse, VirtualKey, KeySpend,
   Backend, ConfigResponse, ObservabilityResponse,
   ModelsResponse, AuditResponse, TrafficResponse, UptimeResponse,
+  EnvImportResponse,
 } from './types'
 
 // ── Dashboard ────────────────────────────────────────────────────────────────
@@ -119,7 +121,7 @@ export function useSaveConfig() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (body: Record<string, string>) =>
-      mutatingFetch<void>('POST', '/admin/api/config', body),
+      mutatingFetch<void>('PUT', '/admin/api/config', body),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['config'] }) },
   })
 }
@@ -128,7 +130,7 @@ export function useDeleteConfigOverride() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (key: string) =>
-      mutatingFetch<void>('DELETE', `/admin/api/config/${encodeURIComponent(key)}`),
+      mutatingFetch<void>('DELETE', `/admin/api/config/overrides/${encodeURIComponent(key)}`),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['config'] }) },
   })
 }
@@ -197,4 +199,38 @@ export function useUptime() {
     queryFn: () => apiFetch('/admin/api/uptime'),
     refetchInterval: 30_000,
   })
+}
+
+// ── Env file import / export ──────────────────────────────────────────────────
+
+/** Upload a .anyllm.env file to the proxy. Returns parse warnings on success. */
+export function useImportEnv() {
+  return useMutation<EnvImportResponse, Error, File>({
+    mutationFn: (file: File) => {
+      const fd = new FormData()
+      fd.append('file', file)
+      return mutatingFetchMultipart<EnvImportResponse>('/admin/api/env/import', fd)
+    },
+  })
+}
+
+/**
+ * Download the current effective env as a .anyllm.env file.
+ * Not a hook — call directly from an event handler.
+ */
+export async function downloadEnvExport(): Promise<void> {
+  const token = useAuthStore.getState().token ?? ''
+  const res = await fetch('/admin/api/env/export', {
+    headers: { 'Authorization': `Bearer ${token}` },
+  })
+  if (!res.ok) throw new Error(`Export failed: HTTP ${res.status}`)
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = '.anyllm.env'
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
 }

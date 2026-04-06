@@ -1,7 +1,10 @@
-// Reverse streaming: Anthropic SSE events -> OpenAI ChatCompletionChunk SSE
-//
-// Consumes Anthropic StreamEvent items and emits OpenAI ChatCompletionChunk
-// objects. This is the inverse of StreamingTranslator in streaming_map.rs.
+//! Reverse streaming: Anthropic SSE events -> OpenAI ChatCompletionChunk SSE.
+//!
+//! Consumes `Anthropic StreamEvent` items and emits OpenAI `ChatCompletionChunk`
+//! objects. This is the inverse of `StreamingTranslator` in `streaming_map.rs`.
+//!
+//! Used by the `/v1/chat/completions` handler when the incoming request is
+//! already in OpenAI format and the backend speaks Anthropic (passthrough path).
 
 use crate::anthropic;
 use crate::mapping::reverse_message_map::anthropic_stop_reason_to_openai;
@@ -30,6 +33,11 @@ pub struct ReverseStreamingTranslator {
 }
 
 impl ReverseStreamingTranslator {
+    /// Create a new reverse streaming translator.
+    ///
+    /// `id` is the Anthropic message ID from the `message_start` event;
+    /// it is echoed in every emitted chunk so the client can correlate events.
+    /// `tool_call_index` starts at -1 and increments on each new tool call block.
     pub fn new(id: String, model: String) -> Self {
         Self {
             message_id: id,
@@ -45,6 +53,8 @@ impl ReverseStreamingTranslator {
         }
     }
 
+    /// Returns true after a `message_stop` event has been processed.
+    /// Caller should emit `data: [DONE]\n\n` and close the stream.
     pub fn is_done(&self) -> bool {
         self.done
     }

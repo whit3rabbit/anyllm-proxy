@@ -12,6 +12,8 @@ use axum::{
 
 use super::state::AppState;
 
+/// Forward an Anthropic-format request byte-for-byte to the upstream Anthropic API.
+/// No translation is performed. Only active when `BACKEND=anthropic`.
 pub(crate) async fn anthropic_passthrough(
     State(state): State<AppState>,
     vk_ctx: Option<axum::Extension<super::middleware::VirtualKeyContext>>,

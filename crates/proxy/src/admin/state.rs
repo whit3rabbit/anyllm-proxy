@@ -1,5 +1,9 @@
-// Shared state between the proxy and admin server.
-// RuntimeConfig holds mutable settings; AdminEvent is broadcast to WebSocket clients.
+//! Shared state between the proxy and admin server.
+//!
+//! `SharedState` is cloned into every axum handler (cheap: all fields are `Arc`).
+//! `RuntimeConfig` holds settings that can be mutated at runtime via the admin API
+//! without restarting the process. `AdminEvent` is broadcast to WebSocket clients
+//! for live dashboard updates.
 
 use crate::admin::keys::VirtualKeyMeta;
 use crate::config::ModelMapping;
@@ -180,12 +184,20 @@ impl SharedState {
 }
 
 /// Aggregated metrics for the periodic WebSocket snapshot.
+/// Matches the TypeScript `Metrics` interface — App.tsx feeds this directly into
+/// the ['metrics'] react-query cache, so field names must stay in sync.
+/// Latency percentiles are None from WS (computed on demand by the REST endpoint).
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct MetricsSnapshotData {
-    pub backends: HashMap<String, crate::metrics::MetricsSnapshot>,
-    pub latency_p50_ms: Option<u64>,
-    pub latency_p95_ms: Option<u64>,
-    pub latency_p99_ms: Option<u64>,
-    pub requests_per_second: f64,
+    pub total_requests: u64,
+    pub successful_requests: u64,
+    pub failed_requests: u64,
+    pub requests_per_minute: f64,
+    pub p50_latency_ms: Option<u64>,
+    pub p95_latency_ms: Option<u64>,
     pub error_rate: f64,
+    pub streams_started: u64,
+    pub streams_completed: u64,
+    pub streams_failed: u64,
+    pub streams_client_disconnected: u64,
 }

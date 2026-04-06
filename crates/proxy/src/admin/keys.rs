@@ -15,6 +15,7 @@ pub enum KeyRole {
 }
 
 impl KeyRole {
+    /// Return the lowercase string label stored in SQLite and returned by the admin API.
     pub fn as_str(&self) -> &'static str {
         match self {
             KeyRole::Admin => "admin",
@@ -22,6 +23,7 @@ impl KeyRole {
         }
     }
 
+    /// Parse a role string. Any unrecognised value is treated as `Developer` for safety.
     pub fn from_str_or_default(s: &str) -> Self {
         match s.to_lowercase().as_str() {
             "admin" => KeyRole::Admin,
@@ -38,6 +40,7 @@ pub enum BudgetDuration {
 }
 
 impl BudgetDuration {
+    /// Return the lowercase string label stored in SQLite and returned by the admin API.
     pub fn as_str(&self) -> &'static str {
         match self {
             BudgetDuration::Daily => "daily",
@@ -45,6 +48,7 @@ impl BudgetDuration {
         }
     }
 
+    /// Parse a duration string. Returns `None` for unrecognised values.
     pub fn parse(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "daily" => Some(BudgetDuration::Daily),
@@ -146,6 +150,8 @@ impl Default for RateLimitState {
 }
 
 impl RateLimitState {
+    /// Create an empty rate limit state. VecDeque provides O(1) front-pop
+    /// for the sliding window expiry drain without reallocating.
     pub fn new() -> Self {
         Self {
             rpm_window: Mutex::new(VecDeque::new()),
@@ -154,18 +160,26 @@ impl RateLimitState {
     }
 
     /// Check if a new request is within the RPM limit.
-    /// Returns Ok(()) if allowed, Err(retry_after_secs) if exceeded.
+    /// Returns `Ok(())` if allowed, `Err(retry_after_secs)` if exceeded.
+    ///
+    /// Implements a 60-second sliding window: timestamps older than 60 s are
+    /// evicted before checking. `>= limit` (not `>`) ensures the limit is a
+    /// strict ceiling — a limit of 10 RPM allows exactly 10 requests per window.
+    /// The `retry_after` value is rounded up to at least 1 s (HTTP Retry-After
+    /// is in whole seconds; 0 would mislead clients into retrying immediately).
     pub fn check_rpm(&self, limit: u32, now_ms: u64) -> Result<(), u64> {
         let mut window = self.rpm_window.lock().unwrap_or_else(|e| e.into_inner());
+        // 60_000 ms = 1 minute; the window size for RPM limiting.
         let cutoff = now_ms.saturating_sub(60_000);
-        // Drain expired entries
+        // Drain expired entries from the front (VecDeque is ordered oldest-first).
         while window.front().is_some_and(|&ts| ts < cutoff) {
             window.pop_front();
         }
         if window.len() >= limit as usize {
-            // Compute retry-after: time until the oldest entry expires
+            // Time until the oldest entry ages out of the 60-second window.
             let oldest = window.front().copied().unwrap_or(now_ms);
             let retry_after_ms = (oldest + 60_000).saturating_sub(now_ms);
+            // Divide ms -> s and clamp to 1 s minimum (HTTP Retry-After is whole seconds).
             return Err((retry_after_ms / 1000).max(1));
         }
         window.push_back(now_ms);
@@ -216,7 +230,9 @@ pub fn check_and_reset_period(meta: &mut VirtualKeyMeta) -> bool {
     let boundary_epoch = match &meta.period_start {
         Some(start) => next_period_boundary(start, duration),
         None => {
-            // No period_start set yet; initialize it now
+            // Lazy init: period_start is None until the first spend event. Initializing
+            // here (rather than at key creation) means budget windows align to actual
+            // usage, not creation time, which is more intuitive for low-traffic keys.
             meta.period_start = Some(current_period_start(now_epoch, duration));
             meta.period_spend_usd = 0.0;
             return true;
@@ -234,8 +250,12 @@ pub fn check_and_reset_period(meta: &mut VirtualKeyMeta) -> bool {
 }
 
 /// Compute the epoch timestamp of the next period boundary given a period start ISO string.
+///
+/// Avoids pulling in `chrono` or `time` crates by doing the arithmetic directly with
+/// the Hinnant algorithm (same as `db::days_to_ymd`). This keeps the crate dependency
+/// footprint small for a function that is called on every authenticated request.
 fn next_period_boundary(start_iso: &str, duration: BudgetDuration) -> Option<u64> {
-    // Parse the ISO 8601 date to extract year, month, day
+    // Parse the ISO 8601 date to extract year, month, day.
     // Format: "2026-03-22T00:00:00Z"
     if start_iso.len() < 10 {
         return None;

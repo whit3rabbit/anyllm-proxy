@@ -17,6 +17,7 @@ use super::{
 
 // ---- Serde structs for LiteLLM config.yaml ----
 
+/// Root structure of a LiteLLM `config.yaml` file.
 #[derive(Deserialize)]
 pub(crate) struct LiteLLMConfig {
     #[serde(default)]
@@ -161,11 +162,14 @@ pub struct LiteLLMParsed {
     pub master_key: Option<String>,
 }
 
+/// Parse a LiteLLM YAML config and return the multi-backend config + model router pair.
 pub fn from_litellm_yaml(yaml: &str) -> (MultiConfig, ModelRouter) {
     let parsed = parse_litellm_yaml(yaml);
     (parsed.multi_config, parsed.router)
 }
 
+/// Parse a LiteLLM YAML config into the intermediate `LiteLLMParsed` struct.
+/// Panics on invalid YAML (startup-time validation; misconfiguration is unrecoverable).
 pub fn parse_litellm_yaml(yaml: &str) -> LiteLLMParsed {
     let config: LiteLLMConfig =
         serde_yaml::from_str(yaml).unwrap_or_else(|e| panic!("invalid LiteLLM config YAML: {e}"));

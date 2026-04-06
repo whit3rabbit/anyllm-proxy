@@ -26,6 +26,11 @@ pub struct FileStore {
 }
 
 impl FileStore {
+    /// Create a new file store backed by the given SQLite connection.
+    ///
+    /// The connection is shared with the job queue and webhook queue via `Arc<Mutex>`.
+    /// All operations run on the blocking thread pool via `spawn_blocking` to avoid
+    /// holding the mutex across `.await` points.
     pub fn new(db: Arc<Mutex<Connection>>) -> Self {
         Self { db }
     }
