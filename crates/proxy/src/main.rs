@@ -845,10 +845,7 @@ fn parse_env_file(path: &str) -> Vec<(String, String)> {
     }
 
     for warn in &result.warnings {
-        let loc = warn
-            .line
-            .map(|l| format!(":{l}"))
-            .unwrap_or_default();
+        let loc = warn.line.map(|l| format!(":{l}")).unwrap_or_default();
         eprintln!("anyllm_proxy: {path}{loc}: {}", warn.message);
     }
 
@@ -881,15 +878,14 @@ fn load_env_from_sqlite(db_path: &str) -> Vec<(String, String)> {
 
     // The env_import table is created by init_db() during normal startup.
     // If the proxy has never run with a DB, the table won't exist yet.
-    let rows: Vec<(String, String)> = match conn.prepare(
-        "SELECT key, value FROM env_import ORDER BY key",
-    ) {
-        Ok(mut stmt) => stmt
-            .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))
-            .and_then(|mapped| mapped.collect())
-            .unwrap_or_default(),
-        Err(_) => return Vec::new(), // Table doesn't exist yet
-    };
+    let rows: Vec<(String, String)> =
+        match conn.prepare("SELECT key, value FROM env_import ORDER BY key") {
+            Ok(mut stmt) => stmt
+                .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))
+                .and_then(|mapped| mapped.collect())
+                .unwrap_or_default(),
+            Err(_) => return Vec::new(), // Table doesn't exist yet
+        };
 
     rows.into_iter()
         .filter(|(key, _)| std::env::var(key).is_err())

@@ -10,10 +10,10 @@ pub mod cache;
 pub mod callbacks;
 /// Environment-based configuration, TLS client cert setup, URL validation.
 pub mod config;
-/// Pure env-file parser (no I/O, no set_var). Used by startup bootstrap and admin import endpoint.
-pub mod env_parser;
 /// Per-request cost tracking and model pricing (US4).
 pub mod cost;
+/// Pure env-file parser (no I/O, no set_var). Used by startup bootstrap and admin import endpoint.
+pub mod env_parser;
 /// Backend fallback chains for transparent failover (US2).
 pub mod fallback;
 /// Named integration registry (Langfuse, etc.).

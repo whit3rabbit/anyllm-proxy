@@ -220,10 +220,7 @@ pub fn parse_env_content(content: &str) -> ParseResult {
         }
 
         // Strip optional `export ` prefix.
-        let line = line
-            .strip_prefix("export ")
-            .map(str::trim)
-            .unwrap_or(line);
+        let line = line.strip_prefix("export ").map(str::trim).unwrap_or(line);
 
         // Split on first `=`.
         let Some((raw_key, val)) = line.split_once('=') else {
@@ -327,9 +324,8 @@ pub fn parse_env_content(content: &str) -> ParseResult {
 
     // Hard reject: non-empty file that yielded zero valid pairs (likely wrong file type).
     if had_content && pairs.is_empty() && hard_errors.is_empty() {
-        hard_errors.push(
-            "no valid KEY=VALUE entries found — is this a .anyllm.env file?".to_string(),
-        );
+        hard_errors
+            .push("no valid KEY=VALUE entries found — is this a .anyllm.env file?".to_string());
     }
 
     ParseResult {
@@ -434,13 +430,19 @@ mod tests {
     fn warn_unknown_key() {
         let result = parse_env_content("UNKNOWN_XYZ_KEY=value");
         assert!(result.hard_errors.is_empty());
-        assert!(result.warnings.iter().any(|w| w.message.contains("not a recognized")));
+        assert!(result
+            .warnings
+            .iter()
+            .any(|w| w.message.contains("not a recognized")));
     }
 
     #[test]
     fn warn_duplicate_key() {
         let result = parse_env_content("BACKEND=openai\nBACKEND=vertex\n");
-        assert!(result.warnings.iter().any(|w| w.message.contains("more than once")));
+        assert!(result
+            .warnings
+            .iter()
+            .any(|w| w.message.contains("more than once")));
         // Last value wins
         assert_eq!(result.pairs.last().unwrap().value, "vertex");
     }
@@ -448,13 +450,19 @@ mod tests {
     #[test]
     fn warn_empty_value() {
         let result = parse_env_content("BACKEND=");
-        assert!(result.warnings.iter().any(|w| w.message.contains("empty value")));
+        assert!(result
+            .warnings
+            .iter()
+            .any(|w| w.message.contains("empty value")));
     }
 
     #[test]
     fn warn_sensitive_key() {
         let result = parse_env_content("ADMIN_TOKEN=secret");
-        assert!(result.warnings.iter().any(|w| w.message.contains("sensitive")));
+        assert!(result
+            .warnings
+            .iter()
+            .any(|w| w.message.contains("sensitive")));
     }
 
     #[test]

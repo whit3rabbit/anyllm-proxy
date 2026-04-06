@@ -86,13 +86,27 @@ pub(super) async fn get_observability_overview(
 
     let result = crate::admin::state::with_db(&shared.db, move |conn| {
         let series = crate::admin::db::query_request_timeseries(
-            conn, &since, Some(&until), backend.as_deref(), key_id,
+            conn,
+            &since,
+            Some(&until),
+            backend.as_deref(),
+            key_id,
         )?;
         let timeline = crate::admin::db::query_request_timeline(
-            conn, &since, Some(&until), backend.as_deref(), key_id, timeline_limit,
+            conn,
+            &since,
+            Some(&until),
+            backend.as_deref(),
+            key_id,
+            timeline_limit,
         )?;
         let failures = crate::admin::db::query_failure_breakdown(
-            conn, &since, Some(&until), backend.as_deref(), key_id, failure_limit,
+            conn,
+            &since,
+            Some(&until),
+            backend.as_deref(),
+            key_id,
+            failure_limit,
         )?;
         Ok::<_, rusqlite::Error>((series, timeline, failures))
     })
@@ -100,14 +114,24 @@ pub(super) async fn get_observability_overview(
 
     match result {
         Some(Ok((series, timeline, failures))) => {
-            let (total_requests, total_errors, total_input_tokens, total_output_tokens, total_cost_usd) =
-                series.iter().fold(
-                    (0u64, 0u64, 0u64, 0u64, 0.0f64),
-                    |(req, err, inp, out, cost), b| {
-                        (req + b.requests_total, err + b.requests_error,
-                         inp + b.input_tokens, out + b.output_tokens, cost + b.cost_usd)
-                    },
-                );
+            let (
+                total_requests,
+                total_errors,
+                total_input_tokens,
+                total_output_tokens,
+                total_cost_usd,
+            ) = series.iter().fold(
+                (0u64, 0u64, 0u64, 0u64, 0.0f64),
+                |(req, err, inp, out, cost), b| {
+                    (
+                        req + b.requests_total,
+                        err + b.requests_error,
+                        inp + b.input_tokens,
+                        out + b.output_tokens,
+                        cost + b.cost_usd,
+                    )
+                },
+            );
             Json(serde_json::json!({
                 "window_hours": hours,
                 "backend": backend_str,

@@ -212,8 +212,14 @@ static EXPORT_SECTIONS: &[(&str, &[&str])] = &[
             "ANYLLM_DEGRADATION_WARNINGS",
         ],
     ),
-    ("# Authentication / relay", &["PROXY_API_KEYS", "PROXY_OPEN_RELAY"]),
-    ("# OpenAI / compatible", &["OPENAI_API_KEY", "OPENAI_BASE_URL", "OPENAI_API_FORMAT"]),
+    (
+        "# Authentication / relay",
+        &["PROXY_API_KEYS", "PROXY_OPEN_RELAY"],
+    ),
+    (
+        "# OpenAI / compatible",
+        &["OPENAI_API_KEY", "OPENAI_BASE_URL", "OPENAI_API_FORMAT"],
+    ),
     (
         "# Azure OpenAI",
         &[
@@ -223,16 +229,41 @@ static EXPORT_SECTIONS: &[(&str, &[&str])] = &[
             "AZURE_OPENAI_API_VERSION",
         ],
     ),
-    ("# Google Vertex AI", &["VERTEX_PROJECT", "VERTEX_REGION", "VERTEX_API_KEY", "GOOGLE_ACCESS_TOKEN"]),
+    (
+        "# Google Vertex AI",
+        &[
+            "VERTEX_PROJECT",
+            "VERTEX_REGION",
+            "VERTEX_API_KEY",
+            "GOOGLE_ACCESS_TOKEN",
+        ],
+    ),
     ("# Google Gemini", &["GEMINI_API_KEY", "GEMINI_BASE_URL"]),
     (
         "# AWS Bedrock",
-        &["AWS_REGION", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"],
+        &[
+            "AWS_REGION",
+            "AWS_ACCESS_KEY_ID",
+            "AWS_SECRET_ACCESS_KEY",
+            "AWS_SESSION_TOKEN",
+        ],
     ),
-    ("# TLS", &["TLS_CLIENT_CERT_P12", "TLS_CLIENT_CERT_PASSWORD", "TLS_CA_CERT"]),
+    (
+        "# TLS",
+        &[
+            "TLS_CLIENT_CERT_P12",
+            "TLS_CLIENT_CERT_PASSWORD",
+            "TLS_CA_CERT",
+        ],
+    ),
     (
         "# Network / security",
-        &["IP_ALLOWLIST", "TRUST_PROXY_HEADERS", "WEBHOOK_URLS", "RATE_LIMIT_FAIL_POLICY"],
+        &[
+            "IP_ALLOWLIST",
+            "TRUST_PROXY_HEADERS",
+            "WEBHOOK_URLS",
+            "RATE_LIMIT_FAIL_POLICY",
+        ],
     ),
     (
         "# Admin server",
@@ -249,12 +280,26 @@ static EXPORT_SECTIONS: &[(&str, &[&str])] = &[
     ),
     ("# OIDC / JWT", &["OIDC_ISSUER_URL", "OIDC_AUDIENCE"]),
     ("# Redis (optional rate-limit backend)", &["REDIS_URL"]),
-    ("# Qdrant (optional semantic cache)", &["QDRANT_URL", "QDRANT_COLLECTION"]),
+    (
+        "# Qdrant (optional semantic cache)",
+        &["QDRANT_URL", "QDRANT_COLLECTION"],
+    ),
     (
         "# OpenTelemetry",
-        &["OTEL_EXPORTER_OTLP_ENDPOINT", "OTEL_SERVICE_NAME", "OTEL_TRACES_SAMPLER"],
+        &[
+            "OTEL_EXPORTER_OTLP_ENDPOINT",
+            "OTEL_SERVICE_NAME",
+            "OTEL_TRACES_SAMPLER",
+        ],
     ),
-    ("# Langfuse tracing", &["LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "LANGFUSE_HOST"]),
+    (
+        "# Langfuse tracing",
+        &[
+            "LANGFUSE_PUBLIC_KEY",
+            "LANGFUSE_SECRET_KEY",
+            "LANGFUSE_HOST",
+        ],
+    ),
 ];
 
 /// GET /admin/api/env/export
@@ -267,7 +312,12 @@ pub(super) async fn export_env() -> impl IntoResponse {
     // Snapshot all known env vars in one pass to avoid repeated std::env::var calls.
     let env_cache: std::collections::HashMap<&str, String> = KNOWN_KEYS
         .iter()
-        .filter_map(|&k| std::env::var(k).ok().filter(|v| !v.is_empty()).map(|v| (k, v)))
+        .filter_map(|&k| {
+            std::env::var(k)
+                .ok()
+                .filter(|v| !v.is_empty())
+                .map(|v| (k, v))
+        })
         .collect();
 
     let mut out = String::with_capacity(2048);

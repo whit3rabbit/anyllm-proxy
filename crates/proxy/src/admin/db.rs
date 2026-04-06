@@ -149,7 +149,10 @@ pub fn init_db(conn: &Connection) -> rusqlite::Result<()> {
 /// Upsert a batch of env-file key-value pairs into the `env_import` table.
 /// Existing keys are overwritten; `imported_at` is set to the current UTC timestamp.
 /// All rows are written in a single transaction for atomicity and performance.
-pub fn upsert_env_import(conn: &mut Connection, pairs: &[(String, String)]) -> rusqlite::Result<()> {
+pub fn upsert_env_import(
+    conn: &mut Connection,
+    pairs: &[(String, String)],
+) -> rusqlite::Result<()> {
     let now = chrono_now();
     let tx = conn.transaction()?;
     {

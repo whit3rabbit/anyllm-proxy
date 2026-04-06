@@ -436,7 +436,10 @@ pub fn admin_router(shared: SharedState, token: Arc<zeroize::Zeroizing<String>>)
     let spa_route = Router::new()
         .route("/admin/", get(serve_spa))
         .route("/admin", get(serve_spa))
-        .route("/", get(|| async { axum::response::Redirect::permanent("/admin/") }));
+        .route(
+            "/",
+            get(|| async { axum::response::Redirect::permanent("/admin/") }),
+        );
 
     // Merge all routes.
     public
