@@ -5,6 +5,7 @@ case "$1" in
     remove|deconfigure)
         if [ -d /run/systemd/system ]; then
             systemctl stop anyllm-proxy || true
+            systemctl disable anyllm-proxy || true
         fi
         ;;
 esac

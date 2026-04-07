@@ -175,7 +175,6 @@ jobs:
 
       - name: Verify postinst artifacts
         run: |
-          sudo /var/lib/dpkg/info/anyllm-proxy.postinst configure || true
           getent passwd anyllm
           test -d /var/lib/anyllm
           stat -c '%U:%G' /var/lib/anyllm | grep -q 'anyllm:anyllm'
@@ -207,7 +206,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           ls -la ./debs/
-          gh release upload "${{ github.ref_name }}" ./debs/*.deb --repo "${{ github.repository }}"
+          gh release upload "${{ github.ref_name }}" ./debs/*.deb --repo "${{ github.repository }}" --clobber
 
   publish:
     name: Publish to crates.io
