@@ -92,3 +92,20 @@ pretty_assertions = "1"
 reqwest = { version = "0.12", default-features = false, features = ["json", "native-tls", "multipart"] }
 tokio = { version = "1", features = ["full"] }
 tempfile = "3"
+
+[package.metadata.deb]
+name = "anyllm-proxy"
+section = "net"
+priority = "optional"
+depends = "libc6 (>= 2.31)"
+maintainer-scripts = "../../packaging"
+conf-files = ["/etc/default/anyllm-proxy"]
+extended-description = """\
+HTTP proxy that accepts Anthropic Messages API and OpenAI Chat Completions \
+requests, translates between formats, and forwards to any supported backend. \
+Supports streaming SSE, tool calling, virtual key management, and cost tracking."""
+assets = [
+    ["target/release/anyllm_proxy", "/usr/bin/anyllm-proxy", "755"],
+    ["../../packaging/anyllm-proxy.service", "/lib/systemd/system/anyllm-proxy.service", "644"],
+    ["../../packaging/anyllm-proxy.default", "/etc/default/anyllm-proxy", "640"],
+]
