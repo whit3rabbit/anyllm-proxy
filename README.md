@@ -2,17 +2,39 @@
 
 An API translation proxy that lets Anthropic-based tools (Claude Code, Cursor, Windsurf, Cline) talk to any OpenAI-compatible backend, local LLM, or alternative provider.
 
-**[Releases](https://github.com/whit3rabbit/anyllm-proxy/releases)** | **[Library Usage](#using-as-a-library)**
+**[Releases](https://github.com/whit3rabbit/anyllm-proxy/releases)** | **[ENV Reference](docs/ENV.md)** | **[Config Reference](docs/CONFIG.md)**
+
+---
+
+## Install
+
+Download a binary from the [releases page](https://github.com/whit3rabbit/anyllm-proxy/releases).
+
+<details>
+<summary>Other install methods</summary>
+
+```bash
+# Cargo (from source)
+cargo install anyllm_proxy
+
+# Build from source
+cargo build -p anyllm_proxy --release
+
+# Debian package
+cargo build --release -p anyllm_proxy
+cargo deb -p anyllm_proxy --no-build --no-strip
+sudo dpkg -i target/debian/anyllm-proxy_*.deb
+sudo systemctl enable --now anyllm-proxy
+
+# Docker
+docker run -e OPENAI_API_KEY=sk-... -p 3000:3000 followthewhit3rabbit/anyllm-proxy:latest
+```
+
+</details>
 
 ---
 
 ## Quick Start
-
-Download a binary from the [releases page](https://github.com/whit3rabbit/anyllm-proxy/releases), or install from source:
-
-```bash
-cargo install anyllm_proxy
-```
 
 Create a `.anyllm.env` config file in `~/.anyllm/` (or the current directory):
 
@@ -30,6 +52,22 @@ anyllm_proxy
 # or: anyllm_proxy --env-file ~/configs/ollama.env
 ```
 
+Point Claude Code at the proxy:
+
+```bash
+ANTHROPIC_BASE_URL=http://localhost:3000 \
+ANTHROPIC_AUTH_TOKEN=proxy-user \
+ANTHROPIC_API_KEY="" \
+CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 \
+claude
+```
+
+Or use the `run` subcommand to do the same in one step:
+
+```bash
+anyllm_proxy run claude
+```
+
 ### Simple mode vs. advanced mode
 
 | | Simple mode | Advanced mode |
@@ -42,17 +80,76 @@ anyllm_proxy
 
 Most users never leave simple mode. Start there.
 
-Point Claude Code at the proxy:
+---
+
+## Backends
+
+### Local LLMs (Ollama, LM Studio, vLLM)
 
 ```bash
-ANTHROPIC_BASE_URL=http://localhost:3000 \
-ANTHROPIC_AUTH_TOKEN=proxy-user \
-ANTHROPIC_API_KEY="" \
-CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 \
-claude
+# Ollama
+OPENAI_API_KEY=unused \
+OPENAI_BASE_URL=http://localhost:11434/v1 \
+BIG_MODEL=qwen2.5-coder:32b \
+SMALL_MODEL=qwen2.5-coder:32b \
+anyllm_proxy
 ```
 
-### Admin Web Interface (optional)
+Use the same pattern for **LM Studio** (port `1234`) or **vLLM** (port `8000`) by substituting `OPENAI_BASE_URL`.
+
+If your local LLM rejects `stream_options`, set `OMIT_STREAM_OPTIONS=true`.
+
+### Commercial APIs
+
+**OpenAI:**
+```bash
+OPENAI_API_KEY=sk-... BIG_MODEL=gpt-4o SMALL_MODEL=gpt-4o-mini anyllm_proxy
+```
+
+**OpenRouter:**
+```bash
+OPENAI_API_KEY=sk-or-... \
+OPENAI_BASE_URL=https://openrouter.ai/api/v1 \
+BIG_MODEL=anthropic/claude-3.5-sonnet \
+SMALL_MODEL=anthropic/claude-3-haiku \
+anyllm_proxy
+```
+
+**Google Gemini:**
+```bash
+BACKEND=gemini GEMINI_API_KEY=AIza... anyllm_proxy
+```
+
+**Azure OpenAI:**
+```bash
+BACKEND=azure \
+AZURE_OPENAI_ENDPOINT=https://myresource.openai.azure.com \
+AZURE_OPENAI_DEPLOYMENT=my-gpt4o \
+AZURE_OPENAI_API_KEY=... \
+anyllm_proxy
+```
+
+**AWS Bedrock:**
+```bash
+BACKEND=bedrock \
+AWS_REGION=us-east-1 \
+AWS_ACCESS_KEY_ID=AKIA... \
+AWS_SECRET_ACCESS_KEY=... \
+BIG_MODEL=anthropic.claude-3-5-sonnet-20241022-v2:0 \
+SMALL_MODEL=anthropic.claude-3-5-haiku-20241022-v1:0 \
+anyllm_proxy
+```
+
+**Anthropic Passthrough** (no translation, for auth/routing/rate-limiting only):
+```bash
+BACKEND=anthropic ANTHROPIC_API_KEY=sk-ant-... anyllm_proxy
+```
+
+See [docs/ENV.md](docs/ENV.md) for the full variable reference.
+
+---
+
+## Admin Web Interface
 
 Pass `--webui` (or `--admin`) to start the admin dashboard alongside the proxy:
 
@@ -64,22 +161,37 @@ anyllm_proxy --webui
 
 If no backend is configured, the UI opens on the **Settings** tab with a getting-started guide and env file import.
 
-The admin server binds to `127.0.0.1:3001` by default (localhost only). The dashboard tabs:
+The admin server binds to `127.0.0.1:3001` by default (localhost only). Dashboard tabs:
 
 - **Dashboard:** Live RPM, error rate, P50/P95 latency, per-backend cards, filterable live request feed.
 - **Request Log:** Historical log with filters (backend, status, key, date range), paginated, with per-request cost and token detail.
-- **Access Control:** Virtual key CRUD — create, edit (RPM/TPM limits, budget, expiry, model allowlist), revoke without restarting.
+- **Access Control:** Virtual key CRUD -- create, edit (RPM/TPM limits, budget, expiry, model allowlist), revoke without restarting.
 - **Backends:** Configured backends and their status.
 - **Models:** Discover models from providers (OpenRouter, DeepInfra, Ollama, or configured backend), add/remove deployments. Changes are persisted to SQLite and survive restarts.
 - **Audit:** All admin config mutations and key lifecycle events.
 - **Settings:** Mutable config (log level, log_bodies, model mappings), read-only env vars (secrets masked), **Import/Export .anyllm.env**. Shows a getting-started guide when no backend is configured.
 
-**Token:** On first start an admin token is auto-generated and written to `~/.anyllm/.admin_token`. Pass it as `?token=` in the URL or `Authorization: Bearer` for API calls. To set a fixed token instead:
+**Token:** On first start an admin token is auto-generated and written to `~/.anyllm/.admin_token`. Pass it as `?token=` in the URL or `Authorization: Bearer` for API calls. To set a fixed token:
 
 ```bash
 ADMIN_TOKEN=mysecret anyllm_proxy --webui
 # Generate a strong token: openssl rand -hex 32
 ```
+
+<details>
+<summary>Admin env vars and Docker setup</summary>
+
+| Variable | Default | Description |
+|---|---|---|
+| `ADMIN_PORT` | `3001` | Admin server port |
+| `ADMIN_BIND` | `127.0.0.1` | Bind address (`0.0.0.0` in Docker) |
+| `ADMIN_TOKEN` | auto-generated | Fixed token (min 32 chars recommended) |
+| `ADMIN_TOKEN_PATH` | `~/.anyllm/.admin_token` | Where the auto-generated token is written |
+| `ADMIN_DB_PATH` | `~/.anyllm/admin.db` | SQLite database path |
+| `ANYLLM_HOME` | `~/.anyllm` | Data directory for all default file paths |
+| `ADMIN_LOG_RETENTION_DAYS` | `7` | Request log retention |
+| `DISABLE_ADMIN` | -- | Set to `1` to force-disable |
+| `WEBUI` / `ADMIN` | -- | Docker entrypoint shorthand for `--webui` |
 
 **Custom port / disable:**
 
@@ -94,50 +206,77 @@ DISABLE_ADMIN=1 anyllm_proxy --webui          # do not start admin even when fla
 docker run -e OPENAI_API_KEY=sk-... -e WEBUI=1 -e ADMIN_BIND=0.0.0.0 \
   -p 3000:3000 -p 127.0.0.1:3001:3001 followthewhit3rabbit/anyllm-proxy:latest
 
-# docker-compose (recommended — see docker-compose.yml)
+# docker-compose (recommended)
 docker compose up
 # Token: docker compose exec proxy cat /data/.admin_token
 ```
 
-**Admin env vars summary:**
-
-| Variable | Default | Description |
-|---|---|---|
-| `ADMIN_PORT` | `3001` | Admin server port |
-| `ADMIN_BIND` | `127.0.0.1` | Bind address (`0.0.0.0` in Docker) |
-| `ADMIN_TOKEN` | auto-generated | Fixed token (min 32 chars recommended) |
-| `ADMIN_TOKEN_PATH` | `~/.anyllm/.admin_token` | Where the auto-generated token is written |
-| `ADMIN_DB_PATH` | `~/.anyllm/admin.db` | SQLite database path |
-| `ANYLLM_HOME` | `~/.anyllm` | Data directory for all default file paths |
-| `ADMIN_LOG_RETENTION_DAYS` | `7` | Request log retention |
-| `DISABLE_ADMIN` | — | Set to `1` to force-disable |
-| `WEBUI` / `ADMIN` | — | Docker entrypoint shorthand for `--webui` |
-
 **CSRF:** State-mutating admin API calls (POST/PUT/DELETE) require an `X-CSRF-Token` header. Fetch a one-time token from `GET /admin/csrf-token` before each mutating request. The SPA handles this automatically; scripts must do it explicitly. Admin endpoints are rate-limited to 10 requests/minute per IP.
 
-### Config Directory
+</details>
 
-All data files live in `~/.anyllm/` by default. The directory is created on first run.
+---
 
+## Virtual Key Management
+
+Create short-lived, rate-limited, or budget-capped API keys without restarting the proxy. Requires `--webui`.
+
+```bash
+# Create a key with RPM/TPM limits, a monthly budget, and a model allowlist
+curl -X POST http://localhost:3001/admin/api/keys \
+  -H "Authorization: Bearer $(cat ~/.anyllm/.admin_token)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "description": "dev key",
+    "rpm_limit": 60,
+    "tpm_limit": 100000,
+    "max_budget_usd": 10.00,
+    "budget_duration": "monthly",
+    "expires_at": "2026-12-31T00:00:00Z",
+    "allowed_models": ["claude-*", "gpt-4o"]
+  }'
+# Response: {"id": 1, "key": "sk-vk...", ...}
 ```
-~/.anyllm/
-  admin.db          SQLite (keys, models, audit, env imports)
-  .admin_token      Auto-generated admin auth token
-  .anyllm.env       Environment file (auto-loaded if present)
-  config.yaml       Proxy config (auto-detected if present)
+
+<details>
+<summary>More virtual key operations</summary>
+
+```bash
+# Use the key like any other proxy key
+curl http://localhost:3000/v1/messages \
+  -H "x-api-key: sk-vk..." \
+  -d '{"model": "claude-sonnet-4-20250514", "max_tokens": 100, "messages": [...]}'
+
+# Update limits on an existing key (no restart needed)
+curl -X PUT http://localhost:3001/admin/api/keys/1 \
+  -H "Authorization: Bearer $(cat ~/.anyllm/.admin_token)" \
+  -H "Content-Type: application/json" \
+  -d '{"rpm_limit": 120, "max_budget_usd": 20.00}'
+
+# Check spend for a key
+curl http://localhost:3001/admin/api/keys/1/spend \
+  -H "Authorization: Bearer $(cat ~/.anyllm/.admin_token)"
+
+# Revoke immediately (no restart needed)
+curl -X DELETE http://localhost:3001/admin/api/keys/1 \
+  -H "Authorization: Bearer $(cat ~/.anyllm/.admin_token)"
 ```
 
-Override the directory with `ANYLLM_HOME=/path/to/dir`, or override individual files with `ADMIN_DB_PATH`, `ADMIN_TOKEN_PATH`, `--env-file`, or `PROXY_CONFIG`.
+`budget_duration` accepts `daily`, `monthly`, or `lifetime`. `allowed_models` supports exact names and `prefix/*` wildcards. A key at 100% of its budget returns 429 with period reset information. Webhook notifications fire at 80%, 95%, and 100% of the budget via `WEBHOOK_URLS`.
 
-The proxy looks for `.anyllm.env` in three places (first match wins): `--env-file` flag, then the current directory, then `~/.anyllm/`. Similarly, `config.yaml` is auto-detected in `~/.anyllm/` when `PROXY_CONFIG` is not set.
+</details>
 
-Docker Compose sets explicit paths (`/data/admin.db`, `/data/.admin_token`) so the home directory convention does not apply in containers. See [docs/CONFIG.md](docs/CONFIG.md) for full details.
+Requests from unauthenticated clients are rejected by default. For local development, set `PROXY_OPEN_RELAY=true` to accept any non-empty key.
 
-## Advanced Mode
+**Distributed rate limiting (optional):** Build with `--features redis` and set `REDIS_URL` to share rate limit state across multiple proxy instances. `RATE_LIMIT_FAIL_POLICY=open` (default) allows requests when Redis is unavailable; `closed` rejects them with 503.
 
-### Multiple backends on one proxy (recommended)
+---
 
-A single proxy instance can serve all your backends simultaneously. Each backend gets its own URL path. Use a `config.toml` (see [section 2](#2-multi-routing-and-the-web-interface)):
+## Multi-Backend Routing
+
+A single proxy instance can serve all your backends simultaneously. Each backend gets its own URL path.
+
+### TOML config
 
 ```toml
 # config.toml
@@ -153,7 +292,7 @@ small_model = "qwen2.5-coder:7b"
 
 [backends.openai]
 kind = "openai"
-api_key = "sk-..."
+api_key = "env:OPENAI_API_KEY"
 base_url = "https://api.openai.com/v1"
 big_model = "gpt-4o"
 small_model = "gpt-4o-mini"
@@ -180,15 +319,15 @@ All three backends are live at once:
 
 Point different tools at different paths, or switch in Claude Code by changing `ANTHROPIC_BASE_URL`.
 
-### Coming from LiteLLM? Drop in your config.yaml
+Additional per-backend fields: `api_format = "chat"` (OpenAI only; `chat` or `responses`), `omit_stream_options = true` (strip `stream_options` for backends that reject it). Top-level `log_bodies = true` enables request/response body logging. Any config value can use `env:VAR_NAME` to read from the environment at startup.
 
-anyllm-proxy accepts LiteLLM `config.yaml` files directly. If you already have a LiteLLM deployment, point the proxy at your existing config:
+### LiteLLM config (drop-in)
+
+anyllm-proxy accepts LiteLLM `config.yaml` files directly:
 
 ```bash
 PROXY_CONFIG=config.yaml anyllm_proxy --webui
 ```
-
-A standard LiteLLM config works as-is:
 
 ```yaml
 # config.yaml (LiteLLM format)
@@ -204,52 +343,36 @@ model_list:
       model: openai/gpt-4o
       api_key: os.environ/OPENAI_API_KEY
       rpm: 10000
-  - model_name: claude-3-opus
-    litellm_params:
-      model: anthropic/claude-3-opus-20240229
-      api_key: os.environ/ANTHROPIC_API_KEY
 
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
 ```
 
-Multiple deployments of the same model name are load-balanced with round-robin routing. Deployments at their RPM limit are automatically skipped.
+Multiple deployments of the same model name are load-balanced with round-robin routing. Deployments at their RPM limit are automatically skipped. The `os.environ/VAR_NAME` syntax is supported alongside `env:VAR_NAME`.
 
-**Env var compatibility:** LiteLLM env var names are accepted as aliases, so you do not need to rename anything:
+<details>
+<summary>LiteLLM env var aliases</summary>
 
-| LiteLLM env var | anyllm-proxy equivalent | Notes |
-|---|---|---|
-| `LITELLM_MASTER_KEY` | `PROXY_API_KEYS` | Admin/auth key |
-| `LITELLM_CONFIG` | `PROXY_CONFIG` | Config file path |
-| `AZURE_API_KEY` | `AZURE_OPENAI_API_KEY` | Azure auth |
-| `AZURE_API_BASE` | `AZURE_OPENAI_ENDPOINT` | Azure endpoint |
-| `AZURE_API_VERSION` | `AZURE_OPENAI_API_VERSION` | Azure API version |
-| `AWS_REGION_NAME` | `AWS_REGION` | Bedrock region |
-| `OPENAI_API_KEY` | `OPENAI_API_KEY` | Same name |
-| `ANTHROPIC_API_KEY` | `ANTHROPIC_API_KEY` | Same name |
+| LiteLLM env var | anyllm-proxy equivalent |
+|---|---|
+| `LITELLM_MASTER_KEY` | `PROXY_API_KEYS` |
+| `LITELLM_CONFIG` | `PROXY_CONFIG` |
+| `AZURE_API_KEY` | `AZURE_OPENAI_API_KEY` |
+| `AZURE_API_BASE` | `AZURE_OPENAI_ENDPOINT` |
+| `AZURE_API_VERSION` | `AZURE_OPENAI_API_VERSION` |
+| `AWS_REGION_NAME` | `AWS_REGION` |
 
-The `os.environ/VAR_NAME` syntax in YAML values is supported alongside anyllm's native `env:VAR_NAME`. See [docs/COMPARISON_LITELLM.md](docs/COMPARISON_LITELLM.md) for a full feature comparison.
+See [docs/COMPARISON_LITELLM.md](docs/COMPARISON_LITELLM.md) for a full feature comparison.
 
-### Multiple separate instances (for isolated deployments)
+</details>
 
-For cases where you want completely separate proxy processes (different ports, different machines, different Docker containers), keep one `.env` file per deployment:
+### Multiple separate instances
 
-```
-~/proxies/
-  ollama.env         # local Ollama
-  openai-prod.env    # production OpenAI
-  deepseek.env       # DeepSeek API
-```
-
-Run any one:
+For completely separate proxy processes (different ports, machines, or containers), keep one `.env` file per deployment:
 
 ```bash
 anyllm_proxy --env-file ~/proxies/deepseek.env
-```
-
-Docker-compatible — same file works with `--env-file`:
-
-```bash
+# Docker-compatible:
 docker run --env-file ~/proxies/openai-prod.env -p 3000:3000 anyllm-proxy
 ```
 
@@ -257,282 +380,73 @@ The admin UI's **Export .env** button (Settings tab) generates a ready-to-edit t
 
 ---
 
-## What, Why, and How?
+## Config Directory
 
-### What is it?
-A lightweight, fast Rust-based proxy that accepts Anthropic Messages API requests, translates them to OpenAI Chat Completions format, forwards them to any compliant backend, and translates responses back in real-time. Supports streaming SSE, tool calling, and image/document blocks.
+All data files live in `~/.anyllm/` by default. The directory is created on first run.
 
-### Why use it?
-
-- **Local AI Coding:** Run Claude Code against local models (Llama 3, DeepSeek, Qwen) without API credits.
-- **Broad Compatibility:** Works with open-weights and alternative models including Qwen and DeepSeek.
-- **Multi-Backend Routing:** Route `haiku` requests to a fast local model and `opus` requests to external providers, transparently.
-- **Observability:** Built-in admin dashboard for request logs, latency, and live config changes.
-
-### How to Build from Source
-
-```bash
-cargo build
-
-# Proxy only (default)
-cargo run -p anyllm_proxy
-
-# Proxy + admin web UI
-cargo run -p anyllm_proxy -- --webui
+```
+~/.anyllm/
+  admin.db          SQLite (keys, models, audit, env imports)
+  .admin_token      Auto-generated admin auth token
+  .anyllm.env       Environment file (auto-loaded if present)
+  config.yaml       Proxy config (auto-detected if present)
 ```
 
-The proxy listens on `0.0.0.0:3000`. The admin dashboard (opt-in via `--webui`) binds to `127.0.0.1:3001`.
+Override the directory with `ANYLLM_HOME=/path/to/dir`, or override individual files with `ADMIN_DB_PATH`, `ADMIN_TOKEN_PATH`, `--env-file`, or `PROXY_CONFIG`.
+
+The proxy looks for `.anyllm.env` in three places (first match wins): `--env-file` flag, then the current directory, then `~/.anyllm/`. Similarly, `config.yaml` is auto-detected in `~/.anyllm/` when `PROXY_CONFIG` is not set.
+
+Docker Compose sets explicit paths (`/data/admin.db`, `/data/.admin_token`) so the home directory convention does not apply in containers. See [docs/CONFIG.md](docs/CONFIG.md) for full details.
 
 ---
 
-## 1. Primary Use Case: Claude Code + Local LLMs
+## Features
 
-Claude Code works with any OpenAI-compatible backend (GPT-4o, DeepSeek, Azure, LM Studio, vLLM) by pointing it at anyllm-proxy. Use these environment variables when launching Claude Code:
-
-```bash
-export ANTHROPIC_BASE_URL="http://localhost:3000"
-export ANTHROPIC_AUTH_TOKEN="proxy-user"
-export ANTHROPIC_API_KEY=""
-# Prevents Claude Code from hitting Anthropic's cloud telemetry endpoints
-export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1"
-
-claude
-```
-
-`ANTHROPIC_AUTH_TOKEN` is sent as the `Authorization: Bearer` header to the proxy. Set it to any non-empty string (or a real virtual key if you have auth enabled). `ANTHROPIC_API_KEY` must be explicitly cleared so Claude Code does not attempt direct Anthropic API calls.
-
-### Example: Running with Ollama (DeepSeek / Qwen)
-
-```bash
-# 1. Start your local LLM
-ollama run qwen2.5-coder:32b &
-
-# 2. Start the translation proxy
-OPENAI_API_KEY=unused \
-OPENAI_BASE_URL=http://localhost:11434/v1 \
-BIG_MODEL=qwen2.5-coder:32b \
-SMALL_MODEL=qwen2.5-coder:32b \
-cargo run -p anyllm_proxy &
-
-# 3. Use Claude Code targeting the local proxy
-export ANTHROPIC_BASE_URL="http://localhost:3000"
-export ANTHROPIC_AUTH_TOKEN="proxy-user"
-export ANTHROPIC_API_KEY=""
-export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1"
-claude
-```
-
-Use the same pattern for **LM Studio** (default port `1234`) or **vLLM** (default port `8000`) by substituting `OPENAI_BASE_URL`.
+- **Streaming SSE:** Real-time translation of chunked responses.
+- **Tool Calling:** Transparent tool definition and `tool_use`/`tool_result` translation.
+- **Image and Document Blocks:** Base64/URL and document block support.
+- **OpenAI input:** `POST /v1/chat/completions` accepts OpenAI format and returns OpenAI format, so OpenAI-native clients work unchanged.
+- **Embeddings passthrough:** `POST /v1/embeddings` forwarded as-is to the backend. Works with OpenAI, Azure, Vertex, Gemini, and vLLM. Not available when `BACKEND=anthropic`.
+- **Degradation header:** `x-anyllm-degradation` is set when features are silently dropped during translation (e.g., `top_k`, `cache_control`, `document_blocks`, `thinking_config`).
+- **Model allowlist:** Per-virtual-key restriction by exact model name or `prefix/*` wildcard, enforced pre-request.
+- **Budget tracking and spend alerts:** Per-key `max_budget_usd` with daily/monthly/lifetime periods. Webhooks fire at 80%, 95%, and 100%.
+- **Audit log:** All admin config mutations and key lifecycle events stored in SQLite.
+- **OIDC/JWT authentication:** Set `OIDC_ISSUER_URL` to accept JWT bearer tokens.
+- **OpenTelemetry:** Build with `--features otel` for OTLP trace export. Zero overhead when not compiled in.
+- **Safety:** SSRF protection (including IPv6 ULA/link-local), concurrency limits, exponential backoff retry, CSRF protection on admin endpoints.
 
 ---
 
-## 2. Multi-Routing and the Web Interface
-
-Create a `config.toml` to map different routes to different backends:
-
-```toml
-listen_port = 3000
-default_backend = "local_qwen"
-
-[backends.local_qwen]
-kind = "openai"
-api_key = "unused"
-base_url = "http://localhost:11434/v1"
-big_model = "qwen2.5-coder:32b"
-small_model = "qwen2.5-coder:7b"
-
-[backends.deepseek_api]
-kind = "openai"
-api_key = "sk-deepseek-..."
-base_url = "https://api.deepseek.com/v1"
-big_model = "deepseek-coder"
-small_model = "deepseek-chat"
-
-[backends.openrouter]
-kind = "openai"
-api_key = "sk-or-..."
-base_url = "https://openrouter.ai/api/v1"
-big_model = "anthropic/claude-3.5-sonnet"
-small_model = "google/gemini-2.5-flash"
-```
+## Docker
 
 ```bash
-PROXY_CONFIG=config.toml anyllm_proxy --webui
+# Pull and run
+docker run -e OPENAI_API_KEY=sk-... -p 3000:3000 followthewhit3rabbit/anyllm-proxy:latest
+
+# With admin UI
+docker run -e OPENAI_API_KEY=sk-... -e WEBUI=1 -e ADMIN_BIND=0.0.0.0 \
+  -p 3000:3000 -p 127.0.0.1:3001:3001 followthewhit3rabbit/anyllm-proxy:latest
+
+# docker-compose (recommended)
+cp .env.example .env   # set OPENAI_API_KEY
+docker compose up
 ```
 
-Additional per-backend fields: `api_format = "chat"` (OpenAI only; `chat` or `responses`), `omit_stream_options = true` (strip `stream_options` for backends that reject it). Top-level `log_bodies = true` enables request/response body logging. Any config value can use `env:VAR_NAME` to read from the environment at startup (e.g., `api_key = "env:OPENAI_API_KEY"`).
-
-Key environment variables for advanced mode:
-
-- `LOG_BODIES`: Enable request/response body logging at debug level (`true` or `1`, default: disabled).
-- `ANYLLM_DEGRADATION_WARNINGS`: Set to `true` or `1` to expose `x-anyllm-degradation` response header when translation silently drops features (default: disabled; auto-enabled when `PROXY_CONFIG` is set).
-
-All backends are live at once on a single port. The path prefix matches the backend name in the config:
-
-| Path | Backend | Notes |
-|------|---------|-------|
-| `/v1/messages` | `local_qwen` | default |
-| `/deepseek_api/v1/messages` | `deepseek_api` | |
-| `/openrouter/v1/messages` | `openrouter` | |
-
-Point Claude Code at a specific backend:
-```bash
-ANTHROPIC_BASE_URL=http://localhost:3000/deepseek_api claude
-```
-
-### The Admin Dashboard
-
-See [Admin Web Interface](#admin-web-interface-optional) for the full reference. The **Models** tab lets you discover models from providers and add/remove deployments (persisted to SQLite). All mutations are recorded in the **Audit** tab.
+<details>
+<summary>Smoke tests (no real API key needed)</summary>
 
 ```bash
-open http://127.0.0.1:3001/admin/?token=$(cat ~/.anyllm/.admin_token)
+docker compose -f docker-compose.test.yml up -d --build
+bash scripts/docker-smoke-test.sh
+docker compose -f docker-compose.test.yml down -v
 ```
+
+</details>
 
 ---
 
-## 3. Commercial APIs (OpenAI, Gemini, OpenRouter)
-
-**OpenRouter:**
-```bash
-OPENAI_API_KEY=sk-or-... \
-OPENAI_BASE_URL=https://openrouter.ai/api/v1 \
-BIG_MODEL=anthropic/claude-3.5-sonnet \
-SMALL_MODEL=anthropic/claude-3-haiku \
-cargo run -p anyllm_proxy
-```
-
-**OpenAI:**
-```bash
-OPENAI_API_KEY=sk-... \
-BIG_MODEL=gpt-4o \
-SMALL_MODEL=gpt-4o-mini \
-cargo run -p anyllm_proxy
-```
-
-**Google Gemini:**
-```bash
-BACKEND=gemini \
-GEMINI_API_KEY=AIza... \
-BIG_MODEL=gemini-2.5-pro \
-SMALL_MODEL=gemini-2.5-flash \
-cargo run -p anyllm_proxy
-```
-
----
-
-## 4. Additional Backends and Features
-
-### Azure OpenAI
-
-```bash
-BACKEND=azure \
-AZURE_OPENAI_ENDPOINT=https://myresource.openai.azure.com \
-AZURE_OPENAI_DEPLOYMENT=my-gpt4o \
-AZURE_OPENAI_API_KEY=... \
-cargo run -p anyllm_proxy
-```
-
-### AWS Bedrock
-
-```bash
-BACKEND=bedrock \
-AWS_REGION=us-east-1 \
-AWS_ACCESS_KEY_ID=AKIA... \
-AWS_SECRET_ACCESS_KEY=... \
-BIG_MODEL=anthropic.claude-3-5-sonnet-20241022-v2:0 \
-SMALL_MODEL=anthropic.claude-3-5-haiku-20241022-v1:0 \
-cargo run -p anyllm_proxy
-```
-
-### Anthropic Passthrough
-
-Forwards requests to the Anthropic API with no format translation. Use this when the upstream is already Anthropic and you only need auth, routing, or rate limiting from the proxy.
-
-```bash
-BACKEND=anthropic \
-ANTHROPIC_API_KEY=sk-ant-... \
-cargo run -p anyllm_proxy
-```
-
-`ANTHROPIC_BASE_URL` overrides the upstream URL (default: `https://api.anthropic.com`). Note: `POST /v1/embeddings` is not available on this backend.
-
-### OpenAI Chat Completions Input
-
-The proxy accepts `POST /v1/chat/completions` in OpenAI format and returns OpenAI format. This means any OpenAI-native client (LiteLLM, LangChain, etc.) can route through the proxy unchanged:
-
-```bash
-curl http://localhost:3000/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -H "x-api-key: your-key" \
-  -d '{
-    "model": "claude-sonnet-4-20250514",
-    "messages": [{"role": "user", "content": "Hello"}],
-    "max_tokens": 100
-  }'
-```
-
-### Virtual Key Management
-
-Create short-lived, rate-limited, or budget-capped API keys without restarting the proxy. Start with `--webui` to enable the admin server, then:
-
-```bash
-# Create a key with RPM/TPM limits, a monthly budget, and a model allowlist
-curl -X POST http://localhost:3001/admin/api/keys \
-  -H "Authorization: Bearer $(cat ~/.anyllm/.admin_token)" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "description": "dev key",
-    "rpm_limit": 60,
-    "tpm_limit": 100000,
-    "max_budget_usd": 10.00,
-    "budget_duration": "monthly",
-    "expires_at": "2026-12-31T00:00:00Z",
-    "allowed_models": ["claude-*", "gpt-4o"]
-  }'
-# Response: {"id": 1, "key": "sk-vk...", ...}
-
-# Use the key like any other proxy key
-curl http://localhost:3000/v1/messages \
-  -H "x-api-key: sk-vk..." \
-  -d '{"model": "claude-sonnet-4-20250514", "max_tokens": 100, "messages": [...]}'
-
-# Update limits on an existing key (no restart needed)
-curl -X PUT http://localhost:3001/admin/api/keys/1 \
-  -H "Authorization: Bearer $(cat ~/.anyllm/.admin_token)" \
-  -H "Content-Type: application/json" \
-  -d '{"rpm_limit": 120, "max_budget_usd": 20.00}'
-
-# Check spend for a key
-curl http://localhost:3001/admin/api/keys/1/spend \
-  -H "Authorization: Bearer $(cat ~/.anyllm/.admin_token)"
-
-# Revoke immediately (no restart needed)
-curl -X DELETE http://localhost:3001/admin/api/keys/1 \
-  -H "Authorization: Bearer $(cat ~/.anyllm/.admin_token)"
-```
-
-`budget_duration` accepts `daily`, `monthly`, or `lifetime`. `allowed_models` supports exact names and `prefix/*` wildcards. A key at 100% of its budget returns 429 with period reset information. Webhook notifications fire at 80%, 95%, and 100% of the budget via `WEBHOOK_URLS`.
-
-Requests from unauthenticated clients are rejected by default. For local development, set `PROXY_OPEN_RELAY=true` to accept any non-empty key (insecure, never use in production).
-
-**Distributed rate limiting (optional):** Build with `--features redis` and set `REDIS_URL=redis://localhost:6379` to use Redis-backed rate limiting across multiple proxy instances. In-process rate limits are per-instance only. `RATE_LIMIT_FAIL_POLICY=open` (default) allows requests when Redis is unavailable; `closed` rejects them with 503.
-
-### OpenTelemetry Export
-
-```bash
-cargo build -p anyllm_proxy --features otel
-
-OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 \
-OTEL_SERVICE_NAME=anyllm-proxy \
-OPENAI_API_KEY=sk-... \
-./target/debug/anyllm_proxy
-```
-
-Spans are exported via OTLP HTTP (protobuf). Standard OpenTelemetry SDK environment variables control endpoint, service name, and sampling. The feature adds zero runtime overhead when not compiled in.
-
----
-
-## Using as a Library
+<details>
+<summary><strong>Using as a Library</strong></summary>
 
 The translation engine is available as standalone Rust crates.
 
@@ -670,7 +584,7 @@ let openai_req = translate_request(&anthropic_req, &config)?;
 let anthropic_resp = translate_response(&openai_resp, &anthropic_req.model);
 ```
 
-**Streaming (OpenAI chunks → Anthropic SSE events):**
+**Streaming (OpenAI chunks to Anthropic SSE events):**
 
 ```rust
 use anyllm_translate::new_stream_translator;
@@ -682,7 +596,7 @@ let events = translator.process_chunk(&chunk);
 let final_events = translator.finish();
 ```
 
-**Reverse direction (OpenAI ← Anthropic), for serving OpenAI-native clients:**
+**Reverse direction (OpenAI from Anthropic), for serving OpenAI-native clients:**
 
 ```rust
 use anyllm_translate::{
@@ -717,21 +631,9 @@ let app = Router::new()
 
 For cross-language bindings (FFI, WASM, PyO3), see [docs/library-integration.md](docs/library-integration.md).
 
+</details>
+
 ---
-
-## Advanced Features
-
-- **Streaming SSE:** Real-time translation of chunked responses.
-- **Tool Calling:** Transparent tool definition and `tool_use`/`tool_result` translation.
-- **Image & Document Blocks:** Base64/URL and document block support.
-- **Embeddings passthrough:** `POST /v1/embeddings` forwarded as-is to the backend (no translation). Works with OpenAI, Azure, Vertex, Gemini, and vLLM. Not available when `BACKEND=anthropic`.
-- **Degradation header:** `x-anyllm-degradation` is set on responses when features are silently dropped during translation (e.g., `top_k`, `cache_control`, `document_blocks`, `thinking_config`).
-- **Model allowlist:** Per-virtual-key restriction by exact model name or `prefix/*` wildcard, enforced pre-request.
-- **Budget tracking and spend alerts:** Per-key `max_budget_usd` with daily/monthly/lifetime periods. Webhook notifications (via `WEBHOOK_URLS`) fire at 80%, 95%, and 100% of the budget.
-- **Audit log:** All admin config mutations and key lifecycle events stored in SQLite, queryable via `GET /admin/api/audit`.
-- **OIDC/JWT authentication:** Set `OIDC_ISSUER_URL` (and optionally `OIDC_AUDIENCE`) to accept JWT bearer tokens for proxy authentication.
-- **Observability:** SQLite request logging, metrics endpoint, WebSocket live dashboard.
-- **Safety:** SSRF protection (including IPv6 ULA/link-local), concurrency limits, exponential backoff retry, CSRF protection on admin endpoints.
 
 ## License
 
