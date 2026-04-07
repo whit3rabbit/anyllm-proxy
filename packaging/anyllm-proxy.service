@@ -1,0 +1,23 @@
+[Unit]
+Description=AnYLLM Translation Proxy
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=anyllm
+Group=anyllm
+EnvironmentFile=-/etc/default/anyllm-proxy
+ExecStart=/usr/bin/anyllm-proxy
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65536
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/anyllm
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

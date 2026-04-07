@@ -1,0 +1,9 @@
+# /etc/default/anyllm-proxy
+# Environment variables for anyllm-proxy
+# See: https://github.com/whit3rabbit/anyllm-proxy
+
+ANYLLM_HOME=/var/lib/anyllm
+LISTEN_PORT=3000
+# OPENAI_API_KEY=
+# BACKEND=openai
+# RUST_LOG=info

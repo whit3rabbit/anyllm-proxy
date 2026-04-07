@@ -1,0 +1,21 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    configure)
+        # Create system user if it does not exist
+        if ! getent passwd anyllm >/dev/null 2>&1; then
+            adduser --system --group --home /var/lib/anyllm --no-create-home --quiet anyllm
+        fi
+
+        # Create data directory
+        install -d -o anyllm -g anyllm -m 0750 /var/lib/anyllm
+
+        # Reload systemd to pick up the new unit file
+        if [ -d /run/systemd/system ]; then
+            systemctl daemon-reload || true
+        fi
+        ;;
+esac
+
+exit 0
