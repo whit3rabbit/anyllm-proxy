@@ -86,6 +86,25 @@ docker compose -f docker-compose.test.yml down -v
 ```
 Uses `.env.example.test` (`PROXY_OPEN_RELAY=true`, `ADMIN_TOKEN=test-admin-token-docker-smoke-0000`). Also runs automatically in CI via `.github/workflows/docker.yml`.
 
+## Debian Package
+
+Built with `cargo-deb`. On version tags, CI builds `.deb` packages for amd64 and arm64, tests them (install + verify), and uploads to GitHub releases.
+
+Local build:
+```bash
+cargo build --release -p anyllm_proxy
+cargo deb -p anyllm_proxy --no-build --no-strip
+# Output: target/debian/anyllm-proxy_<version>_<arch>.deb
+```
+
+Package contents:
+- `/usr/bin/anyllm-proxy` (binary)
+- `/lib/systemd/system/anyllm-proxy.service` (systemd unit)
+- `/etc/default/anyllm-proxy` (environment config, conffile)
+- Creates `anyllm` system user and `/var/lib/anyllm` data directory on install
+
+After installing: `sudo systemctl enable --now anyllm-proxy`, then edit `/etc/default/anyllm-proxy` with your API keys.
+
 ## Build and Test
 
 ```bash
