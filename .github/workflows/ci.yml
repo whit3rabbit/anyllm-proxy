@@ -77,10 +77,12 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             binary: anyllm_proxy
+            deb_arch: amd64
           # Linux ARM64 (native GitHub runner)
           - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
             binary: anyllm_proxy
+            deb_arch: arm64
           # macOS Apple Silicon
           - os: macos-latest
             target: aarch64-apple-darwin
@@ -114,6 +116,17 @@ jobs:
         with:
           name: anyllm_proxy-${{ matrix.target }}
           path: target/${{ matrix.target }}/release/${{ matrix.binary }}
+      - name: Build deb package
+        if: matrix.deb_arch != ''
+        run: |
+          cargo install cargo-deb --locked --quiet
+          cargo deb -p anyllm_proxy --no-build --no-strip --target ${{ matrix.target }}
+      - name: Upload deb artifact
+        if: matrix.deb_arch != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: anyllm-proxy-deb-${{ matrix.deb_arch }}
+          path: target/${{ matrix.target }}/debian/*.deb
 
   publish:
     name: Publish to crates.io
