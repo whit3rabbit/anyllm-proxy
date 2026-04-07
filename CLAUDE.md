@@ -37,6 +37,9 @@ All implementation phases are complete.
 - Security hardening: plaintext HTTP startup warning, 1MB admin body limit, CSP header, model name validation
 - Security fixes (2026-03-30 audit): `AWS_ACCESS_KEY_ID`/`GOOGLE_ACCESS_TOKEN` redacted in env endpoint; admin rate limiter uses sliding window; all audit entries include `source_ip`; OIDC discovery and webhook callbacks use SSRF-safe HTTP client and validate URLs against private IP ranges; CSRF public-route decision documented; non-Unix token file warning already present
 - Admin rate limiter: 10 RPM per source IP (60-second sliding window, in-memory). Resets on process restart. `set_admin_rpm()` overrides the limit for tests.
+- Model persistence: models added via admin API stored in SQLite `model_deployment` table, survive restarts; YAML config models loaded first, admin-added models merged on top
+- Model discovery: `POST /admin/api/models/discover` fetches available models from providers (OpenRouter, DeepInfra public; Ollama local; configured backend with key). Admin UI has discover section on Models tab.
+- Config directory: `~/.anyllm/` stores admin.db, .admin_token, .anyllm.env, config.yaml by default. Override with `ANYLLM_HOME` env var or individual file env vars.
 - Model mapping and lossy-translation warnings
 - `POST /v1/embeddings` passthrough: forwards directly to the backend with no translation; works with OpenAI, Vertex, Gemini (`gemini-embedding-exp-03-07`), and vLLM/HuggingFace models. Not mounted for the Anthropic passthrough backend.
 - `x-anyllm-degradation` response header: set when features are silently dropped during translation (opt-in via `ANYLLM_DEGRADATION_WARNINGS=true`; auto-enabled when `PROXY_CONFIG` is set). Examples: `top_k`, `thinking_config`, `cache_control`, `document_blocks`, `stop_sequences_truncated`
@@ -70,8 +73,8 @@ docker compose up
 Key Docker env vars:
 - `WEBUI=1` or `ADMIN=1`: enable admin UI (also requires `ADMIN_BIND=0.0.0.0` when in Docker)
 - `ADMIN_BIND`: bind address for admin server (default `127.0.0.1`; set `0.0.0.0` in Docker)
-- `ADMIN_DB_PATH`: SQLite path (default `admin.db` in CWD; compose sets `/data/admin.db`)
-- `ADMIN_TOKEN_PATH`: where the auto-generated admin token is written (compose sets `/data/.admin_token`)
+- `ADMIN_DB_PATH`: SQLite path (default `~/.anyllm/admin.db`; compose sets `/data/admin.db`)
+- `ADMIN_TOKEN_PATH`: where the auto-generated admin token is written (default `~/.anyllm/.admin_token`; compose sets `/data/.admin_token`)
 
 CI: `.github/workflows/docker.yml` builds linux/amd64 + linux/arm64 on native runners, merges into a multi-arch manifest. Requires `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` secrets in the repo.
 
@@ -105,6 +108,31 @@ Package contents:
 
 After installing: `sudo systemctl enable --now anyllm-proxy`, then edit `/etc/default/anyllm-proxy` with your API keys.
 
+## Config Directory
+
+Data lives in `~/.anyllm/` by default. Override with `ANYLLM_HOME` or per-file env vars.
+
+```
+~/.anyllm/
+  admin.db          SQLite (keys, models, audit, env imports)
+  .admin_token      Auto-generated admin auth token
+  .anyllm.env       Environment file (optional, auto-loaded)
+  config.yaml       Proxy config (optional, auto-detected)
+```
+
+Lookup order (first match wins):
+
+| File | 1st | 2nd | 3rd |
+|------|-----|-----|-----|
+| Env file | `--env-file` flag | CWD `.anyllm.env` | `~/.anyllm/.anyllm.env` |
+| Config | `PROXY_CONFIG` env | `~/.anyllm/config.yaml` | -- |
+| Database | `ADMIN_DB_PATH` env | `~/.anyllm/admin.db` | -- |
+| Token | `ADMIN_TOKEN_PATH` env | `~/.anyllm/.admin_token` | -- |
+
+Docker sets explicit paths (`/data/admin.db`, `/data/.admin_token`) via env vars, so the home directory convention does not apply in containers.
+
+See [docs/CONFIG.md](docs/CONFIG.md) for full details.
+
 ## Build and Test
 
 ```bash
@@ -128,6 +156,7 @@ OPENAI_API_KEY=sk-... cargo run -p anyllm_proxy
 
 ## Environment Variables
 
+- `ANYLLM_HOME`: Override the data directory (default: `~/.anyllm`). All default file paths resolve relative to this directory.
 - `BACKEND`: Backend provider: `openai` (default), `azure`, `vertex`, `gemini`, `anthropic` (passthrough), or `bedrock` (SigV4-signed, Anthropic format)
 - `OPENAI_API_KEY`: OpenAI API key (required when BACKEND=openai, empty default)
 - `OPENAI_BASE_URL`: OpenAI base URL (default: `https://api.openai.com`)
@@ -135,8 +164,8 @@ OPENAI_API_KEY=sk-... cargo run -p anyllm_proxy
 - `LISTEN_PORT`: Server port (default: `3000`)
 - `ADMIN_PORT`: Admin server port (default: `3001`; must differ from `LISTEN_PORT`)
 - `ADMIN_BIND`: Admin server bind address (default: `127.0.0.1`; set `0.0.0.0` in Docker)
-- `ADMIN_DB_PATH`: SQLite database path (default: `admin.db` in CWD)
-- `ADMIN_TOKEN_PATH`: Path for auto-generated admin token file (default: `.admin_token` in CWD)
+- `ADMIN_DB_PATH`: SQLite database path (default: `~/.anyllm/admin.db`)
+- `ADMIN_TOKEN_PATH`: Path for auto-generated admin token file (default: `~/.anyllm/.admin_token`)
 - `DISABLE_ADMIN`: Set to `1` to force-disable admin UI even when `--webui` flag is passed
 - `BIG_MODEL`: Backend model for sonnet/opus requests (default: `gpt-4o` for OpenAI, `gemini-2.5-pro` for Vertex/Gemini)
 - `SMALL_MODEL`: Backend model for haiku requests (default: `gpt-4o-mini` for OpenAI, `gemini-2.5-flash` for Vertex/Gemini)

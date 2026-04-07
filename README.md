@@ -14,7 +14,7 @@ Download a binary from the [releases page](https://github.com/whit3rabbit/anyllm
 cargo install anyllm_proxy
 ```
 
-Create a `.anyllm.env` config file:
+Create a `.anyllm.env` config file in `~/.anyllm/` (or the current directory):
 
 ```env
 OPENAI_API_KEY=unused
@@ -23,7 +23,7 @@ BIG_MODEL=qwen2.5-coder:32b
 SMALL_MODEL=qwen2.5-coder:32b
 ```
 
-Run the proxy (auto-loads `.anyllm.env` from the current directory):
+Run the proxy (auto-loads `.anyllm.env` from `~/.anyllm/` or the current directory):
 
 ```bash
 anyllm_proxy
@@ -36,7 +36,7 @@ anyllm_proxy
 |---|---|---|
 | **Config** | 3 env vars or `.anyllm.env` | `config.toml` / `config.yaml` |
 | **Routing** | Single backend | Multi-backend with path prefixes |
-| **Admin UI** | Not started | `--webui` flag |
+| **Admin UI** | `--webui` (guided setup if no config) | `--webui` (full dashboard) |
 | **Translation warnings** | Silent (never exposed to clients) | `x-anyllm-degradation` header active |
 | **How to enable** | Default | Pass `--webui`, set `PROXY_CONFIG`, or `ANYLLM_DEGRADATION_WARNINGS=true` |
 
@@ -59,8 +59,10 @@ Pass `--webui` (or `--admin`) to start the admin dashboard alongside the proxy:
 ```bash
 anyllm_proxy --webui
 # Proxy:     http://localhost:3000
-# Admin UI:  http://127.0.0.1:3001/admin/?token=$(cat .admin_token)
+# Admin UI:  http://127.0.0.1:3001/admin/?token=$(cat ~/.anyllm/.admin_token)
 ```
+
+If no backend is configured, the UI opens on the **Settings** tab with a getting-started guide and env file import.
 
 The admin server binds to `127.0.0.1:3001` by default (localhost only). The dashboard tabs:
 
@@ -68,11 +70,11 @@ The admin server binds to `127.0.0.1:3001` by default (localhost only). The dash
 - **Request Log:** Historical log with filters (backend, status, key, date range), paginated, with per-request cost and token detail.
 - **Access Control:** Virtual key CRUD — create, edit (RPM/TPM limits, budget, expiry, model allowlist), revoke without restarting.
 - **Backends:** Configured backends and their status.
-- **Models:** Add/remove model routing deployments (LiteLLM config mode only).
+- **Models:** Discover models from providers (OpenRouter, DeepInfra, Ollama, or configured backend), add/remove deployments. Changes are persisted to SQLite and survive restarts.
 - **Audit:** All admin config mutations and key lifecycle events.
-- **Settings:** Mutable config (log level, log_bodies, model mappings), read-only env vars (secrets masked), **Export .env** to generate a `.anyllm.env` template.
+- **Settings:** Mutable config (log level, log_bodies, model mappings), read-only env vars (secrets masked), **Import/Export .anyllm.env**. Shows a getting-started guide when no backend is configured.
 
-**Token:** On first start an admin token is auto-generated and written to `.admin_token`. Pass it as `?token=` in the URL or `Authorization: Bearer` for API calls. To set a fixed token instead:
+**Token:** On first start an admin token is auto-generated and written to `~/.anyllm/.admin_token`. Pass it as `?token=` in the URL or `Authorization: Bearer` for API calls. To set a fixed token instead:
 
 ```bash
 ADMIN_TOKEN=mysecret anyllm_proxy --webui
@@ -104,13 +106,32 @@ docker compose up
 | `ADMIN_PORT` | `3001` | Admin server port |
 | `ADMIN_BIND` | `127.0.0.1` | Bind address (`0.0.0.0` in Docker) |
 | `ADMIN_TOKEN` | auto-generated | Fixed token (min 32 chars recommended) |
-| `ADMIN_TOKEN_PATH` | `.admin_token` | Where the auto-generated token is written |
-| `ADMIN_DB_PATH` | `admin.db` | SQLite database path |
+| `ADMIN_TOKEN_PATH` | `~/.anyllm/.admin_token` | Where the auto-generated token is written |
+| `ADMIN_DB_PATH` | `~/.anyllm/admin.db` | SQLite database path |
+| `ANYLLM_HOME` | `~/.anyllm` | Data directory for all default file paths |
 | `ADMIN_LOG_RETENTION_DAYS` | `7` | Request log retention |
 | `DISABLE_ADMIN` | — | Set to `1` to force-disable |
 | `WEBUI` / `ADMIN` | — | Docker entrypoint shorthand for `--webui` |
 
 **CSRF:** State-mutating admin API calls (POST/PUT/DELETE) require an `X-CSRF-Token` header. Fetch a one-time token from `GET /admin/csrf-token` before each mutating request. The SPA handles this automatically; scripts must do it explicitly. Admin endpoints are rate-limited to 10 requests/minute per IP.
+
+### Config Directory
+
+All data files live in `~/.anyllm/` by default. The directory is created on first run.
+
+```
+~/.anyllm/
+  admin.db          SQLite (keys, models, audit, env imports)
+  .admin_token      Auto-generated admin auth token
+  .anyllm.env       Environment file (auto-loaded if present)
+  config.yaml       Proxy config (auto-detected if present)
+```
+
+Override the directory with `ANYLLM_HOME=/path/to/dir`, or override individual files with `ADMIN_DB_PATH`, `ADMIN_TOKEN_PATH`, `--env-file`, or `PROXY_CONFIG`.
+
+The proxy looks for `.anyllm.env` in three places (first match wins): `--env-file` flag, then the current directory, then `~/.anyllm/`. Similarly, `config.yaml` is auto-detected in `~/.anyllm/` when `PROXY_CONFIG` is not set.
+
+Docker Compose sets explicit paths (`/data/admin.db`, `/data/.admin_token`) so the home directory convention does not apply in containers. See [docs/CONFIG.md](docs/CONFIG.md) for full details.
 
 ## Advanced Mode
 
@@ -361,10 +382,10 @@ ANTHROPIC_BASE_URL=http://localhost:3000/deepseek_api claude
 
 ### The Admin Dashboard
 
-See [Admin Web Interface](#admin-web-interface-optional) for the full reference. When using a LiteLLM config, the **Models** tab lets you add/remove deployments live. All mutations are recorded in the **Audit** tab.
+See [Admin Web Interface](#admin-web-interface-optional) for the full reference. The **Models** tab lets you discover models from providers and add/remove deployments (persisted to SQLite). All mutations are recorded in the **Audit** tab.
 
 ```bash
-open http://127.0.0.1:3001/admin/?token=$(cat .admin_token)
+open http://127.0.0.1:3001/admin/?token=$(cat ~/.anyllm/.admin_token)
 ```
 
 ---
@@ -457,7 +478,7 @@ Create short-lived, rate-limited, or budget-capped API keys without restarting t
 ```bash
 # Create a key with RPM/TPM limits, a monthly budget, and a model allowlist
 curl -X POST http://localhost:3001/admin/api/keys \
-  -H "Authorization: Bearer $(cat .admin_token)" \
+  -H "Authorization: Bearer $(cat ~/.anyllm/.admin_token)" \
   -H "Content-Type: application/json" \
   -d '{
     "description": "dev key",
@@ -477,17 +498,17 @@ curl http://localhost:3000/v1/messages \
 
 # Update limits on an existing key (no restart needed)
 curl -X PUT http://localhost:3001/admin/api/keys/1 \
-  -H "Authorization: Bearer $(cat .admin_token)" \
+  -H "Authorization: Bearer $(cat ~/.anyllm/.admin_token)" \
   -H "Content-Type: application/json" \
   -d '{"rpm_limit": 120, "max_budget_usd": 20.00}'
 
 # Check spend for a key
 curl http://localhost:3001/admin/api/keys/1/spend \
-  -H "Authorization: Bearer $(cat .admin_token)"
+  -H "Authorization: Bearer $(cat ~/.anyllm/.admin_token)"
 
 # Revoke immediately (no restart needed)
 curl -X DELETE http://localhost:3001/admin/api/keys/1 \
-  -H "Authorization: Bearer $(cat .admin_token)"
+  -H "Authorization: Bearer $(cat ~/.anyllm/.admin_token)"
 ```
 
 `budget_duration` accepts `daily`, `monthly`, or `lifetime`. `allowed_models` supports exact names and `prefix/*` wildcards. A key at 100% of its budget returns 429 with period reset information. Webhook notifications fire at 80%, 95%, and 100% of the budget via `WEBHOOK_URLS`.

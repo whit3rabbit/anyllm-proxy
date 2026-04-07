@@ -1,6 +1,10 @@
 // Mirrors the JSON shapes returned by /admin/api/* endpoints.
 // Keep in sync with Rust structs in crates/proxy/src/admin/state.rs and routes/.
 
+export interface ProxyStatus {
+  configured: boolean
+}
+
 export interface Metrics {
   total_requests: number
   successful_requests: number
@@ -138,6 +142,17 @@ export interface ModelEntry {
 export interface ModelsResponse {
   models: ModelEntry[]
   routing_strategy: string
+}
+
+export interface DiscoveredModel {
+  id: string
+  name: string | null
+}
+
+export interface DiscoverResponse {
+  models: DiscoveredModel[]
+  source: string
+  auth_used: boolean
 }
 
 export interface AuditEntry {

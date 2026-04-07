@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from './store/auth'
 import { useWsStore } from './store/ws'
 import { connectWs, disconnectWs } from './api/websocket'
+import { useStatus } from './api/queries'
 import LoginPage from './components/layout/LoginPage'
 import Nav from './components/layout/Nav'
 import Dashboard from './tabs/dashboard/Dashboard'
@@ -24,6 +25,7 @@ export default function App() {
   const qc = useQueryClient()
   const [activeTab, setActiveTab] = useState<Tab>('dashboard')
   const [bootstrapping, setBootstrapping] = useState(true)
+  const { data: status } = useStatus(!!token)
 
   // On mount: if ?token= is in the URL and no token is stored, validate and log in.
   useEffect(() => {
@@ -54,6 +56,13 @@ export default function App() {
     }
   }, [token])
 
+  // Default to the Settings tab on first load when nothing is configured.
+  useEffect(() => {
+    if (token && status && !status.configured) {
+      setActiveTab('settings')
+    }
+  }, [status?.configured, token]) // eslint-disable-line react-hooks/exhaustive-deps -- run when status first arrives
+
   // Invalidate query cache on relevant WS events.
   useEffect(() => {
     if (!lastEvent) return
@@ -73,7 +82,7 @@ export default function App() {
       <div className="tab-content">
         {activeTab === 'dashboard' && <Dashboard />}
         {activeTab === 'requests' && <RequestLog />}
-        {activeTab === 'settings' && <Settings />}
+        {activeTab === 'settings' && <Settings configured={status?.configured ?? true} />}
         {activeTab === 'backends' && <Backends />}
         {activeTab === 'keys' && <Keys />}
         {activeTab === 'models' && <Models />}

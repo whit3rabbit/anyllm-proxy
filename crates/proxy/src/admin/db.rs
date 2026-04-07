@@ -143,6 +143,21 @@ pub fn init_db(conn: &Connection) -> rusqlite::Result<()> {
         );",
     )?;
 
+    // model_deployment: models added via the admin API, persisted across restarts.
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS model_deployment (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            model_name   TEXT NOT NULL,
+            backend_name TEXT NOT NULL,
+            actual_model TEXT NOT NULL,
+            rpm_limit    INTEGER,
+            tpm_limit    INTEGER,
+            weight       INTEGER NOT NULL DEFAULT 1,
+            created_at   TEXT NOT NULL,
+            UNIQUE(model_name, backend_name, actual_model)
+        );",
+    )?;
+
     Ok(())
 }
 
@@ -173,6 +188,72 @@ pub fn upsert_env_import(
 pub fn list_env_import(conn: &Connection) -> rusqlite::Result<Vec<(String, String)>> {
     let mut stmt = conn.prepare("SELECT key, value FROM env_import ORDER BY key")?;
     let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
+    rows.collect()
+}
+
+// ── Model deployment persistence ─────────────────────────────────────────────
+
+/// Row returned by `list_model_deployments`.
+pub struct ModelDeploymentRow {
+    pub model_name: String,
+    pub backend_name: String,
+    pub actual_model: String,
+    pub rpm_limit: Option<u32>,
+    pub tpm_limit: Option<u64>,
+    pub weight: u32,
+}
+
+/// Insert or ignore a model deployment (unique constraint prevents duplicates).
+pub fn insert_model_deployment(
+    conn: &Connection,
+    model_name: &str,
+    backend_name: &str,
+    actual_model: &str,
+    rpm: Option<u32>,
+    tpm: Option<u64>,
+    weight: u32,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "INSERT OR IGNORE INTO model_deployment
+         (model_name, backend_name, actual_model, rpm_limit, tpm_limit, weight, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        params![
+            model_name,
+            backend_name,
+            actual_model,
+            rpm,
+            tpm,
+            weight,
+            chrono_now()
+        ],
+    )?;
+    Ok(())
+}
+
+/// Delete all deployments for a given model name. Returns the number of rows deleted.
+pub fn delete_model_deployments(conn: &Connection, model_name: &str) -> rusqlite::Result<usize> {
+    conn.execute(
+        "DELETE FROM model_deployment WHERE model_name = ?1",
+        [model_name],
+    )
+}
+
+/// Return all persisted model deployments, ordered by model name.
+pub fn list_model_deployments(conn: &Connection) -> rusqlite::Result<Vec<ModelDeploymentRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT model_name, backend_name, actual_model, rpm_limit, tpm_limit, weight
+         FROM model_deployment ORDER BY model_name, backend_name",
+    )?;
+    let rows = stmt.query_map([], |r| {
+        Ok(ModelDeploymentRow {
+            model_name: r.get(0)?,
+            backend_name: r.get(1)?,
+            actual_model: r.get(2)?,
+            rpm_limit: r.get(3)?,
+            tpm_limit: r.get(4)?,
+            weight: r.get(5)?,
+        })
+    })?;
     rows.collect()
 }
 

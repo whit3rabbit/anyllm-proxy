@@ -14,6 +14,8 @@ use std::sync::LazyLock;
 /// All known env var names accepted by anyllm_proxy.
 /// Import warns on keys not in this list but still applies them.
 pub(crate) const KNOWN_KEYS: &[&str] = &[
+    // Data directory
+    "ANYLLM_HOME",
     // Core proxy
     "BACKEND",
     "LISTEN_PORT",

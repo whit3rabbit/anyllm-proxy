@@ -7,6 +7,7 @@ pub mod keys;
 pub mod logs;
 pub mod mcp;
 pub mod models;
+pub mod status;
 pub mod traffic;
 pub mod uptime;
 
@@ -399,6 +400,7 @@ pub fn admin_router(shared: SharedState, token: Arc<zeroize::Zeroizing<String>>)
             "/admin/api/models",
             get(models::list_models).post(models::add_model),
         )
+        .route("/admin/api/models/discover", post(models::discover_models))
         .route("/admin/api/models/{name}", delete(models::remove_model))
         .route("/admin/api/audit", get(audit::get_audit_log))
         .route(
@@ -409,6 +411,7 @@ pub fn admin_router(shared: SharedState, token: Arc<zeroize::Zeroizing<String>>)
             "/admin/api/mcp-servers/{name}",
             delete(mcp::remove_mcp_server),
         )
+        .route("/admin/api/status", get(status::get_status))
         .route("/admin/api/traffic", get(traffic::get_traffic))
         .route("/admin/api/uptime", get(uptime::get_uptime))
         .with_state(shared.clone())

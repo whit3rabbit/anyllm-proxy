@@ -3,6 +3,7 @@ use anyllm_proxy::{
     server::{routes, state},
     tools,
 };
+use std::path::PathBuf;
 use std::sync::Arc;
 use tracing_subscriber::prelude::*;
 
@@ -16,19 +17,28 @@ fn main() {
     // inherited from the parent process; skip env file loading to avoid duplicate messages.
     let is_run_child = std::env::var("_ANYLLM_RUN_CHILD").is_ok();
 
+    // Resolve the data directory early so all path defaults can use it.
+    let data_dir = resolve_data_dir();
     if !is_run_child {
+        eprintln!("anyllm_proxy: data directory: {}", data_dir.display());
+        let data_dir_env = data_dir.join(".anyllm.env");
         let env_file_path = args
             .windows(2)
             .find(|w| w[0] == "--env-file")
-            .map(|w| w[1].as_str())
+            .map(|w| w[1].to_string())
             .or_else(|| {
                 if std::path::Path::new(".anyllm.env").exists() {
-                    Some(".anyllm.env")
+                    Some(".anyllm.env".into())
+                } else if data_dir_env.exists() {
+                    Some(data_dir_env.to_string_lossy().into_owned())
                 } else {
                     None
                 }
             });
-        let env_file_vars = env_file_path.map(parse_env_file).unwrap_or_default();
+        let env_file_vars = env_file_path
+            .as_deref()
+            .map(parse_env_file)
+            .unwrap_or_default();
 
         // SAFETY: genuinely single-threaded here (no tokio runtime yet).
         unsafe {
@@ -56,7 +66,7 @@ fn main() {
     // Runs after .anyllm.env so the file still takes precedence over DB imports,
     // and before the async runtime to keep set_var single-threaded safe.
     if !is_run_child {
-        let db_path = std::env::var("ADMIN_DB_PATH").unwrap_or_else(|_| "admin.db".to_string());
+        let db_path = resolve_db_path(&data_dir);
         let db_vars = load_env_from_sqlite(&db_path);
         if !db_vars.is_empty() {
             unsafe {
@@ -71,6 +81,16 @@ fn main() {
         }
     }
 
+    // Auto-detect config file in data directory if PROXY_CONFIG is not set.
+    if std::env::var("PROXY_CONFIG").is_err() {
+        let data_config = data_dir.join("config.yaml");
+        if data_config.exists() {
+            let path_str = data_config.to_string_lossy().into_owned();
+            unsafe { std::env::set_var("PROXY_CONFIG", &path_str) };
+            eprintln!("anyllm_proxy: auto-detected config: {path_str}");
+        }
+    }
+
     // Extract litellm master_key before the runtime starts (still single-threaded).
     if std::env::var("PROXY_API_KEYS").is_err() {
         if let Ok(ref config_path) = std::env::var("PROXY_CONFIG") {
@@ -80,6 +100,37 @@ fn main() {
                 eprintln!("anyllm_proxy: applied general_settings.master_key as PROXY_API_KEYS");
             }
         }
+    }
+
+    // Warn when no backend is configured so users aren't left guessing why
+    // requests fail. Skip when spawned as a child of the "run" subcommand.
+    if !is_run_child && !anyllm_proxy::admin::routes::status::is_backend_configured() {
+        eprintln!(
+            "\n\
+anyllm-proxy: no backend configured. The proxy has nothing to forward requests to.\n\
+\n\
+The proxy needs an endpoint to forward to (backend) and a port to listen on (front).\n\
+LISTEN_PORT defaults to 3000. Pick a backend:\n\
+\n\
+  # OpenAI (remote, needs API key)\n\
+  OPENAI_API_KEY=sk-...\n\
+  PROXY_API_KEYS=my-key          # key your clients send\n\
+\n\
+  # Ollama / local LLM (no API key required)\n\
+  OPENAI_BASE_URL=http://localhost:11434/v1\n\
+  PROXY_OPEN_RELAY=true          # allow any key (local dev only)\n\
+\n\
+  # OpenRouter / any OpenAI-compatible endpoint\n\
+  OPENAI_BASE_URL=https://openrouter.ai/api/v1\n\
+  OPENAI_API_KEY=sk-or-...\n\
+  PROXY_API_KEYS=my-key\n\
+\n\
+Save to ~/.anyllm/.anyllm.env or load explicitly:\n\
+\n\
+  anyllm-proxy --env-file /path/to/.anyllm.env\n\
+\n\
+Configure via UI:  anyllm-proxy --webui\n"
+        );
     }
 
     // Detect "run" subcommand: anyllm_proxy [proxy_opts...] run <command> [args...]
@@ -101,10 +152,10 @@ fn main() {
         .enable_all()
         .build()
         .expect("failed to build tokio runtime")
-        .block_on(async_main(args));
+        .block_on(async_main(args, data_dir));
 }
 
-async fn async_main(args: Vec<String>) {
+async fn async_main(args: Vec<String>, data_dir: PathBuf) {
     // ---- Phase 3: Init tracing (needs RUST_LOG from env file) ----
     let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
@@ -131,7 +182,39 @@ async fn async_main(args: Vec<String>) {
     // Env aliases were already applied in sync main(). Load config.
     let load_result = config::MultiConfig::load();
     let multi_config = load_result.multi_config;
-    let model_router = load_result.model_router;
+
+    // Ensure a ModelRouter always exists (empty if no config file).
+    // Then merge persisted model deployments from SQLite.
+    let model_router = {
+        let router = load_result.model_router.unwrap_or_else(|| {
+            Arc::new(std::sync::RwLock::new(
+                config::model_router::ModelRouter::new(std::collections::HashMap::new()),
+            ))
+        });
+        // Load persisted deployments from the DB (best-effort, non-fatal).
+        let db_path = resolve_db_path(&data_dir);
+        if let Ok(conn) = rusqlite::Connection::open(&db_path) {
+            if let Ok(rows) = admin::db::list_model_deployments(&conn) {
+                if !rows.is_empty() {
+                    let mut rw = router.write().unwrap_or_else(|e| e.into_inner());
+                    for row in &rows {
+                        rw.add_deployment(
+                            row.model_name.clone(),
+                            Arc::new(config::model_router::Deployment::with_weight(
+                                row.backend_name.clone(),
+                                row.actual_model.clone(),
+                                row.rpm_limit,
+                                row.tpm_limit,
+                                row.weight,
+                            )),
+                        );
+                    }
+                    tracing::info!(count = rows.len(), "loaded persisted model deployments from DB");
+                }
+            }
+        }
+        Some(router)
+    };
 
     // litellm master_key was already applied in fn main() (single-threaded).
     // Log confirmation if it was set.
@@ -355,8 +438,7 @@ async fn async_main(args: Vec<String>) {
             panic!("ADMIN_PORT ({admin_port}) must differ from LISTEN_PORT ({listen_port})");
         }
 
-        // SQLite: open or create the database file in the current directory.
-        let db_path = std::env::var("ADMIN_DB_PATH").unwrap_or_else(|_| "admin.db".into());
+        let db_path = resolve_db_path(&data_dir);
         let conn =
             rusqlite::Connection::open(&db_path).expect("failed to open SQLite database for admin");
         admin::db::init_db(&conn).expect("failed to initialize admin database schema");
@@ -545,7 +627,7 @@ async fn async_main(args: Vec<String>) {
                 let mut buf = [0u8; 32];
                 getrandom::fill(&mut buf).expect("getrandom failed");
                 let token = hex::encode(buf);
-                let token_path = resolve_admin_token_path();
+                let token_path = resolve_admin_token_path(&data_dir);
                 let token_path = token_path.to_string_lossy().to_string();
                 // Write token to file with restrictive permissions instead of stderr,
                 // because stderr is captured by container log drivers in production.
@@ -687,7 +769,7 @@ async fn async_main(args: Vec<String>) {
             >,
         >,
     > = if enable_admin {
-        let db_path = std::env::var("ADMIN_DB_PATH").unwrap_or_else(|_| "admin.db".into());
+        let db_path = resolve_db_path(&data_dir);
         let batch_conn = rusqlite::Connection::open(&db_path)
             .expect("failed to open second SQLite connection for batch engine");
         anyllm_batch_engine::db::migrate_old_tables(&batch_conn)
@@ -823,6 +905,7 @@ async fn async_main(args: Vec<String>) {
 /// Parse a `.env`-format file and return `(key, value)` pairs to set.
 ///
 /// Delegates parsing to `anyllm_proxy::env_parser::parse_env_content` (pure, no side effects).
+///
 /// Hard errors are printed to stderr and result in an empty list; warnings are printed as-is.
 /// Already-set environment variables are skipped so the real environment always wins.
 /// Compatible with Docker `--env-file` and standard dotenv tooling.
@@ -892,12 +975,65 @@ fn load_env_from_sqlite(db_path: &str) -> Vec<(String, String)> {
         .collect()
 }
 
+/// Resolve the data directory where config, DB, and token files live.
+/// Priority: ANYLLM_HOME env var > ~/.anyllm/ > CWD (fallback if HOME unresolvable).
+/// Creates the directory on first use (mode 0700 on Unix).
+fn resolve_data_dir() -> PathBuf {
+    let dir = if let Ok(home) = std::env::var("ANYLLM_HOME") {
+        PathBuf::from(home)
+    } else if let Some(home) = home_dir() {
+        home.join(".anyllm")
+    } else {
+        // No home directory (unusual). Fall back to CWD.
+        PathBuf::from(".")
+    };
+
+    if !dir.exists() {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::DirBuilderExt;
+            let mut builder = std::fs::DirBuilder::new();
+            builder.recursive(true).mode(0o700);
+            if let Err(e) = builder.create(&dir) {
+                eprintln!(
+                    "anyllm_proxy: could not create data directory '{}': {e}",
+                    dir.display()
+                );
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            if let Err(e) = std::fs::create_dir_all(&dir) {
+                eprintln!(
+                    "anyllm_proxy: could not create data directory '{}': {e}",
+                    dir.display()
+                );
+            }
+        }
+    }
+    dir
+}
+
+/// Cross-platform home directory lookup.
+fn home_dir() -> Option<PathBuf> {
+    std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .ok()
+        .map(PathBuf::from)
+}
+
+/// Resolve SQLite DB path: ADMIN_DB_PATH env var > data_dir/admin.db.
+fn resolve_db_path(data_dir: &std::path::Path) -> String {
+    std::env::var("ADMIN_DB_PATH")
+        .unwrap_or_else(|_| data_dir.join("admin.db").to_string_lossy().into_owned())
+}
+
 /// Resolve admin token file path from `ADMIN_TOKEN_PATH` env var,
-/// falling back to `.admin_token` in the current directory.
-fn resolve_admin_token_path() -> std::path::PathBuf {
+/// falling back to `~/.anyllm/.admin_token`.
+fn resolve_admin_token_path(data_dir: &std::path::Path) -> PathBuf {
     match std::env::var("ADMIN_TOKEN_PATH") {
         Ok(p) => {
-            let path = std::path::PathBuf::from(&p);
+            let path = PathBuf::from(&p);
             // Reject paths containing traversal sequences to prevent writing
             // the admin token to unexpected locations via misconfigured env vars.
             if p.contains("..") {
@@ -905,7 +1041,7 @@ fn resolve_admin_token_path() -> std::path::PathBuf {
             }
             path
         }
-        Err(_) => std::path::PathBuf::from(".admin_token"),
+        Err(_) => data_dir.join(".admin_token"),
     }
 }
 

@@ -5,8 +5,19 @@ import type {
   Metrics, RequestsResponse, VirtualKey, KeySpend,
   Backend, ConfigResponse, ObservabilityResponse,
   ModelsResponse, AuditResponse, TrafficResponse, UptimeResponse,
-  EnvImportResponse,
+  EnvImportResponse, ProxyStatus, DiscoverResponse,
 } from './types'
+
+// ── Status ───────────────────────────────────────────────────────────────────
+
+export function useStatus(enabled = true) {
+  return useQuery<ProxyStatus>({
+    queryKey: ['status'],
+    queryFn: () => apiFetch('/admin/api/status'),
+    enabled,
+    staleTime: Infinity,
+  })
+}
 
 // ── Dashboard ────────────────────────────────────────────────────────────────
 
@@ -168,6 +179,13 @@ export function useRemoveModel() {
     mutationFn: (name: string) =>
       mutatingFetch<void>('DELETE', `/admin/api/models/${encodeURIComponent(name)}`),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['models'] }) },
+  })
+}
+
+export function useDiscoverModels() {
+  return useMutation<DiscoverResponse, Error, { source: string; url?: string }>({
+    mutationFn: (body) =>
+      mutatingFetch<DiscoverResponse>('POST', '/admin/api/models/discover', body),
   })
 }
 
