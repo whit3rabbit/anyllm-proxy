@@ -27,6 +27,7 @@ pub(crate) const KNOWN_KEYS: &[&str] = &[
     "REQUEST_TIMEOUT_SECS",
     "MODEL_PRICING_FILE",
     "ANYLLM_DEGRADATION_WARNINGS",
+    "OMIT_STREAM_OPTIONS",
     // OpenAI / compatible
     "OPENAI_BASE_URL",
     "OPENAI_API_FORMAT",
@@ -49,6 +50,9 @@ pub(crate) const KNOWN_KEYS: &[&str] = &[
     "AWS_ACCESS_KEY_ID",
     "AWS_SECRET_ACCESS_KEY",
     "AWS_SESSION_TOKEN",
+    // Anthropic passthrough
+    "ANTHROPIC_API_KEY",
+    "ANTHROPIC_BASE_URL",
     // Auth / relay
     "PROXY_API_KEYS",
     "PROXY_OPEN_RELAY",
@@ -73,6 +77,9 @@ pub(crate) const KNOWN_KEYS: &[&str] = &[
     // OIDC / JWT
     "OIDC_ISSUER_URL",
     "OIDC_AUDIENCE",
+    // Batch API
+    "BATCH_WEBHOOK_URLS",
+    "BATCH_WEBHOOK_SIGNING_SECRET",
     // Optional backends
     "REDIS_URL",
     "QDRANT_URL",
@@ -81,6 +88,7 @@ pub(crate) const KNOWN_KEYS: &[&str] = &[
     "OTEL_EXPORTER_OTLP_ENDPOINT",
     "OTEL_SERVICE_NAME",
     "OTEL_TRACES_SAMPLER",
+    "OTEL_TRACES_SAMPLER_ARG",
     // Langfuse
     "LANGFUSE_PUBLIC_KEY",
     "LANGFUSE_SECRET_KEY",
