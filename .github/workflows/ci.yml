@@ -184,6 +184,31 @@ jobs:
         run: |
           test -f /etc/default/anyllm-proxy
 
+  release-assets:
+    name: Upload release assets
+    needs: [test-deb]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download amd64 deb
+        uses: actions/download-artifact@v4
+        with:
+          name: anyllm-proxy-deb-amd64
+          path: ./debs
+      - name: Download arm64 deb
+        uses: actions/download-artifact@v4
+        with:
+          name: anyllm-proxy-deb-arm64
+          path: ./debs
+      - name: Upload to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -la ./debs/
+          gh release upload "${{ github.ref_name }}" ./debs/*.deb --repo "${{ github.repository }}"
+
   publish:
     name: Publish to crates.io
     needs: [test, build-release]
