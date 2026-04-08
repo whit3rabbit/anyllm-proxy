@@ -386,6 +386,14 @@ pub fn admin_router(shared: SharedState, token: Arc<zeroize::Zeroizing<String>>)
         .route("/admin/api/requests/{id}", get(logs::get_request_by_id))
         .route("/admin/api/backends", get(get_backends))
         .route(
+            "/admin/api/backends/managed",
+            get(managed_backends::list).post(managed_backends::create),
+        )
+        .route(
+            "/admin/api/backends/managed/{name}",
+            put(managed_backends::update).delete(managed_backends::delete),
+        )
+        .route(
             "/admin/api/keys",
             post(keys::create_key).get(keys::list_keys),
         )
