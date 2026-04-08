@@ -269,6 +269,10 @@ export interface ManagedBackend {
   updated_at: string
 }
 
+export interface ManagedBackendsResponse {
+  backends: ManagedBackend[]
+}
+
 export interface CreateManagedBackendRequest {
   name: string
   provider_id: string

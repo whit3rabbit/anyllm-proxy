@@ -6,7 +6,8 @@ import type {
   Backend, ConfigResponse, ObservabilityResponse,
   ModelsResponse, AuditResponse, TrafficResponse, UptimeResponse,
   EnvImportResponse, ProxyStatus, DiscoverResponse,
-  ManagedBackend, CreateManagedBackendRequest, UpdateManagedBackendRequest,
+  ManagedBackend, ManagedBackendsResponse, CreateManagedBackendRequest, UpdateManagedBackendRequest,
+  CatalogProvider,
 } from './types'
 
 // ── Status ───────────────────────────────────────────────────────────────────
@@ -233,10 +234,20 @@ export function useImportEnv() {
   })
 }
 
+// ── Catalog / Provider metadata ────────────────────────────────────────────────
+
+export function useCatalogProviders() {
+  return useQuery<CatalogProvider[]>({
+    queryKey: ['catalog-providers'],
+    queryFn: () => apiFetch('/admin/api/catalog/providers').then(r => r.providers ?? r),
+    staleTime: Infinity,
+  })
+}
+
 // ── Managed backends ──────────────────────────────────────────────────────────
 
 export function useManagedBackends() {
-  return useQuery<{ backends: ManagedBackend[] }>({
+  return useQuery<ManagedBackendsResponse>({
     queryKey: ['managed-backends'],
     queryFn: () => apiFetch('/admin/api/backends/managed'),
     staleTime: Infinity,
