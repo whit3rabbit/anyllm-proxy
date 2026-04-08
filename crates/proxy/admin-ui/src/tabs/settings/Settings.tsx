@@ -5,6 +5,7 @@ import {
 } from '../../api/queries'
 import EmptyState from '../../components/shared/EmptyState'
 import type { EnvImportResponse, EnvImportError } from '../../api/types'
+import { ManagedBackendsSection } from './ManagedBackendsSection'
 
 const RESTART_KEY = 'env_import_pending_restart'
 
@@ -77,6 +78,9 @@ export default function Settings({ configured = true }: { configured?: boolean }
 
   return (
     <div>
+      {/* Managed backends — always shown first */}
+      <ManagedBackendsSection />
+
       {/* Getting-started notice — shown when no backend is configured */}
       {!configured && (
         <div style={{ marginBottom: 20, padding: '12px 16px', border: '1px solid var(--border)', borderLeft: '3px solid var(--warn)', borderRadius: 'var(--r)', fontSize: 13 }}>

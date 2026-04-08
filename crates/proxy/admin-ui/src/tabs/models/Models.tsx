@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useModels, useAddModel, useRemoveModel, useDiscoverModels } from '../../api/queries'
+import { useModels, useAddModel, useRemoveModel, useDiscoverModels, useBackends, useManagedBackends } from '../../api/queries'
 import EmptyState from '../../components/shared/EmptyState'
 
 const AUTH_HINTS: Record<string, { text: string; needsKey: boolean }> = {
@@ -27,9 +27,12 @@ export default function Models() {
   const add = useAddModel()
   const remove = useRemoveModel()
   const discover = useDiscoverModels()
+  const { data: backends } = useBackends()
+  const { data: managedBackends } = useManagedBackends()
   const [name, setName] = useState('')
   const [model, setModel] = useState('')
   const [provider, setProvider] = useState('openai')
+  const [backendName, setBackendName] = useState('')
   const [discoverSource, setDiscoverSource] = useState('openrouter')
   const [customUrl, setCustomUrl] = useState('')
 
@@ -117,6 +120,16 @@ export default function Models() {
         )}
       </div>
 
+      {/* Datalist for backend name suggestions */}
+      <datalist id="backends-list">
+        {backends?.map(b => (
+          <option key={b.name} value={b.name}>{b.name}</option>
+        ))}
+        {managedBackends?.backends.map(b => (
+          <option key={`managed-${b.name}`} value={b.name}>{b.name} (managed)</option>
+        ))}
+      </datalist>
+
       {/* Manual add model form */}
       <div className="form-group">
         <div className="form-label">Add Model</div>
@@ -131,9 +144,15 @@ export default function Models() {
             <option value="azure">azure</option>
             <option value="bedrock">bedrock</option>
           </select>
+          <input
+            placeholder="Backend (optional)"
+            value={backendName}
+            onChange={(e) => setBackendName(e.target.value)}
+            list="backends-list"
+          />
           <button
             className="btn btn-primary"
-            onClick={() => add.mutate({ name, model, provider })}
+            onClick={() => add.mutate({ name, model, provider, ...(backendName ? { backend_name: backendName } : {}) })}
             disabled={!name || !model || add.isPending}
           >
             Add
