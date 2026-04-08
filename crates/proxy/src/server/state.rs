@@ -174,16 +174,19 @@ impl AppState {
                     .or_else(|| {
                         // Check managed backends (SQLite-backed, zero-restart)
                         self.shared.as_ref().and_then(|s| {
-                            s.managed_backends
+                            let guard = s.managed_backends
                                 .read()
-                                .ok()?
-                                .get(&backend_name)
-                                .map(|(_, client)| {
-                                    let mut state = self.clone();
-                                    state.backend = client.clone();
-                                    state.backend_name = backend_name.clone();
-                                    state
-                                })
+                                .ok()
+                                .or_else(|| {
+                                    tracing::warn!("managed_backends RwLock is poisoned; skipping managed backend lookup");
+                                    None
+                                })?;
+                            guard.get(&backend_name).map(|(_, client)| {
+                                let mut state = self.clone();
+                                state.backend = client.clone();
+                                state.backend_name = backend_name.clone();
+                                state
+                            })
                         })
                     })
                     .unwrap_or_else(|| self.clone());
