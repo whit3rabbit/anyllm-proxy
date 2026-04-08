@@ -5,6 +5,7 @@ pub mod config;
 pub mod env;
 pub mod keys;
 pub mod logs;
+pub mod managed_backends;
 pub mod mcp;
 pub mod models;
 pub mod status;
