@@ -63,7 +63,8 @@ pub struct SharedState {
     /// Unix timestamp of admin server startup; used by /admin/api/uptime.
     pub started_at: std::time::SystemTime,
     /// In-memory registry of managed backends loaded from SQLite at startup.
-    /// Key = backend id (UUID string). Value = (row snapshot, live BackendClient).
+    /// Key = backend name (same as `row.name`). Keyed by name so routing lookups
+    /// can find by backend_name string. Value = (row snapshot, live BackendClient).
     /// Wrapped in RwLock so the admin CRUD routes can update it without restart.
     pub managed_backends: Arc<RwLock<HashMap<String, (crate::admin::db::ManagedBackendRow, BackendClient)>>>,
 }

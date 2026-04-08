@@ -176,6 +176,7 @@ export function getProviderFields(provider: CatalogProvider): FieldDef[] {
     type: 'number',
     required: false,
     group: 'limits',
+    hint: 'Stored for reference; not enforced on managed backends',
   })
   fields.push({
     name: 'tpm',
@@ -183,6 +184,7 @@ export function getProviderFields(provider: CatalogProvider): FieldDef[] {
     type: 'number',
     required: false,
     group: 'limits',
+    hint: 'Stored for reference; not enforced on managed backends',
   })
 
   return fields

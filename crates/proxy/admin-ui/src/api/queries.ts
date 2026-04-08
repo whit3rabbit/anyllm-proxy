@@ -239,7 +239,7 @@ export function useImportEnv() {
 export function useCatalogProviders() {
   return useQuery<CatalogProvider[]>({
     queryKey: ['catalog-providers'],
-    queryFn: () => apiFetch('/admin/api/catalog/providers').then(r => r.providers ?? r),
+    queryFn: () => apiFetch<{ providers: CatalogProvider[] }>('/admin/api/catalog/providers').then(r => r.providers),
     staleTime: Infinity,
   })
 }

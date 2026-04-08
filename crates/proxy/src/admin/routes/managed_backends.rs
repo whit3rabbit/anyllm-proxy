@@ -348,7 +348,11 @@ pub(super) async fn update(
         }
     }
 
-    // 5. Update in-memory map.
+    // 5. Stamp updated_at before inserting into memory (SQLite already has the new value).
+    // Sub-millisecond difference from SQLite's timestamp is acceptable; direction is correct.
+    updated_row.updated_at = crate::admin::db::now_iso8601();
+
+    // 6. Update in-memory map.
     {
         let mut map = shared
             .managed_backends
@@ -357,7 +361,7 @@ pub(super) async fn update(
         map.insert(name.clone(), (updated_row.clone(), new_client));
     }
 
-    // 6. Emit audit.
+    // 7. Emit audit.
     super::emit_audit(
         &shared,
         crate::admin::db::AuditEntry {
