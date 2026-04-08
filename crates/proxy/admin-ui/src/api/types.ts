@@ -239,6 +239,54 @@ export interface EnvImportError {
   warnings: EnvWarning[]
 }
 
+// --- Provider catalog ---
+
+export interface CatalogProvider {
+  id: string
+  name: string
+  protocol: string
+  auth: string
+  default_base_url: string
+  env_vars: string[]
+}
+
+// --- Managed backends ---
+
+export interface ManagedBackend {
+  id: string
+  name: string
+  provider_id: string
+  api_key_set: boolean
+  aws_creds_set: boolean
+  api_base: string | null
+  deployment: string | null
+  api_version: string | null
+  project: string | null
+  region: string | null
+  rpm: number | null
+  tpm: number | null
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateManagedBackendRequest {
+  name: string
+  provider_id: string
+  api_key?: string
+  api_base?: string
+  deployment?: string
+  api_version?: string
+  project?: string
+  region?: string
+  aws_access_key_id?: string
+  aws_secret_access_key?: string
+  aws_session_token?: string
+  rpm?: number
+  tpm?: number
+}
+
+export type UpdateManagedBackendRequest = Partial<Omit<CreateManagedBackendRequest, 'name'>>
+
 // --- WebSocket events ---
 
 export type WSEvent =

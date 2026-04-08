@@ -6,6 +6,7 @@ import type {
   Backend, ConfigResponse, ObservabilityResponse,
   ModelsResponse, AuditResponse, TrafficResponse, UptimeResponse,
   EnvImportResponse, ProxyStatus, DiscoverResponse,
+  ManagedBackend, CreateManagedBackendRequest, UpdateManagedBackendRequest,
 } from './types'
 
 // ── Status ───────────────────────────────────────────────────────────────────
@@ -229,6 +230,43 @@ export function useImportEnv() {
       fd.append('file', file)
       return mutatingFetchMultipart<EnvImportResponse>('/admin/api/env/import', fd)
     },
+  })
+}
+
+// ── Managed backends ──────────────────────────────────────────────────────────
+
+export function useManagedBackends() {
+  return useQuery<{ backends: ManagedBackend[] }>({
+    queryKey: ['managed-backends'],
+    queryFn: () => apiFetch('/admin/api/backends/managed'),
+    staleTime: Infinity,
+  })
+}
+
+export function useCreateManagedBackend() {
+  const qc = useQueryClient()
+  return useMutation<ManagedBackend, Error, CreateManagedBackendRequest>({
+    mutationFn: (data) =>
+      mutatingFetch<ManagedBackend>('POST', '/admin/api/backends/managed', data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['managed-backends'] }) },
+  })
+}
+
+export function useUpdateManagedBackend() {
+  const qc = useQueryClient()
+  return useMutation<ManagedBackend, Error, { name: string; data: UpdateManagedBackendRequest }>({
+    mutationFn: ({ name, data }) =>
+      mutatingFetch<ManagedBackend>('PUT', `/admin/api/backends/managed/${name}`, data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['managed-backends'] }) },
+  })
+}
+
+export function useDeleteManagedBackend() {
+  const qc = useQueryClient()
+  return useMutation<void, Error, string>({
+    mutationFn: (name) =>
+      mutatingFetch<void>('DELETE', `/admin/api/backends/managed/${name}`),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['managed-backends'] }) },
   })
 }
 
