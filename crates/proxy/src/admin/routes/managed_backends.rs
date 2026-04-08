@@ -184,4 +184,67 @@ mod tests {
         let bc = row_to_backend_config(&row, &provider).unwrap();
         assert_eq!(bc.base_url, "https://api.test.com/v1");
     }
+
+    #[test]
+    fn azure_openai_maps_to_azure_openai_kind() {
+        let provider = make_provider(ProviderProtocol::AzureOpenAI, AuthKind::AzureApiKey);
+        let row = make_row();
+        let bc = row_to_backend_config(&row, &provider).unwrap();
+        assert_eq!(bc.kind, BackendKind::AzureOpenAI);
+    }
+
+    #[test]
+    fn vertex_ai_maps_to_vertex_kind() {
+        let provider = make_provider(ProviderProtocol::VertexAI, AuthKind::Bearer);
+        let row = make_row();
+        let bc = row_to_backend_config(&row, &provider).unwrap();
+        assert_eq!(bc.kind, BackendKind::Vertex);
+    }
+
+    #[test]
+    fn gemini_native_maps_to_gemini_kind() {
+        let provider = make_provider(ProviderProtocol::GeminiNative, AuthKind::GoogleApiKey);
+        let row = make_row();
+        let bc = row_to_backend_config(&row, &provider).unwrap();
+        assert_eq!(bc.kind, BackendKind::Gemini);
+    }
+
+    #[test]
+    fn google_api_key_auth_maps_correctly() {
+        let provider = make_provider(ProviderProtocol::GeminiNative, AuthKind::GoogleApiKey);
+        let row = make_row();
+        let bc = row_to_backend_config(&row, &provider).unwrap();
+        match bc.backend_auth {
+            BackendAuth::GoogleApiKey(key) => {
+                assert_eq!(key, "sk-test");
+            }
+            _ => panic!("Expected GoogleApiKey auth"),
+        }
+    }
+
+    #[test]
+    fn azure_api_key_auth_maps_correctly() {
+        let provider = make_provider(ProviderProtocol::AzureOpenAI, AuthKind::AzureApiKey);
+        let row = make_row();
+        let bc = row_to_backend_config(&row, &provider).unwrap();
+        match bc.backend_auth {
+            BackendAuth::AzureApiKey(key) => {
+                assert_eq!(key, "sk-test");
+            }
+            _ => panic!("Expected AzureApiKey auth"),
+        }
+    }
+
+    #[test]
+    fn none_auth_maps_to_empty_bearer_token() {
+        let provider = make_provider(ProviderProtocol::OpenAICompat, AuthKind::None);
+        let row = make_row();
+        let bc = row_to_backend_config(&row, &provider).unwrap();
+        match bc.backend_auth {
+            BackendAuth::BearerToken(token) => {
+                assert_eq!(token, "");
+            }
+            _ => panic!("Expected BearerToken auth"),
+        }
+    }
 }
