@@ -28,6 +28,9 @@ pub struct ManagedBackendRow {
 }
 
 /// Patch struct for partial updates — all fields optional.
+/// Note: Option<T> fields mean "update this field if Some, leave unchanged if None".
+/// There is no way to clear a field back to NULL via this patch type.
+/// UI should keep original value in form fields when editing, not attempt to clear.
 #[derive(Debug, Default, serde::Deserialize)]
 pub struct ManagedBackendPatch {
     pub provider_id: Option<String>,

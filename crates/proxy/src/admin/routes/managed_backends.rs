@@ -296,7 +296,8 @@ pub(super) async fn update(
     if let Some(v) = patch.tpm {
         updated_row.tpm = Some(v);
     }
-    updated_row.updated_at = crate::admin::db::now_iso8601();
+    // updated_at reflects pre-update state; canonical value is in SQLite.
+    // The db function independently generates the new timestamp.
 
     // 3. Build BackendConfig/Client from updated row.
     let provider = match anyllm_providers::get_provider(&updated_row.provider_id) {
@@ -365,7 +366,7 @@ pub(super) async fn update(
             action: "managed_backend_updated".into(),
             target_type: "managed_backend".into(),
             target_id: Some(name.clone()),
-            detail: None,
+            detail: Some(format!("provider_id={}", updated_row.provider_id)),
             source_ip: Some(addr.ip().to_string()),
         },
     );
