@@ -104,6 +104,15 @@ pub fn pricing() -> &'static ModelPricing {
     &PRICING
 }
 
+/// Return (input_per_million, output_per_million) for a model, or None if unknown.
+/// Costs are scaled to per-million for human-readable display; the underlying
+/// table stores per-token values.
+pub fn price_per_million_for_model(model_id: &str) -> Option<(f64, f64)> {
+    pricing()
+        .price_for_model(model_id)
+        .map(|(i, o)| (i * 1_000_000.0, o * 1_000_000.0))
+}
+
 /// A single pricing record loaded from the JSON pricing table.
 /// `model_pattern` supports exact match and longest-prefix matching.
 #[derive(Debug, Clone, serde::Deserialize)]

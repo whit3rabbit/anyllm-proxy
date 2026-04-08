@@ -1,6 +1,7 @@
 // Admin server routes. Served on a separate localhost-only listener.
 
 pub mod audit;
+pub mod catalog;
 pub mod config;
 pub mod env;
 pub mod keys;
@@ -419,6 +420,11 @@ pub fn admin_router(shared: SharedState, token: Arc<zeroize::Zeroizing<String>>)
         .route(
             "/admin/api/mcp-servers/{name}",
             delete(mcp::remove_mcp_server),
+        )
+        .route("/admin/api/catalog/providers", get(catalog::list_providers))
+        .route(
+            "/admin/api/catalog/providers/:id/models",
+            get(catalog::list_provider_models),
         )
         .route("/admin/api/status", get(status::get_status))
         .route("/admin/api/traffic", get(traffic::get_traffic))

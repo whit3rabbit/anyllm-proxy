@@ -243,11 +243,23 @@ export interface EnvImportError {
 
 export interface CatalogProvider {
   id: string
-  name: string
+  display_name: string
+  name?: string             // keep for backwards compat if anything uses it
   protocol: string
   auth: string
+  status: 'implemented' | 'wired' | 'stub'
   default_base_url: string
   env_vars: string[]
+  litellm_prefix: string
+  capabilities: {
+    chat_completions: boolean
+    streaming: boolean
+    tool_use: boolean
+    embeddings: boolean
+    vision: boolean
+    batch: boolean
+  }
+  model_count: number
 }
 
 // --- Managed backends ---

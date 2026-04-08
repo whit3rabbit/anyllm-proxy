@@ -128,9 +128,17 @@ export function BackendForm({ initial, onSuccess, onCancel }: BackendFormProps) 
           {providers.length === 0 && (
             <option value="">Loading providers…</option>
           )}
-          {providers.map(p => (
-            <option key={p.id} value={p.id}>{p.name}</option>
-          ))}
+          {(['implemented', 'wired', 'stub'] as const).map(status => {
+            const group = providers.filter(p => p.status === status)
+            if (group.length === 0) return null
+            return (
+              <optgroup key={status} label={status.charAt(0).toUpperCase() + status.slice(1)}>
+                {group.map(p => (
+                  <option key={p.id} value={p.id}>{p.display_name}</option>
+                ))}
+              </optgroup>
+            )
+          })}
         </select>
       </div>
 
