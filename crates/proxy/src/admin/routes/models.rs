@@ -104,7 +104,15 @@ pub(super) async fn add_model(
     }
 
     // Validate that backend_name refers to a configured backend.
-    if !shared.backend_metrics.contains_key(&body.backend_name) {
+    // Check static backends first, then managed backends (SQLite-backed).
+    let backend_known = shared.backend_metrics.contains_key(&body.backend_name)
+        || shared
+            .managed_backends
+            .read()
+            .map(|m| m.contains_key(&body.backend_name))
+            .unwrap_or(false);
+
+    if !backend_known {
         return (
             StatusCode::BAD_REQUEST,
             Json(serde_json::json!({

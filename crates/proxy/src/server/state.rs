@@ -171,6 +171,21 @@ impl AppState {
                     .as_ref()
                     .and_then(|m| m.get(&backend_name))
                     .cloned()
+                    .or_else(|| {
+                        // Check managed backends (SQLite-backed, zero-restart)
+                        self.shared.as_ref().and_then(|s| {
+                            s.managed_backends
+                                .read()
+                                .ok()?
+                                .get(&backend_name)
+                                .map(|(_, client)| {
+                                    let mut state = self.clone();
+                                    state.backend = client.clone();
+                                    state.backend_name = backend_name.clone();
+                                    state
+                                })
+                        })
+                    })
                     .unwrap_or_else(|| self.clone());
                 Ok((mapped, effective, Some(deployment)))
             }
