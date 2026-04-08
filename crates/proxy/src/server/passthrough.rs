@@ -5,7 +5,7 @@ use crate::backend::BackendClient;
 use anyllm_translate::{anthropic, mapping};
 use axum::{
     body::Bytes,
-    extract::State,
+    extract::{OriginalUri, State},
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
@@ -64,14 +64,29 @@ pub(crate) async fn anthropic_passthrough(
 
     // Enforce model allowlist for virtual keys.
     if let Some(axum::Extension(ref ctx)) = vk_ctx {
-        if let Some(ref m) = peek.model {
-            if !super::policy::is_model_allowed(m, &ctx.allowed_models) {
-                let err = mapping::errors_map::create_anthropic_error(
-                    anthropic::ErrorType::PermissionError,
-                    format!("Model '{}' is not allowed for this API key.", m),
-                    None,
-                );
-                return (StatusCode::FORBIDDEN, Json(err)).into_response();
+        match &peek.model {
+            Some(m) => {
+                if !super::policy::is_model_allowed(m, &ctx.allowed_models) {
+                    let err = mapping::errors_map::create_anthropic_error(
+                        anthropic::ErrorType::PermissionError,
+                        format!("Model '{}' is not allowed for this API key.", m),
+                        None,
+                    );
+                    return (StatusCode::FORBIDDEN, Json(err)).into_response();
+                }
+            }
+            None => {
+                // If a model allowlist is configured, we cannot verify the request
+                // is permitted without knowing the model. Reject rather than bypass.
+                if ctx.allowed_models.is_some() {
+                    let err = mapping::errors_map::create_anthropic_error(
+                        anthropic::ErrorType::InvalidRequestError,
+                        "Request must include a 'model' field when a model allowlist is configured."
+                            .to_string(),
+                        None,
+                    );
+                    return (StatusCode::BAD_REQUEST, Json(err)).into_response();
+                }
             }
         }
     }
@@ -112,6 +127,88 @@ pub(crate) async fn anthropic_passthrough(
                 state.metrics.record_error();
                 passthrough_error_to_response(e)
             }
+        }
+    }
+}
+
+/// Generic catch-all passthrough for any /v1/* path in Anthropic mode.
+/// Forwards batch, file CRUD, count_tokens, and other Anthropic-native endpoints
+/// directly to the upstream Anthropic API. Registered after /v1/messages so that
+/// route retains its dedicated streaming/model-peek logic.
+pub(crate) async fn anthropic_generic_passthrough(
+    State(state): State<AppState>,
+    OriginalUri(uri): OriginalUri,
+    method: axum::http::Method,
+    headers: axum::http::HeaderMap,
+    body: Bytes,
+) -> Response {
+    state.metrics.record_request();
+
+    let client = match &state.backend {
+        BackendClient::Anthropic(c) => c,
+        _ => {
+            let err = mapping::errors_map::create_anthropic_error(
+                anthropic::ErrorType::ApiError,
+                "Backend is not configured as anthropic passthrough".to_string(),
+                None,
+            );
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(err)).into_response();
+        }
+    };
+
+    // Build full path with query string preserved.
+    let mut full_path = uri.path().to_string();
+    if let Some(q) = uri.query() {
+        full_path.push('?');
+        full_path.push_str(q);
+    }
+
+    // Collect owned Strings before building the &str slice (lifetime requirement).
+    let session_id = headers
+        .get("x-claude-code-session-id")
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_string);
+    let beta = headers
+        .get("anthropic-beta")
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_string);
+    let mut extra: Vec<(&str, &str)> = Vec::new();
+    if let Some(ref v) = session_id {
+        extra.push(("x-claude-code-session-id", v));
+    }
+    if let Some(ref v) = beta {
+        extra.push(("anthropic-beta", v));
+    }
+
+    match client
+        .forward_generic(method, &full_path, body, &extra)
+        .await
+    {
+        Ok(response) => {
+            let status = StatusCode::from_u16(response.status().as_u16()).unwrap_or(StatusCode::OK);
+            if status.is_success() {
+                state.metrics.record_success();
+            } else {
+                state.metrics.record_error();
+            }
+            // Preserve upstream content-type (batches return application/x-jsonl, etc.)
+            let upstream_ct = response
+                .headers()
+                .get("content-type")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("application/json")
+                .to_string();
+            let stream = response.bytes_stream();
+            let axum_body = axum::body::Body::from_stream(stream);
+            let mut resp = (status, axum_body).into_response();
+            if let Ok(hv) = axum::http::HeaderValue::from_str(&upstream_ct) {
+                resp.headers_mut().insert("content-type", hv);
+            }
+            resp
+        }
+        Err(e) => {
+            state.metrics.record_error();
+            passthrough_error_to_response(e)
         }
     }
 }

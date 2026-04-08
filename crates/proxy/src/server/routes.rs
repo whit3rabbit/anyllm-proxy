@@ -243,11 +243,35 @@ fn backend_router(state: AppState, mode: HandlerMode) -> Router<GlobalState> {
     let api_routes = match mode {
         HandlerMode::Anthropic => common_routes
             .route("/v1/messages", post(anthropic_passthrough))
+            // Catch-all for batch, file CRUD, and other Anthropic-native endpoints.
+            // /v1/messages above takes priority (exact match beats wildcard).
+            .route(
+                "/v1/{*path}",
+                axum::routing::any(super::passthrough::anthropic_generic_passthrough),
+            )
             .merge(gemini_input_routes),
         HandlerMode::Bedrock => common_routes
             .route(
                 "/v1/messages",
                 post(super::bedrock_passthrough::bedrock_passthrough),
+            )
+            // Bedrock native endpoints: accept Bedrock-native JSON, proxy handles SigV4.
+            // Client path: POST /{backend_name}/model/{modelId}/converse (or the default backend path)
+            .route(
+                "/model/{model_id}/converse",
+                post(super::bedrock_native::bedrock_converse),
+            )
+            .route(
+                "/model/{model_id}/converse-stream",
+                post(super::bedrock_native::bedrock_converse_stream),
+            )
+            .route(
+                "/model/{model_id}/invoke",
+                post(super::bedrock_native::bedrock_invoke),
+            )
+            .route(
+                "/model/{model_id}/invoke-with-response-stream",
+                post(super::bedrock_native::bedrock_invoke_stream),
             )
             .merge(gemini_input_routes),
         HandlerMode::GeminiNative => common_routes
@@ -286,7 +310,17 @@ fn backend_router(state: AppState, mode: HandlerMode) -> Router<GlobalState> {
                 post(super::images::image_generations),
             )
             .route("/v1/rerank", post(rerank))
+            .route("/v2/rerank", post(v2_rerank))
             .route("/v1/completions", post(completions))
+            // Catch-all for any /v1/* path without an explicit handler.
+            // Explicit routes above take priority; this fires only for unmatched paths.
+            // Covers: /v1/responses, /v1/moderations, /v1/images/edits, /v1/images/variations,
+            //         /v1/videos, /v1/fine_tuning/*, /v1/evals/*, /v1/assistants/*,
+            //         /v1/threads/*, /v1/containers/*, /v1/vector_stores/*, files CRUD, etc.
+            .route(
+                "/v1/{*path}",
+                axum::routing::any(super::generic_passthrough::v1_generic_passthrough),
+            )
             .merge(gemini_input_routes),
     };
 
@@ -494,6 +528,14 @@ async fn rerank(
     body: axum::body::Bytes,
 ) -> Response {
     passthrough_to_backend(&state, &headers, body, "/v1/rerank").await
+}
+
+async fn v2_rerank(
+    State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
+    body: axum::body::Bytes,
+) -> Response {
+    passthrough_to_backend(&state, &headers, body, "/v2/rerank").await
 }
 
 async fn completions(

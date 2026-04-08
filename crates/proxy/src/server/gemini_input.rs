@@ -1,5 +1,6 @@
 // Gemini native input handler: POST /v1beta/models/{model}:generateContent
 //                               POST /v1beta/models/{model}:streamGenerateContent
+//                               POST /v1beta/models/{model}:countTokens
 //
 // Accepts Gemini generateContent API requests (as sent by the gemini-cli tool),
 // translates them to Anthropic format, calls the configured backend, and returns
@@ -28,16 +29,47 @@ use futures::StreamExt;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
-/// Extract model name and streaming flag from a `{model}:generateContent` or
-/// `{model}:streamGenerateContent` path segment.
-fn parse_model_action(model_action: &str) -> (&str, bool) {
+enum GeminiAction {
+    Generate,
+    Stream,
+    CountTokens,
+    Unknown,
+}
+
+/// Extract model name and action from a `{model}:{action}` path segment.
+fn parse_model_action(model_action: &str) -> (&str, GeminiAction) {
     if let Some(model) = model_action.strip_suffix(":streamGenerateContent") {
-        (model, true)
+        (model, GeminiAction::Stream)
     } else if let Some(model) = model_action.strip_suffix(":generateContent") {
-        (model, false)
+        (model, GeminiAction::Generate)
+    } else if let Some(model) = model_action.strip_suffix(":countTokens") {
+        (model, GeminiAction::CountTokens)
     } else {
         // Unknown action suffix — treat as non-streaming with the full string as model.
-        (model_action, false)
+        (model_action, GeminiAction::Unknown)
+    }
+}
+
+/// POST /v1beta/models/{model}:countTokens
+///
+/// Translates the Gemini request to Anthropic format and counts tokens using
+/// the tiktoken o200k_base approximation. Returns `{"totalTokens": N}`.
+/// No backend call is made — purely local computation.
+async fn gemini_count_tokens(model: &str, gemini_req: GenerateContentRequest) -> Response {
+    let anthropic_req = gemini_message_map::gemini_to_anthropic_request(&gemini_req, model);
+    match tokio::task::spawn_blocking(move || {
+        crate::server::token_counting::count_request_tokens_sync(&anthropic_req)
+    })
+    .await
+    {
+        Ok(n) => Json(serde_json::json!({ "totalTokens": n })).into_response(),
+        Err(_) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "error": {"code": 500, "message": "token counting failed", "status": "INTERNAL"}
+            })),
+        )
+            .into_response(),
     }
 }
 
@@ -52,7 +84,14 @@ pub(crate) async fn gemini_input_handler(
     vk_ctx: Option<axum::Extension<crate::server::middleware::VirtualKeyContext>>,
     Json(gemini_req): Json<GenerateContentRequest>,
 ) -> Response {
-    let (model, is_streaming) = parse_model_action(&model_action);
+    let (model, action) = parse_model_action(&model_action);
+
+    // countTokens: local computation only, no backend call needed.
+    if matches!(action, GeminiAction::CountTokens) {
+        return gemini_count_tokens(model, gemini_req).await;
+    }
+
+    let is_streaming = matches!(action, GeminiAction::Stream);
 
     state.metrics.record_request();
 

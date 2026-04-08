@@ -209,7 +209,10 @@ async fn async_main(args: Vec<String>, data_dir: PathBuf) {
                             )),
                         );
                     }
-                    tracing::info!(count = rows.len(), "loaded persisted model deployments from DB");
+                    tracing::info!(
+                        count = rows.len(),
+                        "loaded persisted model deployments from DB"
+                    );
                 }
             }
         }

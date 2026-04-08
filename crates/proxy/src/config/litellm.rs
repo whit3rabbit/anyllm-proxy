@@ -105,8 +105,17 @@ struct GeneralSettings {
 
 /// Parse LiteLLM's "provider/model_name" format.
 /// No prefix defaults to OpenAI (matches LiteLLM behavior).
-fn parse_provider_model(model: &str) -> (BackendKind, String) {
+/// Returns (kind, model_name, stub_provider) where stub_provider is set for
+/// registry-resolved OpenAI-compatible providers so callers can use their default URL.
+fn parse_provider_model(
+    model: &str,
+) -> (
+    BackendKind,
+    String,
+    Option<&'static anyllm_providers::ProviderDef>,
+) {
     let (provider, model_name) = model.split_once('/').unwrap_or(("openai", model));
+    let mut stub_provider: Option<&'static anyllm_providers::ProviderDef> = None;
     let kind = match provider.to_ascii_lowercase().as_str() {
         "openai" => BackendKind::OpenAI,
         "azure" => BackendKind::AzureOpenAI,
@@ -115,14 +124,37 @@ fn parse_provider_model(model: &str) -> (BackendKind, String) {
         "anthropic" => BackendKind::Anthropic,
         "bedrock" => BackendKind::Bedrock,
         other => {
-            tracing::warn!(
-                provider = %other,
-                "unknown LiteLLM provider, treating as openai-compatible"
-            );
-            BackendKind::OpenAI
+            // Try the provider registry for known OpenAI-compatible providers
+            // (e.g. "groq", "together_ai", "mistral", etc.)
+            let prefix_with_slash = format!("{other}/");
+            if let Some(p) = anyllm_providers::find_by_litellm_prefix(&prefix_with_slash) {
+                let resolved = match anyllm_providers::resolve_backend(p.id) {
+                    Some(("openai", _)) => {
+                        stub_provider = Some(p);
+                        BackendKind::OpenAI
+                    }
+                    Some(("anthropic", _)) => BackendKind::Anthropic,
+                    Some(("gemini", _)) => BackendKind::Gemini,
+                    Some(("vertex", _)) => BackendKind::Vertex,
+                    Some(("azure", _)) => BackendKind::AzureOpenAI,
+                    Some(("bedrock", _)) => BackendKind::Bedrock,
+                    _ => {
+                        tracing::warn!(provider = %other, "provider found in registry but protocol not mappable, treating as openai-compatible");
+                        stub_provider = Some(p);
+                        BackendKind::OpenAI
+                    }
+                };
+                resolved
+            } else {
+                tracing::warn!(
+                    provider = %other,
+                    "unknown LiteLLM provider, treating as openai-compatible"
+                );
+                BackendKind::OpenAI
+            }
         }
     };
-    (kind, model_name.to_string())
+    (kind, model_name.to_string(), stub_provider)
 }
 
 // ---- Backend deduplication key ----
@@ -223,16 +255,21 @@ pub fn parse_litellm_yaml(yaml: &str) -> LiteLLMParsed {
     let mut model_deployments: HashMap<String, Vec<DeploymentSpec>> = HashMap::new();
 
     for entry in &config.model_list {
-        let (kind, actual_model) = parse_provider_model(&entry.litellm_params.model);
+        let (kind, actual_model, stub_provider) = parse_provider_model(&entry.litellm_params.model);
         let params = &entry.litellm_params;
 
         let api_key = params
             .api_key
             .as_deref()
             .map(|v| resolve_env_value(v).unwrap_or_else(|e| panic!("model_list api_key: {e}")))
-            .unwrap_or_default();
+            .unwrap_or_else(|| {
+                // Fall back to the provider's own env vars when no api_key in YAML.
+                stub_provider
+                    .and_then(|p| p.env_vars.iter().find_map(|v| std::env::var(v).ok()))
+                    .unwrap_or_default()
+            });
 
-        let base_url = resolve_base_url(&kind, params);
+        let base_url = resolve_base_url(&kind, params, stub_provider);
 
         let bk = BackendKey {
             kind: format!("{kind:?}"),
@@ -360,14 +397,26 @@ pub fn extract_master_key(yaml: &str) -> Option<String> {
 }
 
 /// Determine the base URL for a deployment, applying provider-specific defaults.
-fn resolve_base_url(kind: &BackendKind, params: &LiteLLMParams) -> String {
+fn resolve_base_url(
+    kind: &BackendKind,
+    params: &LiteLLMParams,
+    stub_provider: Option<&'static anyllm_providers::ProviderDef>,
+) -> String {
     if let Some(ref url) = params.api_base {
         let resolved =
             resolve_env_value(url).unwrap_or_else(|e| panic!("model_list api_base: {e}"));
         return resolved;
     }
     match kind {
-        BackendKind::OpenAI => "https://api.openai.com".to_string(),
+        BackendKind::OpenAI => {
+            // Use the stub provider's default URL when available (e.g. groq, xai, mistral).
+            // Falls back to OpenAI's URL only when the provider has no default or is unknown.
+            stub_provider
+                .map(|p| p.default_base_url)
+                .filter(|u| !u.is_empty())
+                .unwrap_or("https://api.openai.com")
+                .to_string()
+        }
         BackendKind::Gemini => {
             "https://generativelanguage.googleapis.com/v1beta/openai".to_string()
         }
@@ -510,42 +559,42 @@ mod tests {
 
     #[test]
     fn parse_provider_model_openai() {
-        let (kind, model) = parse_provider_model("openai/gpt-4o");
+        let (kind, model, _) = parse_provider_model("openai/gpt-4o");
         assert_eq!(kind, BackendKind::OpenAI);
         assert_eq!(model, "gpt-4o");
     }
 
     #[test]
     fn parse_provider_model_azure() {
-        let (kind, model) = parse_provider_model("azure/gpt-4o-eu");
+        let (kind, model, _) = parse_provider_model("azure/gpt-4o-eu");
         assert_eq!(kind, BackendKind::AzureOpenAI);
         assert_eq!(model, "gpt-4o-eu");
     }
 
     #[test]
     fn parse_provider_model_no_prefix() {
-        let (kind, model) = parse_provider_model("gpt-4o");
+        let (kind, model, _) = parse_provider_model("gpt-4o");
         assert_eq!(kind, BackendKind::OpenAI);
         assert_eq!(model, "gpt-4o");
     }
 
     #[test]
     fn parse_provider_model_vertex_ai() {
-        let (kind, model) = parse_provider_model("vertex_ai/gemini-pro");
+        let (kind, model, _) = parse_provider_model("vertex_ai/gemini-pro");
         assert_eq!(kind, BackendKind::Vertex);
         assert_eq!(model, "gemini-pro");
     }
 
     #[test]
     fn parse_provider_model_bedrock() {
-        let (kind, model) = parse_provider_model("bedrock/anthropic.claude-v2");
+        let (kind, model, _) = parse_provider_model("bedrock/anthropic.claude-v2");
         assert_eq!(kind, BackendKind::Bedrock);
         assert_eq!(model, "anthropic.claude-v2");
     }
 
     #[test]
     fn parse_provider_model_unknown_treated_as_openai() {
-        let (kind, model) = parse_provider_model("groq/llama-70b");
+        let (kind, model, _) = parse_provider_model("groq/llama-70b");
         assert_eq!(kind, BackendKind::OpenAI);
         assert_eq!(model, "llama-70b");
     }

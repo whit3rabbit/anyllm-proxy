@@ -83,20 +83,73 @@ impl BedrockClient {
         &self.small_model
     }
 
-    /// Build the Bedrock InvokeModel URL for a given model.
-    fn invoke_url(&self, model_id: &str) -> String {
+    /// Build a Bedrock runtime URL for any native endpoint suffix.
+    /// e.g. `suffix = "converse"` → `.../model/{modelId}/converse`
+    pub fn native_endpoint_url(&self, model_id: &str, suffix: &str) -> String {
         format!(
-            "https://bedrock-runtime.{}.amazonaws.com/model/{}/invoke",
+            "https://bedrock-runtime.{}.amazonaws.com/model/{}/{suffix}",
             self.region, model_id
         )
     }
 
+    /// Build the Bedrock InvokeModel URL for a given model.
+    fn invoke_url(&self, model_id: &str) -> String {
+        self.native_endpoint_url(model_id, "invoke")
+    }
+
     /// Build the Bedrock InvokeModelWithResponseStream URL.
     fn invoke_stream_url(&self, model_id: &str) -> String {
-        format!(
-            "https://bedrock-runtime.{}.amazonaws.com/model/{}/invoke-with-response-stream",
-            self.region, model_id
-        )
+        self.native_endpoint_url(model_id, "invoke-with-response-stream")
+    }
+
+    /// Forward a native Bedrock request (Converse or Invoke format) to the given URL.
+    /// Signs with SigV4. Returns the raw response so the caller can stream or buffer it.
+    /// No format translation — caller is responsible for using the correct Bedrock schema.
+    pub async fn forward_native(
+        &self,
+        url: &str,
+        body: bytes::Bytes,
+        streaming: bool,
+    ) -> Result<reqwest::Response, BedrockClientError> {
+        let content_type = "application/json";
+        let accept = if streaming {
+            "application/vnd.amazon.eventstream"
+        } else {
+            "application/json"
+        };
+
+        let base_headers = [("content-type", content_type), ("accept", accept)];
+        let signing_headers = self.sign_request("POST", url, &body, &base_headers)?;
+
+        let mut builder = self
+            .client
+            .post(url)
+            .header("content-type", content_type)
+            .header("accept", accept)
+            .body(body);
+
+        for (k, v) in &signing_headers {
+            builder = builder.header(k.as_str(), v.as_str());
+        }
+
+        let response = builder
+            .send()
+            .await
+            .map_err(|e| BedrockClientError::Transport(e.to_string()))?;
+        let status = response.status().as_u16();
+
+        if !(200..300).contains(&status) {
+            let resp_body = response
+                .bytes()
+                .await
+                .map_err(|e| BedrockClientError::Transport(e.to_string()))?;
+            return Err(BedrockClientError::ApiError {
+                status,
+                body: resp_body,
+            });
+        }
+
+        Ok(response)
     }
 
     /// Sign an HTTP request with SigV4 and return headers to add.

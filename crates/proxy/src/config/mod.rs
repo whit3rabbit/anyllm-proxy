@@ -96,6 +96,9 @@ impl Config {
     /// (unknown backend, bad GCP identifiers) to fail fast at startup.
     pub fn from_env() -> Self {
         let backend_str = std::env::var("BACKEND").unwrap_or_else(|_| "openai".into());
+        // For stub OpenAI-compatible providers (e.g. BACKEND=groq), record the provider def so
+        // the OpenAI config branch can pick up the correct API key env var and default base URL.
+        let mut stub_provider: Option<&'static anyllm_providers::ProviderDef> = None;
         let backend = match backend_str.to_ascii_lowercase().as_str() {
             "openai" => BackendKind::OpenAI,
             "azure" => BackendKind::AzureOpenAI,
@@ -104,7 +107,27 @@ impl Config {
             "anthropic" => BackendKind::Anthropic,
             "bedrock" => BackendKind::Bedrock,
             other => {
-                panic!("unknown BACKEND value '{other}', expected 'openai', 'azure', 'vertex', 'gemini', 'anthropic', or 'bedrock'")
+                match anyllm_providers::resolve_backend(other) {
+                    Some(("openai", _)) => {
+                        stub_provider = anyllm_providers::get_provider(other);
+                        BackendKind::OpenAI
+                    }
+                    Some((kind, _)) => panic!(
+                        "BACKEND={other} is a known provider but requires direct configuration \
+                         (protocol: {kind}); use PROXY_CONFIG with a TOML or LiteLLM YAML file instead"
+                    ),
+                    None => {
+                        let known: Vec<&str> = anyllm_providers::all_providers()
+                            .map(|p| p.id)
+                            .collect();
+                        panic!(
+                            "unknown BACKEND value '{other}'. \
+                             Known values: openai, azure, vertex, gemini, anthropic, bedrock, \
+                             and provider ids: {}",
+                            known.join(", ")
+                        )
+                    }
+                }
             }
         };
 
@@ -125,12 +148,22 @@ impl Config {
 
         match backend {
             BackendKind::OpenAI => {
+                let provider_default_url = stub_provider
+                    .map(|p| p.default_base_url)
+                    .filter(|u| !u.is_empty())
+                    .unwrap_or("https://api.openai.com");
                 let base_url = std::env::var("OPENAI_BASE_URL")
-                    .unwrap_or_else(|_| "https://api.openai.com".to_string());
+                    .unwrap_or_else(|_| provider_default_url.to_string());
                 if let Err(e) = validate_base_url(&base_url) {
                     panic!("OPENAI_BASE_URL rejected: {e}");
                 }
-                let api_key = std::env::var("OPENAI_API_KEY").unwrap_or_default();
+                // For stub providers, fall back to their env var (e.g. GROQ_API_KEY) when
+                // OPENAI_API_KEY is not set.
+                let api_key = std::env::var("OPENAI_API_KEY").unwrap_or_else(|_| {
+                    stub_provider
+                        .and_then(|p| p.env_vars.iter().find_map(|v| std::env::var(v).ok()))
+                        .unwrap_or_default()
+                });
                 let backend_auth = BackendAuth::BearerToken(api_key.clone());
                 let openai_api_format = match std::env::var("OPENAI_API_FORMAT")
                     .unwrap_or_else(|_| "chat".into())

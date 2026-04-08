@@ -20,7 +20,7 @@ pub(crate) async fn count_tokens(
 ) -> axum::response::Response {
     // Offload to blocking threadpool: tokenization is CPU-intensive and
     // would stall the async runtime, blocking other request handlers.
-    match tokio::task::spawn_blocking(move || count_request_tokens(&body)).await {
+    match tokio::task::spawn_blocking(move || count_request_tokens_sync(&body)).await {
         Ok(token_count) => {
             let mut resp = (
                 StatusCode::OK,
@@ -50,7 +50,7 @@ pub(crate) async fn count_tokens(
 /// Per-segment counting may differ slightly from concatenated counting at BPE
 /// boundaries, but this endpoint is already approximate (tiktoken, not the real
 /// Anthropic tokenizer).
-fn count_request_tokens(req: &anthropic::MessageCreateRequest) -> usize {
+pub(crate) fn count_request_tokens_sync(req: &anthropic::MessageCreateRequest) -> usize {
     let mut total = 0;
 
     if let Some(system) = &req.system {

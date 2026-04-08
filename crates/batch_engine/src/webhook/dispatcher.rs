@@ -127,7 +127,10 @@ async fn deliver<Q: WebhookQueue>(
             }
         }
         _ => {
-            if delivery.attempts < delivery.max_retries {
+            // attempts is pre-incremented by claim_next(), so max_retries=3 means
+            // attempts will be 1, 2, 3 on each call. Using <= gives max_retries
+            // retries after the initial attempt (max_retries+1 total deliveries).
+            if delivery.attempts <= delivery.max_retries {
                 let delay = Duration::from_secs(1 << delivery.attempts.min(4));
                 if let Err(e) = queue.schedule_retry(&delivery.delivery_id, delay).await {
                     tracing::error!(error = %e, "failed to schedule webhook retry");

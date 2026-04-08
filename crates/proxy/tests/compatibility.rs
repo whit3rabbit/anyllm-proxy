@@ -195,8 +195,10 @@ async fn metrics_endpoint_returns_counters() {
 async fn unknown_route_returns_anthropic_not_found() {
     let base = spawn_test_server().await;
     let client = Client::new();
+    // Use a path outside /v1/ — the generic /v1/* catch-all covers all /v1/ paths now,
+    // so only non-/v1/ routes still 404 at the global fallback (no auth required).
     let resp = client
-        .get(format!("{base}/v1/nonexistent"))
+        .get(format!("{base}/v2/nonexistent"))
         .send()
         .await
         .unwrap();

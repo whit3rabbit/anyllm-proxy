@@ -70,7 +70,14 @@ impl OpenAIClient {
                     .split("/openai/deployments/")
                     .nth(1)
                     .and_then(|s| s.split('/').next())
-                    .unwrap_or("");
+                    .filter(|s| !s.is_empty())
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "AZURE_OPENAI_API_BASE must contain '/openai/deployments/{{deployment}}', \
+                             got: '{}'. Example: https://myresource.openai.azure.com/openai/deployments/gpt-4o",
+                            config.openai_base_url
+                        )
+                    });
                 (
                     config.openai_base_url.clone(),
                     // Azure Responses API is not widely available; provide URL for completeness
@@ -287,6 +294,31 @@ impl OpenAIClient {
         }
         let resp_body = response.bytes().await.map_err(OpenAIClientError::Request)?;
         Ok((status, resp_headers, resp_body))
+    }
+
+    /// Forward an arbitrary HTTP request to the given URL and return the raw response.
+    /// Supports any HTTP method (GET, POST, DELETE, PUT, PATCH). No retry.
+    /// The caller is responsible for streaming or buffering the response body.
+    pub async fn generic_proxy_request(
+        &self,
+        method: reqwest::Method,
+        url: &str,
+        content_type: Option<&str>,
+        body: Option<bytes::Bytes>,
+    ) -> Result<reqwest::Response, OpenAIClientError> {
+        let mut builder = self.client.request(method, url);
+        if let Some(ct) = content_type {
+            builder = builder.header("content-type", ct);
+        }
+        if let Some(b) = body {
+            builder = builder.body(b);
+        }
+        builder = match &self.auth {
+            BackendAuth::BearerToken(token) => builder.bearer_auth(token),
+            BackendAuth::GoogleApiKey(key) => builder.header("x-goog-api-key", key),
+            BackendAuth::AzureApiKey(key) => builder.header("api-key", key),
+        };
+        builder.send().await.map_err(OpenAIClientError::Request)
     }
 
     /// Forward a raw embeddings request body to the backend embeddings endpoint.

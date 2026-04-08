@@ -10,6 +10,7 @@ use tokio::time::sleep;
 #[derive(Clone)]
 pub struct AnthropicClient {
     client: Client,
+    base_url: String,
     messages_url: String,
     api_key: String,
 }
@@ -36,9 +37,11 @@ impl AnthropicClient {
     /// Create from a BackendConfig (used in multi-backend mode).
     pub fn from_backend_config(bc: &BackendConfig) -> Self {
         let client = build_http_client(&bc.tls);
-        let messages_url = format!("{}/v1/messages", bc.base_url.trim_end_matches('/'));
+        let base_url = bc.base_url.trim_end_matches('/').to_string();
+        let messages_url = format!("{base_url}/v1/messages");
         Self {
             client,
+            base_url,
             messages_url,
             api_key: bc.api_key.clone(),
         }
@@ -47,9 +50,11 @@ impl AnthropicClient {
     /// Create from raw parts (used in legacy single-backend mode).
     pub fn new(base_url: &str, api_key: &str, tls: &TlsConfig) -> Self {
         let client = build_http_client(tls);
-        let messages_url = format!("{}/v1/messages", base_url.trim_end_matches('/'));
+        let base_url = base_url.trim_end_matches('/').to_string();
+        let messages_url = format!("{base_url}/v1/messages");
         Self {
             client,
+            base_url,
             messages_url,
             api_key: api_key.to_string(),
         }
@@ -89,6 +94,30 @@ impl AnthropicClient {
         let response = self.send_with_retry(body, true, extra_headers).await?;
         let rate_limits = RateLimitHeaders::from_anthropic_headers(response.headers());
         Ok((response, rate_limits))
+    }
+
+    /// Forward a request to an arbitrary Anthropic API path with any HTTP method.
+    /// Used by the generic Anthropic passthrough to reach batch, file, and other
+    /// endpoints that are not /v1/messages. No retry: batch/file ops are not safe
+    /// to retry blindly.
+    pub async fn forward_generic(
+        &self,
+        method: reqwest::Method,
+        path: &str,
+        body: bytes::Bytes,
+        extra_headers: &[(&str, &str)],
+    ) -> Result<reqwest::Response, AnthropicClientError> {
+        let url = format!("{}{}", self.base_url, path);
+        let rb = self
+            .client
+            .request(method, &url)
+            .header("content-type", "application/json")
+            .body(body);
+        let rb = self.auth_request(rb);
+        let rb = extra_headers.iter().fold(rb, |rb, &(k, v)| rb.header(k, v));
+        rb.send()
+            .await
+            .map_err(|e| AnthropicClientError::Transport(e.to_string()))
     }
 
     /// Send with retry on 429/5xx. For passthrough, we retry the raw body bytes.

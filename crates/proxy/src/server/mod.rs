@@ -1,5 +1,19 @@
+/// Hop-by-hop headers that must not be forwarded to clients per RFC 7230.
+pub(super) const HOP_BY_HOP: &[&str] = &[
+    "transfer-encoding",
+    "connection",
+    "keep-alive",
+    "proxy-authenticate",
+    "proxy-authorization",
+    "te",
+    "trailer",
+    "upgrade",
+];
+
 /// Audio transcription and text-to-speech passthrough handlers.
 pub mod audio;
+/// AWS Bedrock native endpoint handlers (Converse API + InvokeModel, SigV4 signing).
+mod bedrock_native;
 /// AWS Bedrock passthrough handler (SigV4 signing + event stream decoding).
 mod bedrock_passthrough;
 /// OpenAI Chat Completions input handler (POST /v1/chat/completions).
@@ -8,6 +22,8 @@ mod chat_completions;
 pub mod gemini_input;
 /// Gemini native generateContent handler (POST /v1/messages when GEMINI_API_FORMAT=native).
 mod gemini_native;
+/// Generic catch-all passthrough for any /v1/* path without an explicit handler.
+mod generic_passthrough;
 /// Image generation passthrough handler.
 pub mod images;
 /// Auth validation, request ID injection, size limits, concurrency limits, header logging.

@@ -205,6 +205,116 @@ cargo run -p anyllm_proxy
 
 ---
 
+## Third-party OpenAI-compatible providers
+
+Any provider id from the built-in catalog can be used as a `BACKEND` value. These providers use the OpenAI Chat Completions protocol and route through the same HTTP client as `BACKEND=openai`.
+
+**Resolution order:**
+1. `BACKEND=<provider_id>` — e.g. `BACKEND=groq`
+2. Base URL: `OPENAI_BASE_URL` env var (if set) overrides the provider default; otherwise the catalog default is used.
+3. API key: `OPENAI_API_KEY` (if set) takes precedence; otherwise the provider-specific key var is used (e.g. `GROQ_API_KEY`).
+
+**Example (Groq):**
+```bash
+BACKEND=groq \
+GROQ_API_KEY=gsk_... \
+PROXY_OPEN_RELAY=true \
+cargo run -p anyllm_proxy
+```
+
+### Popular cloud providers
+
+| `BACKEND` value | API key env var(s) | Default base URL |
+|---|---|---|
+| `groq` | `GROQ_API_KEY` | `https://api.groq.com/openai/v1` |
+| `together_ai` | `TOGETHER_API_KEY`, `TOGETHERAI_API_KEY` | `https://api.together.xyz/v1` |
+| `openrouter` | `OPENROUTER_API_KEY` | `https://openrouter.ai/api/v1` |
+| `fireworks_ai` | `FIREWORKS_API_KEY` | `https://api.fireworks.ai/inference/v1` |
+| `mistral` | `MISTRAL_API_KEY` | `https://api.mistral.ai/v1` |
+| `codestral` | `CODESTRAL_API_KEY` | `https://codestral.mistral.ai/v1` |
+| `perplexity` | `PERPLEXITYAI_API_KEY`, `PERPLEXITY_API_KEY` | `https://api.perplexity.ai` |
+| `deepseek` | `DEEPSEEK_API_KEY` | `https://api.deepseek.com` |
+| `cerebras` | `CEREBRAS_API_KEY` | `https://api.cerebras.ai/v1` |
+| `xai` | `XAI_API_KEY` | `https://api.x.ai/v1` |
+| `nvidia_nim` | `NVIDIA_NIM_API_KEY` | `https://integrate.api.nvidia.com/v1` |
+| `sambanova` | `SAMBANOVA_API_KEY` | `https://api.sambanova.ai/v1` |
+| `nebius` | `NEBIUS_API_KEY` | `https://api.studio.nebius.ai/v1` |
+| `deepinfra` | `DEEPINFRA_API_KEY` | `https://api.deepinfra.com/v1/openai` |
+| `novita` | `NOVITA_API_KEY` | `https://api.novita.ai/v3/openai` |
+| `hyperbolic` | `HYPERBOLIC_API_KEY` | `https://api.hyperbolic.xyz/v1` |
+| `lambda_ai` | `LAMBDA_API_KEY` | `https://api.lambdalabs.com/v1` |
+| `nscale` | `NSCALE_API_KEY` | `https://inference.nscale.com/v1` |
+| `featherless_ai` | `FEATHERLESS_API_KEY` | `https://api.featherless.ai/v1` |
+| `friendliai` | `FRIENDLIAI_TOKEN` | `https://api.friendli.ai/serverless/v1` |
+| `replicate` | `REPLICATE_API_KEY` | `https://openai-compat.replicate.com/v1` |
+| `cohere_chat` | `COHERE_API_KEY` | `https://api.cohere.com/compatibility/v1` |
+| `ai21` | `AI21_API_KEY` | `https://api.ai21.com/studio/v1` |
+| `anyscale` | `ANYSCALE_API_KEY` | `https://api.endpoints.anyscale.com/v1` |
+| `aleph_alpha` | `ALEPH_ALPHA_API_KEY` | `https://api.aleph-alpha.com` |
+| `nlp_cloud` | `NLP_CLOUD_API_KEY` | `https://api.nlpcloud.io` |
+| `clarifai` | `CLARIFAI_API_KEY` | `https://api.clarifai.com/v2` |
+| `predibase` | `PREDIBASE_API_KEY` | `https://serving.app.predibase.com` |
+| `voyage` | `VOYAGE_API_KEY` | `https://api.voyageai.com/v1` (embeddings only) |
+| `jina` | `JINA_AI_API_KEY` | `https://api.jina.ai/v1` (embeddings only) |
+| `github` | `GITHUB_TOKEN` | `https://models.inference.ai.azure.com` |
+| `chutes` | `CHUTES_API_KEY` | `https://llm.chutes.ai/v1` |
+| `gmi_cloud` | `GMI_CLOUD_API_KEY` | `https://api.gmi.ai/v1` |
+| `meta_llama` | `META_LLAMA_API_KEY` | `https://www.llama.com/api/v1` |
+| `ai_ml_api` | `AIML_API_KEY` | `https://api.aimlapi.com/v1` |
+| `morph` | `MORPH_API_KEY` | `https://api.morphllm.com/v1` |
+| `galadriel` | `GALADRIEL_API_KEY` | `https://api.galadriel.com/v1` |
+| `nanogpt` | `NANOGPT_API_KEY` | `https://nano-gpt.com/api/v1` |
+| `bytez` | `BYTEZ_KEY` | `https://api.bytez.com/models/v2` |
+| `public_ai` | `PUBLIC_AI_API_KEY` | `https://api.publicai.io/v1` |
+
+### Regional / specialized
+
+| `BACKEND` value | API key env var(s) | Default base URL |
+|---|---|---|
+| `moonshot` | `MOONSHOT_API_KEY` | `https://api.moonshot.cn/v1` |
+| `volcengine` | `VOLCENGINE_API_KEY` | `https://ark.cn-beijing.volces.com/api/v3` |
+| `minimax` | `MINIMAX_API_KEY` | `https://api.minimax.chat/v1` |
+| `zhipuai` | `ZHIPUAI_API_KEY` | `https://open.bigmodel.cn/api/paas/v4` |
+| `dashscope` | `DASHSCOPE_API_KEY` | `https://dashscope.aliyuncs.com/compatible-mode/v1` |
+| `xiaomi_mimo` | `XIAOMI_MIMO_API_KEY` | `https://api.mimo.chat/v1` |
+| `gradient_ai` | `GRADIENT_ACCESS_TOKEN` | `https://api.gradient.ai` |
+
+### Per-deployment (must set `OPENAI_BASE_URL`)
+
+These providers require a workspace/account-specific URL set via `OPENAI_BASE_URL`.
+
+| `BACKEND` value | API key env var(s) | Notes |
+|---|---|---|
+| `databricks` | `DATABRICKS_API_KEY` | Set `OPENAI_BASE_URL` to your workspace serving endpoint |
+| `hosted_vllm` | `VLLM_API_KEY` | Set `OPENAI_BASE_URL` to your vLLM server URL |
+| `huggingface` | `HUGGINGFACE_API_KEY`, `HF_TOKEN` | Set `OPENAI_BASE_URL` to your HF Inference Endpoint |
+| `scaleway` | `SCW_SECRET_KEY` | Set `OPENAI_BASE_URL` to your Scaleway Inference endpoint |
+| `baseten` | `BASETEN_API_KEY` | Set `OPENAI_BASE_URL` to your Baseten deployment URL |
+| `azure_ai` | `AZURE_AI_API_KEY`, `AZURE_AI_API_BASE` | Azure AI Foundry; also set `OPENAI_BASE_URL=<AZURE_AI_API_BASE>` |
+| `watsonx` | `WATSONX_API_KEY`, `WATSONX_URL` | IBM WatsonX; also set `OPENAI_BASE_URL=<WATSONX_URL>` |
+| `cloudflare` | `CLOUDFLARE_API_KEY`, `CLOUDFLARE_ACCOUNT_ID` | Set `OPENAI_BASE_URL` to your account endpoint |
+| `snowflake` | `SNOWFLAKE_JWT`, `SNOWFLAKE_ACCOUNT_ID` | Set `OPENAI_BASE_URL` to your Snowflake Cortex endpoint |
+| `xinference` | `XINFERENCE_SERVER_URL` | Set `OPENAI_BASE_URL=<XINFERENCE_SERVER_URL>` |
+| `ovhcloud` | `OVH_AI_ENDPOINTS_ACCESS_TOKEN` | Set `OPENAI_BASE_URL` to your OVHcloud endpoint |
+| `wandb` | `WANDB_API_KEY` | Set `OPENAI_BASE_URL` to your W&B Inference project URL |
+
+### Self-hosted / local (no key required)
+
+| `BACKEND` value | Default base URL | Notes |
+|---|---|---|
+| `ollama` | `http://localhost:11434/v1` | Override with `OPENAI_BASE_URL` for remote Ollama |
+| `lm_studio` | `http://localhost:1234/v1` | LM Studio local server |
+| `llamafile` | `http://localhost:8080` | llamafile server |
+| `lemonade` | `http://localhost:8000` | Lemonade local server |
+| `docker_model_runner` | `http://localhost:12434/engines/llama.cpp/v1` | Docker Model Runner |
+| `infinity` | `http://localhost:7997` | Infinity embeddings server |
+| `petals` | `http://localhost:8080` | Petals distributed inference |
+| `triton` | (none — set `OPENAI_BASE_URL`) | NVIDIA Triton Inference Server |
+
+> **Note:** `sagemaker` appears in the provider catalog but uses a custom AWS signing protocol not yet routed through `BACKEND=sagemaker`. Use `BACKEND=bedrock` for AWS-hosted Anthropic models instead.
+
+---
+
 ## mTLS Client Certificates
 
 Most users do not need these. They configure mutual TLS (mTLS) on the **outbound** connection from the proxy to the backend endpoint. Use them when the backend requires a client certificate for authentication, or uses a private CA that is not in the system trust store.

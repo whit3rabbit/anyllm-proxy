@@ -429,6 +429,11 @@ pub fn admin_router(shared: SharedState, token: Arc<zeroize::Zeroizing<String>>)
         .route("/admin/api/status", get(status::get_status))
         .route("/admin/api/traffic", get(traffic::get_traffic))
         .route("/admin/api/uptime", get(uptime::get_uptime))
+        .route("/admin/api/catalog/providers", get(catalog::list_providers))
+        .route(
+            "/admin/api/catalog/providers/{id}/models",
+            get(catalog::list_provider_models),
+        )
         .with_state(shared.clone())
         // Innermost: CSRF check runs after auth succeeds.
         .layer(middleware::from_fn_with_state(

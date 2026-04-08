@@ -94,10 +94,9 @@ where
                 return StreamOutcome::UpstreamError;
             }
         };
-        buffer.extend_from_slice(&bytes);
-
         // Guard against unbounded buffer growth from a misbehaving backend.
-        if buffer.len() > MAX_SSE_BUFFER_SIZE {
+        // Check before appending so a single oversized chunk can't exceed the limit.
+        if buffer.len() + bytes.len() > MAX_SSE_BUFFER_SIZE {
             tracing::error!(
                 buffer_len = buffer.len(),
                 "SSE buffer exceeded maximum size, aborting stream"
@@ -105,6 +104,7 @@ where
             metrics.record_error();
             return StreamOutcome::UpstreamError;
         }
+        buffer.extend_from_slice(&bytes);
 
         while let Some((pos, delim_len)) = find_double_newline(&buffer, search_from) {
             frame_events.clear();
