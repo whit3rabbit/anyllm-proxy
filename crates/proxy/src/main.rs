@@ -612,7 +612,7 @@ async fn async_main(args: Vec<String>, data_dir: PathBuf) {
                                 }
                                 Some(bc) => {
                                     let client = anyllm_proxy::backend::BackendClient::from_backend_config(&bc);
-                                    map.insert(row.id.clone(), (row, client));
+                                    map.insert(row.name.clone(), (row, client));
                                 }
                             }
                         }

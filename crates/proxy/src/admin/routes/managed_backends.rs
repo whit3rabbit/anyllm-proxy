@@ -27,10 +27,30 @@ pub fn row_to_backend_config(
         ProviderProtocol::Custom => return None,
     };
 
-    let base_url = row
-        .api_base
-        .clone()
-        .unwrap_or_else(|| provider.default_base_url.to_string());
+    // Bedrock: base_url is passed as the region string to BedrockClient::new, not a URL.
+    // Vertex: construct the full endpoint URL from project+region if api_base is absent.
+    let base_url = match provider.protocol {
+        ProviderProtocol::BedrockNative => {
+            row.region.clone().unwrap_or_else(|| "us-east-1".to_string())
+        }
+        ProviderProtocol::VertexAI => {
+            // api_base must be the full Vertex endpoint URL if provided.
+            // Otherwise construct from project+region; if neither is set the caller
+            // will get an error at request time.
+            row.api_base.clone().unwrap_or_else(|| {
+                match (&row.project, &row.region) {
+                    (Some(proj), Some(reg)) => format!(
+                        "https://{reg}-aiplatform.googleapis.com/v1/projects/{proj}/locations/{reg}/endpoints/openapi"
+                    ),
+                    _ => provider.default_base_url.to_string(),
+                }
+            })
+        }
+        _ => row
+            .api_base
+            .clone()
+            .unwrap_or_else(|| provider.default_base_url.to_string()),
+    };
 
     let api_key_str = row.api_key.clone().unwrap_or_default();
 
@@ -155,10 +175,60 @@ mod tests {
         row.api_key = None;
         row.aws_access_key_id = Some("AKIA123".to_string());
         row.aws_secret_access_key = Some("secret123".to_string());
+        row.region = Some("us-west-2".to_string());
         let bc = row_to_backend_config(&row, &provider).unwrap();
         assert_eq!(bc.kind, BackendKind::Bedrock);
         assert!(bc.bedrock_credentials.is_some());
         assert_eq!(bc.api_key, "");
+        // base_url is used as the region string for BedrockClient, not a URL.
+        assert_eq!(bc.base_url, "us-west-2");
+    }
+
+    #[test]
+    fn bedrock_defaults_region_to_us_east_1() {
+        let provider = make_provider(ProviderProtocol::BedrockNative, AuthKind::AwsSigV4);
+        let mut row = make_row();
+        row.api_key = None;
+        row.aws_access_key_id = Some("AKIA123".to_string());
+        row.aws_secret_access_key = Some("secret123".to_string());
+        // region is None — should fall back to "us-east-1"
+        let bc = row_to_backend_config(&row, &provider).unwrap();
+        assert_eq!(bc.base_url, "us-east-1");
+    }
+
+    #[test]
+    fn vertex_constructs_url_from_project_and_region() {
+        let provider = make_provider(ProviderProtocol::VertexAI, AuthKind::Bearer);
+        let mut row = make_row();
+        row.api_base = None;
+        row.project = Some("my-gcp-project".to_string());
+        row.region = Some("us-central1".to_string());
+        let bc = row_to_backend_config(&row, &provider).unwrap();
+        assert_eq!(bc.kind, BackendKind::Vertex);
+        assert_eq!(
+            bc.base_url,
+            "https://us-central1-aiplatform.googleapis.com/v1/projects/my-gcp-project/locations/us-central1/endpoints/openapi"
+        );
+    }
+
+    #[test]
+    fn vertex_api_base_takes_priority_over_project_region() {
+        let provider = make_provider(ProviderProtocol::VertexAI, AuthKind::Bearer);
+        let mut row = make_row();
+        row.api_base = Some("https://custom.vertex.example.com/v1".to_string());
+        row.project = Some("my-gcp-project".to_string());
+        row.region = Some("us-central1".to_string());
+        let bc = row_to_backend_config(&row, &provider).unwrap();
+        assert_eq!(bc.base_url, "https://custom.vertex.example.com/v1");
+    }
+
+    #[test]
+    fn vertex_falls_back_to_default_when_no_base_no_project_region() {
+        let provider = make_provider(ProviderProtocol::VertexAI, AuthKind::Bearer);
+        let row = make_row(); // api_base=None, project=None, region=None
+        let bc = row_to_backend_config(&row, &provider).unwrap();
+        // Falls back to provider.default_base_url (empty string in real Vertex provider).
+        assert_eq!(bc.base_url, "https://api.test.com/v1");
     }
 
     #[test]
