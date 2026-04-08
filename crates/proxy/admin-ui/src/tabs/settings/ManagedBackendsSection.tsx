@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import {
   useManagedBackends,
   useDeleteManagedBackend,
@@ -21,7 +21,10 @@ export function ManagedBackendsSection() {
   const [panel, setPanel] = useState<PanelState>({ mode: 'none' })
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
 
-  const providerMap = Object.fromEntries(providers.map(p => [p.id, p.display_name]))
+  const providerMap = useMemo(
+    () => Object.fromEntries(providers.map(p => [p.id, p.display_name])),
+    [providers],
+  )
 
   function getProviderLabel(providerId: string): string {
     return providerMap[providerId] ?? providerId

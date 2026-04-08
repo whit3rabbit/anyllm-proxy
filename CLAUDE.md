@@ -79,39 +79,7 @@ See [docs/CONFIG.md](docs/CONFIG.md) for lookup order, file layout, and config f
 
 ## Architecture
 
-Cargo workspace with five crates:
-
-### `crates/providers` (lib: `anyllm_providers`)
-Metadata-only catalog: no HTTP, no IO. `ProviderDef` (protocol, auth, env vars, LiteLLM prefix) and `ModelDef` (context window, capabilities). Registry functions in `registry.rs`. Add a new provider: create `providers/src/providers/<name>.rs`, register in `providers/mod.rs` and `registry.rs`. OpenAI-compatible providers route through the existing `OpenAIClient` automatically.
-
-### `crates/client` (lib: `anyllm_client`)
-Async HTTP client (Anthropic-in, Anthropic-out). `ClientBuilder`, `ToolBuilder`, `messages_stream()` returning `impl Stream`.
-
-### `crates/translator` (lib: `anyllm_translate`)
-Pure translation logic, no IO. Stateless `fn(A) -> B` mapping between Anthropic and OpenAI types.
-- `anthropic/`: Anthropic Messages API types
-- `openai/`: OpenAI types (Chat Completions + Responses API)
-- `mapping/`: Conversion functions (message_map, tools_map, streaming_map, reverse_streaming_map, responses_*, warnings)
-- `middleware/`: Request/response handler orchestrating translation
-
-### `crates/batch_engine` (lib: `anyllm_batch_engine`)
-HTTP-agnostic batch orchestration: job queue, file storage, webhook delivery.
-
-### `crates/proxy` (bin: `anyllm_proxy`)
-HTTP proxy on axum + reqwest:
-- `server/`: Routes, middleware (auth, rate limit, request ID, size/concurrency limits), SSE streaming, passthrough handlers
-- `backend/`: `BackendClient` enum dispatching to OpenAI/Azure/Vertex/Gemini/Anthropic/Bedrock with retry
-- `admin/`: Admin server (localhost:3001), virtual key CRUD, model management, audit log, WebSocket live updates
-- `admin-ui/`: React 19 + TypeScript SPA (Vite). Build: `cd crates/proxy/admin-ui && npm run build`
-
-### Data Flow
-```
-Client (Anthropic or OpenAI format) -> proxy (axum)
-  -> translator: input types -> mapping -> backend types
-  -> backend: reqwest -> provider API
-  -> translator: response types -> mapping -> client types
-  -> proxy -> Client
-```
+Five-crate Cargo workspace: `providers` (metadata catalog), `client` (Anthropic HTTP client), `translator` (pure format mapping, no IO), `batch_engine` (job queue + webhook), `proxy` (axum HTTP server + admin UI). See [docs/proxy-architecture.md](docs/proxy-architecture.md) for crate details and data flow.
 
 ## Key Design Decisions
 
@@ -126,6 +94,7 @@ Client (Anthropic or OpenAI format) -> proxy (axum)
 
 ## Gotchas
 
+- **Managed backend fields cannot be cleared to NULL.** `ManagedBackendPatch` has no sentinel to distinguish "omitted" from "set to null". Once a field like `api_base` is set, it cannot be cleared via PATCH. UI should always send the current value in edit forms, not omit fields.
 - **`OPENAI_API_KEY` takes precedence over provider-specific keys for stub backends.** `config/mod.rs` tries `OPENAI_API_KEY` first, then falls back to `GROQ_API_KEY` / `MISTRAL_API_KEY` / etc. If `OPENAI_API_KEY` is set globally, it gets sent to Groq/Mistral/etc. even when `BACKEND=groq`. Unset it or clear it from `.anyllm.env` before switching to a stub provider.
 - **`BACKEND=sagemaker` panics at startup.** Its `ProviderProtocol::Custom` makes `resolve_backend()` return `None`, triggering the "unknown backend" panic. Use `BACKEND=bedrock` for AWS-hosted Anthropic models instead.
 - **Adding a passthrough route (Translate mode):** Reuse `passthrough_to_backend(&state, &headers, body, "/v2/path")` in `routes.rs` — it handles content-type forwarding and error mapping. The Anthropic mode equivalent is `anthropic_generic_passthrough` in `passthrough.rs` via `AnthropicClient::forward_generic`.
@@ -156,3 +125,4 @@ Client (Anthropic or OpenAI format) -> proxy (axum)
 ## References
 
 - OpenAI API spec: https://github.com/openai/openai-openapi/blob/manual_spec/openapi.yaml (very large, ~70k+ lines). Reference specific sections, do not load full spec.
+- Endpoint inventory: [docs/ENDPOINTS.md](docs/ENDPOINTS.md)

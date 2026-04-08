@@ -475,6 +475,11 @@ pub fn row_to_backend_config(
             // api_base must be the full Vertex endpoint URL if provided.
             // Otherwise construct from project+region; if neither is set the caller
             // will get an error at request time.
+            //
+            // Security: region and project are user-supplied but the constructed
+            // hostname always ends with "-aiplatform.googleapis.com", so an attacker
+            // cannot reach an arbitrary host via these two fields. The api_base
+            // override (handled in the _ arm) is the only path to an arbitrary URL.
             row.api_base.clone().unwrap_or_else(|| {
                 match (&row.project, &row.region) {
                     (Some(proj), Some(reg)) => format!(
@@ -484,6 +489,11 @@ pub fn row_to_backend_config(
                 }
             })
         }
+        // Security: api_base is user-supplied (full host + protocol). SSRF is
+        // mitigated at the HTTP client layer: the ssrf-protection Cargo feature
+        // (enabled by default) installs a DNS resolver that rejects private/loopback
+        // IPs (127.x, 10.x, 172.16-31.x, 192.168.x, 169.254.x) and disables
+        // redirects. Access also requires admin Bearer token + localhost binding.
         _ => row
             .api_base
             .clone()

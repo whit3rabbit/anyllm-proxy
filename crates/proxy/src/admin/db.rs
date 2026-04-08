@@ -2299,8 +2299,8 @@ mod tests {
 
     // ── managed_backends CRUD tests ───────────────────────────────────────────
 
-    fn test_row(name: &str) -> crate::admin::routes::managed_backends::ManagedBackendRow {
-        crate::admin::routes::managed_backends::ManagedBackendRow {
+    fn test_row(name: &str) -> ManagedBackendRow {
+        ManagedBackendRow {
             id: format!("id-{name}"),
             name: name.to_string(),
             provider_id: "openai".to_string(),

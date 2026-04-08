@@ -147,7 +147,6 @@ export function BackendForm({ initial, onSuccess, onCancel }: BackendFormProps) 
         </select>
       </div>
 
-      {/* Backend name */}
       <div style={{ marginBottom: 10 }}>
         <div style={{ fontSize: 12, color: 'var(--text-2)', marginBottom: 3 }}>
           Name<span style={{ color: 'var(--err)', marginLeft: 2 }}>*</span>
@@ -167,7 +166,6 @@ export function BackendForm({ initial, onSuccess, onCancel }: BackendFormProps) 
         )}
       </div>
 
-      {/* Auth fields */}
       {authFields.length > 0 && (
         <div style={{ marginBottom: 4 }}>
           <div className="section-label" style={{ marginBottom: 6 }}>Authentication</div>
@@ -175,7 +173,6 @@ export function BackendForm({ initial, onSuccess, onCancel }: BackendFormProps) 
         </div>
       )}
 
-      {/* Endpoint fields */}
       {endpointFields.length > 0 && (
         <div style={{ marginBottom: 4 }}>
           <div className="section-label" style={{ marginBottom: 6 }}>Endpoint</div>
@@ -183,7 +180,6 @@ export function BackendForm({ initial, onSuccess, onCancel }: BackendFormProps) 
         </div>
       )}
 
-      {/* Rate limit fields — collapsed by default */}
       {limitFields.length > 0 && (
         <details style={{ marginBottom: 10 }}>
           <summary style={{ fontSize: 11, color: 'var(--text-2)', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.07em', fontWeight: 500, marginBottom: 6 }}>

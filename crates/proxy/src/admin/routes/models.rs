@@ -386,6 +386,9 @@ fn resolve_discover_target(body: &DiscoverRequest) -> Result<(String, Option<Str
             } else {
                 format!("{url}/v1/models")
             };
+            // Security: url is user-supplied (host + protocol fully controlled).
+            // SSRF risk is gated by: (a) admin Bearer token required, (b) admin server
+            // binds to 127.0.0.1 by default, (c) DISCOVER_CLIENT follows no redirects.
             Ok((url, None))
         }
         other => Err(format!("unknown source: {other}")),
