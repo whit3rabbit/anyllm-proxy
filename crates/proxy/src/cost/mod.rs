@@ -445,6 +445,7 @@ mod tests {
                     .build(),
             ),
             started_at: std::time::SystemTime::now(),
+            managed_backends: Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
         };
 
         let vk_ctx = VirtualKeyContext {

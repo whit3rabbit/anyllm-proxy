@@ -6,6 +6,7 @@
 //! for live dashboard updates.
 
 use crate::admin::keys::VirtualKeyMeta;
+use crate::backend::BackendClient;
 use crate::config::ModelMapping;
 use crate::metrics::Metrics;
 use dashmap::DashMap;
@@ -61,6 +62,10 @@ pub struct SharedState {
     pub issued_csrf_tokens: Arc<moka::sync::Cache<String, ()>>,
     /// Unix timestamp of admin server startup; used by /admin/api/uptime.
     pub started_at: std::time::SystemTime,
+    /// In-memory registry of managed backends loaded from SQLite at startup.
+    /// Key = backend id (UUID string). Value = (row snapshot, live BackendClient).
+    /// Wrapped in RwLock so the admin CRUD routes can update it without restart.
+    pub managed_backends: Arc<RwLock<HashMap<String, (crate::admin::db::ManagedBackendRow, BackendClient)>>>,
 }
 
 /// Run a synchronous closure against the SQLite connection on the blocking
@@ -179,6 +184,7 @@ impl SharedState {
                     .build(),
             ),
             started_at: std::time::SystemTime::now(),
+            managed_backends: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 }

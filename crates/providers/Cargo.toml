@@ -1,0 +1,10 @@
+[package]
+name = "anyllm_providers"
+description = "Provider and model catalog for anyllm-proxy"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }

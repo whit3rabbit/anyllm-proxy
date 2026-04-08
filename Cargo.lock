@@ -86,11 +86,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "anyllm_providers"
+version = "0.2.0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "anyllm_proxy"
 version = "0.2.0"
 dependencies = [
  "anyllm_batch_engine",
  "anyllm_client",
+ "anyllm_providers",
  "anyllm_translate",
  "aws-credential-types",
  "aws-sigv4",

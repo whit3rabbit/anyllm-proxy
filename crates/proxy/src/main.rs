@@ -587,6 +587,42 @@ async fn async_main(args: Vec<String>, data_dir: PathBuf) {
             }
         });
 
+        // Load managed backends from SQLite into in-memory HashMap.
+        let managed_backends = {
+            let mut map = std::collections::HashMap::new();
+            let conn_guard = db.lock().unwrap_or_else(|e| e.into_inner());
+            if let Ok(rows) = admin::db::list_managed_backends(&conn_guard) {
+                for row in rows {
+                    match anyllm_providers::get_provider(&row.provider_id) {
+                        None => {
+                            tracing::warn!(
+                                provider_id = %row.provider_id,
+                                backend_id = %row.id,
+                                "managed backend references unknown provider; skipping"
+                            );
+                        }
+                        Some(provider) => {
+                            match anyllm_proxy::admin::routes::managed_backends::row_to_backend_config(&row, provider) {
+                                None => {
+                                    tracing::warn!(
+                                        provider_id = %row.provider_id,
+                                        backend_id = %row.id,
+                                        "managed backend uses unsupported protocol (Custom); skipping"
+                                    );
+                                }
+                                Some(bc) => {
+                                    let client = anyllm_proxy::backend::BackendClient::from_backend_config(&bc);
+                                    map.insert(row.id.clone(), (row, client));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            tracing::info!(count = map.len(), "loaded managed backends from SQLite");
+            Arc::new(std::sync::RwLock::new(map))
+        };
+
         let shared = admin::state::SharedState {
             db: db.clone(),
             events_tx: events_tx.clone(),
@@ -608,6 +644,7 @@ async fn async_main(args: Vec<String>, data_dir: PathBuf) {
                     .build(),
             ),
             started_at: std::time::SystemTime::now(),
+            managed_backends,
         };
 
         // Admin token: use env var or generate 256-bit random hex written to a file.
