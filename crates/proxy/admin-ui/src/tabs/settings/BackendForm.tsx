@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   useCatalogProviders,
   useCreateManagedBackend,
@@ -20,9 +20,15 @@ export function BackendForm({ initial, onSuccess, onCancel }: BackendFormProps) 
   const update = useUpdateManagedBackend()
 
   const [name, setName] = useState(initial?.name ?? '')
-  const [providerId, setProviderId] = useState(initial?.provider_id ?? (providers[0]?.id ?? ''))
+  const [providerId, setProviderId] = useState(initial?.provider_id ?? '')
   const [fields, setFields] = useState<Record<string, string>>({})
   const [submitError, setSubmitError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (providers.length > 0 && !providerId) {
+      setProviderId(initial?.provider_id ?? providers[0].id)
+    }
+  }, [providers.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const selectedProvider: CatalogProvider | undefined = providers.find(p => p.id === providerId)
     ?? (providers.length > 0 ? providers[0] : undefined)
@@ -71,9 +77,8 @@ export function BackendForm({ initial, onSuccess, onCancel }: BackendFormProps) 
         setSubmitError('Name is required')
         return
       }
-      const effectiveProvider = selectedProvider?.id ?? providerId
       create.mutate(
-        { name, provider_id: effectiveProvider, ...cleanedFields } as Parameters<typeof create.mutate>[0],
+        { name, provider_id: providerId, ...cleanedFields } as Parameters<typeof create.mutate>[0],
         {
           onSuccess: () => onSuccess(),
           onError: (err) => setSubmitError(err.message),
@@ -120,7 +125,7 @@ export function BackendForm({ initial, onSuccess, onCancel }: BackendFormProps) 
           Provider<span style={{ color: 'var(--err)', marginLeft: 2 }}>*</span>
         </div>
         <select
-          value={providerId || (providers[0]?.id ?? '')}
+          value={providerId}
           onChange={(e) => { setProviderId(e.target.value); setFields({}) }}
           disabled={isEdit}
           style={{ width: '100%' }}

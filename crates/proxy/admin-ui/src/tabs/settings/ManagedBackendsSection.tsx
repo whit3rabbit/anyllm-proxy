@@ -21,7 +21,7 @@ export function ManagedBackendsSection() {
   const [panel, setPanel] = useState<PanelState>({ mode: 'none' })
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
 
-  const providerMap = Object.fromEntries(providers.map(p => [p.id, p.name]))
+  const providerMap = Object.fromEntries(providers.map(p => [p.id, p.display_name]))
 
   function getProviderLabel(providerId: string): string {
     return providerMap[providerId] ?? providerId
