@@ -4,7 +4,7 @@
 FROM node:20-alpine AS frontend
 WORKDIR /app/crates/proxy/admin-ui
 COPY crates/proxy/admin-ui/package.json crates/proxy/admin-ui/package-lock.json ./
-RUN npm ci
+RUN npm ci --legacy-peer-deps
 COPY crates/proxy/admin-ui/ ./
 RUN npm run build
 
