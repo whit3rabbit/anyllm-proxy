@@ -108,6 +108,14 @@ OPENAI_API_KEY=sk-... BIG_MODEL=gpt-4o SMALL_MODEL=gpt-4o-mini anyllm_proxy
 
 **OpenRouter:**
 ```bash
+# Using the dedicated provider key (recommended):
+BACKEND=openrouter \
+OPENROUTER_API_KEY=sk-or-... \
+BIG_MODEL=anthropic/claude-3.5-sonnet \
+SMALL_MODEL=anthropic/claude-3-haiku \
+anyllm_proxy
+
+# Or via the generic OpenAI-compat path:
 OPENAI_API_KEY=sk-or-... \
 OPENAI_BASE_URL=https://openrouter.ai/api/v1 \
 BIG_MODEL=anthropic/claude-3.5-sonnet \
@@ -262,7 +270,7 @@ curl -X DELETE http://localhost:3001/admin/api/keys/1 \
   -H "Authorization: Bearer $(cat ~/.anyllm/.admin_token)"
 ```
 
-`budget_duration` accepts `daily`, `monthly`, or `lifetime`. `allowed_models` supports exact names and `prefix/*` wildcards. A key at 100% of its budget returns 429 with period reset information. Webhook notifications fire at 80%, 95%, and 100% of the budget via `WEBHOOK_URLS`.
+`budget_duration` accepts `daily`, `monthly`, or `lifetime`. `allowed_models` supports exact names and trailing-wildcard patterns (e.g., `claude-*`). A key at 100% of its budget returns 429 with period reset information. Webhook notifications fire at 80%, 95%, and 100% of the budget via `WEBHOOK_URLS`.
 
 </details>
 

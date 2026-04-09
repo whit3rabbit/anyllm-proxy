@@ -189,13 +189,12 @@ impl Config {
                 }
                 // For stub providers, fall back to their env var (e.g. GROQ_API_KEY) when
                 // OPENAI_API_KEY is not set.
-                let api_key = sanitize_api_key(
-                    &std::env::var("OPENAI_API_KEY").unwrap_or_else(|_| {
+                let api_key =
+                    sanitize_api_key(&std::env::var("OPENAI_API_KEY").unwrap_or_else(|_| {
                         stub_provider
                             .and_then(|p| p.env_vars.iter().find_map(|v| std::env::var(v).ok()))
                             .unwrap_or_default()
-                    }),
-                );
+                    }));
                 let backend_auth = BackendAuth::BearerToken(api_key.clone());
                 let openai_api_format = match std::env::var("OPENAI_API_FORMAT")
                     .unwrap_or_else(|_| "chat".into())
@@ -228,11 +227,10 @@ impl Config {
                 let deployment = std::env::var("AZURE_OPENAI_DEPLOYMENT").unwrap_or_else(|_| {
                     panic!("AZURE_OPENAI_DEPLOYMENT is required when BACKEND=azure")
                 });
-                let api_key = sanitize_api_key(
-                    &std::env::var("AZURE_OPENAI_API_KEY").unwrap_or_else(|_| {
+                let api_key =
+                    sanitize_api_key(&std::env::var("AZURE_OPENAI_API_KEY").unwrap_or_else(|_| {
                         panic!("AZURE_OPENAI_API_KEY is required when BACKEND=azure")
-                    }),
-                );
+                    }));
                 let api_version = std::env::var("AZURE_OPENAI_API_VERSION")
                     .unwrap_or_else(|_| "2024-10-21".to_string());
 
@@ -301,10 +299,10 @@ impl Config {
                 }
             }
             BackendKind::Gemini => {
-                let api_key = sanitize_api_key(
-                    &std::env::var("GEMINI_API_KEY")
-                        .unwrap_or_else(|_| panic!("GEMINI_API_KEY is required when BACKEND=gemini")),
-                );
+                let api_key =
+                    sanitize_api_key(&std::env::var("GEMINI_API_KEY").unwrap_or_else(|_| {
+                        panic!("GEMINI_API_KEY is required when BACKEND=gemini")
+                    }));
 
                 let base_url = std::env::var("GEMINI_BASE_URL").unwrap_or_else(|_| {
                     "https://generativelanguage.googleapis.com/v1beta".to_string()
@@ -332,11 +330,10 @@ impl Config {
                 }
             }
             BackendKind::Anthropic => {
-                let api_key = sanitize_api_key(
-                    &std::env::var("ANTHROPIC_API_KEY").unwrap_or_else(|_| {
+                let api_key =
+                    sanitize_api_key(&std::env::var("ANTHROPIC_API_KEY").unwrap_or_else(|_| {
                         panic!("ANTHROPIC_API_KEY is required when BACKEND=anthropic")
-                    }),
-                );
+                    }));
 
                 let base_url = std::env::var("ANTHROPIC_BASE_URL")
                     .unwrap_or_else(|_| "https://api.anthropic.com".to_string());

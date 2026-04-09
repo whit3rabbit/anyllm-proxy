@@ -33,10 +33,7 @@ struct ManagedBackendResponse {
 
 impl ManagedBackendResponse {
     fn from_row(row: &ManagedBackendRow) -> Self {
-        let api_key_set = row
-            .api_key
-            .as_deref()
-            .is_some_and(|k| !k.is_empty());
+        let api_key_set = row.api_key.as_deref().is_some_and(|k| !k.is_empty());
         let aws_creds_set = row
             .aws_access_key_id
             .as_deref()
@@ -187,7 +184,9 @@ pub(super) async fn create(
         Some(Err(e)) if e.to_string().contains("UNIQUE constraint failed") => {
             return (
                 StatusCode::CONFLICT,
-                Json(serde_json::json!({"error": "A managed backend with that name already exists"})),
+                Json(
+                    serde_json::json!({"error": "A managed backend with that name already exists"}),
+                ),
             )
                 .into_response();
         }
@@ -468,9 +467,10 @@ pub fn row_to_backend_config(
     // Bedrock: base_url is passed as the region string to BedrockClient::new, not a URL.
     // Vertex: construct the full endpoint URL from project+region if api_base is absent.
     let base_url = match provider.protocol {
-        ProviderProtocol::BedrockNative => {
-            row.region.clone().unwrap_or_else(|| "us-east-1".to_string())
-        }
+        ProviderProtocol::BedrockNative => row
+            .region
+            .clone()
+            .unwrap_or_else(|| "us-east-1".to_string()),
         ProviderProtocol::VertexAI => {
             // api_base must be the full Vertex endpoint URL if provided.
             // Otherwise construct from project+region; if neither is set the caller

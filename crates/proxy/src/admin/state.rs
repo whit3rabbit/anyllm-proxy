@@ -66,7 +66,8 @@ pub struct SharedState {
     /// Key = backend name (same as `row.name`). Keyed by name so routing lookups
     /// can find by backend_name string. Value = (row snapshot, live BackendClient).
     /// Wrapped in RwLock so the admin CRUD routes can update it without restart.
-    pub managed_backends: Arc<RwLock<HashMap<String, (crate::admin::db::ManagedBackendRow, BackendClient)>>>,
+    pub managed_backends:
+        Arc<RwLock<HashMap<String, (crate::admin::db::ManagedBackendRow, BackendClient)>>>,
 }
 
 /// Run a synchronous closure against the SQLite connection on the blocking

@@ -323,10 +323,7 @@ pub fn list_model_deployments(conn: &Connection) -> rusqlite::Result<Vec<ModelDe
 // ── Managed backend persistence ──────────────────────────────────────────────
 
 /// Insert a new managed backend. Returns an error if `name` already exists (UNIQUE constraint).
-pub fn insert_managed_backend(
-    conn: &Connection,
-    row: &ManagedBackendRow,
-) -> rusqlite::Result<()> {
+pub fn insert_managed_backend(conn: &Connection, row: &ManagedBackendRow) -> rusqlite::Result<()> {
     conn.execute(
         "INSERT INTO managed_backends
              (id, name, provider_id, api_key, api_base, deployment, api_version,
@@ -457,10 +454,7 @@ pub fn update_managed_backend(
 /// Delete a managed backend by name.
 /// Returns `true` if a row was deleted, `false` if no row matched.
 pub fn delete_managed_backend(conn: &Connection, name: &str) -> rusqlite::Result<bool> {
-    let deleted = conn.execute(
-        "DELETE FROM managed_backends WHERE name = ?1",
-        [name],
-    )?;
+    let deleted = conn.execute("DELETE FROM managed_backends WHERE name = ?1", [name])?;
     Ok(deleted > 0)
 }
 
