@@ -22,7 +22,7 @@ jobs:
           cache-dependency-path: crates/proxy/admin-ui/package-lock.json
       - name: Install dependencies
         working-directory: crates/proxy/admin-ui
-        run: npm ci
+        run: npm ci --legacy-peer-deps
       - name: TypeScript check
         working-directory: crates/proxy/admin-ui
         run: npx tsc --noEmit
@@ -297,22 +297,22 @@ jobs:
           git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/whit3rabbit/homebrew-tap.git"
           cd homebrew-tap
 
-          cat > Casks/anyllm-proxy.rb << RUBY
-cask "anyllm-proxy" do
-  arch arm: "arm64", intel: "x86_64"
-
-  version "${VERSION}"
-  sha256 arm:   "${ARM64_SHA}",
-         intel: "${X86_SHA}"
-
-  url "https://github.com/whit3rabbit/anyllm-proxy/releases/download/v\#{version}/anyllm-proxy-\#{version}-macos-\#{arch}.tar.gz"
-  name "anyllm-proxy"
-  desc "HTTP proxy translating Anthropic Messages API and OpenAI Chat Completions to any backend"
-  homepage "https://github.com/whit3rabbit/anyllm-proxy"
-
-  binary "anyllm-proxy"
-end
-RUBY
+          {
+            printf '%s\n' 'cask "anyllm-proxy" do'
+            printf '%s\n' '  arch arm: "arm64", intel: "x86_64"'
+            printf '%s\n' ''
+            printf "  version \"%s\"\n" "${VERSION}"
+            printf "  sha256 arm:   \"%s\",\n" "${ARM64_SHA}"
+            printf "         intel: \"%s\"\n" "${X86_SHA}"
+            printf '%s\n' ''
+            printf '%s\n' '  url "https://github.com/whit3rabbit/anyllm-proxy/releases/download/v#{version}/anyllm-proxy-#{version}-macos-#{arch}.tar.gz"'
+            printf '%s\n' '  name "anyllm-proxy"'
+            printf '%s\n' '  desc "HTTP proxy translating Anthropic Messages API and OpenAI Chat Completions to any backend"'
+            printf '%s\n' '  homepage "https://github.com/whit3rabbit/anyllm-proxy"'
+            printf '%s\n' ''
+            printf '%s\n' '  binary "anyllm-proxy"'
+            printf '%s\n' 'end'
+          } > Casks/anyllm-proxy.rb
 
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
