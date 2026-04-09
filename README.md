@@ -1,8 +1,10 @@
 # anyllm-proxy
 
-An API translation proxy that lets Anthropic-based tools (Claude Code, Cursor, Windsurf, Cline) talk to any OpenAI-compatible backend, local LLM, or alternative provider.
+[![CI](https://github.com/whit3rabbit/anyllm-proxy/actions/workflows/ci.yml/badge.svg)](https://github.com/whit3rabbit/anyllm-proxy/actions/workflows/ci.yml)
+[![crates.io](https://img.shields.io/crates/v/anyllm_proxy.svg)](https://crates.io/crates/anyllm_proxy)
+[![GitHub release](https://img.shields.io/github/v/release/whit3rabbit/anyllm-proxy)](https://github.com/whit3rabbit/anyllm-proxy/releases/latest)
 
-**[Releases](https://github.com/whit3rabbit/anyllm-proxy/releases)** | **[ENV Reference](docs/ENV.md)** | **[Config Reference](docs/CONFIG.md)**
+An API translation proxy that lets Anthropic-based tools (Claude Code, Cursor, Windsurf, Cline) talk to any OpenAI-compatible backend, local LLM, or alternative provider.
 
 ---
 
@@ -13,14 +15,15 @@ An API translation proxy that lets Anthropic-based tools (Claude Code, Cursor, W
 brew install whit3rabbit/tap/anyllm-proxy
 ```
 
-**Linux (Debian/Ubuntu):**
+**Linux (Debian/Ubuntu — amd64):**
 ```bash
-# Download and install the .deb package (amd64 or arm64)
 curl -LO https://github.com/whit3rabbit/anyllm-proxy/releases/latest/download/anyllm-proxy_0.9.0-1_amd64.deb
 sudo dpkg -i anyllm-proxy_*.deb
 sudo systemctl enable --now anyllm-proxy
-# Edit /etc/default/anyllm-proxy to set env vars
+# Edit /etc/default/anyllm-proxy to configure env vars
 ```
+
+**Linux (arm64):** replace `amd64` with `arm64` in the URL above.
 
 **Binary (all platforms):** Download from the [releases page](https://github.com/whit3rabbit/anyllm-proxy/releases).
 
@@ -28,7 +31,7 @@ sudo systemctl enable --now anyllm-proxy
 <summary>Other install methods</summary>
 
 ```bash
-# Cargo (from source)
+# Cargo
 cargo install anyllm_proxy
 
 # Build from source
@@ -39,6 +42,8 @@ docker run -e OPENAI_API_KEY=sk-... -p 3000:3000 followthewhit3rabbit/anyllm-pro
 ```
 
 </details>
+
+**[Releases](https://github.com/whit3rabbit/anyllm-proxy/releases)** | **[ENV Reference](docs/ENV.md)** | **[Config Reference](docs/CONFIG.md)**
 
 ---
 

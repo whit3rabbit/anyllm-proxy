@@ -122,6 +122,29 @@ Five-crate Cargo workspace: `providers` (metadata catalog), `client` (Anthropic 
 - Rust stable (1.83+, workspace edition 2021)
 - SQLite, Redis (optional rate-limit/cache), Qdrant (optional semantic cache, `--features qdrant`)
 
+## CI / Workflow Validation
+
+- **Validate workflows before pushing:** `brew install actionlint && actionlint .github/workflows/*.yml`
+  Ruby YAML parser validates syntax only; actionlint catches GitHub Actions semantic errors.
+- **secrets context in `if` conditions:** Not allowed at job or step level. Pass via `env:` and check
+  in shell: `if [ -z "${SECRET}" ]; then echo "skipping"; exit 0; fi`
+- **Heredocs in `run:` blocks:** Content must be indented to match the block level. Unindented
+  heredoc content (col 0) breaks YAML parsing. Use `printf '%s\n' ...` or `{ echo ...; } > file`.
+- **`gh release upload` requires the release to exist.** Add a `create-release` job before upload
+  jobs: `gh release create "$TAG" --generate-notes || echo "already exists"`.
+- **cargo publish exit 101** = version already exists on crates.io (not an error for re-runs).
+  Pattern: `cargo publish -p FOO || { ec=$?; [ "$ec" -eq 101 ] && echo "already published" || exit "$ec"; }`
+
+## npm / Frontend
+
+- `@vitejs/plugin-react@4.7.0` declares peer deps only up to vite 7. With vite 8, use
+  `npm ci --legacy-peer-deps` (in ci.yml AND Dockerfile stage that runs npm ci).
+
+## crates.io Publish Order
+
+anyllm_translate → anyllm_providers → anyllm_client → anyllm_batch_engine → anyllm_proxy
+(sleep 30 between each for index propagation)
+
 ## References
 
 - OpenAI API spec: https://github.com/openai/openai-openapi/blob/manual_spec/openapi.yaml (very large, ~70k+ lines). Reference specific sections, do not load full spec.
