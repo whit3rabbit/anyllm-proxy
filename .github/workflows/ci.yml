@@ -236,3 +236,86 @@ jobs:
         run: cargo publish -p anyllm_proxy --no-verify
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  brew-release:
+    name: Homebrew tap release
+    needs: [test-deb]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download arm64 macOS binary
+        uses: actions/download-artifact@v4
+        with:
+          name: anyllm_proxy-aarch64-apple-darwin
+          path: ./macos/arm64
+      - name: Download x86_64 macOS binary
+        uses: actions/download-artifact@v4
+        with:
+          name: anyllm_proxy-x86_64-apple-darwin
+          path: ./macos/x86_64
+      - name: Create versioned tarballs
+        id: tarballs
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          chmod +x ./macos/arm64/anyllm_proxy ./macos/x86_64/anyllm_proxy
+          mkdir -p dist
+          # rename binary to anyllm-proxy inside the archive (hyphen, not underscore)
+          cp ./macos/arm64/anyllm_proxy  ./macos/arm64/anyllm-proxy
+          cp ./macos/x86_64/anyllm_proxy ./macos/x86_64/anyllm-proxy
+          tar -czf "dist/anyllm-proxy-${VERSION}-macos-arm64.tar.gz"   -C ./macos/arm64  anyllm-proxy
+          tar -czf "dist/anyllm-proxy-${VERSION}-macos-x86_64.tar.gz"  -C ./macos/x86_64 anyllm-proxy
+      - name: Upload macOS tarballs to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ steps.tarballs.outputs.version }}"
+          gh release upload "${{ github.ref_name }}" \
+            "dist/anyllm-proxy-${VERSION}-macos-arm64.tar.gz" \
+            "dist/anyllm-proxy-${VERSION}-macos-x86_64.tar.gz" \
+            --repo "${{ github.repository }}" --clobber
+      - name: Compute SHA256
+        id: sha
+        run: |
+          VERSION="${{ steps.tarballs.outputs.version }}"
+          ARM64=$(sha256sum "dist/anyllm-proxy-${VERSION}-macos-arm64.tar.gz"  | cut -d' ' -f1)
+          X86=$(sha256sum  "dist/anyllm-proxy-${VERSION}-macos-x86_64.tar.gz" | cut -d' ' -f1)
+          echo "arm64=${ARM64}" >> $GITHUB_OUTPUT
+          echo "x86_64=${X86}"  >> $GITHUB_OUTPUT
+      - name: Update Homebrew tap
+        if: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          VERSION="${{ steps.tarballs.outputs.version }}"
+          ARM64_SHA="${{ steps.sha.outputs.arm64 }}"
+          X86_SHA="${{ steps.sha.outputs.x86_64 }}"
+
+          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/whit3rabbit/homebrew-tap.git"
+          cd homebrew-tap
+
+          cat > Casks/anyllm-proxy.rb << RUBY
+cask "anyllm-proxy" do
+  arch arm: "arm64", intel: "x86_64"
+
+  version "${VERSION}"
+  sha256 arm:   "${ARM64_SHA}",
+         intel: "${X86_SHA}"
+
+  url "https://github.com/whit3rabbit/anyllm-proxy/releases/download/v\#{version}/anyllm-proxy-\#{version}-macos-\#{arch}.tar.gz"
+  name "anyllm-proxy"
+  desc "HTTP proxy translating Anthropic Messages API and OpenAI Chat Completions to any backend"
+  homepage "https://github.com/whit3rabbit/anyllm-proxy"
+
+  binary "anyllm-proxy"
+end
+RUBY
+
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add Casks/anyllm-proxy.rb
+          git diff --staged --quiet || git commit -m "chore: update anyllm-proxy to ${VERSION}"
+          git push

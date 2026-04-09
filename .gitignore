@@ -43,6 +43,9 @@ Thumbs.db
 .cook/
 .worktrees/
 .playwright-mcp/
+.mcp.json
+.repowise/
+.superpowers/
 
 # Script caches and venv
 scripts/.cache/
