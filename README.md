@@ -1,7 +1,7 @@
 # anyllm-proxy
 
 [![CI](https://github.com/whit3rabbit/anyllm-proxy/actions/workflows/ci.yml/badge.svg)](https://github.com/whit3rabbit/anyllm-proxy/actions/workflows/ci.yml)
-[![crates.io](https://img.shields.io/crates/v/anyllm_proxy.svg)](https://crates.io/crates/anyllm_proxy)
+[![crates.io](https://img.shields.io/crates/v/anyllm_translate.svg)](https://crates.io/crates/anyllm_translate)
 [![GitHub release](https://img.shields.io/github/v/release/whit3rabbit/anyllm-proxy)](https://github.com/whit3rabbit/anyllm-proxy/releases/latest)
 
 An API translation proxy that lets Anthropic-based tools (Claude Code, Cursor, Windsurf, Cline) talk to any OpenAI-compatible backend, local LLM, or alternative provider.
@@ -15,15 +15,15 @@ An API translation proxy that lets Anthropic-based tools (Claude Code, Cursor, W
 brew install whit3rabbit/tap/anyllm-proxy
 ```
 
-**Linux (Debian/Ubuntu — amd64):**
+**Linux (Debian/Ubuntu):**
 ```bash
-curl -LO https://github.com/whit3rabbit/anyllm-proxy/releases/latest/download/anyllm-proxy_0.9.0-1_amd64.deb
+# Check https://github.com/whit3rabbit/anyllm-proxy/releases for the current filename
+curl -LO https://github.com/whit3rabbit/anyllm-proxy/releases/latest/download/anyllm-proxy_0.2.0-1_amd64.deb
+# arm64: replace amd64 with arm64
 sudo dpkg -i anyllm-proxy_*.deb
 sudo systemctl enable --now anyllm-proxy
-# Edit /etc/default/anyllm-proxy to configure env vars
+# Configure: edit /etc/default/anyllm-proxy
 ```
-
-**Linux (arm64):** replace `amd64` with `arm64` in the URL above.
 
 **Binary (all platforms):** Download from the [releases page](https://github.com/whit3rabbit/anyllm-proxy/releases).
 
