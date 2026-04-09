@@ -145,6 +145,13 @@ Five-crate Cargo workspace: `providers` (metadata catalog), `client` (Anthropic 
 anyllm_translate → anyllm_providers → anyllm_client → anyllm_batch_engine → anyllm_proxy
 (sleep 30 between each for index propagation)
 
+## Version Bumping
+
+- **`crates/client/Cargo.toml` pins `version` directly** (not `version.workspace = true`). When bumping
+  the workspace version, also update it there and all inter-crate `version = "X.Y.Z"` path deps.
+  Quick check: `grep -r 'version.*0\.' crates/*/Cargo.toml Cargo.toml | grep -v "workspace"`
+- Deb package version = Cargo workspace version, NOT the release tag. Keep them in sync.
+
 ## References
 
 - OpenAI API spec: https://github.com/openai/openai-openapi/blob/manual_spec/openapi.yaml (very large, ~70k+ lines). Reference specific sections, do not load full spec.
