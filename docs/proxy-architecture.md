@@ -1,5 +1,32 @@
 # Proxy Architecture
 
+## Crate Structure
+
+Cargo workspace with five crates:
+
+### `crates/providers` (lib: `anyllm_providers`)
+Metadata-only catalog: no HTTP, no IO. `ProviderDef` (protocol, auth, env vars, LiteLLM prefix) and `ModelDef` (context window, capabilities). Registry functions in `registry.rs`. Add a new provider: create `providers/src/providers/<name>.rs`, register in `providers/mod.rs` and `registry.rs`. OpenAI-compatible providers route through the existing `OpenAIClient` automatically.
+
+### `crates/client` (lib: `anyllm_client`)
+Async HTTP client (Anthropic-in, Anthropic-out). `ClientBuilder`, `ToolBuilder`, `messages_stream()` returning `impl Stream`.
+
+### `crates/translator` (lib: `anyllm_translate`)
+Pure translation logic, no IO. Stateless `fn(A) -> B` mapping between Anthropic and OpenAI types.
+- `anthropic/`: Anthropic Messages API types
+- `openai/`: OpenAI types (Chat Completions + Responses API)
+- `mapping/`: Conversion functions (message_map, tools_map, streaming_map, reverse_streaming_map, responses_*, warnings)
+- `middleware/`: Request/response handler orchestrating translation
+
+### `crates/batch_engine` (lib: `anyllm_batch_engine`)
+HTTP-agnostic batch orchestration: job queue, file storage, webhook delivery.
+
+### `crates/proxy` (bin: `anyllm_proxy`)
+HTTP proxy on axum + reqwest:
+- `server/`: Routes, middleware (auth, rate limit, request ID, size/concurrency limits), SSE streaming, passthrough handlers. `bedrock_native.rs`: Bedrock Converse/InvokeModel native passthrough (SigV4 handled by proxy). `generic_passthrough.rs`: catch-all `/v1/{*path}` for Translate mode (registered last).
+- `backend/`: `BackendClient` enum dispatching to OpenAI/Azure/Vertex/Gemini/Anthropic/Bedrock with retry
+- `admin/`: Admin server (localhost:3001), virtual key CRUD, managed backend CRUD (`routes/managed_backends.rs`), model management, audit log, WebSocket live updates
+- `admin-ui/`: React 19 + TypeScript SPA (Vite). Build: `cd crates/proxy/admin-ui && npm run build`
+
 ## Data Flow
 
 ```

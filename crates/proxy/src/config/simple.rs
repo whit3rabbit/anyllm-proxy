@@ -225,10 +225,12 @@ pub fn parse_simple_yaml(yaml: &str) -> SimpleParsed {
     for entry in &config.models {
         let norm = normalize_entry(entry);
         let kind = parse_kind(&norm.provider);
-        let api_key = norm
-            .api_key
-            .clone()
-            .unwrap_or_else(|| default_api_key_for_provider(&norm.provider, &kind));
+        let api_key = super::sanitize_api_key(
+            &norm
+                .api_key
+                .clone()
+                .unwrap_or_else(|| default_api_key_for_provider(&norm.provider, &kind)),
+        );
         let base_url = if kind == BackendKind::AzureOpenAI {
             // Azure always builds a full deployment URL (api_base or env var + deployment + version).
             default_base_url(&kind, &norm)
@@ -517,8 +519,11 @@ fn default_api_key_for_provider(provider: &str, kind: &BackendKind) -> String {
 
 fn default_base_url(kind: &BackendKind, entry: &NormalizedEntry) -> String {
     match kind {
-        BackendKind::OpenAI => std::env::var("OPENAI_BASE_URL")
-            .unwrap_or_else(|_| "https://api.openai.com".to_string()),
+        BackendKind::OpenAI => {
+            let url = std::env::var("OPENAI_BASE_URL")
+                .unwrap_or_else(|_| "https://api.openai.com".to_string());
+            super::strip_v1_suffix(&url).to_string()
+        }
         BackendKind::Gemini => {
             let base = std::env::var("GEMINI_BASE_URL")
                 .unwrap_or_else(|_| "https://generativelanguage.googleapis.com/v1beta".to_string());

@@ -258,16 +258,18 @@ pub fn parse_litellm_yaml(yaml: &str) -> LiteLLMParsed {
         let (kind, actual_model, stub_provider) = parse_provider_model(&entry.litellm_params.model);
         let params = &entry.litellm_params;
 
-        let api_key = params
-            .api_key
-            .as_deref()
-            .map(|v| resolve_env_value(v).unwrap_or_else(|e| panic!("model_list api_key: {e}")))
-            .unwrap_or_else(|| {
-                // Fall back to the provider's own env vars when no api_key in YAML.
-                stub_provider
-                    .and_then(|p| p.env_vars.iter().find_map(|v| std::env::var(v).ok()))
-                    .unwrap_or_default()
-            });
+        let api_key = super::sanitize_api_key(
+            &params
+                .api_key
+                .as_deref()
+                .map(|v| resolve_env_value(v).unwrap_or_else(|e| panic!("model_list api_key: {e}")))
+                .unwrap_or_else(|| {
+                    // Fall back to the provider's own env vars when no api_key in YAML.
+                    stub_provider
+                        .and_then(|p| p.env_vars.iter().find_map(|v| std::env::var(v).ok()))
+                        .unwrap_or_default()
+                }),
+        );
 
         let base_url = resolve_base_url(&kind, params, stub_provider);
 
@@ -411,11 +413,11 @@ fn resolve_base_url(
         BackendKind::OpenAI => {
             // Use the stub provider's default URL when available (e.g. groq, xai, mistral).
             // Falls back to OpenAI's URL only when the provider has no default or is unknown.
-            stub_provider
+            let url = stub_provider
                 .map(|p| p.default_base_url)
                 .filter(|u| !u.is_empty())
-                .unwrap_or("https://api.openai.com")
-                .to_string()
+                .unwrap_or("https://api.openai.com");
+            super::strip_v1_suffix(url).to_string()
         }
         BackendKind::Gemini => {
             "https://generativelanguage.googleapis.com/v1beta/openai".to_string()

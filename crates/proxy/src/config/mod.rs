@@ -47,6 +47,35 @@ pub enum BackendAuth {
     AzureApiKey(String),
 }
 
+/// Strip curly/smart quotes and other non-ASCII punctuation that copy-paste
+/// from rich-text sources (Slack, docs, web pages) can silently inject into
+/// API keys. Logs a warning so the operator notices.
+pub fn sanitize_api_key(key: &str) -> String {
+    // U+2018 ' U+2019 ' U+201C " U+201D "
+    let cleaned: String = key
+        .chars()
+        .filter(|c| !matches!(c, '\u{2018}' | '\u{2019}' | '\u{201C}' | '\u{201D}'))
+        .collect();
+    if cleaned.len() != key.len() {
+        tracing::warn!(
+            "stripped curly/smart quotes from API key \
+             (likely copy-pasted from a rich-text source)"
+        );
+    }
+    cleaned
+}
+
+/// Strip a trailing `/v1` or `/v1/` suffix from a base URL.
+///
+/// The OpenAI client always appends `/v1/chat/completions`, so provider URLs
+/// that include `/v1` (e.g. `https://openrouter.ai/api/v1`) would produce a
+/// doubled path without this.
+pub fn strip_v1_suffix(url: &str) -> &str {
+    url.strip_suffix("/v1/")
+        .or_else(|| url.strip_suffix("/v1"))
+        .unwrap_or(url)
+}
+
 impl fmt::Debug for BackendAuth {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -154,16 +183,19 @@ impl Config {
                     .unwrap_or("https://api.openai.com");
                 let base_url = std::env::var("OPENAI_BASE_URL")
                     .unwrap_or_else(|_| provider_default_url.to_string());
+                let base_url = strip_v1_suffix(&base_url).to_string();
                 if let Err(e) = validate_base_url(&base_url) {
                     panic!("OPENAI_BASE_URL rejected: {e}");
                 }
                 // For stub providers, fall back to their env var (e.g. GROQ_API_KEY) when
                 // OPENAI_API_KEY is not set.
-                let api_key = std::env::var("OPENAI_API_KEY").unwrap_or_else(|_| {
-                    stub_provider
-                        .and_then(|p| p.env_vars.iter().find_map(|v| std::env::var(v).ok()))
-                        .unwrap_or_default()
-                });
+                let api_key = sanitize_api_key(
+                    &std::env::var("OPENAI_API_KEY").unwrap_or_else(|_| {
+                        stub_provider
+                            .and_then(|p| p.env_vars.iter().find_map(|v| std::env::var(v).ok()))
+                            .unwrap_or_default()
+                    }),
+                );
                 let backend_auth = BackendAuth::BearerToken(api_key.clone());
                 let openai_api_format = match std::env::var("OPENAI_API_FORMAT")
                     .unwrap_or_else(|_| "chat".into())
@@ -196,9 +228,11 @@ impl Config {
                 let deployment = std::env::var("AZURE_OPENAI_DEPLOYMENT").unwrap_or_else(|_| {
                     panic!("AZURE_OPENAI_DEPLOYMENT is required when BACKEND=azure")
                 });
-                let api_key = std::env::var("AZURE_OPENAI_API_KEY").unwrap_or_else(|_| {
-                    panic!("AZURE_OPENAI_API_KEY is required when BACKEND=azure")
-                });
+                let api_key = sanitize_api_key(
+                    &std::env::var("AZURE_OPENAI_API_KEY").unwrap_or_else(|_| {
+                        panic!("AZURE_OPENAI_API_KEY is required when BACKEND=azure")
+                    }),
+                );
                 let api_version = std::env::var("AZURE_OPENAI_API_VERSION")
                     .unwrap_or_else(|_| "2024-10-21".to_string());
 
@@ -236,9 +270,9 @@ impl Config {
                 validate_gcp_identifier("VERTEX_REGION", &region);
 
                 let backend_auth = if let Ok(api_key) = std::env::var("VERTEX_API_KEY") {
-                    BackendAuth::GoogleApiKey(api_key)
+                    BackendAuth::GoogleApiKey(sanitize_api_key(&api_key))
                 } else if let Ok(token) = std::env::var("GOOGLE_ACCESS_TOKEN") {
-                    BackendAuth::BearerToken(token)
+                    BackendAuth::BearerToken(sanitize_api_key(&token))
                 } else {
                     panic!("VERTEX_API_KEY or GOOGLE_ACCESS_TOKEN is required when BACKEND=vertex");
                 };
@@ -267,8 +301,10 @@ impl Config {
                 }
             }
             BackendKind::Gemini => {
-                let api_key = std::env::var("GEMINI_API_KEY")
-                    .unwrap_or_else(|_| panic!("GEMINI_API_KEY is required when BACKEND=gemini"));
+                let api_key = sanitize_api_key(
+                    &std::env::var("GEMINI_API_KEY")
+                        .unwrap_or_else(|_| panic!("GEMINI_API_KEY is required when BACKEND=gemini")),
+                );
 
                 let base_url = std::env::var("GEMINI_BASE_URL").unwrap_or_else(|_| {
                     "https://generativelanguage.googleapis.com/v1beta".to_string()
@@ -296,9 +332,11 @@ impl Config {
                 }
             }
             BackendKind::Anthropic => {
-                let api_key = std::env::var("ANTHROPIC_API_KEY").unwrap_or_else(|_| {
-                    panic!("ANTHROPIC_API_KEY is required when BACKEND=anthropic")
-                });
+                let api_key = sanitize_api_key(
+                    &std::env::var("ANTHROPIC_API_KEY").unwrap_or_else(|_| {
+                        panic!("ANTHROPIC_API_KEY is required when BACKEND=anthropic")
+                    }),
+                );
 
                 let base_url = std::env::var("ANTHROPIC_BASE_URL")
                     .unwrap_or_else(|_| "https://api.anthropic.com".to_string());
@@ -780,11 +818,12 @@ impl MultiConfig {
             other => panic!("unknown backend kind '{other}' for backend '{name}'"),
         };
 
-        let api_key = tb
-            .api_key
-            .as_deref()
-            .map(|v| resolve_env_value(v).unwrap_or_else(|e| panic!("backend '{name}': {e}")))
-            .unwrap_or_default();
+        let api_key = sanitize_api_key(
+            &tb.api_key
+                .as_deref()
+                .map(|v| resolve_env_value(v).unwrap_or_else(|e| panic!("backend '{name}': {e}")))
+                .unwrap_or_default(),
+        );
 
         let (base_url, backend_auth, model_mapping, api_format) = match &kind {
             BackendKind::OpenAI => {
@@ -871,8 +910,10 @@ impl MultiConfig {
                 let auth = if !api_key.is_empty() {
                     BackendAuth::GoogleApiKey(api_key.clone())
                 } else if let Some(token_ref) = &tb.access_token {
-                    let token = resolve_env_value(token_ref)
-                        .unwrap_or_else(|e| panic!("backend '{name}': {e}"));
+                    let token = sanitize_api_key(
+                        &resolve_env_value(token_ref)
+                            .unwrap_or_else(|e| panic!("backend '{name}': {e}")),
+                    );
                     BackendAuth::BearerToken(token)
                 } else {
                     panic!("backend '{name}': api_key or access_token is required for vertex");
