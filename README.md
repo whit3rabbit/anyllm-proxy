@@ -8,7 +8,21 @@ An API translation proxy that lets Anthropic-based tools (Claude Code, Cursor, W
 
 ## Install
 
-Download a binary from the [releases page](https://github.com/whit3rabbit/anyllm-proxy/releases).
+**macOS (Homebrew):**
+```bash
+brew install whit3rabbit/tap/anyllm-proxy
+```
+
+**Linux (Debian/Ubuntu):**
+```bash
+# Download and install the .deb package (amd64 or arm64)
+curl -LO https://github.com/whit3rabbit/anyllm-proxy/releases/latest/download/anyllm-proxy_0.9.0-1_amd64.deb
+sudo dpkg -i anyllm-proxy_*.deb
+sudo systemctl enable --now anyllm-proxy
+# Edit /etc/default/anyllm-proxy to set env vars
+```
+
+**Binary (all platforms):** Download from the [releases page](https://github.com/whit3rabbit/anyllm-proxy/releases).
 
 <details>
 <summary>Other install methods</summary>
@@ -19,12 +33,6 @@ cargo install anyllm_proxy
 
 # Build from source
 cargo build -p anyllm_proxy --release
-
-# Debian package
-cargo build --release -p anyllm_proxy
-cargo deb -p anyllm_proxy --no-build --no-strip
-sudo dpkg -i target/debian/anyllm-proxy_*.deb
-sudo systemctl enable --now anyllm-proxy
 
 # Docker
 docker run -e OPENAI_API_KEY=sk-... -p 3000:3000 followthewhit3rabbit/anyllm-proxy:latest
