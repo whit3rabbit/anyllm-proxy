@@ -6,6 +6,7 @@ import {
 } from '../../api/queries'
 import type { ManagedBackend, CatalogProvider } from '../../api/types'
 import { getProviderFields } from '../../utils/providerFields'
+import ProviderIcon from '../../components/shared/ProviderIcon'
 
 interface BackendFormProps {
   initial?: ManagedBackend | null
@@ -124,12 +125,14 @@ export function BackendForm({ initial, onSuccess, onCancel }: BackendFormProps) 
         <div style={{ fontSize: 12, color: 'var(--text-2)', marginBottom: 3 }}>
           Provider<span style={{ color: 'var(--err)', marginLeft: 2 }}>*</span>
         </div>
-        <select
-          value={providerId}
-          onChange={(e) => { setProviderId(e.target.value); setFields({}) }}
-          disabled={isEdit}
-          style={{ width: '100%' }}
-        >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {providerId && <ProviderIcon id={providerId} size={18} style={{ flexShrink: 0 }} />}
+          <select
+            value={providerId}
+            onChange={(e) => { setProviderId(e.target.value); setFields({}) }}
+            disabled={isEdit}
+            style={{ flex: 1 }}
+          >
           {providers.length === 0 && (
             <option value="">Loading providers…</option>
           )}
@@ -144,7 +147,8 @@ export function BackendForm({ initial, onSuccess, onCancel }: BackendFormProps) 
               </optgroup>
             )
           })}
-        </select>
+          </select>
+        </div>
       </div>
 
       <div style={{ marginBottom: 10 }}>

@@ -221,6 +221,18 @@ pub fn init_db(conn: &Connection) -> rusqlite::Result<()> {
         );",
     )?;
 
+    // provider_models_cache: live model lists fetched from provider APIs.
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS provider_models_cache (
+            provider_id   TEXT    NOT NULL,
+            model_id      TEXT    NOT NULL,
+            fetched_at    INTEGER NOT NULL,
+            PRIMARY KEY (provider_id, model_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_provider_models_cache_provider
+            ON provider_models_cache (provider_id);",
+    )?;
+
     Ok(())
 }
 
@@ -456,6 +468,69 @@ pub fn update_managed_backend(
 pub fn delete_managed_backend(conn: &Connection, name: &str) -> rusqlite::Result<bool> {
     let deleted = conn.execute("DELETE FROM managed_backends WHERE name = ?1", [name])?;
     Ok(deleted > 0)
+}
+
+// ── Provider models cache ────────────────────────────────────────────────────
+
+/// Upsert a batch of model IDs for a provider into the cache.
+/// Replaces all existing entries for this provider atomically.
+pub fn upsert_provider_models_cache(
+    conn: &mut Connection,
+    provider_id: &str,
+    model_ids: &[String],
+) -> rusqlite::Result<()> {
+    let now = now_unix_secs();
+    let tx = conn.transaction()?;
+    tx.execute(
+        "DELETE FROM provider_models_cache WHERE provider_id = ?1",
+        rusqlite::params![provider_id],
+    )?;
+    {
+        let mut stmt = tx.prepare(
+            "INSERT INTO provider_models_cache (provider_id, model_id, fetched_at)
+             VALUES (?1, ?2, ?3)",
+        )?;
+        for model_id in model_ids {
+            stmt.execute(rusqlite::params![provider_id, model_id, now])?;
+        }
+    }
+    tx.commit()
+}
+
+/// Return all cached model IDs for a provider, sorted.
+pub fn list_cached_provider_models(
+    conn: &Connection,
+    provider_id: &str,
+) -> rusqlite::Result<Vec<String>> {
+    let mut stmt = conn.prepare(
+        "SELECT model_id FROM provider_models_cache WHERE provider_id = ?1 ORDER BY model_id",
+    )?;
+    let rows = stmt.query_map(rusqlite::params![provider_id], |r| r.get::<_, String>(0))?;
+    rows.collect()
+}
+
+/// Return a map of provider_id -> (model_count, last_refreshed) for all providers
+/// with cached data. One query instead of one-per-provider.
+pub fn get_all_provider_cache_stats(
+    conn: &Connection,
+) -> rusqlite::Result<std::collections::HashMap<String, (usize, Option<i64>)>> {
+    let mut stmt = conn.prepare(
+        "SELECT provider_id, COUNT(*), MAX(fetched_at) \
+         FROM provider_models_cache GROUP BY provider_id",
+    )?;
+    let rows = stmt.query_map([], |r| {
+        Ok((
+            r.get::<_, String>(0)?,
+            r.get::<_, i64>(1)?,
+            r.get::<_, Option<i64>>(2)?,
+        ))
+    })?;
+    let mut map = std::collections::HashMap::new();
+    for row in rows {
+        let (pid, count, refreshed) = row?;
+        map.insert(pid, (count as usize, refreshed));
+    }
+    Ok(map)
 }
 
 fn now_unix_secs() -> i64 {

@@ -260,6 +260,8 @@ export interface CatalogProvider {
     batch: boolean
   }
   model_count: number
+  cached_model_count: number
+  last_refreshed: number | null
 }
 
 // --- Managed backends ---
@@ -310,32 +312,6 @@ export type WSEvent =
   | { type: 'metrics_snapshot'; data: Metrics }
   | { type: 'config_changed'; data: { key: string; value: string } }
   | { type: 'backend_health_changed'; data: { backend: string; status: 'up' | 'down'; latency_ms: number | null } }
-
-// --- Provider/model catalog ---
-
-export interface CatalogProvider {
-  id: string
-  display_name: string
-  protocol: string
-  auth: string
-  status: 'implemented' | 'wired' | 'stub'
-  default_base_url: string
-  env_vars: string[]
-  litellm_prefix: string
-  capabilities: {
-    chat_completions: boolean
-    streaming: boolean
-    tool_use: boolean
-    embeddings: boolean
-    vision: boolean
-    batch: boolean
-  }
-  model_count: number
-}
-
-export interface CatalogProvidersResponse {
-  providers: CatalogProvider[]
-}
 
 export interface CatalogModel {
   id: string

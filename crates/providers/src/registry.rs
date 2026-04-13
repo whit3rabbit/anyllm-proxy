@@ -82,6 +82,23 @@ static ALL_PROVIDERS: &[&ProviderDef] = &[
     &providers::nanogpt::PROVIDER,
     &providers::wandb::PROVIDER,
     &providers::bytez::PROVIDER,
+    // New stubs (OmniRoute parity)
+    &providers::siliconflow::PROVIDER,
+    &providers::blackboxai::PROVIDER,
+    &providers::pollinations::PROVIDER,
+    &providers::stability::PROVIDER,
+    &providers::iflytek::PROVIDER,
+    &providers::baidu::PROVIDER,
+    &providers::lmsys::PROVIDER,
+    &providers::deepgram::PROVIDER,
+    &providers::assemblyai::PROVIDER,
+    &providers::elevenlabs::PROVIDER,
+    &providers::playht::PROVIDER,
+    &providers::cartesia::PROVIDER,
+    &providers::brave::PROVIDER,
+    &providers::serper::PROVIDER,
+    &providers::tavily::PROVIDER,
+    &providers::exa::PROVIDER,
 ];
 
 /// Models keyed by provider id, in the same order as `ALL_PROVIDERS`.
@@ -165,6 +182,23 @@ static ALL_MODELS: &[(&str, &[ModelDef])] = &[
     ("nanogpt", providers::nanogpt::MODELS),
     ("wandb", providers::wandb::MODELS),
     ("bytez", providers::bytez::MODELS),
+    // New stubs (OmniRoute parity)
+    ("siliconflow", providers::siliconflow::MODELS),
+    ("blackboxai", providers::blackboxai::MODELS),
+    ("pollinations", providers::pollinations::MODELS),
+    ("stability_ai", providers::stability::MODELS),
+    ("iflytek", providers::iflytek::MODELS),
+    ("baidu", providers::baidu::MODELS),
+    ("lmsys", providers::lmsys::MODELS),
+    ("deepgram", providers::deepgram::MODELS),
+    ("assemblyai", providers::assemblyai::MODELS),
+    ("elevenlabs", providers::elevenlabs::MODELS),
+    ("playht", providers::playht::MODELS),
+    ("cartesia", providers::cartesia::MODELS),
+    ("brave", providers::brave::MODELS),
+    ("serper", providers::serper::MODELS),
+    ("tavily", providers::tavily::MODELS),
+    ("exa", providers::exa::MODELS),
 ];
 
 /// Look up a provider by its `id` field (e.g. `"groq"`, `"together_ai"`).

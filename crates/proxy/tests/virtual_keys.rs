@@ -422,6 +422,7 @@ fn openai_config_with_base(base_url: &str) -> Config {
         log_bodies: false,
         expose_degradation_warnings: false,
         openai_api_format: OpenAIApiFormat::Chat,
+        provider_id: None,
     }
 }
 
@@ -454,7 +455,7 @@ async fn spawn_mock_backend() -> String {
 async fn spawn_proxy_with_shared_vk(config: Config) -> String {
     let state = shared_state(); // must call before building app to ensure set_virtual_keys fires
     let multi = anyllm_proxy::config::MultiConfig::from_single_config(&config);
-    let base_app = routes::app_multi_with_shared(multi, Some(state), None, None, None);
+    let base_app = routes::app_multi_with_shared(multi, Some(state), None, None, None, None);
 
     // Add a test /admin/ route behind the same auth middleware so RBAC can be tested.
     let admin_test = Router::new()

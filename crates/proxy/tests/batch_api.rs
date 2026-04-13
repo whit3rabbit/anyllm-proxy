@@ -21,6 +21,7 @@ fn test_config() -> Config {
         log_bodies: false,
         expose_degradation_warnings: false,
         openai_api_format: config::OpenAIApiFormat::Chat,
+        provider_id: None,
     }
 }
 
@@ -54,7 +55,7 @@ async fn spawn_test_server_with_shared() -> String {
     let shared = admin::state::SharedState::new_for_test();
     let engine = make_test_batch_engine().await;
 
-    let app = routes::app_multi_with_shared(multi, Some(shared), None, None, Some(engine));
+    let app = routes::app_multi_with_shared(multi, Some(shared), None, None, Some(engine), None);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
@@ -214,12 +215,13 @@ async fn unsupported_backend_returns_501() {
         log_bodies: false,
         expose_degradation_warnings: false,
         openai_api_format: config::OpenAIApiFormat::Chat,
+        provider_id: None,
     };
 
     let multi = MultiConfig::from_single_config(&config);
     let shared = admin::state::SharedState::new_for_test();
     let engine = make_test_batch_engine().await;
-    let app = routes::app_multi_with_shared(multi, Some(shared), None, None, Some(engine));
+    let app = routes::app_multi_with_shared(multi, Some(shared), None, None, Some(engine), None);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });

@@ -197,6 +197,11 @@ pub(crate) async fn chat_completions(
                 &effective.backend,
                 &mut openai_req,
             );
+            super::routes::inject_glm_thinking(
+                &anthropic_req,
+                &effective.backend,
+                &mut openai_req,
+            );
             // Gemini/Vertex rejects standard JSON Schema keywords; sanitize tool schemas.
             if matches!(
                 effective.backend,
@@ -456,6 +461,7 @@ async fn chat_completions_stream(
     // Translate to OpenAI format for the backend
     let mut openai_req = mapping::message_map::anthropic_to_openai_request(&anthropic_req);
     super::routes::inject_gemini_thinking(&anthropic_req, &effective.backend, &mut openai_req);
+    super::routes::inject_glm_thinking(&anthropic_req, &effective.backend, &mut openai_req);
     // Gemini/Vertex rejects standard JSON Schema keywords; sanitize tool schemas.
     if matches!(
         effective.backend,

@@ -147,12 +147,177 @@ Configure via UI:  anyllm-proxy --webui\n"
         std::process::exit(run_subcommand(proxy_args, tool_argv));
     }
 
+    // Detect "providers" subcommand: anyllm-proxy providers list [--json]
+    //                                anyllm-proxy providers refresh <id>
+    //                                anyllm-proxy providers refresh --all
+    if let Some(pos) = args.iter().position(|a| a == "providers") {
+        let subcmd_args: Vec<String> = args[pos + 1..].to_vec();
+        std::process::exit(providers_subcommand(subcmd_args, &data_dir));
+    }
+
     // Now start the tokio runtime and enter the async main.
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .expect("failed to build tokio runtime")
         .block_on(async_main(args, data_dir));
+}
+
+use std::sync::LazyLock;
+
+/// Shared HTTP client for provider model discovery (connect 10s, read 20s, no redirects).
+static PROVIDER_REFRESH_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
+    reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_secs(20))
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .expect("failed to build provider refresh HTTP client")
+});
+
+fn provider_status_str(s: anyllm_providers::provider::ProviderStatus) -> &'static str {
+    match s {
+        anyllm_providers::provider::ProviderStatus::Implemented => "implemented",
+        anyllm_providers::provider::ProviderStatus::Wired => "wired",
+        anyllm_providers::provider::ProviderStatus::Stub => "stub",
+    }
+}
+
+fn provider_protocol_str(p: anyllm_providers::provider::ProviderProtocol) -> &'static str {
+    match p {
+        anyllm_providers::provider::ProviderProtocol::OpenAICompat => "openai_compat",
+        anyllm_providers::provider::ProviderProtocol::AzureOpenAI => "azure_openai",
+        anyllm_providers::provider::ProviderProtocol::VertexAI => "vertex_ai",
+        anyllm_providers::provider::ProviderProtocol::GeminiOpenAI => "gemini_openai",
+        anyllm_providers::provider::ProviderProtocol::GeminiNative => "gemini_native",
+        anyllm_providers::provider::ProviderProtocol::AnthropicNative => "anthropic_native",
+        anyllm_providers::provider::ProviderProtocol::BedrockNative => "bedrock_native",
+        anyllm_providers::provider::ProviderProtocol::Custom => "custom",
+    }
+}
+
+/// CLI handler for `anyllm-proxy providers …`.
+/// Runs synchronously (blocking HTTP calls via a throw-away tokio runtime).
+/// Does not write to SQLite — the HTTP fetch is informational only.
+fn providers_subcommand(args: Vec<String>, _data_dir: &std::path::Path) -> i32 {
+    match args.first().map(String::as_str) {
+        Some("list") => {
+            let json_mode = args.iter().any(|a| a == "--json");
+            let providers: Vec<_> = anyllm_providers::all_providers().collect();
+            if json_mode {
+                let out: Vec<serde_json::Value> = providers
+                    .iter()
+                    .map(|p| {
+                        serde_json::json!({
+                            "id":               p.id,
+                            "display_name":     p.display_name,
+                            "status":           provider_status_str(p.status),
+                            "protocol":         provider_protocol_str(p.protocol),
+                            "chat_completions": p.capabilities.chat_completions,
+                            "model_count":      anyllm_providers::list_models(p.id).len(),
+                        })
+                    })
+                    .collect();
+                println!("{}", serde_json::to_string_pretty(&out).unwrap());
+            } else {
+                println!("{:<20} {:<15} {:<12} {:>8}", "ID", "STATUS", "PROTOCOL", "MODELS");
+                println!("{}", "-".repeat(60));
+                for p in &providers {
+                    println!(
+                        "{:<20} {:<15} {:<12} {:>8}",
+                        p.id,
+                        provider_status_str(p.status),
+                        provider_protocol_str(p.protocol),
+                        anyllm_providers::list_models(p.id).len()
+                    );
+                }
+            }
+            0
+        }
+        Some("refresh") => {
+            let target = args.get(1).map(String::as_str);
+            let refresh_all = target == Some("--all");
+
+            // Collect providers to refresh before entering async context.
+            let providers_to_refresh: Vec<anyllm_providers::provider::ProviderDef> =
+                if refresh_all {
+                    anyllm_providers::all_providers()
+                        .filter(|p| p.capabilities.chat_completions)
+                        .filter(|p| p.env_vars.iter().any(|v| std::env::var(v).is_ok()))
+                        .cloned()
+                        .collect()
+                } else if let Some(id) = target {
+                    match anyllm_providers::get_provider(id) {
+                        Some(p) => vec![p.clone()],
+                        None => {
+                            eprintln!("error: unknown provider '{id}'");
+                            return 1;
+                        }
+                    }
+                } else {
+                    eprintln!("usage: anyllm-proxy providers refresh <provider-id>|--all");
+                    return 1;
+                };
+
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("failed to build runtime");
+
+            let client = PROVIDER_REFRESH_CLIENT.clone();
+
+            let mut exit = 0;
+            for provider in &providers_to_refresh {
+                let api_key = provider.env_vars.iter().find_map(|v| std::env::var(v).ok());
+                let url = format!("{}/v1/models", provider.default_base_url.trim_end_matches('/'));
+                let result = rt.block_on(async {
+                    let mut req = client.get(&url);
+                    if let Some(ref key) = api_key {
+                        req = req.header("Authorization", format!("Bearer {key}"));
+                    }
+                    req.send().await
+                });
+                match result {
+                    Err(e) => {
+                        eprintln!("{}: error: {e}", provider.id);
+                        exit = 1;
+                    }
+                    Ok(resp) if !resp.status().is_success() => {
+                        eprintln!("{}: upstream returned {}", provider.id, resp.status());
+                        exit = 1;
+                    }
+                    Ok(resp) => match rt.block_on(resp.json::<serde_json::Value>()) {
+                        Err(e) => {
+                            eprintln!("{}: invalid JSON: {e}", provider.id);
+                            exit = 1;
+                        }
+                        Ok(json) => {
+                            let models: Vec<&str> = json
+                                .get("data")
+                                .and_then(|d| d.as_array())
+                                .map(|arr| {
+                                    arr.iter()
+                                        .filter_map(|m| m.get("id")?.as_str())
+                                        .collect()
+                                })
+                                .unwrap_or_default();
+                            println!("{}: {} models", provider.id, models.len());
+                            for m in &models {
+                                println!("  - {m}");
+                            }
+                        }
+                    },
+                }
+            }
+            exit
+        }
+        _ => {
+            eprintln!("usage: anyllm-proxy providers list [--json]");
+            eprintln!("       anyllm-proxy providers refresh <provider-id>");
+            eprintln!("       anyllm-proxy providers refresh --all");
+            1
+        }
+    }
 }
 
 async fn async_main(args: Vec<String>, data_dir: PathBuf) {
@@ -431,15 +596,53 @@ async fn async_main(args: Vec<String>, data_dir: PathBuf) {
 
     // --- Admin setup (enabled only when --webui or --admin flag is passed) ---
     // Returns Some((SharedState, admin Router, admin TcpListener)) when enabled.
+    // admin_redirect_port: passed to the proxy router to enable GET / redirect.
+    // admin_startup_info: (admin_url, token_str) printed in the startup banner.
+    let mut admin_redirect_port: Option<u16> = None;
+    let mut admin_startup_info: Option<(String, String)> = None;
     let admin_parts = if enable_admin {
-        let admin_port: u16 = std::env::var("ADMIN_PORT")
-            .ok()
-            .and_then(|p| p.parse().ok())
-            .unwrap_or(3001);
+        let admin_port: u16 = match std::env::var("ADMIN_PORT") {
+            Ok(val) => val.parse::<u16>().unwrap_or_else(|_| {
+                panic!("ADMIN_PORT must be a number in 1-65535, got '{val}'")
+            }),
+            Err(_) => 3001,
+        };
+        if admin_port == 0 {
+            panic!("ADMIN_PORT cannot be 0");
+        }
+        if admin_port < 1024 {
+            tracing::warn!(
+                port = admin_port,
+                "ADMIN_PORT is in the privileged range (< 1024); \
+                 binding may fail without elevated privileges"
+            );
+        }
+
+        let admin_bind = {
+            let raw = std::env::var("ADMIN_BIND").unwrap_or_else(|_| "127.0.0.1".into());
+            // Translate well-known loopback aliases to explicit IPs before validation.
+            match raw.to_ascii_lowercase().as_str() {
+                "localhost" => "127.0.0.1".to_string(),
+                "localhost6" | "ip6-localhost" | "ip6-loopback" => "::1".to_string(),
+                _ => raw,
+            }
+        };
+        // Bind addresses must be explicit IPs. Hostnames other than the loopback
+        // aliases above are rejected: a bind address maps to a specific local
+        // interface and must be unambiguous.
+        if admin_bind.parse::<std::net::IpAddr>().is_err() {
+            panic!(
+                "ADMIN_BIND must be an IP address (e.g. 127.0.0.1 or 0.0.0.0), \
+                 not a hostname — got '{}'",
+                std::env::var("ADMIN_BIND").unwrap_or_default()
+            );
+        }
 
         if admin_port == listen_port {
             panic!("ADMIN_PORT ({admin_port}) must differ from LISTEN_PORT ({listen_port})");
         }
+
+        admin_redirect_port = Some(admin_port);
 
         let db_path = resolve_db_path(&data_dir);
         let conn =
@@ -650,6 +853,112 @@ async fn async_main(args: Vec<String>, data_dir: PathBuf) {
             managed_backends,
         };
 
+        // Provider model cache auto-refresh (only when --webui is active).
+        // PROVIDER_AUTO_REFRESH=1|true|yes enables it; default off.
+        // PROVIDER_REFRESH_INTERVAL_HOURS controls the interval (default: 168 = 7 days).
+        let auto_refresh = matches!(
+            std::env::var("PROVIDER_AUTO_REFRESH").as_deref(),
+            Ok("1") | Ok("true") | Ok("yes")
+        );
+        let refresh_interval_hours: u64 = std::env::var("PROVIDER_REFRESH_INTERVAL_HOURS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(168); // default: 7 days
+
+        if auto_refresh {
+            let shared_for_refresh = shared.clone();
+            let client = PROVIDER_REFRESH_CLIENT.clone();
+            tokio::spawn(async move {
+                let interval = std::time::Duration::from_secs(refresh_interval_hours * 3600);
+                // Delay first run by 30s so startup is not slowed down.
+                tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+                loop {
+                    for provider in anyllm_providers::all_providers() {
+                        if !provider.capabilities.chat_completions {
+                            continue;
+                        }
+                        let api_key =
+                            provider.env_vars.iter().find_map(|v| std::env::var(v).ok());
+                        if api_key.is_none() {
+                            continue; // skip unconfigured providers
+                        }
+
+                        let url = format!(
+                            "{}/v1/models",
+                            provider.default_base_url.trim_end_matches('/')
+                        );
+                        let mut req = client.get(&url);
+                        if let Some(ref key) = api_key {
+                            req = req.header("Authorization", format!("Bearer {key}"));
+                        }
+                        match req.send().await {
+                            Err(e) => tracing::warn!(
+                                provider = %provider.id,
+                                error = %e,
+                                "provider auto-refresh failed"
+                            ),
+                            Ok(resp) if !resp.status().is_success() => tracing::warn!(
+                                provider = %provider.id,
+                                status = %resp.status(),
+                                "provider auto-refresh upstream error"
+                            ),
+                            Ok(resp) => {
+                                match resp.json::<serde_json::Value>().await {
+                                    Err(e) => tracing::warn!(
+                                        provider = %provider.id,
+                                        error = %e,
+                                        "provider auto-refresh: invalid JSON response"
+                                    ),
+                                    Ok(json) => {
+                                        let model_ids: Vec<String> = json
+                                            .get("data")
+                                            .and_then(|d| d.as_array())
+                                            .map(|arr| {
+                                                arr.iter()
+                                                    .filter_map(|m| {
+                                                        m.get("id")?.as_str().map(String::from)
+                                                    })
+                                                    .collect()
+                                            })
+                                            .unwrap_or_default();
+                                        let count = model_ids.len();
+                                        let db = shared_for_refresh.db.clone();
+                                        let pid = provider.id.to_string();
+                                        let _ = tokio::task::spawn_blocking(move || {
+                                            let mut conn =
+                                                db.lock().unwrap_or_else(|e| e.into_inner());
+                                            if let Err(e) = admin::db::upsert_provider_models_cache(
+                                                &mut conn,
+                                                &pid,
+                                                &model_ids,
+                                            ) {
+                                                tracing::warn!(
+                                                    provider = %pid,
+                                                    error = %e,
+                                                    "failed to save auto-refresh results"
+                                                );
+                                            }
+                                        })
+                                        .await;
+                                        tracing::info!(
+                                            provider = %provider.id,
+                                            count = count,
+                                            "auto-refreshed provider model cache"
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    tokio::time::sleep(interval).await;
+                }
+            });
+            tracing::info!(
+                interval_hours = refresh_interval_hours,
+                "provider auto-refresh enabled"
+            );
+        }
+
         // Admin token: use env var or generate 256-bit random hex written to a file.
         let admin_token = match std::env::var("ADMIN_TOKEN") {
             Ok(t) => {
@@ -693,8 +1002,10 @@ async fn async_main(args: Vec<String>, data_dir: PathBuf) {
         };
         let admin_token = Arc::new(zeroize::Zeroizing::new(admin_token));
 
-        // Print token to stdout (not tracing) so it's easy to copy without cat.
-        println!("Admin token: {}", admin_token.as_str());
+        // Capture for the startup banner printed after both servers are bound.
+        let admin_display_host = if admin_bind == "0.0.0.0" { "localhost" } else { &admin_bind };
+        let admin_ui_url = format!("http://{}:{}/admin/", admin_display_host, admin_port);
+        admin_startup_info = Some((admin_ui_url, admin_token.as_str().to_owned()));
 
         // Spawn periodic tasks: log retention and metrics snapshot broadcast.
         let retention_days: u32 = std::env::var("ADMIN_LOG_RETENTION_DAYS")
@@ -787,7 +1098,6 @@ async fn async_main(args: Vec<String>, data_dir: PathBuf) {
 
         // Bind admin listener; spawned after the shutdown channel is created below.
         let admin_app = admin::routes::admin_router(shared.clone(), admin_token);
-        let admin_bind = std::env::var("ADMIN_BIND").unwrap_or_else(|_| "127.0.0.1".into());
         let admin_addr = format!("{admin_bind}:{admin_port}");
         let admin_listener = tokio::net::TcpListener::bind(&admin_addr)
             .await
@@ -858,6 +1168,7 @@ async fn async_main(args: Vec<String>, data_dir: PathBuf) {
         model_router,
         tool_engine_state,
         batch_engine,
+        admin_redirect_port,
     );
 
     // --- Start servers ---
@@ -866,6 +1177,18 @@ async fn async_main(args: Vec<String>, data_dir: PathBuf) {
         .await
         .unwrap_or_else(|e| panic!("failed to bind proxy to {proxy_addr}: {e}"));
     tracing::info!("proxy listening on {proxy_addr}");
+
+    // Print a clear startup banner once both servers are bound, so it appears
+    // at the bottom of startup output and is easy to find and copy from.
+    if let Some((admin_url, token)) = &admin_startup_info {
+        let proxy_display = proxy_addr.replace("0.0.0.0", "localhost");
+        let border = "─".repeat(56);
+        println!("{border}");
+        println!("  Proxy API  http://{proxy_display}");
+        println!("  Admin UI   {admin_url}");
+        println!("  Token      {token}");
+        println!("{border}");
+    }
 
     // Warn if API keys are configured and listener is on a non-loopback address.
     let listen_addr = proxy_listener

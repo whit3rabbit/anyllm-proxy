@@ -46,6 +46,7 @@ fn azure_test_config() -> Config {
         log_bodies: true,
         expose_degradation_warnings: false,
         openai_api_format: config::OpenAIApiFormat::Chat,
+        provider_id: None,
     }
 }
 

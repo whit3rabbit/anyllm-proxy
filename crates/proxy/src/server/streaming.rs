@@ -181,6 +181,7 @@ pub(crate) async fn messages_stream(
             let client = client.clone();
             let mut openai_req = mapping::message_map::anthropic_to_openai_request(&body);
             super::routes::inject_gemini_thinking(&body, &state.backend, &mut openai_req);
+            super::routes::inject_glm_thinking(&body, &state.backend, &mut openai_req);
             // Strip Gemini-incompatible JSON Schema keywords from tool parameters.
             if matches!(
                 state.backend,

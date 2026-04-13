@@ -19,6 +19,7 @@ fn test_config() -> Config {
         log_bodies: false,
         expose_degradation_warnings: false,
         openai_api_format: config::OpenAIApiFormat::Chat,
+        provider_id: None,
     }
 }
 

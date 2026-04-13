@@ -15,8 +15,9 @@ import Models from './tabs/models/Models'
 import Audit from './tabs/audit/Audit'
 import TrafficView from './tabs/traffic/TrafficView'
 import UptimeView from './tabs/uptime/UptimeView'
+import Providers from './tabs/providers/Providers'
 
-type Tab = 'dashboard' | 'requests' | 'settings' | 'backends' | 'keys' | 'models' | 'audit' | 'traffic' | 'uptime'
+type Tab = 'dashboard' | 'requests' | 'settings' | 'backends' | 'keys' | 'models' | 'providers' | 'audit' | 'traffic' | 'uptime'
 
 export default function App() {
   const token = useAuthStore((s) => s.token)
@@ -86,6 +87,7 @@ export default function App() {
         {activeTab === 'backends' && <Backends />}
         {activeTab === 'keys' && <Keys />}
         {activeTab === 'models' && <Models />}
+        {activeTab === 'providers' && <Providers />}
         {activeTab === 'audit' && <Audit />}
         {activeTab === 'traffic' && <TrafficView />}
         {activeTab === 'uptime' && <UptimeView />}
