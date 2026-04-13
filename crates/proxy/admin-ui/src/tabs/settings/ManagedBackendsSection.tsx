@@ -6,6 +6,7 @@ import {
 } from '../../api/queries'
 import type { ManagedBackend } from '../../api/types'
 import EmptyState from '../../components/shared/EmptyState'
+import ProviderIcon from '../../components/shared/ProviderIcon'
 import { BackendForm } from './BackendForm'
 
 type PanelState =
@@ -90,7 +91,10 @@ export function ManagedBackendsSection() {
               <Fragment key={b.id}>
                 <tr>
                   <td className="mono">{b.name}</td>
-                  <td className="dim">{getProviderLabel(b.provider_id)}</td>
+                  <td className="dim" style={{ whiteSpace: 'nowrap' }}>
+                    <ProviderIcon id={b.provider_id} size={16} style={{ marginRight: 6, verticalAlign: 'middle', opacity: 0.8 }} />
+                    {getProviderLabel(b.provider_id)}
+                  </td>
                   <td>
                     {b.api_key_set && (
                       <span className="badge badge-active" style={{ marginRight: 4 }}>Key set</span>

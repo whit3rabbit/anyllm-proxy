@@ -32,7 +32,7 @@ pub fn app(config: Config) -> Router {
 /// Build the axum router from multi-backend configuration.
 /// Creates nested sub-routers for each configured backend.
 pub fn app_multi(config: MultiConfig) -> Router {
-    app_multi_with_shared(config, None, None, None, None)
+    app_multi_with_shared(config, None, None, None, None, None)
 }
 
 /// Build the axum router with optional shared admin state and model router.
@@ -49,6 +49,7 @@ pub fn app_multi_with_shared(
             >,
         >,
     >,
+    admin_port: Option<u16>,
 ) -> Router {
     let mut backend_metrics: HashMap<String, Metrics> = HashMap::new();
     let mut router = Router::new();
@@ -188,7 +189,31 @@ pub fn app_multi_with_shared(
         tracing::info!("IP allowlist middleware enabled");
     }
 
-    final_router.with_state(global_state)
+    let final_router = final_router.with_state(global_state);
+
+    // When admin UI is active, redirect proxy root to the admin UI. Uses the
+    // incoming Host header so the hostname matches what the user typed.
+    if let Some(port) = admin_port {
+        Router::new()
+            .route(
+                "/",
+                get(move |headers: axum::http::HeaderMap| async move {
+                    let host = headers
+                        .get("host")
+                        .and_then(|h| h.to_str().ok())
+                        .and_then(|h| h.split(':').next())
+                        .unwrap_or("localhost")
+                        .to_owned();
+                    axum::response::Redirect::temporary(&format!(
+                        "http://{}:{}/admin/",
+                        host, port
+                    ))
+                }),
+            )
+            .merge(final_router)
+    } else {
+        final_router
+    }
 }
 
 /// Return Anthropic-shaped 404 for any unmatched route (PRD US-004).
@@ -692,6 +717,7 @@ async fn messages(
         | BackendClient::GeminiOpenAI(client) => {
             let mut openai_req = mapping::message_map::anthropic_to_openai_request(&body);
             inject_gemini_thinking(&body, &effective.backend, &mut openai_req);
+            inject_glm_thinking(&body, &effective.backend, &mut openai_req);
             // Gemini/Vertex rejects standard JSON Schema keywords; sanitize tool schemas.
             if matches!(
                 effective.backend,
@@ -1031,6 +1057,32 @@ pub(crate) fn inject_gemini_thinking(
             serde_json::json!({
                 "thinking_config": { "thinking_budget": budget_tokens }
             }),
+        );
+    }
+}
+
+/// When routing to ZhipuAI (Z.AI / GLM models), inject Anthropic's thinking config
+/// as GLM's `thinking` extension field. GLM has no token budget parameter, so
+/// `budget_tokens` is not forwarded. `reasoning_effort` (injected by
+/// `anthropic_to_openai_request`) is also removed since GLM doesn't use it.
+pub(crate) fn inject_glm_thinking(
+    body: &anthropic::MessageCreateRequest,
+    backend: &BackendClient,
+    req: &mut openai::ChatCompletionRequest,
+) {
+    let is_glm = matches!(
+        backend,
+        BackendClient::OpenAI(c) if c.provider_id() == Some("zhipuai")
+    );
+    if !is_glm {
+        return;
+    }
+    if matches!(&body.thinking, Some(anthropic::ThinkingConfig::Enabled { .. })) {
+        // reasoning_effort was injected by anthropic_to_openai_request; GLM doesn't use it.
+        req.extra.remove("reasoning_effort");
+        req.extra.insert(
+            "thinking".to_string(),
+            serde_json::json!({"type": "enabled", "clear_thinking": false}),
         );
     }
 }

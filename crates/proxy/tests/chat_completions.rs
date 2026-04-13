@@ -22,6 +22,7 @@ fn openai_config_with_base(base_url: &str) -> Config {
         log_bodies: false,
         expose_degradation_warnings: false,
         openai_api_format: OpenAIApiFormat::Chat,
+        provider_id: None,
     }
 }
 

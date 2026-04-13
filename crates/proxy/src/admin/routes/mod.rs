@@ -426,6 +426,10 @@ pub fn admin_router(shared: SharedState, token: Arc<zeroize::Zeroizing<String>>)
             "/admin/api/catalog/providers/{id}/models",
             get(catalog::list_provider_models),
         )
+        .route(
+            "/admin/api/catalog/providers/{id}/refresh",
+            post(catalog::refresh_provider_models),
+        )
         .route("/admin/api/status", get(status::get_status))
         .route("/admin/api/traffic", get(traffic::get_traffic))
         .route("/admin/api/uptime", get(uptime::get_uptime))

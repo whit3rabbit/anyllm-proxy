@@ -428,6 +428,7 @@ impl BackendClient {
             log_bodies: bc.log_bodies,
             expose_degradation_warnings: false, // not used by BackendClient constructors
             openai_api_format: bc.api_format.clone(),
+            provider_id: None, // multi-backend configs don't carry a stub provider ID
         };
 
         match bc.kind {

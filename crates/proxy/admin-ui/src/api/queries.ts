@@ -244,6 +244,26 @@ export function useCatalogProviders() {
   })
 }
 
+export function useRefreshProvider() {
+  const qc = useQueryClient()
+  return useMutation<{ provider_id: string; count: number; models: string[] }, Error, string>({
+    mutationFn: (providerId: string) =>
+      mutatingFetch('POST', `/admin/api/catalog/providers/${encodeURIComponent(providerId)}/refresh`, {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['catalog-providers'] })
+    },
+  })
+}
+
+export function useCatalogProviderModels(providerId: string | null) {
+  return useQuery<{ provider_id: string; has_models: boolean; models: object[]; cached_models: string[] }>({
+    queryKey: ['catalog-provider-models', providerId],
+    queryFn: () => apiFetch(`/admin/api/catalog/providers/${encodeURIComponent(providerId!)}/models`),
+    enabled: !!providerId,
+    staleTime: 30_000,
+  })
+}
+
 // ── Managed backends ──────────────────────────────────────────────────────────
 
 export function useManagedBackends() {

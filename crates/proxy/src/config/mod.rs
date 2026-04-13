@@ -104,6 +104,9 @@ pub struct Config {
     pub expose_degradation_warnings: bool,
     /// Which OpenAI API format to use (only relevant when BACKEND=openai).
     pub openai_api_format: OpenAIApiFormat,
+    /// Provider ID when backend is an OpenAI-compatible stub (e.g. "zhipuai", "groq").
+    /// None for first-party backends (OpenAI, Azure, Gemini, etc.).
+    pub provider_id: Option<&'static str>,
 }
 
 /// Validate that a GCP identifier (project ID, region) contains only safe characters.
@@ -160,10 +163,21 @@ impl Config {
             }
         };
 
-        let listen_port = std::env::var("LISTEN_PORT")
-            .ok()
-            .and_then(|p| p.parse().ok())
-            .unwrap_or(3000);
+        let listen_port: u16 = match std::env::var("LISTEN_PORT") {
+            Ok(val) => val.parse::<u16>().unwrap_or_else(|_| {
+                panic!("LISTEN_PORT must be a number in 1-65535, got '{val}'")
+            }),
+            Err(_) => 3000,
+        };
+        if listen_port == 0 {
+            panic!("LISTEN_PORT cannot be 0");
+        }
+        if listen_port < 1024 {
+            eprintln!(
+                "warning: LISTEN_PORT {listen_port} is in the privileged range (< 1024); \
+                 binding may fail without elevated privileges"
+            );
+        }
         let tls = TlsConfig::from_env();
         let log_bodies = std::env::var("LOG_BODIES")
             .map(|v| v == "true" || v == "1")
@@ -218,6 +232,7 @@ impl Config {
                     log_bodies,
                     expose_degradation_warnings,
                     openai_api_format,
+                    provider_id: stub_provider.map(|p| p.id),
                 }
             }
             BackendKind::AzureOpenAI => {
@@ -257,6 +272,7 @@ impl Config {
                     log_bodies,
                     expose_degradation_warnings,
                     openai_api_format: OpenAIApiFormat::Chat,
+                    provider_id: None,
                 }
             }
             BackendKind::Vertex => {
@@ -296,6 +312,7 @@ impl Config {
                     log_bodies,
                     expose_degradation_warnings,
                     openai_api_format: OpenAIApiFormat::Chat,
+                    provider_id: None,
                 }
             }
             BackendKind::Gemini => {
@@ -327,6 +344,7 @@ impl Config {
                     log_bodies,
                     expose_degradation_warnings,
                     openai_api_format: OpenAIApiFormat::Chat,
+                    provider_id: None,
                 }
             }
             BackendKind::Anthropic => {
@@ -355,6 +373,7 @@ impl Config {
                     log_bodies,
                     expose_degradation_warnings,
                     openai_api_format: OpenAIApiFormat::Chat,
+                    provider_id: None,
                 }
             }
             BackendKind::Bedrock => {
@@ -388,6 +407,7 @@ impl Config {
                     log_bodies,
                     expose_degradation_warnings,
                     openai_api_format: OpenAIApiFormat::Chat,
+                    provider_id: None,
                 }
             }
         }

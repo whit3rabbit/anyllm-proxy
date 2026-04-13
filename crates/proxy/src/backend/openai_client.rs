@@ -20,6 +20,9 @@ pub struct OpenAIClient {
     backend_kind: BackendKind,
     /// Raw base URL from config, used to build passthrough endpoint URLs.
     base_url: String,
+    /// Provider ID when this client was built for an OpenAI-compatible stub (e.g. "zhipuai").
+    /// None for first-party OpenAI, Azure, Gemini, and Vertex backends.
+    provider_id: Option<&'static str>,
 }
 
 impl OpenAIClient {
@@ -98,7 +101,12 @@ impl OpenAIClient {
             auth: config.backend_auth.clone(),
             backend_kind: config.backend.clone(),
             base_url: config.openai_base_url.clone(),
+            provider_id: config.provider_id,
         }
+    }
+
+    pub fn provider_id(&self) -> Option<&str> {
+        self.provider_id
     }
 
     /// Returns the API key/token for use in batch API calls.
@@ -495,6 +503,7 @@ mod tests {
             log_bodies: false,
             expose_degradation_warnings: false,
             openai_api_format: OpenAIApiFormat::Chat,
+            provider_id: None,
         };
         // Should not panic
         let _client = OpenAIClient::new(&config);
@@ -517,6 +526,7 @@ mod tests {
             log_bodies: false,
             expose_degradation_warnings: false,
             openai_api_format: OpenAIApiFormat::Chat,
+            provider_id: None,
         };
         let client = OpenAIClient::new(&config);
         // Verify URL construction for Vertex (no /v1 prefix)
@@ -542,6 +552,7 @@ mod tests {
             log_bodies: false,
             expose_degradation_warnings: false,
             openai_api_format: OpenAIApiFormat::Chat,
+            provider_id: None,
         };
         let client = OpenAIClient::new(&config);
         assert_eq!(
@@ -567,6 +578,7 @@ mod tests {
             log_bodies: false,
             expose_degradation_warnings: false,
             openai_api_format: OpenAIApiFormat::Chat,
+            provider_id: None,
         };
         let client = OpenAIClient::new(&config);
         assert!(
@@ -594,6 +606,7 @@ mod tests {
             log_bodies: false,
             expose_degradation_warnings: false,
             openai_api_format: OpenAIApiFormat::Chat,
+            provider_id: None,
         };
         let client = OpenAIClient::new(&config);
         assert_eq!(
@@ -619,6 +632,7 @@ mod tests {
             log_bodies: false,
             expose_degradation_warnings: false,
             openai_api_format: OpenAIApiFormat::Chat,
+            provider_id: None,
         };
         let client = OpenAIClient::new(&config);
         // Chat completions URL is the pre-built URL, unchanged

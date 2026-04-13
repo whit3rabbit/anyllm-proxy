@@ -1,7 +1,7 @@
 import { useAuthStore } from '../../store/auth'
 import { useWsStore } from '../../store/ws'
 
-type Tab = 'dashboard' | 'requests' | 'settings' | 'backends' | 'keys' | 'models' | 'audit' | 'traffic' | 'uptime'
+type Tab = 'dashboard' | 'requests' | 'settings' | 'backends' | 'keys' | 'models' | 'providers' | 'audit' | 'traffic' | 'uptime'
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'dashboard', label: 'Dashboard' },
@@ -10,6 +10,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'backends', label: 'Backends' },
   { id: 'keys', label: 'Access Control' },
   { id: 'models', label: 'Models' },
+  { id: 'providers', label: 'Providers' },
   { id: 'audit', label: 'Audit' },
   { id: 'traffic', label: 'Traffic' },
   { id: 'uptime', label: 'Uptime' },

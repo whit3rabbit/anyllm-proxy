@@ -1,17 +1,15 @@
-use crate::model::ModelDef;
-use crate::provider::{
-    AuthKind, ProviderCapabilities, ProviderDef, ProviderProtocol, ProviderStatus,
-};
+use crate::model::{ModelCapabilities, ModelDef, ModelStatus};
+use crate::provider::{AuthKind, ProviderCapabilities, ProviderDef, ProviderProtocol, ProviderStatus};
 
 /// Zhipu AI (Z.AI) — GLM model series via OpenAI-compatible endpoint.
 pub const PROVIDER: ProviderDef = ProviderDef {
     id: "zhipuai",
     display_name: "Zhipu AI (Z.AI)",
-    default_base_url: "https://open.bigmodel.cn/api/paas/v4",
+    default_base_url: "https://api.z.ai/api/paas/v4",
     protocol: ProviderProtocol::OpenAICompat,
     auth: AuthKind::Bearer,
     status: ProviderStatus::Stub,
-    env_vars: &["ZHIPUAI_API_KEY"],
+    env_vars: &["ZHIPUAI_API_KEY", "ZAI_API_KEY"],
     litellm_prefix: "zhipuai/",
     capabilities: ProviderCapabilities {
         chat_completions: true,
@@ -23,4 +21,174 @@ pub const PROVIDER: ProviderDef = ProviderDef {
     },
 };
 
-pub const MODELS: &[ModelDef] = &[];
+pub const MODELS: &[ModelDef] = &[
+    ModelDef {
+        id: "glm-5.1",
+        provider_id: "zhipuai",
+        context_window: 200_704,
+        max_output_tokens: 163_840,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "glm-5",
+        provider_id: "zhipuai",
+        context_window: 131_072,
+        max_output_tokens: 131_072,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "glm-5-turbo",
+        provider_id: "zhipuai",
+        context_window: 131_072,
+        max_output_tokens: 131_072,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "glm-4.7",
+        provider_id: "zhipuai",
+        context_window: 131_072,
+        max_output_tokens: 131_072,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "glm-4.7-flash",
+        provider_id: "zhipuai",
+        context_window: 131_072,
+        max_output_tokens: 131_072,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "glm-4.6",
+        provider_id: "zhipuai",
+        context_window: 131_072,
+        max_output_tokens: 131_072,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "glm-4.6v",
+        provider_id: "zhipuai",
+        context_window: 131_072,
+        max_output_tokens: 131_072,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "glm-4.5",
+        provider_id: "zhipuai",
+        context_window: 131_072,
+        max_output_tokens: 131_072,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "glm-4.5v",
+        provider_id: "zhipuai",
+        context_window: 131_072,
+        max_output_tokens: 131_072,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "glm-4.5-air",
+        provider_id: "zhipuai",
+        context_window: 131_072,
+        max_output_tokens: 131_072,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "glm-4-plus",
+        provider_id: "zhipuai",
+        context_window: 131_072,
+        max_output_tokens: 131_072,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "glm-4-air",
+        provider_id: "zhipuai",
+        context_window: 131_072,
+        max_output_tokens: 131_072,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "glm-4-flash",
+        provider_id: "zhipuai",
+        context_window: 131_072,
+        max_output_tokens: 131_072,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+];
