@@ -49,6 +49,7 @@ pub struct VirtualKeyContext {
     /// Optional model allowlist from the virtual key policy.
     pub(crate) allowed_models: Option<Vec<String>>,
     /// Optional route allowlist from the virtual key policy.
+    #[allow(dead_code)]
     pub(crate) allowed_routes: Option<Vec<String>>,
     /// Set to the new period_start ISO string when a budget period was reset
     /// during this request's auth check. Signals `record_cost` to call
