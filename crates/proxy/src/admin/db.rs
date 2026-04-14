@@ -233,6 +233,42 @@ pub fn init_db(conn: &Connection) -> rusqlite::Result<()> {
             ON provider_models_cache (provider_id);",
     )?;
 
+    // routes: named endpoint groupings that map to one or more managed backends.
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS routes (
+            id          TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+            name        TEXT NOT NULL UNIQUE,
+            description TEXT,
+            strategy    TEXT NOT NULL DEFAULT 'failover',
+            rpm         INTEGER,
+            tpm         INTEGER,
+            budget_usd  REAL,
+            created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+            updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS route_providers (
+            id          TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+            route_id    TEXT NOT NULL REFERENCES routes(id) ON DELETE CASCADE,
+            backend_id  TEXT NOT NULL REFERENCES managed_backends(id) ON DELETE CASCADE,
+            models      TEXT NOT NULL DEFAULT '[\"*\"]',
+            priority    INTEGER NOT NULL DEFAULT 0,
+            enabled     INTEGER NOT NULL DEFAULT 1,
+            created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+            UNIQUE(route_id, backend_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_route_providers_route
+            ON route_providers (route_id);
+        ",
+    )?;
+
+    // Virtual key route scoping.
+    idempotent_add_column(
+        conn,
+        "ALTER TABLE virtual_api_key ADD COLUMN allowed_routes TEXT",
+    )?;
+
     Ok(())
 }
 
@@ -468,6 +504,314 @@ pub fn update_managed_backend(
 pub fn delete_managed_backend(conn: &Connection, name: &str) -> rusqlite::Result<bool> {
     let deleted = conn.execute("DELETE FROM managed_backends WHERE name = ?1", [name])?;
     Ok(deleted > 0)
+}
+
+// ── Routes ───────────────────────────────────────────────────────────────────
+
+/// A route row as stored in SQLite.
+#[derive(Debug, Clone)]
+pub struct RouteRow {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub strategy: String,
+    pub rpm: Option<u32>,
+    pub tpm: Option<u64>,
+    pub budget_usd: Option<f64>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// A route↔provider assignment row.
+#[derive(Debug, Clone)]
+pub struct RouteProviderRow {
+    pub id: String,
+    pub route_id: String,
+    pub backend_id: String,
+    pub models: Vec<String>,
+    pub priority: i32,
+    pub enabled: bool,
+    pub created_at: String,
+}
+
+pub fn insert_route(conn: &Connection, row: &RouteRow) -> rusqlite::Result<()> {
+    conn.execute(
+        "INSERT INTO routes (id, name, description, strategy, rpm, tpm, budget_usd, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        params![
+            row.id,
+            row.name,
+            row.description,
+            row.strategy,
+            row.rpm.map(|v| v as i64),
+            row.tpm.map(|v| v as i64),
+            row.budget_usd,
+            row.created_at,
+            row.updated_at,
+        ],
+    )?;
+    Ok(())
+}
+
+fn row_to_route(row: &rusqlite::Row) -> rusqlite::Result<RouteRow> {
+    Ok(RouteRow {
+        id: row.get(0)?,
+        name: row.get(1)?,
+        description: row.get(2)?,
+        strategy: row.get(3)?,
+        rpm: row.get::<_, Option<i64>>(4)?.map(|v| v as u32),
+        tpm: row.get::<_, Option<i64>>(5)?.map(|v| v as u64),
+        budget_usd: row.get(6)?,
+        created_at: row.get(7)?,
+        updated_at: row.get(8)?,
+    })
+}
+
+pub fn list_routes(conn: &Connection) -> rusqlite::Result<Vec<RouteRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, name, description, strategy, rpm, tpm, budget_usd, created_at, updated_at
+         FROM routes ORDER BY name",
+    )?;
+    let rows = stmt.query_map([], row_to_route)?;
+    rows.collect()
+}
+
+pub fn get_route(conn: &Connection, id: &str) -> rusqlite::Result<Option<RouteRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, name, description, strategy, rpm, tpm, budget_usd, created_at, updated_at
+         FROM routes WHERE id = ?1",
+    )?;
+    let mut rows = stmt.query_map([id], row_to_route)?;
+    match rows.next() {
+        Some(row) => Ok(Some(row?)),
+        None => Ok(None),
+    }
+}
+
+/// Patch struct for updating a route. All fields optional; None means unchanged.
+#[derive(serde::Deserialize)]
+pub struct RoutePatch {
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub strategy: Option<String>,
+    pub rpm: Option<Option<u32>>,
+    pub tpm: Option<Option<u64>>,
+    pub budget_usd: Option<Option<f64>>,
+}
+
+pub fn update_route(conn: &Connection, id: &str, patch: &RoutePatch) -> rusqlite::Result<bool> {
+    let mut set_clauses: Vec<String> = Vec::new();
+    let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+
+    if let Some(ref v) = patch.name {
+        set_clauses.push("name = ?".into());
+        param_values.push(Box::new(v.clone()));
+    }
+    if let Some(ref v) = patch.description {
+        set_clauses.push("description = ?".into());
+        param_values.push(Box::new(v.clone()));
+    }
+    if let Some(ref v) = patch.strategy {
+        set_clauses.push("strategy = ?".into());
+        param_values.push(Box::new(v.clone()));
+    }
+    if let Some(ref v) = patch.rpm {
+        match v {
+            Some(val) => {
+                set_clauses.push("rpm = ?".into());
+                param_values.push(Box::new(*val as i64));
+            }
+            None => {
+                set_clauses.push("rpm = NULL".into());
+            }
+        }
+    }
+    if let Some(ref v) = patch.tpm {
+        match v {
+            Some(val) => {
+                set_clauses.push("tpm = ?".into());
+                param_values.push(Box::new(*val as i64));
+            }
+            None => {
+                set_clauses.push("tpm = NULL".into());
+            }
+        }
+    }
+    if let Some(ref v) = patch.budget_usd {
+        match v {
+            Some(val) => {
+                set_clauses.push("budget_usd = ?".into());
+                param_values.push(Box::new(*val));
+            }
+            None => {
+                set_clauses.push("budget_usd = NULL".into());
+            }
+        }
+    }
+
+    if set_clauses.is_empty() {
+        let count: i64 = conn.query_row("SELECT COUNT(*) FROM routes WHERE id = ?1", [id], |r| r.get(0))?;
+        return Ok(count > 0);
+    }
+
+    set_clauses.push("updated_at = ?".into());
+    param_values.push(Box::new(now_iso8601()));
+    param_values.push(Box::new(id.to_string()));
+
+    let sql = format!("UPDATE routes SET {} WHERE id = ?", set_clauses.join(", "));
+    let params: Vec<&dyn rusqlite::types::ToSql> = param_values.iter().map(|p| p.as_ref()).collect();
+    let updated = conn.execute(&sql, params.as_slice())?;
+    Ok(updated > 0)
+}
+
+pub fn delete_route(conn: &Connection, id: &str) -> rusqlite::Result<bool> {
+    let deleted = conn.execute("DELETE FROM routes WHERE id = ?1", [id])?;
+    Ok(deleted > 0)
+}
+
+// ── Route Providers ──────────────────────────────────────────────────────────
+
+pub fn list_route_providers(conn: &Connection, route_id: &str) -> rusqlite::Result<Vec<RouteProviderRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, route_id, backend_id, models, priority, enabled, created_at
+         FROM route_providers WHERE route_id = ?1 ORDER BY priority ASC",
+    )?;
+    let rows = stmt.query_map([route_id], |row| {
+        let models_json: String = row.get(3)?;
+        let models: Vec<String> = serde_json::from_str(&models_json).unwrap_or_else(|_| vec!["*".into()]);
+        Ok(RouteProviderRow {
+            id: row.get(0)?,
+            route_id: row.get(1)?,
+            backend_id: row.get(2)?,
+            models,
+            priority: row.get(4)?,
+            enabled: row.get::<_, i32>(5)? != 0,
+            created_at: row.get(6)?,
+        })
+    })?;
+    rows.collect()
+}
+
+pub fn count_route_providers(conn: &Connection, route_id: &str) -> rusqlite::Result<usize> {
+    let n: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM route_providers WHERE route_id = ?1",
+        [route_id],
+        |row| row.get(0),
+    )?;
+    Ok(n.max(0) as usize)
+}
+
+pub fn managed_backend_exists(conn: &Connection, id: &str) -> rusqlite::Result<bool> {
+    let n: i64 = conn.query_row(
+        "SELECT 1 FROM managed_backends WHERE id = ?1",
+        [id],
+        |row| row.get(0),
+    ).or_else(|e| match e {
+        rusqlite::Error::QueryReturnedNoRows => Ok(0),
+        other => Err(other),
+    })?;
+    Ok(n == 1)
+}
+
+pub fn add_route_provider(conn: &Connection, route_id: &str, backend_id: &str, models: &[String], priority: i32, enabled: bool) -> rusqlite::Result<()> {
+    let models_json = serde_json::to_string(models).unwrap_or_else(|_| "[\"*\"]".into());
+    conn.execute(
+        "INSERT INTO route_providers (id, route_id, backend_id, models, priority, enabled)
+         VALUES (lower(hex(randomblob(16))), ?1, ?2, ?3, ?4, ?5)",
+        params![route_id, backend_id, models_json, priority, enabled as i32],
+    )?;
+    Ok(())
+}
+
+pub fn update_route_provider(conn: &Connection, id: &str, models: Option<&[String]>, priority: Option<i32>, enabled: Option<bool>) -> rusqlite::Result<bool> {
+    let mut set_clauses: Vec<String> = Vec::new();
+    let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+
+    if let Some(m) = models {
+        set_clauses.push("models = ?".into());
+        param_values.push(Box::new(serde_json::to_string(m).unwrap_or_else(|_| "[\"*\"]".into())));
+    }
+    if let Some(p) = priority {
+        set_clauses.push("priority = ?".into());
+        param_values.push(Box::new(p));
+    }
+    if let Some(e) = enabled {
+        set_clauses.push("enabled = ?".into());
+        param_values.push(Box::new(e as i32));
+    }
+
+    if set_clauses.is_empty() {
+        return Ok(true);
+    }
+
+    param_values.push(Box::new(id.to_string()));
+    let sql = format!("UPDATE route_providers SET {} WHERE id = ?", set_clauses.join(", "));
+    let params: Vec<&dyn rusqlite::types::ToSql> = param_values.iter().map(|p| p.as_ref()).collect();
+    let updated = conn.execute(&sql, params.as_slice())?;
+    Ok(updated > 0)
+}
+
+pub fn remove_route_provider(conn: &Connection, id: &str) -> rusqlite::Result<bool> {
+    let deleted = conn.execute("DELETE FROM route_providers WHERE id = ?1", [id])?;
+    Ok(deleted > 0)
+}
+
+/// Result of `reorder_route_providers`.
+///
+/// `Ok` carries the reordered rows (priority ascending).
+/// `Mismatch` means the caller's `ordered_ids` does not exactly match the
+/// route's current provider set (wrong route, duplicate ids, missing ids, or extra ids).
+/// On `Mismatch` the transaction is rolled back, so priorities are unchanged.
+pub enum ReorderOutcome {
+    Ok(Vec<RouteProviderRow>),
+    Mismatch,
+}
+
+/// Atomically rewrite every `priority` on `route_id`'s providers so that the row
+/// whose id is `ordered_ids[i]` has priority `i`.
+///
+/// Validates that the submitted id set is exactly the current provider set for
+/// the route before writing. On any validation failure the transaction is rolled
+/// back by returning `Mismatch` without committing.
+pub fn reorder_route_providers(
+    conn: &Connection,
+    route_id: &str,
+    ordered_ids: &[String],
+) -> rusqlite::Result<ReorderOutcome> {
+    // `unchecked_transaction` matches the pattern used elsewhere in this file
+    // (see request-log flush); it relies on the surrounding Mutex to serialize
+    // connection access rather than Rust's &mut borrow.
+    let tx = conn.unchecked_transaction()?;
+
+    // Fetch current providers for the route.
+    let mut existing_ids: Vec<String> = {
+        let mut stmt = tx.prepare("SELECT id FROM route_providers WHERE route_id = ?1")?;
+        let rows = stmt.query_map([route_id], |row| row.get::<_, String>(0))?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()?
+    };
+    existing_ids.sort();
+
+    let mut submitted_ids: Vec<String> = ordered_ids.to_vec();
+    submitted_ids.sort();
+
+    // Set equality: same length, same sorted contents, no duplicates.
+    if submitted_ids.len() != existing_ids.len() || submitted_ids != existing_ids {
+        // Dropping `tx` without commit rolls back.
+        return Ok(ReorderOutcome::Mismatch);
+    }
+
+    // Write new priorities.
+    for (idx, id) in ordered_ids.iter().enumerate() {
+        tx.execute(
+            "UPDATE route_providers SET priority = ?1 WHERE id = ?2 AND route_id = ?3",
+            params![idx as i32, id, route_id],
+        )?;
+    }
+
+    tx.commit()?;
+
+    // Return fresh state in the new order.
+    list_route_providers(conn, route_id).map(ReorderOutcome::Ok)
 }
 
 // ── Provider models cache ────────────────────────────────────────────────────
@@ -1427,6 +1771,7 @@ pub struct InsertVirtualKeyParams<'a> {
     pub max_budget_usd: Option<f64>,
     pub budget_duration: Option<&'a str>,
     pub allowed_models: Option<String>,
+    pub allowed_routes: Option<String>,
 }
 
 /// Insert a new virtual API key.
@@ -1435,8 +1780,8 @@ pub fn insert_virtual_key(conn: &Connection, p: &InsertVirtualKeyParams) -> rusq
     conn.execute(
         "INSERT INTO virtual_api_key (key_hash, key_prefix, description, created_at, expires_at, \
          rpm_limit, tpm_limit, spend_limit, role, max_budget_usd, budget_duration, period_start, \
-         allowed_models)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+         allowed_models, allowed_routes)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
         params![
             p.key_hash,
             p.key_prefix,
@@ -1452,6 +1797,7 @@ pub fn insert_virtual_key(conn: &Connection, p: &InsertVirtualKeyParams) -> rusq
             // Set period_start to now if budget_duration is set
             p.budget_duration.map(|_| &now),
             p.allowed_models,
+            p.allowed_routes,
         ],
     )?;
     Ok(conn.last_insert_rowid())
@@ -1486,6 +1832,10 @@ fn row_to_virtual_key(row: &rusqlite::Row) -> rusqlite::Result<VirtualKeyRow> {
             .get::<_, Option<String>>(20)
             .unwrap_or(None)
             .and_then(|s| serde_json::from_str(&s).ok()),
+        allowed_routes: row
+            .get::<_, Option<String>>(21)
+            .unwrap_or(None)
+            .and_then(|s| serde_json::from_str(&s).ok()),
     })
 }
 
@@ -1493,7 +1843,7 @@ const VIRTUAL_KEY_COLUMNS: &str =
     "id, key_hash, key_prefix, description, created_at, expires_at, revoked_at, \
      rpm_limit, tpm_limit, spend_limit, total_spend, total_requests, total_tokens, \
      role, max_budget_usd, budget_duration, period_start, period_spend_usd, \
-     total_input_tokens, total_output_tokens, allowed_models";
+     total_input_tokens, total_output_tokens, allowed_models, allowed_routes";
 
 /// List all virtual keys (active, expired, revoked).
 pub fn list_virtual_keys(conn: &Connection) -> rusqlite::Result<Vec<VirtualKeyRow>> {
@@ -1527,6 +1877,7 @@ pub struct UpdateVirtualKeyParams<'a> {
     pub max_budget_usd: Option<f64>,
     pub budget_duration: Option<&'a str>,
     pub allowed_models: Option<String>,
+    pub allowed_routes: Option<String>,
 }
 
 /// Update an existing virtual key. Returns the updated row, or None if not found / revoked.
@@ -1541,7 +1892,8 @@ pub fn update_virtual_key(
     let mut sql = String::from(
         "UPDATE virtual_api_key
          SET description = ?2, expires_at = ?3, rpm_limit = ?4, tpm_limit = ?5,
-             max_budget_usd = ?6, budget_duration = ?7, allowed_models = ?8",
+             max_budget_usd = ?6, budget_duration = ?7, allowed_models = ?8,
+             allowed_routes = ?9",
     );
     if p.budget_duration.is_some() {
         sql.push_str(", period_start = NULL, period_spend_usd = 0.0");
@@ -1558,6 +1910,7 @@ pub fn update_virtual_key(
             p.max_budget_usd,
             p.budget_duration,
             p.allowed_models,
+            p.allowed_routes,
         ],
     )?;
     if updated == 0 {
@@ -2045,6 +2398,7 @@ mod tests {
             max_budget_usd: Some(10.0),
             budget_duration: Some("monthly"),
             allowed_models: None,
+            allowed_routes: None,
         }
     }
 
@@ -2061,6 +2415,7 @@ mod tests {
             max_budget_usd: None,
             budget_duration: None,
             allowed_models: None,
+            allowed_routes: None,
         };
         let row = update_virtual_key(&conn, id, &params).unwrap();
         assert!(row.is_some());
@@ -2083,6 +2438,7 @@ mod tests {
             max_budget_usd: None,
             budget_duration: None,
             allowed_models: None,
+            allowed_routes: None,
         };
         let row = update_virtual_key(&conn, id, &params).unwrap();
         assert!(row.is_none());
@@ -2102,6 +2458,7 @@ mod tests {
             max_budget_usd: None,
             budget_duration: None,
             allowed_models: Some(models_json),
+            allowed_routes: None,
         };
         let row = update_virtual_key(&conn, id, &params).unwrap().unwrap();
         // row.allowed_models is parsed from JSON into Vec<String>.
@@ -2130,6 +2487,7 @@ mod tests {
             max_budget_usd: None,
             budget_duration: Some("daily"),
             allowed_models: None,
+            allowed_routes: None,
         };
         update_virtual_key(&conn, id, &params).unwrap();
 
@@ -2504,5 +2862,103 @@ mod tests {
         let rows = list_managed_backends(&conn).unwrap();
         let names: Vec<&str> = rows.iter().map(|r| r.name.as_str()).collect();
         assert_eq!(names, ["alpha", "middle", "zebra"]);
+    }
+
+    // ── reorder_route_providers tests ────────────────────────────────────────
+
+    fn seed_route_with_providers(conn: &Connection, count: usize) -> (String, Vec<String>) {
+        let route = RouteRow {
+            id: uuid::Uuid::new_v4().to_string(),
+            name: "r".into(),
+            description: None,
+            strategy: "failover".into(),
+            rpm: None,
+            tpm: None,
+            budget_usd: None,
+            created_at: now_iso8601(),
+            updated_at: now_iso8601(),
+        };
+        insert_route(conn, &route).unwrap();
+
+        for i in 0..count {
+            let mut b = test_row(&format!("b{i}"));
+            b.id = format!("backend-{i}");
+            insert_managed_backend(conn, &b).unwrap();
+            add_route_provider(
+                conn,
+                &route.id,
+                &b.id,
+                &["*".to_string()],
+                i as i32,
+                true,
+            )
+            .unwrap();
+        }
+
+        let ids: Vec<String> = list_route_providers(conn, &route.id)
+            .unwrap()
+            .into_iter()
+            .map(|p| p.id)
+            .collect();
+        (route.id, ids)
+    }
+
+    #[test]
+    fn reorder_route_providers_rewrites_priorities() {
+        let conn = in_memory_db();
+        let (route_id, ids) = seed_route_with_providers(&conn, 3);
+
+        // Reverse the order.
+        let reversed: Vec<String> = ids.iter().rev().cloned().collect();
+        let outcome = reorder_route_providers(&conn, &route_id, &reversed).unwrap();
+
+        match outcome {
+            ReorderOutcome::Ok(rows) => {
+                let new_order: Vec<String> = rows.iter().map(|p| p.id.clone()).collect();
+                assert_eq!(new_order, reversed);
+                for (i, row) in rows.iter().enumerate() {
+                    assert_eq!(row.priority, i as i32);
+                }
+            }
+            ReorderOutcome::Mismatch => panic!("expected Ok"),
+        }
+    }
+
+    #[test]
+    fn reorder_route_providers_mismatch_rolls_back() {
+        let conn = in_memory_db();
+        let (route_id, ids) = seed_route_with_providers(&conn, 3);
+
+        // Submit a subset — should be rejected as Mismatch, priorities unchanged.
+        let partial: Vec<String> = ids.iter().take(2).cloned().collect();
+        let outcome = reorder_route_providers(&conn, &route_id, &partial).unwrap();
+        assert!(matches!(outcome, ReorderOutcome::Mismatch));
+
+        // Priorities must be untouched.
+        let rows = list_route_providers(&conn, &route_id).unwrap();
+        for (i, row) in rows.iter().enumerate() {
+            assert_eq!(row.priority, i as i32, "priorities must be unchanged after Mismatch");
+        }
+    }
+
+    #[test]
+    fn reorder_route_providers_rejects_duplicates_and_extras() {
+        let conn = in_memory_db();
+        let (route_id, ids) = seed_route_with_providers(&conn, 3);
+
+        // Duplicate id.
+        let dup = vec![ids[0].clone(), ids[0].clone(), ids[1].clone()];
+        assert!(matches!(
+            reorder_route_providers(&conn, &route_id, &dup).unwrap(),
+            ReorderOutcome::Mismatch
+        ));
+
+        // Extra id that isn't a provider on this route.
+        let mut extra = ids.clone();
+        extra.push("bogus-id".into());
+        assert!(matches!(
+            reorder_route_providers(&conn, &route_id, &extra).unwrap(),
+            ReorderOutcome::Mismatch
+        ));
     }
 }

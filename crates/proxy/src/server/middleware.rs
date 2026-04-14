@@ -48,6 +48,8 @@ pub struct VirtualKeyContext {
     pub(crate) rate_state: Arc<RateLimitState>,
     /// Optional model allowlist from the virtual key policy.
     pub(crate) allowed_models: Option<Vec<String>>,
+    /// Optional route allowlist from the virtual key policy.
+    pub(crate) allowed_routes: Option<Vec<String>>,
     /// Set to the new period_start ISO string when a budget period was reset
     /// during this request's auth check. Signals `record_cost` to call
     /// `reset_period_spend` before `accumulate_spend` so SQLite stays in sync.
@@ -410,6 +412,7 @@ pub async fn validate_auth(
                 key_id: meta.id,
                 rate_state: meta.rate_state.clone(),
                 allowed_models: meta.allowed_models.clone(),
+                allowed_routes: meta.allowed_routes.clone(),
                 period_reset,
             });
 

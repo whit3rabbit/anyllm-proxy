@@ -1,34 +1,32 @@
 import { useEffect, useState } from 'react'
+import { HashRouter, Routes as RouterRoutes, Route, Navigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from './store/auth'
 import { useWsStore } from './store/ws'
 import { connectWs, disconnectWs } from './api/websocket'
 import { useStatus } from './api/queries'
 import LoginPage from './components/layout/LoginPage'
-import Nav from './components/layout/Nav'
+import Sidebar from './components/layout/Sidebar'
+import ToastProvider from './components/shared/Toast'
 import Dashboard from './tabs/dashboard/Dashboard'
 import RequestLog from './tabs/requests/RequestLog'
 import Settings from './tabs/settings/Settings'
-import Backends from './tabs/backends/Backends'
 import Keys from './tabs/keys/Keys'
 import Models from './tabs/models/Models'
 import Audit from './tabs/audit/Audit'
 import TrafficView from './tabs/traffic/TrafficView'
 import UptimeView from './tabs/uptime/UptimeView'
 import Providers from './tabs/providers/Providers'
-
-type Tab = 'dashboard' | 'requests' | 'settings' | 'backends' | 'keys' | 'models' | 'providers' | 'audit' | 'traffic' | 'uptime'
+import RoutesTab from './tabs/routes/Routes'
 
 export default function App() {
   const token = useAuthStore((s) => s.token)
   const login = useAuthStore((s) => s.login)
   const lastEvent = useWsStore((s) => s.lastEvent)
   const qc = useQueryClient()
-  const [activeTab, setActiveTab] = useState<Tab>('dashboard')
   const [bootstrapping, setBootstrapping] = useState(true)
   const { data: status } = useStatus(!!token)
 
-  // On mount: if ?token= is in the URL and no token is stored, validate and log in.
   useEffect(() => {
     const params = new URLSearchParams(location.search)
     const urlToken = params.get('token')
@@ -57,14 +55,6 @@ export default function App() {
     }
   }, [token])
 
-  // Default to the Settings tab on first load when nothing is configured.
-  useEffect(() => {
-    if (token && status && !status.configured) {
-      setActiveTab('settings')
-    }
-  }, [status?.configured, token]) // eslint-disable-line react-hooks/exhaustive-deps -- run when status first arrives
-
-  // Invalidate query cache on relevant WS events.
   useEffect(() => {
     if (!lastEvent) return
     if (lastEvent.type === 'metrics_snapshot') {
@@ -75,23 +65,42 @@ export default function App() {
   }, [lastEvent, qc])
 
   if (bootstrapping) return null
-  if (!token) return <LoginPage />
+  if (!token) {
+    return (
+      <>
+        <LoginPage />
+        <ToastProvider />
+      </>
+    )
+  }
+
+  const configured = status?.configured ?? true
 
   return (
-    <div>
-      <Nav activeTab={activeTab} onTabChange={setActiveTab} />
-      <div className="tab-content">
-        {activeTab === 'dashboard' && <Dashboard />}
-        {activeTab === 'requests' && <RequestLog />}
-        {activeTab === 'settings' && <Settings configured={status?.configured ?? true} />}
-        {activeTab === 'backends' && <Backends />}
-        {activeTab === 'keys' && <Keys />}
-        {activeTab === 'models' && <Models />}
-        {activeTab === 'providers' && <Providers />}
-        {activeTab === 'audit' && <Audit />}
-        {activeTab === 'traffic' && <TrafficView />}
-        {activeTab === 'uptime' && <UptimeView />}
+    <HashRouter>
+      <div className="app-layout">
+        <Sidebar />
+        <div className="tab-content">
+          <RouterRoutes>
+            <Route
+              path="/"
+              element={<Navigate to={configured ? '/dashboard' : '/settings'} replace />}
+            />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/requests" element={<RequestLog />} />
+            <Route path="/traffic" element={<TrafficView />} />
+            <Route path="/providers" element={<Providers />} />
+            <Route path="/routes" element={<RoutesTab />} />
+            <Route path="/models" element={<Models />} />
+            <Route path="/keys" element={<Keys />} />
+            <Route path="/audit" element={<Audit />} />
+            <Route path="/settings" element={<Settings configured={configured} />} />
+            <Route path="/uptime" element={<UptimeView />} />
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          </RouterRoutes>
+        </div>
+        <ToastProvider />
       </div>
-    </div>
+    </HashRouter>
   )
 }

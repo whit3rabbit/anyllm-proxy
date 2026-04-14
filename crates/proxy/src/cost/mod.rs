@@ -423,6 +423,7 @@ mod tests {
                 max_budget_usd: Some(100.0),
                 budget_duration: None,
                 allowed_models: None,
+                allowed_routes: None,
             },
         )
         .unwrap();
@@ -461,6 +462,7 @@ mod tests {
             key_id,
             rate_state: Arc::new(RateLimitState::new()),
             allowed_models: None,
+            allowed_routes: None,
             period_reset: None,
         };
 

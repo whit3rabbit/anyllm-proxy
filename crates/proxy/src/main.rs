@@ -760,6 +760,7 @@ async fn async_main(args: Vec<String>, data_dir: PathBuf) {
                                 period_start: key_row.period_start.clone(),
                                 period_spend_usd: key_row.period_spend_usd,
                                 allowed_models: key_row.allowed_models.clone(),
+                                allowed_routes: key_row.allowed_routes.clone(),
                             },
                         );
                     }

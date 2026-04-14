@@ -59,6 +59,7 @@ export interface VirtualKey {
   total_tokens: number
   period_reset_at: string | null
   allowed_models: string[] | null
+  allowed_routes: string[] | null
   status: 'active' | 'revoked' | 'expired' | 'override'
 }
 
@@ -304,6 +305,68 @@ export interface CreateManagedBackendRequest {
 }
 
 export type UpdateManagedBackendRequest = Partial<Omit<CreateManagedBackendRequest, 'name'>>
+
+// --- Routes ---
+
+export interface Route {
+  id: string
+  name: string
+  description: string | null
+  strategy: string
+  rpm: number | null
+  tpm: number | null
+  budget_usd: number | null
+  provider_count: number
+  created_at: string
+  updated_at: string
+}
+
+export interface RoutesResponse {
+  routes: Route[]
+}
+
+export interface CreateRouteRequest {
+  name: string
+  description?: string
+  strategy?: string
+  rpm?: number
+  tpm?: number
+  budget_usd?: number
+}
+
+export type UpdateRouteRequest = Partial<CreateRouteRequest>
+
+export interface RouteProvider {
+  id: string
+  route_id: string
+  backend_id: string
+  backend_name: string
+  provider_id: string
+  models: string[]
+  priority: number
+  enabled: boolean
+}
+
+export interface RouteProvidersResponse {
+  providers: RouteProvider[]
+}
+
+export interface AddRouteProviderRequest {
+  backend_id: string
+  models?: string[]
+  priority?: number
+  enabled?: boolean
+}
+
+export interface UpdateRouteProviderRequest {
+  models?: string[]
+  priority?: number
+  enabled?: boolean
+}
+
+export interface ReorderRouteProvidersRequest {
+  provider_ids: string[]
+}
 
 // --- WebSocket events ---
 

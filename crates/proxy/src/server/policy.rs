@@ -1,7 +1,7 @@
 //! Request policy enforcement.
 //!
-//! Enforces per-key restrictions (e.g., model allowlists) before the request
-//! reaches the backend. Policies are optional: absent means "allow all".
+//! Enforces per-key restrictions (e.g., model allowlists, route scoping) before
+//! the request reaches the backend. Policies are optional: absent means "allow all".
 
 /// Check if a model name is allowed by the key's policy.
 /// Returns true if no policy is set (all models allowed).
@@ -27,6 +27,16 @@ pub fn is_model_allowed(model: &str, allowed_models: &Option<Vec<String>>) -> bo
         }
     }
     false
+}
+
+/// Check if a route ID is allowed by the key's route scoping policy.
+/// Returns true if no policy is set (all routes allowed).
+/// Route IDs are UUIDs, so this is exact-match only.
+pub fn is_route_allowed(route_id: &str, allowed_routes: &Option<Vec<String>>) -> bool {
+    let Some(allowed) = allowed_routes else {
+        return true;
+    };
+    allowed.iter().any(|r| r == route_id)
 }
 
 #[cfg(test)]
@@ -79,5 +89,26 @@ mod tests {
         assert!(is_model_allowed("gpt-4o", &policy));
         assert!(is_model_allowed("claude-sonnet-4-6", &policy));
         assert!(!is_model_allowed("gpt-4o-mini", &policy));
+    }
+
+    // ── Route scoping tests ──────────────────────────────────────────────────
+
+    #[test]
+    fn route_allowed_when_no_policy() {
+        assert!(is_route_allowed("any-route-id", &None));
+    }
+
+    #[test]
+    fn route_allowed_exact_match() {
+        let policy = Some(vec!["route-abc".to_string(), "route-def".to_string()]);
+        assert!(is_route_allowed("route-abc", &policy));
+        assert!(is_route_allowed("route-def", &policy));
+        assert!(!is_route_allowed("route-xyz", &policy));
+    }
+
+    #[test]
+    fn route_empty_allowlist_denies_all() {
+        let policy = Some(vec![]);
+        assert!(!is_route_allowed("route-abc", &policy));
     }
 }

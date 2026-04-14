@@ -134,6 +134,8 @@ pub struct VirtualKeyMeta {
     /// Optional model allowlist. None = all models allowed.
     /// Supports exact match and prefix wildcard (e.g., `"claude-*"`).
     pub allowed_models: Option<Vec<String>>,
+    /// Optional route allowlist. None = all routes allowed.
+    pub allowed_routes: Option<Vec<String>>,
 }
 
 /// Sliding window rate limit state per virtual key.
@@ -354,6 +356,8 @@ pub struct VirtualKeyRow {
     pub total_input_tokens: i64,
     pub total_output_tokens: i64,
     pub allowed_models: Option<Vec<String>>,
+    /// Optional route allowlist. None = all routes allowed.
+    pub allowed_routes: Option<Vec<String>>,
 }
 
 impl VirtualKeyRow {
@@ -523,6 +527,7 @@ mod tests {
             period_start: Some("2020-01-01T00:00:00Z".to_string()),
             period_spend_usd: 5.0,
             allowed_models: None,
+            allowed_routes: None,
         };
         // No reset because no duration
         assert!(!check_and_reset_period(&mut meta));
@@ -568,6 +573,7 @@ mod tests {
             period_start: Some("2020-01-01T00:00:00Z".to_string()),
             period_spend_usd: 5.0,
             allowed_models: None,
+            allowed_routes: None,
         };
         // Period start is in 2020, so it should reset
         assert!(check_and_reset_period(&mut meta));
@@ -599,6 +605,7 @@ mod tests {
             total_input_tokens: 0,
             total_output_tokens: 0,
             allowed_models: None,
+            allowed_routes: None,
         };
         let reset = period_reset_at_from_row(&row);
         assert_eq!(reset, Some("2026-04-05T00:00:00Z".to_string()));

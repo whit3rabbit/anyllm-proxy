@@ -1,208 +1,266 @@
-import { useState } from 'react'
-import { useCatalogProviders, useRefreshProvider, useCatalogProviderModels } from '../../api/queries'
-import type { CatalogProvider } from '../../api/types'
+import { useMemo, useState } from 'react'
+import {
+  useCatalogProviders,
+  useManagedBackends,
+  useCreateManagedBackend,
+  useDeleteManagedBackend,
+  useBackends,
+} from '../../api/queries'
+import type { CatalogProvider, ManagedBackend } from '../../api/types'
+import { getProviderFields } from '../../utils/providerFields'
+import AsyncBoundary from '../../components/shared/AsyncBoundary'
+import Modal from '../../components/shared/Modal'
+import ConfirmDialog from '../../components/shared/ConfirmDialog'
+import StatusDot from '../../components/shared/StatusDot'
 
-type CategoryFilter = 'all' | 'llm' | 'audio' | 'search' | 'image'
+// ── Add Provider Modal ────────────────────────────────────────────────────────
 
-function getCategory(p: CatalogProvider): CategoryFilter {
-  if (p.capabilities.chat_completions) return 'llm'
-  const id = p.id.toLowerCase()
-  if (['deepgram', 'elevenlabs', 'cartesia', 'playht', 'assemblyai'].includes(id)) return 'audio'
-  if (['tavily', 'serper', 'exa', 'brave'].includes(id)) return 'search'
-  if (['stability', 'stability_ai'].includes(id)) return 'image'
-  return 'llm'
-}
+function AddProviderModal({ onClose }: { onClose: () => void }) {
+  const { data: catalog } = useCatalogProviders()
+  const create = useCreateManagedBackend()
+  const [step, setStep] = useState<'pick' | 'form'>('pick')
+  const [selectedProvider, setSelectedProvider] = useState<CatalogProvider | null>(null)
+  const [search, setSearch] = useState('')
+  const [form, setForm] = useState<Record<string, string>>({})
 
-function formatLastRefreshed(ts: number | null): string {
-  if (!ts) return 'never'
-  const diff = Math.floor(Date.now() / 1000) - ts
-  if (diff < 60) return 'just now'
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-  return `${Math.floor(diff / 86400)}d ago`
-}
+  const providers = (catalog ?? [])
+    .filter((p) => p.capabilities.chat_completions || p.protocol !== 'openai_compat')
+    .filter((p) => !search || p.display_name.toLowerCase().includes(search.toLowerCase()))
 
-function StatusBadge({ status }: { status: CatalogProvider['status'] }) {
-  const colors: Record<string, string> = {
-    implemented: '#22c55e',
-    wired: '#f59e0b',
-    stub: '#6b7280',
+  function pickProvider(p: CatalogProvider) {
+    setSelectedProvider(p)
+    setForm({ name: p.display_name.toLowerCase().replace(/\s+/g, '-'), provider_id: p.id })
+    setStep('form')
   }
-  return (
-    <span style={{
-      display: 'inline-block',
-      padding: '1px 6px',
-      fontSize: 11,
-      fontWeight: 600,
-      borderRadius: 3,
-      background: colors[status] + '22',
-      color: colors[status],
-      border: `1px solid ${colors[status]}44`,
-      textTransform: 'uppercase',
-      letterSpacing: '0.04em',
-    }}>
-      {status}
-    </span>
-  )
-}
 
-function ProviderRow({ provider }: { provider: CatalogProvider }) {
-  const [expanded, setExpanded] = useState(false)
-  const refresh = useRefreshProvider()
-  const { data: models, isLoading: modelsLoading } = useCatalogProviderModels(expanded ? provider.id : null)
-
-  const canRefresh = provider.capabilities.chat_completions
-  const modelDisplay = provider.cached_model_count > 0 && provider.cached_model_count !== provider.model_count
-    ? `${provider.model_count} (+${provider.cached_model_count} live)`
-    : String(provider.model_count || '—')
-
-  function handleRefresh(e: React.MouseEvent) {
-    e.stopPropagation()
-    refresh.mutate(provider.id)
+  function submit() {
+    if (!selectedProvider) return
+    create.mutate(
+      {
+        name: form.name,
+        provider_id: selectedProvider.id,
+        api_key: form.api_key || undefined,
+        api_base: form.api_base || undefined,
+        deployment: form.deployment || undefined,
+        api_version: form.api_version || undefined,
+        project: form.project || undefined,
+        region: form.region || undefined,
+        aws_access_key_id: form.aws_access_key_id || undefined,
+        aws_secret_access_key: form.aws_secret_access_key || undefined,
+        aws_session_token: form.aws_session_token || undefined,
+        rpm: form.rpm ? Number(form.rpm) : undefined,
+        tpm: form.tpm ? Number(form.tpm) : undefined,
+      },
+      { onSuccess: onClose },
+    )
   }
 
   return (
-    <>
-      <tr
-        style={{ cursor: 'pointer', userSelect: 'none' }}
-        onClick={() => setExpanded(v => !v)}
-      >
-        <td style={{ fontWeight: 500 }}>
-          {expanded ? '▾ ' : '▸ '}{provider.display_name}
-        </td>
-        <td><StatusBadge status={provider.status} /></td>
-        <td style={{ color: '#9ca3af', fontSize: 12 }}>{provider.protocol}</td>
-        <td>{modelDisplay}</td>
-        <td style={{ color: '#9ca3af', fontSize: 12 }}>{formatLastRefreshed(provider.last_refreshed)}</td>
-        <td>
-          {canRefresh && (
+    <Modal
+      open
+      onClose={onClose}
+      title={step === 'pick' ? 'Add Provider' : `Configure ${selectedProvider?.display_name ?? ''}`}
+      size={step === 'pick' ? 'lg' : 'md'}
+      dismissable={!create.isPending}
+      footer={
+        step === 'form' ? (
+          <>
+            <button className="btn btn-secondary" onClick={() => setStep('pick')} disabled={create.isPending}>Back</button>
             <button
-              className="btn btn-secondary btn-sm"
-              onClick={handleRefresh}
-              disabled={refresh.isPending}
-              title="Fetch live model list from provider API"
+              className="btn btn-primary"
+              onClick={submit}
+              disabled={create.isPending || !form.name}
             >
-              {refresh.isPending ? '…' : 'Refresh'}
+              {create.isPending ? 'Saving…' : 'Create'}
             </button>
-          )}
-        </td>
-      </tr>
-      {expanded && (
-        <tr>
-          <td colSpan={6} style={{ padding: '8px 16px 12px 28px', background: '#0d1117' }}>
-            {modelsLoading && <span style={{ color: '#6b7280' }}>loading…</span>}
-            {models && (
-              <div>
-                {models.models.length > 0 && (
-                  <div style={{ marginBottom: 6 }}>
-                    <span style={{ fontSize: 11, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Static models ({models.models.length})</span>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
-                      {(models.models as Array<{ id: string }>).map(m => (
-                        <span key={m.id} style={{ fontFamily: 'monospace', fontSize: 11, padding: '1px 6px', background: '#1e2a3a', borderRadius: 2, color: '#93c5fd' }}>{m.id}</span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {models.cached_models && models.cached_models.length > 0 && (
-                  <div>
-                    <span style={{ fontSize: 11, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Live models ({models.cached_models.length})</span>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
-                      {models.cached_models.map(id => (
-                        <span key={id} style={{ fontFamily: 'monospace', fontSize: 11, padding: '1px 6px', background: '#1a2e1a', borderRadius: 2, color: '#86efac' }}>{id}</span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {models.models.length === 0 && (!models.cached_models || models.cached_models.length === 0) && (
-                  <span style={{ color: '#6b7280', fontSize: 12 }}>No models in catalog. {provider.capabilities.chat_completions ? 'Click Refresh to fetch from provider API.' : 'Not an LLM provider.'}</span>
-                )}
-              </div>
+          </>
+        ) : undefined
+      }
+    >
+      {step === 'pick' && (
+        <>
+          <input
+            type="search"
+            name="provider-search"
+            placeholder="Search providers..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{ width: '100%', marginBottom: 12 }}
+          />
+          <div className="provider-pick-grid">
+            {providers.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                className="provider-pick-card"
+                onClick={() => pickProvider(p)}
+              >
+                <span className="provider-pick-name">{p.display_name}</span>
+                <span className="provider-pick-proto">{p.protocol.replace(/_/g, ' ')}</span>
+              </button>
+            ))}
+            {providers.length === 0 && (
+              <div className="dim">No providers match "{search}".</div>
             )}
-          </td>
-        </tr>
+          </div>
+        </>
       )}
-    </>
+
+      {step === 'form' && selectedProvider && (
+        <>
+          {getProviderFields(selectedProvider).map((f) => {
+            const inputId = `prov-${f.name}`
+            return (
+              <div key={f.name} className="form-group">
+                <label className="form-label" htmlFor={inputId}>{f.label}</label>
+                {f.hint && <div className="form-hint">{f.hint}</div>}
+                <input
+                  id={inputId}
+                  name={f.name}
+                  type={f.type}
+                  placeholder={f.placeholder}
+                  value={form[f.name] ?? ''}
+                  onChange={(e) => setForm((prev) => ({ ...prev, [f.name]: e.target.value }))}
+                  style={{ width: '100%' }}
+                />
+              </div>
+            )
+          })}
+          {create.isError && <div className="error">Failed to create provider</div>}
+        </>
+      )}
+    </Modal>
   )
 }
+
+// ── Provider Card ─────────────────────────────────────────────────────────────
+
+function ProviderCard({
+  backend,
+  healthStatus,
+  onDelete,
+}: {
+  backend: ManagedBackend
+  healthStatus?: string
+  onDelete: (backend: ManagedBackend) => void
+}) {
+  return (
+    <div className="card" style={{ minWidth: 200 }}>
+      <div className="card-header">
+        <span className="card-name">{backend.name}</span>
+        <StatusDot status={healthStatus === 'ok' ? 'ok' : healthStatus ? 'err' : 'dim'} pulse={healthStatus === 'ok'} />
+      </div>
+      <div className="card-body">
+        <div className="provider-card-meta">
+          <span className="dim">Key</span>
+          <span>{backend.api_key_set ? 'configured' : 'not set'}</span>
+          {backend.rpm && <><span className="dim">RPM</span><span className="mono">{backend.rpm}</span></>}
+          {backend.tpm && <><span className="dim">TPM</span><span className="mono">{backend.tpm}</span></>}
+        </div>
+        <div className="provider-card-actions">
+          <button className="btn btn-danger btn-sm" onClick={() => onDelete(backend)}>Delete</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Main Providers Tab ────────────────────────────────────────────────────────
 
 export default function Providers() {
-  const { data: providers, isLoading, error } = useCatalogProviders()
-  const [filter, setFilter] = useState<CategoryFilter>('all')
-  const refresh = useRefreshProvider()
+  const catalogQuery = useCatalogProviders()
+  const managedQuery = useManagedBackends()
+  const { data: backends } = useBackends()
+  const deleteBackend = useDeleteManagedBackend()
+  const [showAdd, setShowAdd] = useState(false)
+  const [pendingDelete, setPendingDelete] = useState<ManagedBackend | null>(null)
 
-  const filtered = (providers ?? []).filter(p =>
-    filter === 'all' || getCategory(p) === filter
-  )
+  const catalog = catalogQuery.data
+  const managed = useMemo(() => managedQuery.data?.backends ?? [], [managedQuery.data])
 
-  const llmProviders = (providers ?? []).filter(p => p.capabilities.chat_completions)
+  // Build a health lookup: backend name → status
+  const healthMap = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const b of backends ?? []) m.set(b.name, b.status)
+    return m
+  }, [backends])
 
-  function handleRefreshAll() {
-    for (const p of llmProviders) {
-      refresh.mutate(p.id)
+  // Group managed backends by provider_id
+  const sortedGroups = useMemo(() => {
+    const groups = new Map<string, { display: string; backends: ManagedBackend[] }>()
+    for (const mb of managed) {
+      const cat = catalog?.find((c) => c.id === mb.provider_id)
+      const display = cat?.display_name ?? mb.provider_id
+      if (!groups.has(mb.provider_id)) groups.set(mb.provider_id, { display, backends: [] })
+      groups.get(mb.provider_id)!.backends.push(mb)
     }
-  }
+    return [...groups.entries()].sort((a, b) => a[1].display.localeCompare(b[1].display))
+  }, [managed, catalog])
 
-  const FILTERS: { id: CategoryFilter; label: string }[] = [
-    { id: 'all', label: 'All' },
-    { id: 'llm', label: 'LLM' },
-    { id: 'audio', label: 'Audio' },
-    { id: 'search', label: 'Search' },
-    { id: 'image', label: 'Image' },
-  ]
+  function doDelete() {
+    if (!pendingDelete) return Promise.resolve()
+    return deleteBackend.mutateAsync(pendingDelete.name).then(() => undefined)
+  }
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 12 }}>
-        <span style={{ fontSize: 15, fontWeight: 600 }}>Provider Catalog</span>
-        <div style={{ flex: 1 }} />
-        <button
-          className="btn btn-secondary btn-sm"
-          onClick={handleRefreshAll}
-          disabled={refresh.isPending}
-          title="Refresh all LLM providers with configured API keys"
-        >
-          Refresh All LLM
-        </button>
+      <div className="section-header">
+        <h2>Providers</h2>
+        <button className="btn btn-primary" onClick={() => setShowAdd(true)}>+ Add Provider</button>
       </div>
 
-      <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-        {FILTERS.map(f => (
-          <button
-            key={f.id}
-            className={`btn btn-sm ${filter === f.id ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={() => setFilter(f.id)}
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
-
-      {isLoading && <div style={{ color: '#6b7280' }}>Loading…</div>}
-      {error && <div style={{ color: '#f87171' }}>Failed to load providers</div>}
-
-      {!isLoading && filtered.length > 0 && (
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-          <thead>
-            <tr style={{ color: '#6b7280', borderBottom: '1px solid #1e2a3a' }}>
-              <th style={{ textAlign: 'left', padding: '6px 8px', fontWeight: 500 }}>Provider</th>
-              <th style={{ textAlign: 'left', padding: '6px 8px', fontWeight: 500 }}>Status</th>
-              <th style={{ textAlign: 'left', padding: '6px 8px', fontWeight: 500 }}>Protocol</th>
-              <th style={{ textAlign: 'left', padding: '6px 8px', fontWeight: 500 }}>Models</th>
-              <th style={{ textAlign: 'left', padding: '6px 8px', fontWeight: 500 }}>Last Refreshed</th>
-              <th style={{ textAlign: 'left', padding: '6px 8px', fontWeight: 500 }} />
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map(p => (
-              <ProviderRow key={p.id} provider={p} />
+      <AsyncBoundary
+        query={managedQuery}
+        errorTitle="Failed to load providers"
+        empty={{
+          when: () => sortedGroups.length === 0,
+          render: () => (
+            <div className="empty-cta">
+              <div className="empty-cta-title">No providers configured</div>
+              <div className="empty-cta-body">
+                Add a provider to start forwarding requests. Credentials are stored encrypted at rest.
+              </div>
+              <button className="btn btn-primary" onClick={() => setShowAdd(true)}>+ Add Provider</button>
+            </div>
+          ),
+        }}
+      >
+        {() => (
+          <>
+            {sortedGroups.map(([providerId, group]) => (
+              <div key={providerId} className="provider-group">
+                <div className="section-label provider-group-label">
+                  {group.display} ({group.backends.length})
+                </div>
+                <div className="backend-cards">
+                  {group.backends.map((mb) => (
+                    <ProviderCard
+                      key={mb.id}
+                      backend={mb}
+                      healthStatus={healthMap.get(mb.name)}
+                      onDelete={setPendingDelete}
+                    />
+                  ))}
+                </div>
+              </div>
             ))}
-          </tbody>
-        </table>
-      )}
+          </>
+        )}
+      </AsyncBoundary>
 
-      {!isLoading && filtered.length === 0 && (
-        <div style={{ color: '#6b7280', padding: 20 }}>No providers in this category.</div>
-      )}
+      {showAdd && <AddProviderModal onClose={() => setShowAdd(false)} />}
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onClose={() => setPendingDelete(null)}
+        onConfirm={doDelete}
+        title="Delete provider?"
+        message={
+          <>
+            Delete provider <span className="mono">{pendingDelete?.name}</span>? Routes referencing
+            this backend will lose it from their provider list.
+          </>
+        }
+      />
     </div>
   )
 }

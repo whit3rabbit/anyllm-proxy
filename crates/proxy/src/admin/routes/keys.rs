@@ -19,6 +19,7 @@ pub(super) struct CreateKeyRequest {
     max_budget_usd: Option<f64>,
     budget_duration: Option<String>,
     allowed_models: Option<Vec<String>>,
+    allowed_routes: Option<Vec<String>>,
 }
 
 /// POST /admin/api/keys -- create a new virtual API key.
@@ -46,6 +47,10 @@ pub(super) async fn create_key(
             .allowed_models
             .as_ref()
             .and_then(|v| serde_json::to_string(v).ok());
+        let allowed_routes_json = body
+            .allowed_routes
+            .as_ref()
+            .and_then(|v| serde_json::to_string(v).ok());
         move |conn| {
             super::super::db::insert_virtual_key(
                 conn,
@@ -61,6 +66,7 @@ pub(super) async fn create_key(
                     max_budget_usd: max_budget,
                     budget_duration: budget_dur.as_deref(),
                     allowed_models: allowed_models_json,
+                    allowed_routes: allowed_routes_json,
                 },
             )
         }
@@ -91,6 +97,7 @@ pub(super) async fn create_key(
                         period_start: Some(super::super::db::now_iso8601()),
                         period_spend_usd: 0.0,
                         allowed_models: body.allowed_models.clone(),
+                        allowed_routes: body.allowed_routes.clone(),
                     },
                 );
             }
@@ -167,6 +174,7 @@ pub(super) async fn list_keys(State(shared): State<SharedState>) -> axum::respon
                         "period_spend_usd": k.period_spend_usd,
                         "period_reset_at": crate::admin::keys::period_reset_at_from_row(k),
                         "allowed_models": k.allowed_models,
+                        "allowed_routes": k.allowed_routes,
                     })
                 })
                 .collect();
@@ -191,6 +199,7 @@ pub(super) struct UpdateKeyRequest {
     max_budget_usd: Option<f64>,
     budget_duration: Option<String>,
     allowed_models: Option<Vec<String>>,
+    allowed_routes: Option<Vec<String>>,
 }
 
 /// PUT /admin/api/keys/{id} -- update an existing virtual key (except role).
@@ -202,6 +211,10 @@ pub(super) async fn update_key(
 ) -> axum::response::Response {
     let allowed_models_json = body
         .allowed_models
+        .as_ref()
+        .and_then(|v| serde_json::to_string(v).ok());
+    let allowed_routes_json = body
+        .allowed_routes
         .as_ref()
         .and_then(|v| serde_json::to_string(v).ok());
     let desc = body.description.clone();
@@ -223,6 +236,7 @@ pub(super) async fn update_key(
                 max_budget_usd: max_budget,
                 budget_duration: budget_dur.as_deref(),
                 allowed_models: allowed_models_json,
+                allowed_routes: allowed_routes_json,
             },
         )
     })

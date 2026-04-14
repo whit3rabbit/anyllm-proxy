@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useModels, useAddModel, useRemoveModel, useDiscoverModels, useBackends, useManagedBackends } from '../../api/queries'
-import EmptyState from '../../components/shared/EmptyState'
+import AsyncBoundary from '../../components/shared/AsyncBoundary'
+import ConfirmDialog from '../../components/shared/ConfirmDialog'
 
 const AUTH_HINTS: Record<string, { text: string; needsKey: boolean }> = {
   openrouter: { text: 'Public, no key needed', needsKey: false },
@@ -10,10 +11,9 @@ const AUTH_HINTS: Record<string, { text: string; needsKey: boolean }> = {
   custom: { text: 'API key may be required', needsKey: true },
 }
 
-// Inline SVG key icon (12x12), used as auth indicator next to sources that need a key.
 function KeyIcon() {
   return (
-    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" style={{ verticalAlign: '-1px', marginRight: 3 }}>
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className="key-icon-inline">
       <path
         d="M10.5 1a4.5 4.5 0 0 0-4.1 6.35L2 11.75V15h3.25v-2H7v-1.75h1.75L9.65 10.4A4.5 4.5 0 1 0 10.5 1zm1 3a1 1 0 1 1 0-2 1 1 0 0 1 0 2z"
         fill="currentColor"
@@ -23,7 +23,7 @@ function KeyIcon() {
 }
 
 export default function Models() {
-  const { data, isLoading, error } = useModels()
+  const modelsQuery = useModels()
   const add = useAddModel()
   const remove = useRemoveModel()
   const discover = useDiscoverModels()
@@ -35,6 +35,8 @@ export default function Models() {
   const [backendName, setBackendName] = useState('')
   const [discoverSource, setDiscoverSource] = useState('openrouter')
   const [customUrl, setCustomUrl] = useState('')
+  const [search, setSearch] = useState('')
+  const [pendingRemove, setPendingRemove] = useState<string | null>(null)
 
   const hint = AUTH_HINTS[discoverSource] ?? AUTH_HINTS.custom
 
@@ -45,13 +47,28 @@ export default function Models() {
     })
   }
 
+  function doRemove() {
+    if (!pendingRemove) return Promise.resolve()
+    return remove.mutateAsync(pendingRemove).then(() => undefined)
+  }
+
+  const filter = search.trim().toLowerCase()
+  const filteredModels = useMemo(() => {
+    const all = modelsQuery.data?.models ?? []
+    if (!filter) return all
+    return all.filter((m) =>
+      m.name.toLowerCase().includes(filter) ||
+      m.model.toLowerCase().includes(filter) ||
+      m.provider.toLowerCase().includes(filter),
+    )
+  }, [modelsQuery.data, filter])
 
   return (
     <div>
       {/* Discover models section */}
-      <div style={{ marginBottom: 20 }}>
-        <div className="section-label" style={{ marginBottom: 8 }}>Discover Models</div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+      <div className="models-discover">
+        <div className="section-label">Discover Models</div>
+        <div className="models-discover-row">
           <select value={discoverSource} onChange={(e) => { setDiscoverSource(e.target.value); discover.reset() }}>
             <option value="openrouter">OpenRouter</option>
             <option value="deepinfra">DeepInfra</option>
@@ -61,6 +78,7 @@ export default function Models() {
           </select>
           {discoverSource === 'custom' && (
             <input
+              name="discover-url"
               placeholder="https://api.example.com"
               value={customUrl}
               onChange={(e) => setCustomUrl(e.target.value)}
@@ -74,41 +92,32 @@ export default function Models() {
           >
             {discover.isPending ? 'Fetching...' : 'Fetch'}
           </button>
-          <span className="dim" style={{ fontSize: 12 }}>
+          <span className="dim models-discover-hint">
             {hint.needsKey && <KeyIcon />}{hint.text}
           </span>
         </div>
 
-        {/* Discovery error */}
         {discover.isError && (
-          <div style={{ marginTop: 8, padding: '6px 10px', background: 'var(--err-dim)', borderLeft: '3px solid var(--err)', borderRadius: 'var(--r)', fontSize: 12 }}>
+          <div className="inline-error">
             {discover.error.message}
           </div>
         )}
 
-        {/* Discovery results */}
         {discover.data && discover.data.models.length > 0 && (
-          <div style={{ marginTop: 8 }}>
-            <div className="dim" style={{ fontSize: 12, marginBottom: 4 }}>
+          <div className="models-discover-results">
+            <div className="dim models-discover-count">
               {discover.data.models.length} model{discover.data.models.length !== 1 ? 's' : ''} found.
               Click to populate the form below.
             </div>
-            <div style={{ maxHeight: 200, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--r)', fontSize: 12 }}>
+            <div className="models-discover-list">
               {discover.data.models.map((m) => (
                 <div
                   key={m.id}
                   onClick={() => setModel(m.id)}
-                  style={{
-                    padding: '4px 8px',
-                    cursor: 'pointer',
-                    borderBottom: '1px solid var(--border)',
-                    background: model === m.id ? 'var(--accent-dim)' : undefined,
-                  }}
-                  onMouseEnter={(e) => { (e.target as HTMLElement).style.background = 'var(--surface-2)' }}
-                  onMouseLeave={(e) => { (e.target as HTMLElement).style.background = model === m.id ? 'var(--accent-dim)' : '' }}
+                  className={`models-discover-item${model === m.id ? ' is-selected' : ''}`}
                 >
                   <span className="mono">{m.id}</span>
-                  {m.name && m.name !== m.id && <span className="dim" style={{ marginLeft: 8 }}>{m.name}</span>}
+                  {m.name && m.name !== m.id && <span className="dim models-discover-item-name">{m.name}</span>}
                 </div>
               ))}
             </div>
@@ -116,7 +125,7 @@ export default function Models() {
         )}
 
         {discover.data && discover.data.models.length === 0 && (
-          <div className="dim" style={{ marginTop: 8, fontSize: 12 }}>No models returned.</div>
+          <div className="dim models-discover-count">No models returned.</div>
         )}
       </div>
 
@@ -134,9 +143,9 @@ export default function Models() {
       <div className="form-group">
         <div className="form-label">Add Model</div>
         <div className="form-row" style={{ flexWrap: 'wrap' }}>
-          <input placeholder="Virtual name" value={name} onChange={(e) => setName(e.target.value)} />
-          <input placeholder="Model ID" value={model} onChange={(e) => setModel(e.target.value)} />
-          <select value={provider} onChange={(e) => setProvider(e.target.value)}>
+          <input name="model-name" placeholder="Virtual name" value={name} onChange={(e) => setName(e.target.value)} />
+          <input name="model-id" placeholder="Model ID" value={model} onChange={(e) => setModel(e.target.value)} />
+          <select name="provider" value={provider} onChange={(e) => setProvider(e.target.value)}>
             <option value="openai">openai</option>
             <option value="anthropic">anthropic</option>
             <option value="gemini">gemini</option>
@@ -145,6 +154,7 @@ export default function Models() {
             <option value="bedrock">bedrock</option>
           </select>
           <input
+            name="backend"
             placeholder="Backend (optional)"
             value={backendName}
             onChange={(e) => setBackendName(e.target.value)}
@@ -159,27 +169,77 @@ export default function Models() {
           </button>
         </div>
       </div>
-      <EmptyState loading={isLoading} error={error?.message} />
-      {data && (
-        <table className="route-table">
-          <thead>
-            <tr><th>Virtual Name</th><th>Model</th><th>Provider</th><th>Strategy</th><th></th></tr>
-          </thead>
-          <tbody>
-            {data.models.map((m) => (
-              <tr key={`${m.name}-${m.model}`}>
-                <td className="mono">{m.name}</td>
-                <td className="mono">{m.model}</td>
-                <td className="dim">{m.provider}</td>
-                <td className="dim">{data.routing_strategy}</td>
-                <td>
-                  <button className="btn btn-danger btn-sm" onClick={() => remove.mutate(m.name)}>Remove</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+
+      <div className="toolbar">
+        <input
+          type="search"
+          name="models-search"
+          placeholder="Search models…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="toolbar-search"
+        />
+        {modelsQuery.data && (
+          <span className="dim toolbar-count">
+            {filteredModels.length} of {modelsQuery.data.models.length}
+          </span>
+        )}
+      </div>
+
+      <AsyncBoundary
+        query={modelsQuery}
+        errorTitle="Failed to load models"
+        empty={{
+          when: (d) => (d.models?.length ?? 0) === 0,
+          render: () => (
+            <div className="empty-cta">
+              <div className="empty-cta-title">No models configured</div>
+              <div className="empty-cta-body">
+                Add a model above, or use Discover to pull a catalog from OpenRouter, DeepInfra, Ollama, or a custom endpoint.
+              </div>
+            </div>
+          ),
+        }}
+      >
+        {(data) =>
+          filteredModels.length === 0 ? (
+            <div className="empty">No models match "{search}".</div>
+          ) : (
+            <table className="route-table">
+              <thead>
+                <tr><th>Virtual Name</th><th>Model</th><th>Provider</th><th>Strategy</th><th></th></tr>
+              </thead>
+              <tbody>
+                {filteredModels.map((m) => (
+                  <tr key={`${m.name}-${m.model}`}>
+                    <td className="mono">{m.name}</td>
+                    <td className="mono">{m.model}</td>
+                    <td className="dim">{m.provider}</td>
+                    <td className="dim">{data.routing_strategy}</td>
+                    <td>
+                      <button className="btn btn-danger btn-sm" onClick={() => setPendingRemove(m.name)}>Remove</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )
+        }
+      </AsyncBoundary>
+
+      <ConfirmDialog
+        open={pendingRemove !== null}
+        onClose={() => setPendingRemove(null)}
+        onConfirm={doRemove}
+        title="Remove model?"
+        message={
+          <>
+            Remove model <span className="mono">{pendingRemove}</span>? Requests using this virtual name
+            will fail until another model with the same name is added.
+          </>
+        }
+        confirmLabel="Remove"
+      />
     </div>
   )
 }

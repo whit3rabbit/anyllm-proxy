@@ -109,6 +109,7 @@ mod tests {
                 max_budget_usd: Some(100.0),
                 budget_duration: None,
                 allowed_models: None,
+                allowed_routes: None,
             },
         )
         .unwrap();
@@ -159,6 +160,7 @@ mod tests {
                 max_budget_usd: Some(10.0),
                 budget_duration: Some("monthly"),
                 allowed_models: None,
+                allowed_routes: None,
             },
         )
         .unwrap();

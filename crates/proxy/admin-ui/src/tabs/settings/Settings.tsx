@@ -4,6 +4,7 @@ import {
   useImportEnv, downloadEnvExport,
 } from '../../api/queries'
 import EmptyState from '../../components/shared/EmptyState'
+import ConfirmDialog from '../../components/shared/ConfirmDialog'
 import type { EnvImportResponse, EnvImportError } from '../../api/types'
 import { ManagedBackendsSection } from './ManagedBackendsSection'
 
@@ -26,6 +27,13 @@ export default function Settings({ configured = true }: { configured?: boolean }
   const [importError, setImportError] = useState<EnvImportError | null>(null)
   const [exportError, setExportError] = useState<string | null>(null)
   const [showRestartBanner, setShowRestartBanner] = useState(restartPending)
+  const [pendingReset, setPendingReset] = useState<string | null>(null)
+
+  function doReset() {
+    if (!pendingReset) return Promise.resolve()
+    const key = pendingReset
+    return del.mutateAsync(key).then(() => undefined)
+  }
 
   function handleSave(key: string, currentValue: string) {
     save.mutate({ [key]: form[key] ?? currentValue })
@@ -202,19 +210,24 @@ PROXY_API_KEYS=my-key`}
       <EmptyState loading={isLoading} error={error?.message} />
       {cfg && (
         <div>
-          {cfg.entries.map((entry) => (
-            <div className="form-group" key={entry.key}>
-              <div className="form-label">{entry.key}</div>
-              <div className="form-row">
-                <input
-                  value={form[entry.key] ?? entry.value}
-                  onChange={(e) => setForm((f) => ({ ...f, [entry.key]: e.target.value }))}
-                />
-                <button className="btn btn-primary btn-sm" onClick={() => handleSave(entry.key, entry.value)}>Save</button>
-                <button className="btn btn-secondary btn-sm" onClick={() => del.mutate(entry.key)}>Reset</button>
+          {cfg.entries.map((entry) => {
+            const inputId = `cfg-${entry.key}`
+            return (
+              <div className="form-group" key={entry.key}>
+                <label className="form-label" htmlFor={inputId}>{entry.key}</label>
+                <div className="form-row">
+                  <input
+                    id={inputId}
+                    name={entry.key}
+                    value={form[entry.key] ?? entry.value}
+                    onChange={(e) => setForm((f) => ({ ...f, [entry.key]: e.target.value }))}
+                  />
+                  <button className="btn btn-primary btn-sm" onClick={() => handleSave(entry.key, entry.value)}>Save</button>
+                  <button className="btn btn-secondary btn-sm" onClick={() => setPendingReset(entry.key)}>Reset</button>
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
       {envData && (
@@ -230,6 +243,21 @@ PROXY_API_KEYS=my-key`}
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={pendingReset !== null}
+        onClose={() => setPendingReset(null)}
+        onConfirm={doReset}
+        title="Reset override?"
+        message={
+          <>
+            Reset override for <span className="mono">{pendingReset}</span>? The runtime value will revert
+            to the env-file or default. Active connections are not affected.
+          </>
+        }
+        confirmLabel="Reset"
+        variant="primary"
+      />
     </div>
   )
 }

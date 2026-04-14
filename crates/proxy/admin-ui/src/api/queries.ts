@@ -3,11 +3,14 @@ import { apiFetch, mutatingFetch, mutatingFetchMultipart } from './client'
 import { useAuthStore } from '../store/auth'
 import type {
   Metrics, RequestsResponse, VirtualKey, KeySpend,
-  Backend, ConfigResponse, ObservabilityResponse,
+  Backend, ConfigEntry, ConfigResponse, ObservabilityResponse,
   ModelsResponse, AuditResponse, TrafficResponse, UptimeResponse,
   EnvImportResponse, ProxyStatus, DiscoverResponse,
   ManagedBackend, ManagedBackendsResponse, CreateManagedBackendRequest, UpdateManagedBackendRequest,
   CatalogProvider,
+  Route, RoutesResponse, CreateRouteRequest, UpdateRouteRequest,
+  RouteProvidersResponse, AddRouteProviderRequest, UpdateRouteProviderRequest,
+  ReorderRouteProvidersRequest,
 } from './types'
 
 // ── Status ───────────────────────────────────────────────────────────────────
@@ -28,6 +31,7 @@ export function useMetrics() {
     queryKey: ['metrics'],
     queryFn: () => apiFetch('/admin/api/metrics'),
     refetchInterval: 5_000,
+    staleTime: 0,
   })
 }
 
@@ -36,6 +40,7 @@ export function useObservability(window: number, backend: string) {
     queryKey: ['observability', window, backend],
     queryFn: () => apiFetch(`/admin/api/observability/overview?window=${window}&backend=${encodeURIComponent(backend)}`),
     refetchInterval: 30_000,
+    staleTime: 0,
   })
 }
 
@@ -125,7 +130,12 @@ export function useBackends() {
 export function useConfig() {
   return useQuery<ConfigResponse>({
     queryKey: ['config'],
-    queryFn: () => apiFetch('/admin/api/config'),
+    // /admin/api/config returns effective state (log_level, log_bodies, …) but
+    // not the { entries, env } shape Settings expects.  The overrides endpoint
+    // returns the DB-set overrides with the right key/value/updated_at shape.
+    queryFn: () =>
+      apiFetch<{ overrides: ConfigEntry[] }>('/admin/api/config/overrides')
+        .then(r => ({ entries: r.overrides ?? [], env: {} })),
     staleTime: Infinity,
   })
 }
@@ -208,6 +218,7 @@ export function useTraffic(windowHours: number) {
     queryKey: ['traffic', windowHours],
     queryFn: () => apiFetch(`/admin/api/traffic?window=${windowHours}`),
     refetchInterval: 30_000,
+    staleTime: 0,
   })
 }
 
@@ -218,6 +229,7 @@ export function useUptime() {
     queryKey: ['uptime'],
     queryFn: () => apiFetch('/admin/api/uptime'),
     refetchInterval: 30_000,
+    staleTime: 0,
   })
 }
 
@@ -298,6 +310,96 @@ export function useDeleteManagedBackend() {
     mutationFn: (name) =>
       mutatingFetch<void>('DELETE', `/admin/api/backends/managed/${name}`),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['managed-backends'] }) },
+  })
+}
+
+// ── Routes ────────────────────────────────────────────────────────────────────
+
+export function useRoutes() {
+  return useQuery<RoutesResponse>({
+    queryKey: ['routes'],
+    queryFn: () => apiFetch('/admin/api/routes'),
+    staleTime: Infinity,
+  })
+}
+
+export function useCreateRoute() {
+  const qc = useQueryClient()
+  return useMutation<Route, Error, CreateRouteRequest>({
+    mutationFn: (data) => mutatingFetch<Route>('POST', '/admin/api/routes', data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['routes'] }) },
+  })
+}
+
+export function useUpdateRoute() {
+  const qc = useQueryClient()
+  return useMutation<Route, Error, { id: string; data: UpdateRouteRequest }>({
+    mutationFn: ({ id, data }) => mutatingFetch<Route>('PUT', `/admin/api/routes/${id}`, data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['routes'] }) },
+  })
+}
+
+export function useDeleteRoute() {
+  const qc = useQueryClient()
+  return useMutation<void, Error, string>({
+    mutationFn: (id) => mutatingFetch<void>('DELETE', `/admin/api/routes/${id}`),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['routes'] }) },
+  })
+}
+
+export function useRouteProviders(routeId: string | null) {
+  return useQuery<RouteProvidersResponse>({
+    queryKey: ['route-providers', routeId],
+    queryFn: () => apiFetch(`/admin/api/routes/${routeId}/providers`),
+    enabled: !!routeId,
+    staleTime: Infinity,
+  })
+}
+
+export function useAddRouteProvider() {
+  const qc = useQueryClient()
+  return useMutation<void, Error, { routeId: string; data: AddRouteProviderRequest }>({
+    mutationFn: ({ routeId, data }) =>
+      mutatingFetch<void>('POST', `/admin/api/routes/${routeId}/providers`, data),
+    onSuccess: (_d, { routeId }) => {
+      qc.invalidateQueries({ queryKey: ['route-providers', routeId] })
+      qc.invalidateQueries({ queryKey: ['routes'] })
+    },
+  })
+}
+
+export function useUpdateRouteProvider() {
+  const qc = useQueryClient()
+  return useMutation<void, Error, { routeId: string; providerId: string; data: UpdateRouteProviderRequest }>({
+    mutationFn: ({ routeId, providerId, data }) =>
+      mutatingFetch<void>('PUT', `/admin/api/routes/${routeId}/providers/${providerId}`, data),
+    onSuccess: (_d, { routeId }) => {
+      qc.invalidateQueries({ queryKey: ['route-providers', routeId] })
+    },
+  })
+}
+
+export function useRemoveRouteProvider() {
+  const qc = useQueryClient()
+  return useMutation<void, Error, { routeId: string; providerId: string }>({
+    mutationFn: ({ routeId, providerId }) =>
+      mutatingFetch<void>('DELETE', `/admin/api/routes/${routeId}/providers/${providerId}`),
+    onSuccess: (_d, { routeId }) => {
+      qc.invalidateQueries({ queryKey: ['route-providers', routeId] })
+      qc.invalidateQueries({ queryKey: ['routes'] })
+    },
+  })
+}
+
+export function useReorderRouteProviders() {
+  const qc = useQueryClient()
+  return useMutation<RouteProvidersResponse, Error, { routeId: string; data: ReorderRouteProvidersRequest }>({
+    mutationFn: ({ routeId, data }) =>
+      mutatingFetch<RouteProvidersResponse>('PUT', `/admin/api/routes/${routeId}/providers/reorder`, data),
+    onSuccess: (_d, { routeId }) => {
+      qc.invalidateQueries({ queryKey: ['route-providers', routeId] })
+      qc.invalidateQueries({ queryKey: ['routes'] })
+    },
   })
 }
 

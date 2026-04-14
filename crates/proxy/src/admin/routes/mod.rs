@@ -9,6 +9,7 @@ pub mod logs;
 pub mod managed_backends;
 pub mod mcp;
 pub mod models;
+pub mod routes_api;
 pub mod status;
 pub mod traffic;
 pub mod uptime;
@@ -67,48 +68,61 @@ pub(super) fn check_time_range(since: Option<&str>, until: Option<&str>) -> Opti
     None
 }
 
-/// Per-IP sliding window rate limiter for admin API endpoints.
-/// Each entry is a VecDeque of millisecond timestamps within the last 60 seconds.
-static ADMIN_RATE_LIMIT: LazyLock<DashMap<IpAddr, std::collections::VecDeque<u64>>> =
+/// Per-IP sliding window rate limiter buckets, split by request method.
+/// READ buckets track GET/HEAD/OPTIONS; WRITE buckets track POST/PUT/DELETE/PATCH.
+static READ_RATE_BUCKETS: LazyLock<DashMap<IpAddr, std::collections::VecDeque<u64>>> =
+    LazyLock::new(DashMap::new);
+static WRITE_RATE_BUCKETS: LazyLock<DashMap<IpAddr, std::collections::VecDeque<u64>>> =
     LazyLock::new(DashMap::new);
 
-/// Maximum admin API requests per IP per 60-second window.
-/// Default 10; can be overridden at runtime for tests via `set_admin_rpm`.
-static ADMIN_RPM: AtomicU32 = AtomicU32::new(10);
+/// Separate RPM limits for read vs write admin API requests per IP per 60s window.
+static ADMIN_READ_RPM: AtomicU32 = AtomicU32::new(240);
+static ADMIN_WRITE_RPM: AtomicU32 = AtomicU32::new(60);
 
-/// Override the admin rate limit (requests per minute per IP).
+/// Override both admin rate limits (requests per minute per IP).
 /// Intended for integration tests that need a higher limit.
 pub fn set_admin_rpm(rpm: u32) {
-    ADMIN_RPM.store(rpm, Ordering::Relaxed);
+    ADMIN_READ_RPM.store(rpm, Ordering::Relaxed);
+    ADMIN_WRITE_RPM.store(rpm, Ordering::Relaxed);
 }
 
 /// Clear all rate limit state. Exposed for integration tests.
 pub fn reset_admin_rate_limit() {
-    ADMIN_RATE_LIMIT.clear();
+    READ_RATE_BUCKETS.clear();
+    WRITE_RATE_BUCKETS.clear();
 }
 
-/// Prune stale entries from the admin rate limiter. Removes IPs whose newest
+/// Prune stale entries from a rate limiter bucket. Removes IPs whose newest
 /// timestamp is older than 60 seconds. Called periodically to prevent unbounded
 /// growth from distinct source IPs.
-fn prune_stale_rate_limit_entries(now_ms: u64) {
-    static LAST_PRUNE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    let last = LAST_PRUNE.load(Ordering::Relaxed);
+fn prune_stale_rate_limit_entries(
+    now_ms: u64,
+    bucket: &DashMap<IpAddr, std::collections::VecDeque<u64>>,
+    last_prune: &std::sync::atomic::AtomicU64,
+) {
+    let last = last_prune.load(Ordering::Relaxed);
     // Prune at most once every 60 seconds.
     if now_ms.saturating_sub(last) < 60_000 {
         return;
     }
-    if LAST_PRUNE
+    if last_prune
         .compare_exchange(last, now_ms, Ordering::Relaxed, Ordering::Relaxed)
         .is_err()
     {
         return; // another thread won the race
     }
     let cutoff = now_ms.saturating_sub(60_000);
-    ADMIN_RATE_LIMIT.retain(|_, window| window.back().is_some_and(|&ts| ts >= cutoff));
+    bucket.retain(|_, window| window.back().is_some_and(|&ts| ts >= cutoff));
 }
 
-/// Inner rate-limit check with an explicit rpm; avoids touching the global ADMIN_RPM in tests.
-fn check_admin_rate_limit_with_rpm(ip: IpAddr, rpm: u32) -> bool {
+/// Inner rate-limit check with an explicit rpm and bucket; avoids touching the global
+/// statics in tests.
+fn check_admin_rate_limit_with_rpm(
+    ip: IpAddr,
+    rpm: u32,
+    bucket: &DashMap<IpAddr, std::collections::VecDeque<u64>>,
+    last_prune: &std::sync::atomic::AtomicU64,
+) -> bool {
     let now_ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
@@ -116,9 +130,9 @@ fn check_admin_rate_limit_with_rpm(ip: IpAddr, rpm: u32) -> bool {
     let cutoff = now_ms.saturating_sub(60_000);
 
     // Periodically prune entries for IPs that have gone silent.
-    prune_stale_rate_limit_entries(now_ms);
+    prune_stale_rate_limit_entries(now_ms, bucket, last_prune);
 
-    let mut window = ADMIN_RATE_LIMIT.entry(ip).or_default();
+    let mut window = bucket.entry(ip).or_default();
     // Evict timestamps older than 60 seconds.
     while window.front().is_some_and(|&ts| ts < cutoff) {
         window.pop_front();
@@ -131,8 +145,25 @@ fn check_admin_rate_limit_with_rpm(ip: IpAddr, rpm: u32) -> bool {
 }
 
 /// Returns true if the request is within the rate limit, false if exceeded.
-fn check_admin_rate_limit(ip: IpAddr) -> bool {
-    check_admin_rate_limit_with_rpm(ip, ADMIN_RPM.load(Ordering::Relaxed))
+/// Uses the higher read limit for GET/HEAD/OPTIONS, and the lower write limit for mutations.
+fn check_admin_rate_limit(ip: IpAddr, is_read: bool) -> bool {
+    static LAST_READ_PRUNE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    static LAST_WRITE_PRUNE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    if is_read {
+        check_admin_rate_limit_with_rpm(
+            ip,
+            ADMIN_READ_RPM.load(Ordering::Relaxed),
+            &READ_RATE_BUCKETS,
+            &LAST_READ_PRUNE,
+        )
+    } else {
+        check_admin_rate_limit_with_rpm(
+            ip,
+            ADMIN_WRITE_RPM.load(Ordering::Relaxed),
+            &WRITE_RATE_BUCKETS,
+            &LAST_WRITE_PRUNE,
+        )
+    }
 }
 
 /// Axum middleware that enforces per-IP rate limiting on admin API routes.
@@ -141,6 +172,15 @@ async fn admin_rate_limit_middleware(
     req: axum::extract::Request,
     next: middleware::Next,
 ) -> Result<axum::response::Response, StatusCode> {
+    // Liveness checks and CSRF-token mints are preconditions called on every session
+    // and before every mutation respectively. Billing them against the shared per-IP
+    // bucket causes spurious 429s during normal SPA navigation. The frontend caches
+    // the CSRF token so flood risk stays low in practice.
+    let path = req.uri().path();
+    if matches!(path, "/admin/health" | "/admin/csrf-token") {
+        return Ok(next.run(req).await);
+    }
+
     // Extract client IP from ConnectInfo extension (set by into_make_service_with_connect_info).
     let ip = req
         .extensions()
@@ -148,7 +188,12 @@ async fn admin_rate_limit_middleware(
         .map(|ci| ci.0.ip())
         .unwrap_or(IpAddr::V4(std::net::Ipv4Addr::LOCALHOST));
 
-    if !check_admin_rate_limit(ip) {
+    let is_read = matches!(
+        *req.method(),
+        axum::http::Method::GET | axum::http::Method::HEAD | axum::http::Method::OPTIONS
+    );
+
+    if !check_admin_rate_limit(ip, is_read) {
         tracing::warn!(%ip, "admin API rate limit exceeded");
         return Err(StatusCode::TOO_MANY_REQUESTS);
     }
@@ -354,7 +399,9 @@ async fn get_csrf_token(State(shared): State<SharedState>) -> axum::response::Re
 pub fn admin_router(shared: SharedState, token: Arc<zeroize::Zeroizing<String>>) -> Router {
     // Public routes (no auth).
     // /admin/csrf-token is public so the SPA can fetch a token before and after login.
-    // Rate-limited to prevent unauthenticated flooding of the CSRF token map.
+    // The limiter layer is attached for uniformity, but /admin/health and
+    // /admin/csrf-token are explicitly exempted inside `admin_rate_limit_middleware`
+    // so normal SPA navigation doesn't burn through the per-IP read budget.
     let public = Router::new()
         .route("/admin/health", get(health))
         .route("/admin/csrf-token", get(get_csrf_token))
@@ -433,6 +480,27 @@ pub fn admin_router(shared: SharedState, token: Arc<zeroize::Zeroizing<String>>)
         .route("/admin/api/status", get(status::get_status))
         .route("/admin/api/traffic", get(traffic::get_traffic))
         .route("/admin/api/uptime", get(uptime::get_uptime))
+        // Routes CRUD
+        .route(
+            "/admin/api/routes",
+            get(routes_api::list_routes).post(routes_api::create_route),
+        )
+        .route(
+            "/admin/api/routes/{id}",
+            put(routes_api::update_route).delete(routes_api::delete_route),
+        )
+        .route(
+            "/admin/api/routes/{id}/providers",
+            get(routes_api::list_route_providers_handler).post(routes_api::add_route_provider_handler),
+        )
+        .route(
+            "/admin/api/routes/{id}/providers/reorder",
+            put(routes_api::reorder_route_providers_handler),
+        )
+        .route(
+            "/admin/api/routes/{id}/providers/{provider_id}",
+            put(routes_api::update_route_provider_handler).delete(routes_api::remove_route_provider_handler),
+        )
         .with_state(shared.clone())
         // Innermost: CSRF check runs after auth succeeds.
         .layer(middleware::from_fn_with_state(
@@ -642,29 +710,33 @@ mod tests {
 
     #[test]
     fn admin_rate_limit_enforced() {
-        // Use a unique IP and pass rpm directly to avoid mutating ADMIN_RPM,
+        // Use a unique IP and pass rpm directly to avoid mutating globals,
         // which would race with test_router() calling set_admin_rpm(10_000).
         let ip: IpAddr = "198.51.100.1".parse().unwrap();
-        ADMIN_RATE_LIMIT.remove(&ip);
+        static TEST_PRUNE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let bucket = DashMap::<IpAddr, std::collections::VecDeque<u64>>::new();
+        bucket.remove(&ip);
 
-        assert!(check_admin_rate_limit_with_rpm(ip, 3));
-        assert!(check_admin_rate_limit_with_rpm(ip, 3));
-        assert!(check_admin_rate_limit_with_rpm(ip, 3));
+        assert!(check_admin_rate_limit_with_rpm(ip, 3, &bucket, &TEST_PRUNE));
+        assert!(check_admin_rate_limit_with_rpm(ip, 3, &bucket, &TEST_PRUNE));
+        assert!(check_admin_rate_limit_with_rpm(ip, 3, &bucket, &TEST_PRUNE));
         // 4th request in the same window should be rejected.
-        assert!(!check_admin_rate_limit_with_rpm(ip, 3));
+        assert!(!check_admin_rate_limit_with_rpm(ip, 3, &bucket, &TEST_PRUNE));
 
-        ADMIN_RATE_LIMIT.remove(&ip);
+        bucket.remove(&ip);
     }
 
     #[test]
     fn sliding_window_blocks_on_rpm_exceeded() {
         // Use a unique IP to avoid test isolation issues.
         let ip: IpAddr = "10.88.77.66".parse().unwrap();
+        static TEST_PRUNE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let bucket = DashMap::<IpAddr, std::collections::VecDeque<u64>>::new();
         // With rpm=2, the first 2 requests must pass, the 3rd must fail.
-        assert!(check_admin_rate_limit_with_rpm(ip, 2));
-        assert!(check_admin_rate_limit_with_rpm(ip, 2));
+        assert!(check_admin_rate_limit_with_rpm(ip, 2, &bucket, &TEST_PRUNE));
+        assert!(check_admin_rate_limit_with_rpm(ip, 2, &bucket, &TEST_PRUNE));
         assert!(
-            !check_admin_rate_limit_with_rpm(ip, 2),
+            !check_admin_rate_limit_with_rpm(ip, 2, &bucket, &TEST_PRUNE),
             "3rd request must be blocked when rpm=2"
         );
     }

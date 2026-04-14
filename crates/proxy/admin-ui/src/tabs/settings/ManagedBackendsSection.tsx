@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   useManagedBackends,
   useDeleteManagedBackend,
@@ -6,6 +6,7 @@ import {
 } from '../../api/queries'
 import type { ManagedBackend } from '../../api/types'
 import EmptyState from '../../components/shared/EmptyState'
+import ConfirmDialog from '../../components/shared/ConfirmDialog'
 import ProviderIcon from '../../components/shared/ProviderIcon'
 import { BackendForm } from './BackendForm'
 
@@ -20,7 +21,7 @@ export function ManagedBackendsSection() {
   const del = useDeleteManagedBackend()
 
   const [panel, setPanel] = useState<PanelState>({ mode: 'none' })
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<ManagedBackend | null>(null)
 
   const providerMap = useMemo(
     () => Object.fromEntries(providers.map(p => [p.id, p.display_name])),
@@ -31,10 +32,9 @@ export function ManagedBackendsSection() {
     return providerMap[providerId] ?? providerId
   }
 
-  function handleDelete(name: string) {
-    del.mutate(name, {
-      onSuccess: () => setConfirmDelete(null),
-    })
+  function doDelete() {
+    if (!pendingDelete) return Promise.resolve()
+    return del.mutateAsync(pendingDelete.name).then(() => undefined)
   }
 
   return (
@@ -88,78 +88,65 @@ export function ManagedBackendsSection() {
           </thead>
           <tbody>
             {data.backends.map((b) => (
-              <Fragment key={b.id}>
-                <tr>
-                  <td className="mono">{b.name}</td>
-                  <td className="dim" style={{ whiteSpace: 'nowrap' }}>
-                    <ProviderIcon id={b.provider_id} size={16} style={{ marginRight: 6, verticalAlign: 'middle', opacity: 0.8 }} />
-                    {getProviderLabel(b.provider_id)}
-                  </td>
-                  <td>
-                    {b.api_key_set && (
-                      <span className="badge badge-active" style={{ marginRight: 4 }}>Key set</span>
-                    )}
-                    {!b.api_key_set && !b.aws_creds_set && (
-                      <span className="badge badge-revoked">No key</span>
-                    )}
-                    {b.aws_creds_set && (
-                      <span className="badge badge-active">AWS creds set</span>
-                    )}
-                  </td>
-                  <td className="dim mono" style={{ fontSize: 11 }}>{b.api_base ?? '—'}</td>
-                  <td>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <button
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => {
-                          if (panel.mode === 'edit' && panel.backend.id === b.id) {
-                            setPanel({ mode: 'none' })
-                          } else {
-                            setPanel({ mode: 'edit', backend: b })
-                          }
-                        }}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        className="btn btn-danger btn-sm"
-                        onClick={() => setConfirmDelete(b.name)}
-                        disabled={del.isPending && del.variables === b.name}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-                {/* Confirmation row */}
-                {confirmDelete === b.name && (
-                  <tr>
-                    <td colSpan={5}>
-                      <div style={{ padding: '8px 10px', background: 'var(--err-dim)', borderLeft: '3px solid var(--err)', borderRadius: 'var(--r)', display: 'flex', gap: 8, alignItems: 'center', fontSize: 12 }}>
-                        <span>Delete backend <span className="mono">'{b.name}'</span>?</span>
-                        <button
-                          className="btn btn-danger btn-sm"
-                          onClick={() => handleDelete(b.name)}
-                          disabled={del.isPending}
-                        >
-                          {del.isPending ? 'Deleting…' : 'Confirm'}
-                        </button>
-                        <button
-                          className="btn btn-secondary btn-sm"
-                          onClick={() => setConfirmDelete(null)}
-                          disabled={del.isPending}
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </Fragment>
+              <tr key={b.id}>
+                <td className="mono">{b.name}</td>
+                <td className="dim" style={{ whiteSpace: 'nowrap' }}>
+                  <ProviderIcon id={b.provider_id} size={16} style={{ marginRight: 6, verticalAlign: 'middle', opacity: 0.8 }} />
+                  {getProviderLabel(b.provider_id)}
+                </td>
+                <td>
+                  {b.api_key_set && (
+                    <span className="badge badge-active" style={{ marginRight: 4 }}>Key set</span>
+                  )}
+                  {!b.api_key_set && !b.aws_creds_set && (
+                    <span className="badge badge-revoked">No key</span>
+                  )}
+                  {b.aws_creds_set && (
+                    <span className="badge badge-active">AWS creds set</span>
+                  )}
+                </td>
+                <td className="dim mono" style={{ fontSize: 11 }}>{b.api_base ?? '—'}</td>
+                <td>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => {
+                        if (panel.mode === 'edit' && panel.backend.id === b.id) {
+                          setPanel({ mode: 'none' })
+                        } else {
+                          setPanel({ mode: 'edit', backend: b })
+                        }
+                      }}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      className="btn btn-danger btn-sm"
+                      onClick={() => setPendingDelete(b)}
+                      disabled={del.isPending && del.variables === b.name}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </td>
+              </tr>
             ))}
           </tbody>
         </table>
       )}
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onClose={() => setPendingDelete(null)}
+        onConfirm={doDelete}
+        title="Delete managed backend?"
+        message={
+          <>
+            Delete backend <span className="mono">{pendingDelete?.name}</span>? Stored credentials will be
+            removed. Routes still referencing it will fail until reconfigured.
+          </>
+        }
+      />
     </div>
   )
 }
