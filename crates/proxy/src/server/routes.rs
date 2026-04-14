@@ -204,10 +204,7 @@ pub fn app_multi_with_shared(
                         .and_then(|h| h.split(':').next())
                         .unwrap_or("localhost")
                         .to_owned();
-                    axum::response::Redirect::temporary(&format!(
-                        "http://{}:{}/admin/",
-                        host, port
-                    ))
+                    axum::response::Redirect::temporary(&format!("http://{}:{}/admin/", host, port))
                 }),
             )
             .merge(final_router)
@@ -1077,7 +1074,10 @@ pub(crate) fn inject_glm_thinking(
     if !is_glm {
         return;
     }
-    if matches!(&body.thinking, Some(anthropic::ThinkingConfig::Enabled { .. })) {
+    if matches!(
+        &body.thinking,
+        Some(anthropic::ThinkingConfig::Enabled { .. })
+    ) {
         // reasoning_effort was injected by anthropic_to_openai_request; GLM doesn't use it.
         req.extra.remove("reasoning_effort");
         req.extra.insert(

@@ -146,16 +146,26 @@ fn build_provider_responses(
         .collect()
 }
 
-fn audit(shared: &SharedState, source_ip: Option<String>, action: &str, target_type: &str, target_id: String, detail: Option<String>) {
-    super::emit_audit(shared, crate::admin::db::AuditEntry {
-        id: None,
-        timestamp: None,
-        action: action.into(),
-        target_type: target_type.into(),
-        target_id: Some(target_id),
-        detail,
-        source_ip,
-    });
+fn audit(
+    shared: &SharedState,
+    source_ip: Option<String>,
+    action: &str,
+    target_type: &str,
+    target_id: String,
+    detail: Option<String>,
+) {
+    super::emit_audit(
+        shared,
+        crate::admin::db::AuditEntry {
+            id: None,
+            timestamp: None,
+            action: action.into(),
+            target_type: target_type.into(),
+            target_id: Some(target_id),
+            detail,
+            source_ip,
+        },
+    );
 }
 
 // ── Route CRUD ────────────────────────────────────────────────────────────────
@@ -208,8 +218,19 @@ pub(super) async fn create_route(
 
     match result {
         Some(Ok(())) => {
-            audit(&shared, Some(addr.ip().to_string()), "route_created", "route", row.name.clone(), None);
-            (StatusCode::CREATED, Json(serde_json::to_value(route_to_response(&row, 0)).unwrap())).into_response()
+            audit(
+                &shared,
+                Some(addr.ip().to_string()),
+                "route_created",
+                "route",
+                row.name.clone(),
+                None,
+            );
+            (
+                StatusCode::CREATED,
+                Json(serde_json::to_value(route_to_response(&row, 0)).unwrap()),
+            )
+                .into_response()
         }
         Some(Err(e)) => err_json(db_error_status(&e), e.to_string()),
         None => err_json(StatusCode::INTERNAL_SERVER_ERROR, "Failed to create route"),
@@ -236,10 +257,20 @@ pub(super) async fn update_route(
 
     match result {
         Some(Ok((true, Some(r), count))) => {
-            audit(&shared, Some(addr.ip().to_string()), "route_updated", "route", id, None);
+            audit(
+                &shared,
+                Some(addr.ip().to_string()),
+                "route_updated",
+                "route",
+                id,
+                None,
+            );
             ok_json(route_to_response(&r, count))
         }
-        Some(Ok((true, None, _))) => err_json(StatusCode::INTERNAL_SERVER_ERROR, "route not found after update"),
+        Some(Ok((true, None, _))) => err_json(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "route not found after update",
+        ),
         Some(Ok((false, _, _))) => err_json(StatusCode::NOT_FOUND, "route not found"),
         Some(Err(e)) => err_json(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
         None => err_json(StatusCode::INTERNAL_SERVER_ERROR, "Failed to update route"),
@@ -259,7 +290,14 @@ pub(super) async fn delete_route(
 
     match result {
         Some(Ok(true)) => {
-            audit(&shared, Some(addr.ip().to_string()), "route_deleted", "route", id, None);
+            audit(
+                &shared,
+                Some(addr.ip().to_string()),
+                "route_deleted",
+                "route",
+                id,
+                None,
+            );
             ok_json(serde_json::json!({ "ok": true }))
         }
         Some(Ok(false)) => err_json(StatusCode::NOT_FOUND, "route not found"),
@@ -275,7 +313,11 @@ pub(super) async fn list_route_providers_handler(
     Path(route_id): Path<String>,
 ) -> axum::response::Response {
     let result = crate::admin::state::with_db(&shared.db, move |conn| {
-        if crate::admin::db::get_route(conn, &route_id).ok().flatten().is_none() {
+        if crate::admin::db::get_route(conn, &route_id)
+            .ok()
+            .flatten()
+            .is_none()
+        {
             return Ok::<_, rusqlite::Error>(None);
         }
         let providers = crate::admin::db::list_route_providers(conn, &route_id)?;
@@ -287,7 +329,10 @@ pub(super) async fn list_route_providers_handler(
     match result {
         Some(Ok(Some(resp))) => ok_json(serde_json::json!({ "providers": resp })),
         Some(Ok(None)) => err_json(StatusCode::NOT_FOUND, "route not found"),
-        _ => err_json(StatusCode::INTERNAL_SERVER_ERROR, "Failed to list route providers"),
+        _ => err_json(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to list route providers",
+        ),
     }
 }
 
@@ -306,25 +351,53 @@ pub(super) async fn add_route_provider_handler(
     let backend_id_for_db = backend_id.clone();
     let backend_id_check = backend_id.clone();
     let result = crate::admin::state::with_db(&shared.db, move |conn| {
-        if crate::admin::db::get_route(conn, &route_id_clone).ok().flatten().is_none() {
+        if crate::admin::db::get_route(conn, &route_id_clone)
+            .ok()
+            .flatten()
+            .is_none()
+        {
             return Ok::<_, rusqlite::Error>(Err::<(), String>("route not found".into()));
         }
         if !crate::admin::db::managed_backend_exists(conn, &backend_id_check)? {
             return Ok(Err::<(), String>("backend not found".into()));
         }
-        crate::admin::db::add_route_provider(conn, &route_id_clone, &backend_id_for_db, &models, priority, enabled)?;
+        crate::admin::db::add_route_provider(
+            conn,
+            &route_id_clone,
+            &backend_id_for_db,
+            &models,
+            priority,
+            enabled,
+        )?;
         Ok(Ok::<(), String>(()))
     })
     .await;
 
     match result {
         Some(Ok(Ok(()))) => {
-            audit(&shared, Some(addr.ip().to_string()), "route_provider_added", "route_provider", route_id, Some(format!("backend_id={}", backend_id)));
+            audit(
+                &shared,
+                Some(addr.ip().to_string()),
+                "route_provider_added",
+                "route_provider",
+                route_id,
+                Some(format!("backend_id={}", backend_id)),
+            );
             (StatusCode::CREATED, Json(serde_json::json!({ "ok": true }))).into_response()
         }
-        Some(Ok(Err(msg))) => err_json(if msg == "route not found" { StatusCode::NOT_FOUND } else { StatusCode::BAD_REQUEST }, msg),
+        Some(Ok(Err(msg))) => err_json(
+            if msg == "route not found" {
+                StatusCode::NOT_FOUND
+            } else {
+                StatusCode::BAD_REQUEST
+            },
+            msg,
+        ),
         Some(Err(e)) => err_json(db_error_status(&e), e.to_string()),
-        None => err_json(StatusCode::INTERNAL_SERVER_ERROR, "Failed to add route provider"),
+        None => err_json(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to add route provider",
+        ),
     }
 }
 
@@ -348,12 +421,22 @@ pub(super) async fn update_route_provider_handler(
 
     match result {
         Some(Ok(true)) => {
-            audit(&shared, Some(addr.ip().to_string()), "route_provider_updated", "route_provider", provider_id, Some(format!("route_id={}", route_id)));
+            audit(
+                &shared,
+                Some(addr.ip().to_string()),
+                "route_provider_updated",
+                "route_provider",
+                provider_id,
+                Some(format!("route_id={}", route_id)),
+            );
             ok_json(serde_json::json!({ "ok": true }))
         }
         Some(Ok(false)) => err_json(StatusCode::NOT_FOUND, "route provider not found"),
         Some(Err(e)) => err_json(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
-        None => err_json(StatusCode::INTERNAL_SERVER_ERROR, "Failed to update route provider"),
+        None => err_json(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to update route provider",
+        ),
     }
 }
 
@@ -422,11 +505,21 @@ pub(super) async fn remove_route_provider_handler(
 
     match result {
         Some(Ok(true)) => {
-            audit(&shared, Some(addr.ip().to_string()), "route_provider_removed", "route_provider", provider_id, None);
+            audit(
+                &shared,
+                Some(addr.ip().to_string()),
+                "route_provider_removed",
+                "route_provider",
+                provider_id,
+                None,
+            );
             ok_json(serde_json::json!({ "ok": true }))
         }
         Some(Ok(false)) => err_json(StatusCode::NOT_FOUND, "route provider not found"),
         Some(Err(e)) => err_json(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
-        None => err_json(StatusCode::INTERNAL_SERVER_ERROR, "Failed to remove route provider"),
+        None => err_json(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to remove route provider",
+        ),
     }
 }

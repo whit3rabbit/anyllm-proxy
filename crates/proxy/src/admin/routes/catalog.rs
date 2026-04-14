@@ -1,10 +1,10 @@
+use crate::admin::state::SharedState;
 use anyllm_providers::{
     all_providers, get_provider, list_models,
     model::ModelStatus,
     provider::{AuthKind, ProviderProtocol, ProviderStatus},
 };
 use axum::{extract::Path, extract::State, http::StatusCode, response::IntoResponse, Json};
-use crate::admin::state::SharedState;
 use std::sync::LazyLock;
 
 static REFRESH_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
@@ -152,13 +152,11 @@ pub(super) async fn list_provider_models(
         .collect();
 
     // Enrich with cached model IDs from live refreshes (best-effort).
-    let cached_models: Vec<String> =
-        if let Ok(db_guard) = shared.db.lock() {
-            crate::admin::db::list_cached_provider_models(&db_guard, &provider_id)
-                .unwrap_or_default()
-        } else {
-            vec![]
-        };
+    let cached_models: Vec<String> = if let Ok(db_guard) = shared.db.lock() {
+        crate::admin::db::list_cached_provider_models(&db_guard, &provider_id).unwrap_or_default()
+    } else {
+        vec![]
+    };
 
     let has_models = !models.is_empty();
     Json(serde_json::json!({
@@ -211,7 +209,10 @@ pub(super) async fn refresh_provider_models(
     // Resolve the API key from the first env var that is set.
     let api_key = provider.env_vars.iter().find_map(|v| std::env::var(v).ok());
 
-    let url = format!("{}/v1/models", provider.default_base_url.trim_end_matches('/'));
+    let url = format!(
+        "{}/v1/models",
+        provider.default_base_url.trim_end_matches('/')
+    );
     let mut req = REFRESH_CLIENT.get(&url);
     if let Some(ref key) = api_key {
         req = req.header("Authorization", format!("Bearer {key}"));

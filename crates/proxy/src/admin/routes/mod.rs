@@ -491,7 +491,8 @@ pub fn admin_router(shared: SharedState, token: Arc<zeroize::Zeroizing<String>>)
         )
         .route(
             "/admin/api/routes/{id}/providers",
-            get(routes_api::list_route_providers_handler).post(routes_api::add_route_provider_handler),
+            get(routes_api::list_route_providers_handler)
+                .post(routes_api::add_route_provider_handler),
         )
         .route(
             "/admin/api/routes/{id}/providers/reorder",
@@ -499,7 +500,8 @@ pub fn admin_router(shared: SharedState, token: Arc<zeroize::Zeroizing<String>>)
         )
         .route(
             "/admin/api/routes/{id}/providers/{provider_id}",
-            put(routes_api::update_route_provider_handler).delete(routes_api::remove_route_provider_handler),
+            put(routes_api::update_route_provider_handler)
+                .delete(routes_api::remove_route_provider_handler),
         )
         .with_state(shared.clone())
         // Innermost: CSRF check runs after auth succeeds.
@@ -721,7 +723,12 @@ mod tests {
         assert!(check_admin_rate_limit_with_rpm(ip, 3, &bucket, &TEST_PRUNE));
         assert!(check_admin_rate_limit_with_rpm(ip, 3, &bucket, &TEST_PRUNE));
         // 4th request in the same window should be rejected.
-        assert!(!check_admin_rate_limit_with_rpm(ip, 3, &bucket, &TEST_PRUNE));
+        assert!(!check_admin_rate_limit_with_rpm(
+            ip,
+            3,
+            &bucket,
+            &TEST_PRUNE
+        ));
 
         bucket.remove(&ip);
     }

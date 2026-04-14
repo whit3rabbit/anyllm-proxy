@@ -1,5 +1,7 @@
 use crate::model::{ModelCapabilities, ModelDef, ModelStatus};
-use crate::provider::{AuthKind, ProviderCapabilities, ProviderDef, ProviderProtocol, ProviderStatus};
+use crate::provider::{
+    AuthKind, ProviderCapabilities, ProviderDef, ProviderProtocol, ProviderStatus,
+};
 
 /// Zhipu AI (Z.AI) — GLM model series via OpenAI-compatible endpoint.
 pub const PROVIDER: ProviderDef = ProviderDef {

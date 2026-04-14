@@ -164,9 +164,9 @@ impl Config {
         };
 
         let listen_port: u16 = match std::env::var("LISTEN_PORT") {
-            Ok(val) => val.parse::<u16>().unwrap_or_else(|_| {
-                panic!("LISTEN_PORT must be a number in 1-65535, got '{val}'")
-            }),
+            Ok(val) => val
+                .parse::<u16>()
+                .unwrap_or_else(|_| panic!("LISTEN_PORT must be a number in 1-65535, got '{val}'")),
             Err(_) => 3000,
         };
         if listen_port == 0 {

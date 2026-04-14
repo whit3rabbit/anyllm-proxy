@@ -220,7 +220,10 @@ fn providers_subcommand(args: Vec<String>, _data_dir: &std::path::Path) -> i32 {
                     .collect();
                 println!("{}", serde_json::to_string_pretty(&out).unwrap());
             } else {
-                println!("{:<20} {:<15} {:<12} {:>8}", "ID", "STATUS", "PROTOCOL", "MODELS");
+                println!(
+                    "{:<20} {:<15} {:<12} {:>8}",
+                    "ID", "STATUS", "PROTOCOL", "MODELS"
+                );
                 println!("{}", "-".repeat(60));
                 for p in &providers {
                     println!(
@@ -239,25 +242,25 @@ fn providers_subcommand(args: Vec<String>, _data_dir: &std::path::Path) -> i32 {
             let refresh_all = target == Some("--all");
 
             // Collect providers to refresh before entering async context.
-            let providers_to_refresh: Vec<anyllm_providers::provider::ProviderDef> =
-                if refresh_all {
-                    anyllm_providers::all_providers()
-                        .filter(|p| p.capabilities.chat_completions)
-                        .filter(|p| p.env_vars.iter().any(|v| std::env::var(v).is_ok()))
-                        .cloned()
-                        .collect()
-                } else if let Some(id) = target {
-                    match anyllm_providers::get_provider(id) {
-                        Some(p) => vec![p.clone()],
-                        None => {
-                            eprintln!("error: unknown provider '{id}'");
-                            return 1;
-                        }
+            let providers_to_refresh: Vec<anyllm_providers::provider::ProviderDef> = if refresh_all
+            {
+                anyllm_providers::all_providers()
+                    .filter(|p| p.capabilities.chat_completions)
+                    .filter(|p| p.env_vars.iter().any(|v| std::env::var(v).is_ok()))
+                    .cloned()
+                    .collect()
+            } else if let Some(id) = target {
+                match anyllm_providers::get_provider(id) {
+                    Some(p) => vec![p.clone()],
+                    None => {
+                        eprintln!("error: unknown provider '{id}'");
+                        return 1;
                     }
-                } else {
-                    eprintln!("usage: anyllm-proxy providers refresh <provider-id>|--all");
-                    return 1;
-                };
+                }
+            } else {
+                eprintln!("usage: anyllm-proxy providers refresh <provider-id>|--all");
+                return 1;
+            };
 
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
@@ -269,7 +272,10 @@ fn providers_subcommand(args: Vec<String>, _data_dir: &std::path::Path) -> i32 {
             let mut exit = 0;
             for provider in &providers_to_refresh {
                 let api_key = provider.env_vars.iter().find_map(|v| std::env::var(v).ok());
-                let url = format!("{}/v1/models", provider.default_base_url.trim_end_matches('/'));
+                let url = format!(
+                    "{}/v1/models",
+                    provider.default_base_url.trim_end_matches('/')
+                );
                 let result = rt.block_on(async {
                     let mut req = client.get(&url);
                     if let Some(ref key) = api_key {
@@ -296,9 +302,7 @@ fn providers_subcommand(args: Vec<String>, _data_dir: &std::path::Path) -> i32 {
                                 .get("data")
                                 .and_then(|d| d.as_array())
                                 .map(|arr| {
-                                    arr.iter()
-                                        .filter_map(|m| m.get("id")?.as_str())
-                                        .collect()
+                                    arr.iter().filter_map(|m| m.get("id")?.as_str()).collect()
                                 })
                                 .unwrap_or_default();
                             println!("{}: {} models", provider.id, models.len());
@@ -602,9 +606,9 @@ async fn async_main(args: Vec<String>, data_dir: PathBuf) {
     let mut admin_startup_info: Option<(String, String)> = None;
     let admin_parts = if enable_admin {
         let admin_port: u16 = match std::env::var("ADMIN_PORT") {
-            Ok(val) => val.parse::<u16>().unwrap_or_else(|_| {
-                panic!("ADMIN_PORT must be a number in 1-65535, got '{val}'")
-            }),
+            Ok(val) => val
+                .parse::<u16>()
+                .unwrap_or_else(|_| panic!("ADMIN_PORT must be a number in 1-65535, got '{val}'")),
             Err(_) => 3001,
         };
         if admin_port == 0 {
@@ -878,8 +882,7 @@ async fn async_main(args: Vec<String>, data_dir: PathBuf) {
                         if !provider.capabilities.chat_completions {
                             continue;
                         }
-                        let api_key =
-                            provider.env_vars.iter().find_map(|v| std::env::var(v).ok());
+                        let api_key = provider.env_vars.iter().find_map(|v| std::env::var(v).ok());
                         if api_key.is_none() {
                             continue; // skip unconfigured providers
                         }
@@ -903,52 +906,47 @@ async fn async_main(args: Vec<String>, data_dir: PathBuf) {
                                 status = %resp.status(),
                                 "provider auto-refresh upstream error"
                             ),
-                            Ok(resp) => {
-                                match resp.json::<serde_json::Value>().await {
-                                    Err(e) => tracing::warn!(
-                                        provider = %provider.id,
-                                        error = %e,
-                                        "provider auto-refresh: invalid JSON response"
-                                    ),
-                                    Ok(json) => {
-                                        let model_ids: Vec<String> = json
-                                            .get("data")
-                                            .and_then(|d| d.as_array())
-                                            .map(|arr| {
-                                                arr.iter()
-                                                    .filter_map(|m| {
-                                                        m.get("id")?.as_str().map(String::from)
-                                                    })
-                                                    .collect()
-                                            })
-                                            .unwrap_or_default();
-                                        let count = model_ids.len();
-                                        let db = shared_for_refresh.db.clone();
-                                        let pid = provider.id.to_string();
-                                        let _ = tokio::task::spawn_blocking(move || {
-                                            let mut conn =
-                                                db.lock().unwrap_or_else(|e| e.into_inner());
-                                            if let Err(e) = admin::db::upsert_provider_models_cache(
-                                                &mut conn,
-                                                &pid,
-                                                &model_ids,
-                                            ) {
-                                                tracing::warn!(
-                                                    provider = %pid,
-                                                    error = %e,
-                                                    "failed to save auto-refresh results"
-                                                );
-                                            }
+                            Ok(resp) => match resp.json::<serde_json::Value>().await {
+                                Err(e) => tracing::warn!(
+                                    provider = %provider.id,
+                                    error = %e,
+                                    "provider auto-refresh: invalid JSON response"
+                                ),
+                                Ok(json) => {
+                                    let model_ids: Vec<String> = json
+                                        .get("data")
+                                        .and_then(|d| d.as_array())
+                                        .map(|arr| {
+                                            arr.iter()
+                                                .filter_map(|m| {
+                                                    m.get("id")?.as_str().map(String::from)
+                                                })
+                                                .collect()
                                         })
-                                        .await;
-                                        tracing::info!(
-                                            provider = %provider.id,
-                                            count = count,
-                                            "auto-refreshed provider model cache"
-                                        );
-                                    }
+                                        .unwrap_or_default();
+                                    let count = model_ids.len();
+                                    let db = shared_for_refresh.db.clone();
+                                    let pid = provider.id.to_string();
+                                    let _ = tokio::task::spawn_blocking(move || {
+                                        let mut conn = db.lock().unwrap_or_else(|e| e.into_inner());
+                                        if let Err(e) = admin::db::upsert_provider_models_cache(
+                                            &mut conn, &pid, &model_ids,
+                                        ) {
+                                            tracing::warn!(
+                                                provider = %pid,
+                                                error = %e,
+                                                "failed to save auto-refresh results"
+                                            );
+                                        }
+                                    })
+                                    .await;
+                                    tracing::info!(
+                                        provider = %provider.id,
+                                        count = count,
+                                        "auto-refreshed provider model cache"
+                                    );
                                 }
-                            }
+                            },
                         }
                     }
                     tokio::time::sleep(interval).await;
@@ -1004,7 +1002,11 @@ async fn async_main(args: Vec<String>, data_dir: PathBuf) {
         let admin_token = Arc::new(zeroize::Zeroizing::new(admin_token));
 
         // Capture for the startup banner printed after both servers are bound.
-        let admin_display_host = if admin_bind == "0.0.0.0" { "localhost" } else { &admin_bind };
+        let admin_display_host = if admin_bind == "0.0.0.0" {
+            "localhost"
+        } else {
+            &admin_bind
+        };
         let admin_ui_url = format!("http://{}:{}/admin/", admin_display_host, admin_port);
         admin_startup_info = Some((admin_ui_url, admin_token.as_str().to_owned()));
 
