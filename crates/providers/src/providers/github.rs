@@ -1,13 +1,18 @@
-use crate::model::ModelDef;
+use crate::model::{ModelCapabilities, ModelDef, ModelStatus};
 use crate::provider::{
     AuthKind, ProviderCapabilities, ProviderDef, ProviderProtocol, ProviderStatus,
 };
 
-/// GitHub Models — Azure-hosted OpenAI-compatible endpoint using a GitHub token.
+/// GitHub Models — Azure AI-backed inference marketplace accessed with a GitHub
+/// token (PAT or fine-grained token with the `models:read` scope). The API is
+/// OpenAI-compatible and served under `/inference/chat/completions`.
 pub const PROVIDER: ProviderDef = ProviderDef {
     id: "github",
     display_name: "GitHub Models",
-    default_base_url: "https://models.inference.ai.azure.com",
+    // Modern endpoint used by the REST API (see docs.github.com/en/rest/models).
+    // The older `models.inference.ai.azure.com` host still resolves but is being
+    // superseded by `models.github.ai`.
+    default_base_url: "https://models.github.ai/inference",
     protocol: ProviderProtocol::OpenAICompat,
     auth: AuthKind::Bearer,
     status: ProviderStatus::Stub,
@@ -23,4 +28,459 @@ pub const PROVIDER: ProviderDef = ProviderDef {
     },
 };
 
-pub const MODELS: &[ModelDef] = &[];
+// Model IDs use the `publisher/model-name` form the GitHub Models API expects
+// in the request body. Context windows reflect the publisher's published
+// limits; GitHub Models may impose lower per-request caps via its rate-limit
+// tiers (Low / High / Embedding). Only GA catalog entries are listed here.
+pub const MODELS: &[ModelDef] = &[
+    // -------- OpenAI --------
+    ModelDef {
+        id: "openai/gpt-4o",
+        provider_id: "github",
+        context_window: 128_000,
+        max_output_tokens: 16_384,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "openai/gpt-4o-mini",
+        provider_id: "github",
+        context_window: 128_000,
+        max_output_tokens: 16_384,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "openai/gpt-4.1",
+        provider_id: "github",
+        context_window: 1_047_576,
+        max_output_tokens: 32_768,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "openai/gpt-4.1-mini",
+        provider_id: "github",
+        context_window: 1_047_576,
+        max_output_tokens: 32_768,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "openai/gpt-4.1-nano",
+        provider_id: "github",
+        context_window: 1_047_576,
+        max_output_tokens: 32_768,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "openai/o1",
+        provider_id: "github",
+        context_window: 200_000,
+        max_output_tokens: 100_000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "openai/o1-mini",
+        provider_id: "github",
+        context_window: 128_000,
+        max_output_tokens: 65_536,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "openai/o3",
+        provider_id: "github",
+        context_window: 200_000,
+        max_output_tokens: 100_000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "openai/o3-mini",
+        provider_id: "github",
+        context_window: 200_000,
+        max_output_tokens: 100_000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "openai/o4-mini",
+        provider_id: "github",
+        context_window: 200_000,
+        max_output_tokens: 100_000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "openai/text-embedding-3-large",
+        provider_id: "github",
+        context_window: 8_191,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: false,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "openai/text-embedding-3-small",
+        provider_id: "github",
+        context_window: 8_191,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: false,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    // -------- Microsoft (Phi) --------
+    ModelDef {
+        id: "microsoft/phi-4",
+        provider_id: "github",
+        context_window: 16_384,
+        max_output_tokens: 16_384,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "microsoft/phi-4-mini-instruct",
+        provider_id: "github",
+        context_window: 131_072,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "microsoft/phi-4-multimodal-instruct",
+        provider_id: "github",
+        context_window: 131_072,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: true,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "microsoft/phi-4-reasoning",
+        provider_id: "github",
+        context_window: 32_768,
+        max_output_tokens: 32_768,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    // -------- Meta (Llama) --------
+    ModelDef {
+        id: "meta/meta-llama-3.1-8b-instruct",
+        provider_id: "github",
+        context_window: 131_072,
+        max_output_tokens: 8_192,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "meta/meta-llama-3.1-405b-instruct",
+        provider_id: "github",
+        context_window: 131_072,
+        max_output_tokens: 8_192,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "meta/llama-3.3-70b-instruct",
+        provider_id: "github",
+        context_window: 131_072,
+        max_output_tokens: 8_192,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "meta/llama-3.2-11b-vision-instruct",
+        provider_id: "github",
+        context_window: 131_072,
+        max_output_tokens: 8_192,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: true,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "meta/llama-3.2-90b-vision-instruct",
+        provider_id: "github",
+        context_window: 131_072,
+        max_output_tokens: 8_192,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: true,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "meta/llama-4-scout-17b-16e-instruct",
+        provider_id: "github",
+        context_window: 131_072,
+        max_output_tokens: 8_192,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "meta/llama-4-maverick-17b-128e-instruct-fp8",
+        provider_id: "github",
+        context_window: 131_072,
+        max_output_tokens: 8_192,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    // -------- Mistral AI --------
+    ModelDef {
+        id: "mistral-ai/mistral-medium-2505",
+        provider_id: "github",
+        context_window: 131_072,
+        max_output_tokens: 8_192,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "mistral-ai/mistral-small-2503",
+        provider_id: "github",
+        context_window: 131_072,
+        max_output_tokens: 8_192,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "mistral-ai/ministral-3b",
+        provider_id: "github",
+        context_window: 131_072,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "mistral-ai/codestral-2501",
+        provider_id: "github",
+        context_window: 262_144,
+        max_output_tokens: 8_192,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    // -------- xAI (Grok) --------
+    ModelDef {
+        id: "xai/grok-3",
+        provider_id: "github",
+        context_window: 131_072,
+        max_output_tokens: 8_192,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "xai/grok-3-mini",
+        provider_id: "github",
+        context_window: 131_072,
+        max_output_tokens: 8_192,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    // -------- DeepSeek --------
+    ModelDef {
+        id: "deepseek/deepseek-r1",
+        provider_id: "github",
+        context_window: 163_840,
+        max_output_tokens: 32_768,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "deepseek/deepseek-v3-0324",
+        provider_id: "github",
+        context_window: 131_072,
+        max_output_tokens: 8_192,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    // -------- Cohere --------
+    ModelDef {
+        id: "cohere/cohere-command-a",
+        provider_id: "github",
+        context_window: 256_000,
+        max_output_tokens: 8_192,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "cohere/cohere-command-r-plus-08-2024",
+        provider_id: "github",
+        context_window: 128_000,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    // -------- AI21 Labs --------
+    ModelDef {
+        id: "ai21-labs/ai21-jamba-1.5-large",
+        provider_id: "github",
+        context_window: 256_000,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+];

@@ -1,4 +1,4 @@
-use crate::model::ModelDef;
+use crate::model::{ModelCapabilities, ModelDef, ModelStatus};
 use crate::provider::{
     AuthKind, ProviderCapabilities, ProviderDef, ProviderProtocol, ProviderStatus,
 };
@@ -17,9 +17,305 @@ pub const PROVIDER: ProviderDef = ProviderDef {
         streaming: true,
         tool_use: true,
         embeddings: true,
-        vision: false,
+        vision: true,
         batch: false,
     },
 };
 
-pub const MODELS: &[ModelDef] = &[];
+// Representative GA catalog; see https://deepinfra.com/models and
+// LiteLLM `model_prices_and_context_window.json` for the full list.
+pub const MODELS: &[ModelDef] = &[
+    // Meta Llama
+    ModelDef {
+        id: "meta-llama/Llama-3.3-70B-Instruct",
+        provider_id: "deepinfra",
+        context_window: 131_072,
+        max_output_tokens: 131_072,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+        provider_id: "deepinfra",
+        context_window: 131_072,
+        max_output_tokens: 131_072,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "meta-llama/Meta-Llama-3.1-8B-Instruct",
+        provider_id: "deepinfra",
+        context_window: 131_072,
+        max_output_tokens: 131_072,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8",
+        provider_id: "deepinfra",
+        context_window: 1_048_576,
+        max_output_tokens: 1_048_576,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "meta-llama/Llama-4-Scout-17B-16E-Instruct",
+        provider_id: "deepinfra",
+        context_window: 327_680,
+        max_output_tokens: 327_680,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    // DeepSeek
+    ModelDef {
+        id: "deepseek-ai/DeepSeek-V3.1",
+        provider_id: "deepinfra",
+        context_window: 163_840,
+        max_output_tokens: 163_840,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "deepseek-ai/DeepSeek-V3-0324",
+        provider_id: "deepinfra",
+        context_window: 163_840,
+        max_output_tokens: 163_840,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "deepseek-ai/DeepSeek-R1-0528",
+        provider_id: "deepinfra",
+        context_window: 163_840,
+        max_output_tokens: 163_840,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "deepseek-ai/DeepSeek-R1-Distill-Llama-70B",
+        provider_id: "deepinfra",
+        context_window: 131_072,
+        max_output_tokens: 131_072,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    // Qwen
+    ModelDef {
+        id: "Qwen/Qwen3-235B-A22B-Instruct-2507",
+        provider_id: "deepinfra",
+        context_window: 262_144,
+        max_output_tokens: 262_144,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "Qwen/Qwen3-Coder-480B-A35B-Instruct",
+        provider_id: "deepinfra",
+        context_window: 262_144,
+        max_output_tokens: 262_144,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "Qwen/Qwen2.5-72B-Instruct",
+        provider_id: "deepinfra",
+        context_window: 32_768,
+        max_output_tokens: 32_768,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "Qwen/Qwen2.5-VL-32B-Instruct",
+        provider_id: "deepinfra",
+        context_window: 128_000,
+        max_output_tokens: 128_000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "Qwen/QwQ-32B",
+        provider_id: "deepinfra",
+        context_window: 131_072,
+        max_output_tokens: 131_072,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    // Mistral
+    ModelDef {
+        id: "mistralai/Mistral-Small-3.2-24B-Instruct-2506",
+        provider_id: "deepinfra",
+        context_window: 128_000,
+        max_output_tokens: 128_000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "mistralai/Mixtral-8x7B-Instruct-v0.1",
+        provider_id: "deepinfra",
+        context_window: 32_768,
+        max_output_tokens: 32_768,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    // Google Gemma
+    ModelDef {
+        id: "google/gemma-3-27b-it",
+        provider_id: "deepinfra",
+        context_window: 131_072,
+        max_output_tokens: 131_072,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    // Microsoft Phi
+    ModelDef {
+        id: "microsoft/phi-4",
+        provider_id: "deepinfra",
+        context_window: 16_384,
+        max_output_tokens: 16_384,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    // Embeddings
+    ModelDef {
+        id: "BAAI/bge-large-en-v1.5",
+        provider_id: "deepinfra",
+        context_window: 512,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: false,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "BAAI/bge-m3",
+        provider_id: "deepinfra",
+        context_window: 8_192,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: false,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "Qwen/Qwen3-Embedding-8B",
+        provider_id: "deepinfra",
+        context_window: 32_768,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: false,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "intfloat/multilingual-e5-large",
+        provider_id: "deepinfra",
+        context_window: 512,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: false,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+];

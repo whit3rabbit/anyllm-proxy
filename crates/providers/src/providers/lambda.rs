@@ -1,12 +1,17 @@
-use crate::model::ModelDef;
+use crate::model::{ModelCapabilities, ModelDef, ModelStatus};
 use crate::provider::{
     AuthKind, ProviderCapabilities, ProviderDef, ProviderProtocol, ProviderStatus,
 };
 
+// Lambda Inference API (lambda.ai, formerly lambdalabs.com).
+// OpenAI-compatible surface at https://api.lambda.ai/v1. Auth is a Bearer
+// token taken from the LAMBDA_API_KEY env var. Note: as of 2025 Lambda has
+// publicly stated the Inference API is "winding down" in favor of dedicated
+// GPU deployments, so the GA catalog may continue to shrink.
 pub const PROVIDER: ProviderDef = ProviderDef {
     id: "lambda_ai",
     display_name: "Lambda AI",
-    default_base_url: "https://api.lambdalabs.com/v1",
+    default_base_url: "https://api.lambda.ai/v1",
     protocol: ProviderProtocol::OpenAICompat,
     auth: AuthKind::Bearer,
     status: ProviderStatus::Stub,
@@ -17,9 +22,261 @@ pub const PROVIDER: ProviderDef = ProviderDef {
         streaming: true,
         tool_use: true,
         embeddings: false,
-        vision: false,
+        vision: true,
         batch: false,
     },
 };
 
-pub const MODELS: &[ModelDef] = &[];
+// Model IDs mirror Lambda's OpenAI-compatible catalog (no provider prefix on
+// the wire). Context windows use the upstream model-card values; tool_use
+// reflects whether the base model supports function calling on Lambda's
+// endpoint. Vision is only set for the Llama 3.2 vision variant.
+pub const MODELS: &[ModelDef] = &[
+    ModelDef {
+        id: "llama3.1-8b-instruct",
+        provider_id: "lambda_ai",
+        context_window: 128_000,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "llama3.1-70b-instruct-fp8",
+        provider_id: "lambda_ai",
+        context_window: 128_000,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "llama3.1-405b-instruct-fp8",
+        provider_id: "lambda_ai",
+        context_window: 128_000,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "llama3.1-nemotron-70b-instruct-fp8",
+        provider_id: "lambda_ai",
+        context_window: 128_000,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "llama3.2-11b-vision-instruct",
+        provider_id: "lambda_ai",
+        context_window: 128_000,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: true,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "llama3.3-70b-instruct-fp8",
+        provider_id: "lambda_ai",
+        context_window: 128_000,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "llama-4-scout-17b-16e-instruct",
+        provider_id: "lambda_ai",
+        context_window: 128_000,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "llama-4-maverick-17b-128e-instruct-fp8",
+        provider_id: "lambda_ai",
+        context_window: 128_000,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "hermes3-8b",
+        provider_id: "lambda_ai",
+        context_window: 128_000,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "hermes3-70b",
+        provider_id: "lambda_ai",
+        context_window: 128_000,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "hermes3-405b",
+        provider_id: "lambda_ai",
+        context_window: 128_000,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "qwen25-coder-32b-instruct",
+        provider_id: "lambda_ai",
+        context_window: 32_768,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "qwen3-32b-fp8",
+        provider_id: "lambda_ai",
+        context_window: 131_072,
+        max_output_tokens: 8_192,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "deepseek-v3-0324",
+        provider_id: "lambda_ai",
+        context_window: 128_000,
+        max_output_tokens: 8_192,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "deepseek-r1-0528",
+        provider_id: "lambda_ai",
+        context_window: 128_000,
+        max_output_tokens: 8_192,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "deepseek-r1-671b",
+        provider_id: "lambda_ai",
+        context_window: 128_000,
+        max_output_tokens: 8_192,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "deepseek-llama3.3-70b",
+        provider_id: "lambda_ai",
+        context_window: 128_000,
+        max_output_tokens: 8_192,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "lfm-7b",
+        provider_id: "lambda_ai",
+        context_window: 32_768,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "lfm-40b",
+        provider_id: "lambda_ai",
+        context_window: 32_768,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+];

@@ -23,11 +23,13 @@ pub const PROVIDER: ProviderDef = ProviderDef {
 };
 
 pub const MODELS: &[ModelDef] = &[
+    // deepseek-chat: non-thinking mode of DeepSeek-V3.2. Supports tool calls,
+    // JSON output, and FIM completion (beta). 128K context; 8K max output.
     ModelDef {
         id: "deepseek-chat",
         provider_id: "deepseek",
-        context_window: 64_000,
-        max_output_tokens: 8_000,
+        context_window: 128_000,
+        max_output_tokens: 8_192,
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
@@ -36,10 +38,13 @@ pub const MODELS: &[ModelDef] = &[
         },
         status: ModelStatus::Available,
     },
+    // deepseek-reasoner: thinking mode of DeepSeek-V3.2. Supports JSON output
+    // and chat prefix completion (beta). Does NOT support function calling or FIM.
+    // 128K context; 64K max output (default 32K).
     ModelDef {
         id: "deepseek-reasoner",
         provider_id: "deepseek",
-        context_window: 64_000,
+        context_window: 128_000,
         max_output_tokens: 64_000,
         capabilities: ModelCapabilities {
             streaming: true,

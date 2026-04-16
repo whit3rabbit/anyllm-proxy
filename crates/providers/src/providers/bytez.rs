@@ -6,7 +6,7 @@ use crate::provider::{
 pub const PROVIDER: ProviderDef = ProviderDef {
     id: "bytez",
     display_name: "Bytez",
-    default_base_url: "https://api.bytez.com/models/v2",
+    default_base_url: "https://api.bytez.com/models/v2/openai/v1",
     protocol: ProviderProtocol::OpenAICompat,
     auth: AuthKind::Bearer,
     status: ProviderStatus::Stub,

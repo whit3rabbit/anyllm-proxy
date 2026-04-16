@@ -3,11 +3,17 @@ use crate::provider::{
     AuthKind, ProviderCapabilities, ProviderDef, ProviderProtocol, ProviderStatus,
 };
 
-/// Deepgram — speech-to-text and audio AI. Chat completions are not supported.
+/// Deepgram — speech-to-text (Nova, Whisper) and text-to-speech (Aura) APIs.
+///
+/// Not an LLM chat-completions provider. Voice Agent (`/v1/agent/converse`) delegates
+/// "thinking" to third-party LLMs rather than exposing its own chat endpoint.
+///
+/// Auth header is actually `Authorization: Token <key>`. The closest `AuthKind`
+/// variant is `Bearer`; callers must emit `Token` instead of `Bearer` for Deepgram.
 pub const PROVIDER: ProviderDef = ProviderDef {
     id: "deepgram",
     display_name: "Deepgram",
-    default_base_url: "https://api.deepgram.com",
+    default_base_url: "https://api.deepgram.com/v1",
     protocol: ProviderProtocol::OpenAICompat,
     auth: AuthKind::Bearer,
     status: ProviderStatus::Wired,
@@ -15,7 +21,9 @@ pub const PROVIDER: ProviderDef = ProviderDef {
     litellm_prefix: "",
     capabilities: ProviderCapabilities {
         chat_completions: false,
-        streaming: false,
+        // Streaming is a core Deepgram feature: WebSocket STT (/v1/listen) and
+        // streaming TTS (/v1/speak) are both supported.
+        streaming: true,
         tool_use: false,
         embeddings: false,
         vision: false,
@@ -23,9 +31,79 @@ pub const PROVIDER: ProviderDef = ProviderDef {
     },
 };
 
+// Model list mirrors Deepgram's public catalog as of 2025. Context/output token
+// fields are zero because speech models are billed per audio-second, not tokens.
 pub const MODELS: &[ModelDef] = &[
+    // -- STT: Flux (turn-aware, English) --
+    ModelDef {
+        id: "flux-general-en",
+        provider_id: "deepgram",
+        context_window: 0,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    // -- STT: Nova-3 --
+    ModelDef {
+        id: "nova-3",
+        provider_id: "deepgram",
+        context_window: 0,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "nova-3-general",
+        provider_id: "deepgram",
+        context_window: 0,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "nova-3-medical",
+        provider_id: "deepgram",
+        context_window: 0,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    // -- STT: Nova-2 --
     ModelDef {
         id: "nova-2",
+        provider_id: "deepgram",
+        context_window: 0,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "nova-2-general",
         provider_id: "deepgram",
         context_window: 0,
         max_output_tokens: 0,
@@ -142,6 +220,33 @@ pub const MODELS: &[ModelDef] = &[
         status: ModelStatus::Available,
     },
     ModelDef {
+        id: "nova-2-automotive",
+        provider_id: "deepgram",
+        context_window: 0,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "nova-2-atc",
+        provider_id: "deepgram",
+        context_window: 0,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    // -- STT: Nova (legacy) --
+    ModelDef {
         id: "nova",
         provider_id: "deepgram",
         context_window: 0,
@@ -155,6 +260,33 @@ pub const MODELS: &[ModelDef] = &[
         status: ModelStatus::Available,
     },
     ModelDef {
+        id: "nova-phonecall",
+        provider_id: "deepgram",
+        context_window: 0,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "nova-medical",
+        provider_id: "deepgram",
+        context_window: 0,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    // -- STT: Enhanced (legacy) --
+    ModelDef {
         id: "enhanced",
         provider_id: "deepgram",
         context_window: 0,
@@ -167,6 +299,7 @@ pub const MODELS: &[ModelDef] = &[
         },
         status: ModelStatus::Available,
     },
+    // -- STT: Base (legacy) --
     ModelDef {
         id: "base",
         provider_id: "deepgram",
@@ -180,39 +313,14 @@ pub const MODELS: &[ModelDef] = &[
         },
         status: ModelStatus::Available,
     },
+    // -- STT: Whisper Cloud --
     ModelDef {
-        id: "whisper-large",
+        id: "whisper-tiny",
         provider_id: "deepgram",
         context_window: 0,
         max_output_tokens: 0,
         capabilities: ModelCapabilities {
-            streaming: true,
-            tool_use: false,
-            vision: false,
-            extended_thinking: false,
-        },
-        status: ModelStatus::Available,
-    },
-    ModelDef {
-        id: "whisper-medium",
-        provider_id: "deepgram",
-        context_window: 0,
-        max_output_tokens: 0,
-        capabilities: ModelCapabilities {
-            streaming: true,
-            tool_use: false,
-            vision: false,
-            extended_thinking: false,
-        },
-        status: ModelStatus::Available,
-    },
-    ModelDef {
-        id: "whisper-small",
-        provider_id: "deepgram",
-        context_window: 0,
-        max_output_tokens: 0,
-        capabilities: ModelCapabilities {
-            streaming: true,
+            streaming: false,
             tool_use: false,
             vision: false,
             extended_thinking: false,
@@ -225,6 +333,59 @@ pub const MODELS: &[ModelDef] = &[
         context_window: 0,
         max_output_tokens: 0,
         capabilities: ModelCapabilities {
+            streaming: false,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "whisper-small",
+        provider_id: "deepgram",
+        context_window: 0,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: false,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "whisper-medium",
+        provider_id: "deepgram",
+        context_window: 0,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: false,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "whisper-large",
+        provider_id: "deepgram",
+        context_window: 0,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: false,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    // -- TTS: Aura-2 (English, representative voices) --
+    ModelDef {
+        id: "aura-2-thalia-en",
+        provider_id: "deepgram",
+        context_window: 0,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
             vision: false,
@@ -233,7 +394,295 @@ pub const MODELS: &[ModelDef] = &[
         status: ModelStatus::Available,
     },
     ModelDef {
-        id: "whisper-tiny",
+        id: "aura-2-asteria-en",
+        provider_id: "deepgram",
+        context_window: 0,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "aura-2-luna-en",
+        provider_id: "deepgram",
+        context_window: 0,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "aura-2-zeus-en",
+        provider_id: "deepgram",
+        context_window: 0,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "aura-2-orion-en",
+        provider_id: "deepgram",
+        context_window: 0,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "aura-2-apollo-en",
+        provider_id: "deepgram",
+        context_window: 0,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    // -- TTS: Aura-2 (multilingual, representative voices) --
+    ModelDef {
+        id: "aura-2-celeste-es",
+        provider_id: "deepgram",
+        context_window: 0,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "aura-2-agathe-fr",
+        provider_id: "deepgram",
+        context_window: 0,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "aura-2-julius-de",
+        provider_id: "deepgram",
+        context_window: 0,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "aura-2-livia-it",
+        provider_id: "deepgram",
+        context_window: 0,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "aura-2-fujin-ja",
+        provider_id: "deepgram",
+        context_window: 0,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "aura-2-rhea-nl",
+        provider_id: "deepgram",
+        context_window: 0,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    // -- TTS: Aura 1 (English) --
+    ModelDef {
+        id: "aura-asteria-en",
+        provider_id: "deepgram",
+        context_window: 0,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "aura-luna-en",
+        provider_id: "deepgram",
+        context_window: 0,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "aura-stella-en",
+        provider_id: "deepgram",
+        context_window: 0,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "aura-athena-en",
+        provider_id: "deepgram",
+        context_window: 0,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "aura-hera-en",
+        provider_id: "deepgram",
+        context_window: 0,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "aura-orion-en",
+        provider_id: "deepgram",
+        context_window: 0,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "aura-arcas-en",
+        provider_id: "deepgram",
+        context_window: 0,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "aura-perseus-en",
+        provider_id: "deepgram",
+        context_window: 0,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "aura-angus-en",
+        provider_id: "deepgram",
+        context_window: 0,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "aura-orpheus-en",
+        provider_id: "deepgram",
+        context_window: 0,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "aura-helios-en",
+        provider_id: "deepgram",
+        context_window: 0,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "aura-zeus-en",
         provider_id: "deepgram",
         context_window: 0,
         max_output_tokens: 0,

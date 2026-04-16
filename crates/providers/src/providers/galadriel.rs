@@ -16,7 +16,7 @@ pub const PROVIDER: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: false,
-        embeddings: false,
+        embeddings: true,
         vision: false,
         batch: false,
     },

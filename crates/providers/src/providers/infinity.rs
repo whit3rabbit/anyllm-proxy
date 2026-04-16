@@ -3,11 +3,13 @@ use crate::provider::{
     AuthKind, ProviderCapabilities, ProviderDef, ProviderProtocol, ProviderStatus,
 };
 
-/// Infinity — self-hosted embedding server (local, no auth).
+/// Infinity — self-hosted OpenAI-compatible embeddings & reranking server
+/// (michaelfeil/infinity). No auth by default; optional `INFINITY_API_KEY`.
+/// Models are user-served, so the catalog is empty.
 pub const PROVIDER: ProviderDef = ProviderDef {
     id: "infinity",
     display_name: "Infinity",
-    default_base_url: "http://localhost:7997",
+    default_base_url: "http://localhost:7997/v1",
     protocol: ProviderProtocol::OpenAICompat,
     auth: AuthKind::None,
     status: ProviderStatus::Stub,

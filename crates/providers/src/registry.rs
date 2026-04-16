@@ -293,9 +293,10 @@ mod tests {
     }
 
     #[test]
-    fn stub_models_empty() {
-        // Stubs intentionally ship with no model list until filled in.
-        assert!(list_models("groq").is_empty());
+    fn self_hosted_models_empty() {
+        // Self-hosted providers have no static model list by design.
+        assert!(list_models("ollama").is_empty());
+        assert!(list_models("hosted_vllm").is_empty());
     }
 
     #[test]

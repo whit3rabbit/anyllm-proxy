@@ -1,4 +1,4 @@
-use crate::model::ModelDef;
+use crate::model::{ModelCapabilities, ModelDef, ModelStatus};
 use crate::provider::{
     AuthKind, ProviderCapabilities, ProviderDef, ProviderProtocol, ProviderStatus,
 };
@@ -22,4 +22,178 @@ pub const PROVIDER: ProviderDef = ProviderDef {
     },
 };
 
-pub const MODELS: &[ModelDef] = &[];
+// Featherless hosts 32k+ HuggingFace models behind an OpenAI-compatible API.
+// Model IDs use the HuggingFace `org/name` path. The entries below are a
+// representative subset of widely-used GA models; the full catalog is
+// discoverable at GET /v1/models.
+pub const MODELS: &[ModelDef] = &[
+    ModelDef {
+        id: "meta-llama/Meta-Llama-3.1-8B-Instruct",
+        provider_id: "featherless_ai",
+        context_window: 32_768,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "meta-llama/Meta-Llama-3.1-70B-Instruct",
+        provider_id: "featherless_ai",
+        context_window: 32_768,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "meta-llama/Llama-3.3-70B-Instruct",
+        provider_id: "featherless_ai",
+        context_window: 32_768,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "meta-llama/Llama-3.2-3B-Instruct",
+        provider_id: "featherless_ai",
+        context_window: 32_768,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "Qwen/Qwen2.5-7B-Instruct",
+        provider_id: "featherless_ai",
+        context_window: 32_768,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "Qwen/Qwen2.5-72B-Instruct",
+        provider_id: "featherless_ai",
+        context_window: 32_768,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "Qwen/Qwen2.5-Coder-32B-Instruct",
+        provider_id: "featherless_ai",
+        context_window: 32_768,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "Qwen/Qwen3-8B",
+        provider_id: "featherless_ai",
+        context_window: 32_768,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "deepseek-ai/DeepSeek-V3",
+        provider_id: "featherless_ai",
+        context_window: 32_768,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "deepseek-ai/DeepSeek-R1-Distill-Llama-70B",
+        provider_id: "featherless_ai",
+        context_window: 32_768,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "mistralai/Mistral-7B-Instruct-v0.3",
+        provider_id: "featherless_ai",
+        context_window: 32_768,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "mistralai/Mixtral-8x7B-Instruct-v0.1",
+        provider_id: "featherless_ai",
+        context_window: 32_768,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "mistralai/Mistral-Nemo-Instruct-2407",
+        provider_id: "featherless_ai",
+        context_window: 32_768,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+];

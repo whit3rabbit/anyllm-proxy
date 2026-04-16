@@ -3,11 +3,12 @@ use crate::provider::{
     AuthKind, ProviderCapabilities, ProviderDef, ProviderProtocol, ProviderStatus,
 };
 
-/// Lemonade — local LLM server (no auth).
+/// Lemonade — AMD's local LLM server with an OpenAI-compatible API.
+/// Default port 13305; users load their own models via `/api/v1/pull` + `/api/v1/load`.
 pub const PROVIDER: ProviderDef = ProviderDef {
     id: "lemonade",
     display_name: "Lemonade",
-    default_base_url: "http://localhost:8000",
+    default_base_url: "http://localhost:13305/api/v1",
     protocol: ProviderProtocol::OpenAICompat,
     auth: AuthKind::None,
     status: ProviderStatus::Stub,
@@ -16,9 +17,9 @@ pub const PROVIDER: ProviderDef = ProviderDef {
     capabilities: ProviderCapabilities {
         chat_completions: true,
         streaming: true,
-        tool_use: false,
-        embeddings: false,
-        vision: false,
+        tool_use: true,
+        embeddings: true,
+        vision: true,
         batch: false,
     },
 };

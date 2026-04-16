@@ -22,4 +22,7 @@ pub const PROVIDER: ProviderDef = ProviderDef {
     },
 };
 
+// OpenRouter aggregates hundreds of models from many upstream providers.
+// Model ids use the form `<provider>/<model>` and are passed through as-is.
+// Use GET /api/v1/models at runtime to enumerate available slugs.
 pub const MODELS: &[ModelDef] = &[];

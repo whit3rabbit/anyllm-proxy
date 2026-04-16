@@ -50,6 +50,19 @@ pub const MODELS: &[ModelDef] = &[
         status: ModelStatus::Available,
     },
     ModelDef {
+        id: "gemini-2.5-flash-lite",
+        provider_id: "gemini",
+        context_window: 1_048_576,
+        max_output_tokens: 65_536,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
         id: "gemini-2.0-flash",
         provider_id: "gemini",
         context_window: 1_048_576,
@@ -110,6 +123,21 @@ pub const MODELS: &[ModelDef] = &[
             streaming: true,
             tool_use: true,
             vision: true,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    // Embedding model. max_output_tokens is not meaningful; set to 0 to match
+    // the `text-embedding-3-*` convention in openai.rs.
+    ModelDef {
+        id: "gemini-embedding-001",
+        provider_id: "gemini",
+        context_window: 2_048,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: false,
+            tool_use: false,
+            vision: false,
             extended_thinking: false,
         },
         status: ModelStatus::Available,

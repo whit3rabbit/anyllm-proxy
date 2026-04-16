@@ -1,8 +1,11 @@
-use crate::model::ModelDef;
+use crate::model::{ModelCapabilities, ModelDef, ModelStatus};
 use crate::provider::{
     AuthKind, ProviderCapabilities, ProviderDef, ProviderProtocol, ProviderStatus,
 };
 
+// NVIDIA NIM (NVIDIA Inference Microservices) exposes an OpenAI-compatible
+// endpoint at https://integrate.api.nvidia.com/v1 (auth: Bearer NVIDIA_API_KEY).
+// Model catalog sourced from build.nvidia.com / docs.api.nvidia.com.
 pub const PROVIDER: ProviderDef = ProviderDef {
     id: "nvidia_nim",
     display_name: "NVIDIA NIM",
@@ -10,7 +13,7 @@ pub const PROVIDER: ProviderDef = ProviderDef {
     protocol: ProviderProtocol::OpenAICompat,
     auth: AuthKind::Bearer,
     status: ProviderStatus::Stub,
-    env_vars: &["NVIDIA_NIM_API_KEY"],
+    env_vars: &["NVIDIA_NIM_API_KEY", "NVIDIA_API_KEY"],
     litellm_prefix: "nvidia_nim/",
     capabilities: ProviderCapabilities {
         chat_completions: true,
@@ -22,4 +25,247 @@ pub const PROVIDER: ProviderDef = ProviderDef {
     },
 };
 
-pub const MODELS: &[ModelDef] = &[];
+pub const MODELS: &[ModelDef] = &[
+    // Meta Llama family
+    ModelDef {
+        id: "meta/llama-3.1-405b-instruct",
+        provider_id: "nvidia_nim",
+        context_window: 128_000,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "meta/llama-3.1-70b-instruct",
+        provider_id: "nvidia_nim",
+        context_window: 128_000,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "meta/llama-3.1-8b-instruct",
+        provider_id: "nvidia_nim",
+        context_window: 128_000,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "meta/llama-3.3-70b-instruct",
+        provider_id: "nvidia_nim",
+        context_window: 128_000,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    // Llama 3.2 vision-capable variants
+    ModelDef {
+        id: "meta/llama-3.2-11b-vision-instruct",
+        provider_id: "nvidia_nim",
+        context_window: 128_000,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: true,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "meta/llama-3.2-90b-vision-instruct",
+        provider_id: "nvidia_nim",
+        context_window: 128_000,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: true,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    // NVIDIA Nemotron family
+    ModelDef {
+        id: "nvidia/llama-3.1-nemotron-70b-instruct",
+        provider_id: "nvidia_nim",
+        context_window: 128_000,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "nvidia/llama-3.3-nemotron-super-49b-v1",
+        provider_id: "nvidia_nim",
+        context_window: 128_000,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    // DeepSeek
+    ModelDef {
+        id: "deepseek-ai/deepseek-r1",
+        provider_id: "nvidia_nim",
+        context_window: 128_000,
+        max_output_tokens: 8_192,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "deepseek-ai/deepseek-r1-distill-llama-8b",
+        provider_id: "nvidia_nim",
+        context_window: 128_000,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "deepseek-ai/deepseek-r1-distill-qwen-32b",
+        provider_id: "nvidia_nim",
+        context_window: 128_000,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    // Mistral AI
+    ModelDef {
+        id: "mistralai/mistral-large-2-instruct",
+        provider_id: "nvidia_nim",
+        context_window: 128_000,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "mistralai/mixtral-8x22b-instruct-v0.1",
+        provider_id: "nvidia_nim",
+        context_window: 65_536,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    // Microsoft Phi
+    ModelDef {
+        id: "microsoft/phi-3-medium-4k-instruct",
+        provider_id: "nvidia_nim",
+        context_window: 4_096,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    // Qwen
+    ModelDef {
+        id: "qwen/qwen2.5-7b-instruct",
+        provider_id: "nvidia_nim",
+        context_window: 32_768,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "qwen/qwen2.5-coder-32b-instruct",
+        provider_id: "nvidia_nim",
+        context_window: 32_768,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    // NVIDIA retrieval embeddings
+    ModelDef {
+        id: "nvidia/nv-embedqa-e5-v5",
+        provider_id: "nvidia_nim",
+        context_window: 512,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: false,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "nvidia/llama-3.2-nv-embedqa-1b-v2",
+        provider_id: "nvidia_nim",
+        context_window: 8_192,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: false,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+];

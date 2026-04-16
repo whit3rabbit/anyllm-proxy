@@ -23,11 +23,106 @@ pub const PROVIDER: ProviderDef = ProviderDef {
 };
 
 pub const MODELS: &[ModelDef] = &[
+    // GPT-5 family (GA). Context window 272k, max output 128k, reasoning-capable.
+    // Verified against LiteLLM `model_prices_and_context_window.json` (openai provider).
+    ModelDef {
+        id: "gpt-5",
+        provider_id: "openai",
+        context_window: 272_000,
+        max_output_tokens: 128_000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "gpt-5-mini",
+        provider_id: "openai",
+        context_window: 272_000,
+        max_output_tokens: 128_000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "gpt-5-nano",
+        provider_id: "openai",
+        context_window: 272_000,
+        max_output_tokens: 128_000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    // GPT-4.1 family (GA, 2025-04-14). 1,047,576-token context, 32,768 max output.
+    ModelDef {
+        id: "gpt-4.1",
+        provider_id: "openai",
+        context_window: 1_047_576,
+        max_output_tokens: 32_768,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "gpt-4.1-mini",
+        provider_id: "openai",
+        context_window: 1_047_576,
+        max_output_tokens: 32_768,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "gpt-4.1-nano",
+        provider_id: "openai",
+        context_window: 1_047_576,
+        max_output_tokens: 32_768,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
     ModelDef {
         id: "gpt-4o",
         provider_id: "openai",
         context_window: 128_000,
         max_output_tokens: 16_384,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    // ChatGPT-4o latest (auto-updated alias). 128k context, 4k output per LiteLLM.
+    ModelDef {
+        id: "chatgpt-4o-latest",
+        provider_id: "openai",
+        context_window: 128_000,
+        max_output_tokens: 4_096,
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,

@@ -1,19 +1,28 @@
-use crate::model::{ModelCapabilities, ModelDef, ModelStatus};
+use crate::model::ModelDef;
 use crate::provider::{
     AuthKind, ProviderCapabilities, ProviderDef, ProviderProtocol, ProviderStatus,
 };
 
-/// Stability AI — primarily image generation; chat completions not supported.
+/// Stability AI — image generation (Stable Image / Stable Diffusion 3.5 family)
+/// plus upscalers, edits, and video endpoints. All endpoints are per-model REST
+/// paths under `/v2beta` (e.g. `POST /v2beta/stable-image/generate/ultra`),
+/// not OpenAI-compatible chat. See https://platform.stability.ai/docs/api-reference.
 pub const PROVIDER: ProviderDef = ProviderDef {
     id: "stability_ai",
     display_name: "Stability AI",
-    default_base_url: "https://api.stability.ai/v2beta",
+    // Official REST host. Path versioning (`/v2beta/...`, `/v1/...`) is per-endpoint
+    // and therefore handled by the caller, not baked into the base URL.
+    default_base_url: "https://api.stability.ai",
     protocol: ProviderProtocol::OpenAICompat,
     auth: AuthKind::Bearer,
     status: ProviderStatus::Wired,
     env_vars: &["STABILITY_API_KEY"],
     litellm_prefix: "stability_ai/",
     capabilities: ProviderCapabilities {
+        // Image-generation focused: no chat, streaming, tools, embeddings, or batch.
+        // `vision` here means input-image-as-context for chat, which Stability does
+        // not offer (image-to-image exists, but is a separate REST endpoint, not a
+        // chat vision capability).
         chat_completions: false,
         streaming: false,
         tool_use: false,
@@ -23,135 +32,7 @@ pub const PROVIDER: ProviderDef = ProviderDef {
     },
 };
 
-pub const MODELS: &[ModelDef] = &[
-    ModelDef {
-        id: "stable-diffusion-3-5-large",
-        provider_id: "stability_ai",
-        context_window: 0,
-        max_output_tokens: 0,
-        capabilities: ModelCapabilities {
-            streaming: false,
-            tool_use: false,
-            vision: false,
-            extended_thinking: false,
-        },
-        status: ModelStatus::Available,
-    },
-    ModelDef {
-        id: "stable-diffusion-3-5-large-turbo",
-        provider_id: "stability_ai",
-        context_window: 0,
-        max_output_tokens: 0,
-        capabilities: ModelCapabilities {
-            streaming: false,
-            tool_use: false,
-            vision: false,
-            extended_thinking: false,
-        },
-        status: ModelStatus::Available,
-    },
-    ModelDef {
-        id: "stable-diffusion-3-5-medium",
-        provider_id: "stability_ai",
-        context_window: 0,
-        max_output_tokens: 0,
-        capabilities: ModelCapabilities {
-            streaming: false,
-            tool_use: false,
-            vision: false,
-            extended_thinking: false,
-        },
-        status: ModelStatus::Available,
-    },
-    ModelDef {
-        id: "stable-diffusion-3-large",
-        provider_id: "stability_ai",
-        context_window: 0,
-        max_output_tokens: 0,
-        capabilities: ModelCapabilities {
-            streaming: false,
-            tool_use: false,
-            vision: false,
-            extended_thinking: false,
-        },
-        status: ModelStatus::Available,
-    },
-    ModelDef {
-        id: "stable-diffusion-3-large-turbo",
-        provider_id: "stability_ai",
-        context_window: 0,
-        max_output_tokens: 0,
-        capabilities: ModelCapabilities {
-            streaming: false,
-            tool_use: false,
-            vision: false,
-            extended_thinking: false,
-        },
-        status: ModelStatus::Available,
-    },
-    ModelDef {
-        id: "stable-diffusion-3-medium",
-        provider_id: "stability_ai",
-        context_window: 0,
-        max_output_tokens: 0,
-        capabilities: ModelCapabilities {
-            streaming: false,
-            tool_use: false,
-            vision: false,
-            extended_thinking: false,
-        },
-        status: ModelStatus::Available,
-    },
-    ModelDef {
-        id: "stable-image-ultra",
-        provider_id: "stability_ai",
-        context_window: 0,
-        max_output_tokens: 0,
-        capabilities: ModelCapabilities {
-            streaming: false,
-            tool_use: false,
-            vision: false,
-            extended_thinking: false,
-        },
-        status: ModelStatus::Available,
-    },
-    ModelDef {
-        id: "stable-image-core",
-        provider_id: "stability_ai",
-        context_window: 0,
-        max_output_tokens: 0,
-        capabilities: ModelCapabilities {
-            streaming: false,
-            tool_use: false,
-            vision: false,
-            extended_thinking: false,
-        },
-        status: ModelStatus::Available,
-    },
-    ModelDef {
-        id: "stable-diffusion-xl-1024-v1-0",
-        provider_id: "stability_ai",
-        context_window: 0,
-        max_output_tokens: 0,
-        capabilities: ModelCapabilities {
-            streaming: false,
-            tool_use: false,
-            vision: false,
-            extended_thinking: false,
-        },
-        status: ModelStatus::Deprecated,
-    },
-    ModelDef {
-        id: "stable-diffusion-v1-6",
-        provider_id: "stability_ai",
-        context_window: 0,
-        max_output_tokens: 0,
-        capabilities: ModelCapabilities {
-            streaming: false,
-            tool_use: false,
-            vision: false,
-            extended_thinking: false,
-        },
-        status: ModelStatus::Deprecated,
-    },
-];
+// Stability's API exposes per-endpoint model paths (e.g. `/v2beta/stable-image/
+// generate/ultra`) rather than a `model` field in a chat request, so there are
+// no chat-style model IDs to enumerate here. Consumers select behaviour by URL.
+pub const MODELS: &[ModelDef] = &[];
