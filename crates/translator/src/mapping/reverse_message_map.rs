@@ -357,11 +357,10 @@ fn convert_assistant_to_anthropic(msg: &openai::ChatMessage) -> anthropic::Conte
 
     // Map text content
     match &msg.content {
-        Some(openai::ChatContent::Text(text)) => {
-            if !text.is_empty() {
-                blocks.push(anthropic::ContentBlock::Text { text: text.clone() });
-            }
+        Some(openai::ChatContent::Text(text)) if !text.is_empty() => {
+            blocks.push(anthropic::ContentBlock::Text { text: text.clone() });
         }
+        Some(openai::ChatContent::Text(_)) => {}
         Some(openai::ChatContent::Parts(parts)) => {
             for part in parts {
                 if let openai::ChatContentPart::Text { text } = part {

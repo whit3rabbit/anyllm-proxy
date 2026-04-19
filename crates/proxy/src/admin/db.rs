@@ -1494,11 +1494,10 @@ pub fn query_failure_breakdown(
             status_code: aggregate.status_code,
             count: aggregate.count,
             latest_seen: aggregate.latest_seen,
-            avg_latency_ms: if aggregate.count == 0 {
-                0
-            } else {
-                aggregate.total_latency_ms / aggregate.count
-            },
+            avg_latency_ms: aggregate
+                .total_latency_ms
+                .checked_div(aggregate.count)
+                .unwrap_or(0),
             summary: aggregate.summary,
         })
         .collect::<Vec<_>>();

@@ -93,6 +93,9 @@ async fn handle_ws(
                 match msg {
                     Some(Ok(Message::Close(_))) | None => break,
                     Some(Ok(Message::Ping(data))) => {
+                        // Guard form (clippy::collapsible_match) would move `data` in the
+                        // guard, which Rust forbids. Keep the explicit nested if.
+                        #[allow(clippy::collapsible_match)]
                         if socket.send(Message::Pong(data)).await.is_err() {
                             break;
                         }
