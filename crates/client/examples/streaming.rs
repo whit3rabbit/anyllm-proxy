@@ -43,17 +43,16 @@ async fn run() -> Result<(), ClientError> {
 
     while let Some(event) = stream.next().await {
         match event? {
-            StreamEvent::ContentBlockDelta { delta, .. } => {
+            StreamEvent::ContentBlockDelta {
+                delta: Delta::TextDelta { text },
+                ..
+            } => {
                 // TextDelta carries incremental text. Print immediately without buffering.
-                if let Delta::TextDelta { text } = delta {
-                    print!("{text}");
-                    std::io::stdout().flush().ok();
-                }
+                print!("{text}");
+                std::io::stdout().flush().ok();
             }
-            StreamEvent::MessageDelta { usage, .. } => {
-                if let Some(u) = usage {
-                    eprintln!("\n[output tokens: {}]", u.output_tokens);
-                }
+            StreamEvent::MessageDelta { usage: Some(u), .. } => {
+                eprintln!("\n[output tokens: {}]", u.output_tokens);
             }
             StreamEvent::MessageStop {} => {
                 println!(); // ensure a trailing newline

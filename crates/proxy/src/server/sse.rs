@@ -37,7 +37,6 @@ mod tests {
     /// 1. The event type mapping logic (via match coverage)
     /// 2. The JSON serialization is valid
     /// 3. The function does not error
-
     fn assert_sse_ok(event: &StreamEvent) {
         let _ = stream_event_to_sse(event).expect("stream_event_to_sse should not fail");
     }

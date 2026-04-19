@@ -38,7 +38,7 @@ async fn bedrock_non_streaming() {
 
     assert_eq!(status, 200, "unexpected status: {body}");
     assert_eq!(body["type"], "message");
-    assert!(body["content"].as_array().map_or(false, |a| !a.is_empty()));
+    assert!(body["content"].as_array().is_some_and(|a| !a.is_empty()));
 }
 
 #[tokio::test]

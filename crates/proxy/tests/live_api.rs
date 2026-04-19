@@ -164,7 +164,7 @@ async fn live_openai_streaming() {
     );
 
     // At least one content_block_delta with text.
-    let has_delta = event_types.iter().any(|&e| e == "content_block_delta");
+    let has_delta = event_types.contains(&"content_block_delta");
     assert!(has_delta, "expected at least one content_block_delta event");
 
     // Parse the data lines for content_block_delta to confirm text is present.

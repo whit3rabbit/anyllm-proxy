@@ -133,7 +133,7 @@ fn partition_deny_policy_goes_to_denied_bucket() {
 fn denied_tool_results_are_errors() {
     use anyllm_proxy::tools::trace::ToolOutcome;
 
-    let calls = vec![make_call("tc_denied", "upper", serde_json::json!({}))];
+    let calls = [make_call("tc_denied", "upper", serde_json::json!({}))];
     let refs: Vec<&ToolCall> = calls.iter().collect();
     let results = denied_tool_results(&refs);
 

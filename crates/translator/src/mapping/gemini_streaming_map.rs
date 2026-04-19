@@ -435,14 +435,25 @@ mod tests {
     fn count_event_type(events: &[anthropic::StreamEvent], type_name: &str) -> usize {
         events
             .iter()
-            .filter(|e| match (e, type_name) {
-                (anthropic::StreamEvent::MessageStart { .. }, "message_start") => true,
-                (anthropic::StreamEvent::ContentBlockStart { .. }, "content_block_start") => true,
-                (anthropic::StreamEvent::ContentBlockDelta { .. }, "content_block_delta") => true,
-                (anthropic::StreamEvent::ContentBlockStop { .. }, "content_block_stop") => true,
-                (anthropic::StreamEvent::MessageDelta { .. }, "message_delta") => true,
-                (anthropic::StreamEvent::MessageStop { .. }, "message_stop") => true,
-                _ => false,
+            .filter(|e| {
+                matches!(
+                    (e, type_name),
+                    (anthropic::StreamEvent::MessageStart { .. }, "message_start")
+                        | (
+                            anthropic::StreamEvent::ContentBlockStart { .. },
+                            "content_block_start"
+                        )
+                        | (
+                            anthropic::StreamEvent::ContentBlockDelta { .. },
+                            "content_block_delta"
+                        )
+                        | (
+                            anthropic::StreamEvent::ContentBlockStop { .. },
+                            "content_block_stop"
+                        )
+                        | (anthropic::StreamEvent::MessageDelta { .. }, "message_delta")
+                        | (anthropic::StreamEvent::MessageStop { .. }, "message_stop")
+                )
             })
             .count()
     }

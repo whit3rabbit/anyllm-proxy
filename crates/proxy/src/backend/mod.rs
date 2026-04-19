@@ -215,84 +215,6 @@ impl From<GeminiClientError> for BackendError {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn api_error_details_anthropic_returns_message() {
-        let err = BackendError::Anthropic(AnthropicClientError::ApiError {
-            status: 429,
-            body: bytes::Bytes::from_static(b"rate limit exceeded"),
-        });
-        let details = err.api_error_details();
-        assert!(details.is_some(), "Anthropic ApiError must return details");
-        let (msg, status) = details.unwrap();
-        assert_eq!(status, 429);
-        assert!(
-            msg.contains("rate limit"),
-            "message should contain upstream body"
-        );
-    }
-
-    #[test]
-    fn api_error_details_bedrock_returns_message() {
-        let err = BackendError::Bedrock(BedrockClientError::ApiError {
-            status: 403,
-            body: bytes::Bytes::from_static(b"access denied"),
-        });
-        let details = err.api_error_details();
-        assert!(details.is_some());
-        let (msg, status) = details.unwrap();
-        assert_eq!(status, 403);
-        assert!(msg.contains("access denied"));
-    }
-
-    #[test]
-    fn api_error_details_gemini_returns_message() {
-        let err = BackendError::Gemini(GeminiClientError::ApiError {
-            status: 400,
-            body: "bad request from gemini".to_string(),
-        });
-        let details = err.api_error_details();
-        assert!(details.is_some());
-        let (msg, status) = details.unwrap();
-        assert_eq!(status, 400);
-        assert!(msg.contains("gemini"));
-    }
-
-    #[test]
-    fn api_error_details_transport_returns_none() {
-        let err = BackendError::Anthropic(AnthropicClientError::Transport("timeout".into()));
-        assert!(err.api_error_details().is_none());
-    }
-
-    #[test]
-    fn api_error_details_openai_non_api_error_returns_none() {
-        // Non-ApiError variants on any backend return None.
-        // Use Bedrock::Signing since OpenAIClientError::Request requires a live reqwest::Error.
-        let err = BackendError::Bedrock(BedrockClientError::Signing("bad key".into()));
-        assert!(err.api_error_details().is_none());
-    }
-
-    #[test]
-    fn backend_error_kind_classifies_common_cases() {
-        let rate_limited = BackendError::Gemini(GeminiClientError::ApiError {
-            status: 429,
-            body: "quota hit".to_string(),
-        });
-        assert_eq!(rate_limited.error_kind(), "rate_limit");
-
-        let timeout = BackendError::Anthropic(AnthropicClientError::Transport(
-            "request timeout".to_string(),
-        ));
-        assert_eq!(timeout.error_kind(), "timeout");
-
-        let signing = BackendError::Bedrock(BedrockClientError::Signing("bad sig".into()));
-        assert_eq!(signing.error_kind(), "signing");
-    }
-}
-
 impl BackendClient {
     /// Forward a raw request to a passthrough endpoint (audio, images, etc.).
     /// Returns `501 Not Implemented` for Anthropic/Bedrock backends.
@@ -475,5 +397,83 @@ impl BackendClient {
                 &bc.tls,
             )),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn api_error_details_anthropic_returns_message() {
+        let err = BackendError::Anthropic(AnthropicClientError::ApiError {
+            status: 429,
+            body: bytes::Bytes::from_static(b"rate limit exceeded"),
+        });
+        let details = err.api_error_details();
+        assert!(details.is_some(), "Anthropic ApiError must return details");
+        let (msg, status) = details.unwrap();
+        assert_eq!(status, 429);
+        assert!(
+            msg.contains("rate limit"),
+            "message should contain upstream body"
+        );
+    }
+
+    #[test]
+    fn api_error_details_bedrock_returns_message() {
+        let err = BackendError::Bedrock(BedrockClientError::ApiError {
+            status: 403,
+            body: bytes::Bytes::from_static(b"access denied"),
+        });
+        let details = err.api_error_details();
+        assert!(details.is_some());
+        let (msg, status) = details.unwrap();
+        assert_eq!(status, 403);
+        assert!(msg.contains("access denied"));
+    }
+
+    #[test]
+    fn api_error_details_gemini_returns_message() {
+        let err = BackendError::Gemini(GeminiClientError::ApiError {
+            status: 400,
+            body: "bad request from gemini".to_string(),
+        });
+        let details = err.api_error_details();
+        assert!(details.is_some());
+        let (msg, status) = details.unwrap();
+        assert_eq!(status, 400);
+        assert!(msg.contains("gemini"));
+    }
+
+    #[test]
+    fn api_error_details_transport_returns_none() {
+        let err = BackendError::Anthropic(AnthropicClientError::Transport("timeout".into()));
+        assert!(err.api_error_details().is_none());
+    }
+
+    #[test]
+    fn api_error_details_openai_non_api_error_returns_none() {
+        // Non-ApiError variants on any backend return None.
+        // Use Bedrock::Signing since OpenAIClientError::Request requires a live reqwest::Error.
+        let err = BackendError::Bedrock(BedrockClientError::Signing("bad key".into()));
+        assert!(err.api_error_details().is_none());
+    }
+
+    #[test]
+    fn backend_error_kind_classifies_common_cases() {
+        let rate_limited = BackendError::Gemini(GeminiClientError::ApiError {
+            status: 429,
+            body: "quota hit".to_string(),
+        });
+        assert_eq!(rate_limited.error_kind(), "rate_limit");
+
+        let timeout = BackendError::Anthropic(AnthropicClientError::Transport(
+            "request timeout".to_string(),
+        ));
+        assert_eq!(timeout.error_kind(), "timeout");
+
+        let signing = BackendError::Bedrock(BedrockClientError::Signing("bad sig".into()));
+        assert_eq!(signing.error_kind(), "signing");
     }
 }

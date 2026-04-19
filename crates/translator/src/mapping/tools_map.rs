@@ -496,7 +496,7 @@ mod tests {
                 "required": ["file_path"]
             }),
         };
-        let openai = anthropic_tools_to_openai(&[tool.clone()]);
+        let openai = anthropic_tools_to_openai(std::slice::from_ref(&tool));
         let back = openai_tools_to_anthropic(&openai);
         assert_eq!(back[0].name, tool.name);
         assert_eq!(back[0].description, tool.description);
@@ -518,7 +518,7 @@ mod tests {
                 "required": ["command"]
             }),
         };
-        let openai = anthropic_tools_to_openai(&[tool.clone()]);
+        let openai = anthropic_tools_to_openai(std::slice::from_ref(&tool));
         let back = openai_tools_to_anthropic(&openai);
         assert_eq!(back[0].name, tool.name);
         assert_eq!(back[0].input_schema, tool.input_schema);
@@ -540,7 +540,7 @@ mod tests {
                 "required": ["file_path", "old_string", "new_string"]
             }),
         };
-        let openai = anthropic_tools_to_openai(&[tool.clone()]);
+        let openai = anthropic_tools_to_openai(std::slice::from_ref(&tool));
         let back = openai_tools_to_anthropic(&openai);
         assert_eq!(back[0].name, tool.name);
         assert_eq!(back[0].input_schema, tool.input_schema);
@@ -565,7 +565,7 @@ mod tests {
                 "required": ["pattern"]
             }),
         };
-        let openai = anthropic_tools_to_openai(&[tool.clone()]);
+        let openai = anthropic_tools_to_openai(std::slice::from_ref(&tool));
         let back = openai_tools_to_anthropic(&openai);
         assert_eq!(back[0].input_schema, tool.input_schema);
     }

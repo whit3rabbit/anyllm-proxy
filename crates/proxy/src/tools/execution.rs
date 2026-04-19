@@ -634,7 +634,7 @@ mod tests {
     // 2c. denied_tool_results generates error ToolResult with correct message
     #[test]
     fn denied_tool_results_generates_error_results() {
-        let calls = vec![make_call("id1", "rm_rf", json!({}))];
+        let calls = [make_call("id1", "rm_rf", json!({}))];
         let refs: Vec<&ToolCall> = calls.iter().collect();
         let results = denied_tool_results(&refs);
 

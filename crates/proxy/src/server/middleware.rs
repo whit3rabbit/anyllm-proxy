@@ -636,8 +636,8 @@ mod ip_tests {
     fn is_ip_allowed_no_allowlist() {
         // When IP_ALLOWLIST is not set, all IPs are allowed.
         // We cannot test this directly since LazyLock is static, but the function
-        // logic is: None => true.
-        assert!(is_ip_allowed("127.0.0.1".parse().unwrap()) || true);
+        // logic is: None => true. Smoke-call to ensure it does not panic.
+        let _ = is_ip_allowed("127.0.0.1".parse().unwrap());
     }
 
     #[test]
@@ -648,8 +648,7 @@ mod ip_tests {
         let resolved: std::net::IpAddr = header
             .split(',')
             .map(|s| s.trim())
-            .filter(|s| !s.is_empty())
-            .last()
+            .rfind(|s| !s.is_empty())
             .and_then(|s| s.parse().ok())
             .unwrap();
         assert_eq!(resolved, "203.0.113.5".parse::<std::net::IpAddr>().unwrap());
@@ -661,8 +660,7 @@ mod ip_tests {
         let resolved: std::net::IpAddr = header
             .split(',')
             .map(|s| s.trim())
-            .filter(|s| !s.is_empty())
-            .last()
+            .rfind(|s| !s.is_empty())
             .and_then(|s| s.parse().ok())
             .unwrap();
         assert_eq!(resolved, "10.0.1.5".parse::<std::net::IpAddr>().unwrap());
