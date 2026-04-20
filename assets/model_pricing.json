@@ -84,6 +84,18 @@
     "provider": "anthropic"
   },
   {
+    "model_pattern": "claude-opus-4-7",
+    "input_cost_per_token": 5e-06,
+    "output_cost_per_token": 2.5e-05,
+    "provider": "anthropic"
+  },
+  {
+    "model_pattern": "claude-opus-4-7-20260416",
+    "input_cost_per_token": 5e-06,
+    "output_cost_per_token": 2.5e-05,
+    "provider": "anthropic"
+  },
+  {
     "model_pattern": "claude-sonnet-4-20250514",
     "input_cost_per_token": 3e-06,
     "output_cost_per_token": 1.5e-05,
