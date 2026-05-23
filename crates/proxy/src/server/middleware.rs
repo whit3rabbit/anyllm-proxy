@@ -45,6 +45,8 @@ fn rate_limit_response(message: &str, retry_after: u64) -> Response {
 pub struct VirtualKeyContext {
     /// Database row ID for the virtual key (used for cost accumulation).
     pub(crate) key_id: i64,
+    /// Hex-encoded credential hash used as stable distributed rate-limit key.
+    pub(crate) key_hash_hex: String,
     pub(crate) rate_state: Arc<RateLimitState>,
     /// Optional model allowlist from the virtual key policy.
     pub(crate) allowed_models: Option<Vec<String>>,
@@ -343,18 +345,19 @@ pub async fn validate_auth(
                 }
             }
 
+            let key_hash_hex: String = credential_hash.iter().map(|b| format!("{b:02x}")).collect();
+
             // Enforce TPM limit pre-check
             if let Some(tpm_limit) = meta.tpm_limit {
                 #[allow(unused_mut, unused_variables)]
                 let mut checked_ext = false;
                 #[cfg(feature = "redis")]
                 {
-                    let hash_hex: String =
-                        credential_hash.iter().map(|b| format!("{b:02x}")).collect();
                     if let Some(redis_limiter) = crate::ratelimit::get_redis_rate_limiter() {
                         checked_ext = true;
-                        if let Err(retry_after) =
-                            redis_limiter.check_tpm(&hash_hex, tpm_limit, now_ms).await
+                        if let Err(retry_after) = redis_limiter
+                            .check_tpm(&key_hash_hex, tpm_limit, now_ms)
+                            .await
                         {
                             return Err(rate_limit_response(
                                 "Token rate limit exceeded for this API key.",
@@ -410,6 +413,7 @@ pub async fn validate_auth(
             // Always insert context for post-response TPM recording and cost tracking.
             request.extensions_mut().insert(VirtualKeyContext {
                 key_id: meta.id,
+                key_hash_hex,
                 rate_state: meta.rate_state.clone(),
                 allowed_models: meta.allowed_models.clone(),
                 allowed_routes: meta.allowed_routes.clone(),
