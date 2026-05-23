@@ -148,14 +148,6 @@ pub(crate) async fn chat_completions(
         }
     };
     let bypass_cache = cache_ttl == Some(0);
-    let cache_key = if !bypass_cache {
-        Some(cache::cache_key_for_request(
-            &body_value,
-            CacheNamespace::OpenAI,
-        ))
-    } else {
-        None
-    };
 
     // Resolve model routing before reading cache so route-scoped keys cannot
     // receive cached disallowed-backend data.
@@ -179,6 +171,23 @@ pub(crate) async fn chat_completions(
             );
         }
     }
+    let auth_identity = headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .map(str::trim)
+        .unwrap_or("");
+    let cache_key = if !bypass_cache {
+        Some(cache::cache_key_for_request(
+            &body_value,
+            CacheNamespace::OpenAI,
+            &cache::CacheScope {
+                backend_name: &effective.backend_name,
+                auth_identity,
+            },
+        ))
+    } else {
+        None
+    };
 
     // Check cache on non-bypass requests
     if let (Some(ref key), Some(ref c)) = (&cache_key, &state.cache) {
