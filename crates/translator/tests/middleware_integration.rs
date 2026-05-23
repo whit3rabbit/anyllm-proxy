@@ -140,6 +140,7 @@ fn test_config(backend_url: &str) -> AnthropicCompatConfig {
     AnthropicCompatConfig::builder()
         .backend_url(backend_url)
         .api_key("test-key")
+        .client_api_key("client-key")
         .translation(
             TranslationConfig::builder()
                 .model_map("haiku", "gpt-4o-mini")
@@ -167,6 +168,7 @@ async fn non_streaming_request_translates_roundtrip() {
     let client = reqwest::Client::new();
     let resp = client
         .post(format!("http://{addr}/v1/messages"))
+        .header("x-api-key", "client-key")
         .json(&serde_json::json!({
             "model": "claude-sonnet-4-6",
             "max_tokens": 100,
@@ -206,6 +208,7 @@ async fn streaming_request_produces_anthropic_sse_events() {
     let client = reqwest::Client::new();
     let resp = client
         .post(format!("http://{addr}/v1/messages"))
+        .header("x-api-key", "client-key")
         .json(&serde_json::json!({
             "model": "claude-sonnet-4-6",
             "max_tokens": 100,
@@ -259,6 +262,7 @@ async fn backend_error_translated_to_anthropic_format() {
     let client = reqwest::Client::new();
     let resp = client
         .post(format!("http://{addr}/v1/messages"))
+        .header("x-api-key", "client-key")
         .json(&serde_json::json!({
             "model": "claude-sonnet-4-6",
             "max_tokens": 100,
@@ -315,6 +319,7 @@ async fn tower_layer_intercepts_messages_passes_through_others() {
     // /v1/messages is intercepted by the layer
     let resp = client
         .post(format!("http://{addr}/v1/messages"))
+        .header("x-api-key", "client-key")
         .json(&serde_json::json!({
             "model": "claude-sonnet-4-6",
             "max_tokens": 100,
@@ -344,6 +349,7 @@ async fn invalid_json_returns_anthropic_error() {
     let client = reqwest::Client::new();
     let resp = client
         .post(format!("http://{addr}/v1/messages"))
+        .header("x-api-key", "client-key")
         .header("content-type", "application/json")
         .body("not json")
         .send()
@@ -391,6 +397,7 @@ async fn model_mapping_applied() {
     let client = reqwest::Client::new();
     let resp = client
         .post(format!("http://{addr}/v1/messages"))
+        .header("x-api-key", "client-key")
         .json(&serde_json::json!({
             "model": "claude-haiku-3",
             "max_tokens": 10,
