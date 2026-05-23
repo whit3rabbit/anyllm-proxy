@@ -276,6 +276,11 @@ impl GeminiStreamingTranslator {
         self.finished
     }
 
+    /// Latest usage seen in stream chunks.
+    pub fn usage(&self) -> anthropic::Usage {
+        self.usage.clone()
+    }
+
     fn make_message_start(&self) -> anthropic::StreamEvent {
         anthropic::StreamEvent::MessageStart {
             message: MessageStartData {

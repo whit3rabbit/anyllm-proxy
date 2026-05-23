@@ -27,6 +27,7 @@ pub(crate) async fn gemini_native_handler(
     vk_ctx: Option<axum::Extension<crate::server::middleware::VirtualKeyContext>>,
     AnthropicJson(body): AnthropicJson<anthropic::MessageCreateRequest>,
 ) -> Response {
+    let vk_ctx = vk_ctx.map(|axum::Extension(c)| c);
     let client = match &state.backend {
         BackendClient::GeminiNative(c) => c.clone(),
         _ => {
@@ -47,7 +48,7 @@ pub(crate) async fn gemini_native_handler(
     state.metrics.record_request();
 
     // Enforce model allowlist for virtual keys.
-    if let Some(axum::Extension(ref ctx)) = vk_ctx {
+    if let Some(ref ctx) = vk_ctx {
         if !crate::server::policy::is_model_allowed(&body.model, &ctx.allowed_models) {
             let err = anyllm_translate::mapping::errors_map::create_anthropic_error(
                 anthropic::ErrorType::PermissionError,
@@ -64,6 +65,8 @@ pub(crate) async fn gemini_native_handler(
 
     if body.stream == Some(true) {
         let metrics = state.metrics.clone();
+        let shared = state.shared.clone();
+        let vk_ctx = vk_ctx.clone();
         let (tx, rx) = mpsc::channel::<Result<Event, std::convert::Infallible>>(32);
 
         tokio::spawn(async move {
@@ -120,6 +123,17 @@ pub(crate) async fn gemini_native_handler(
 
             match outcome {
                 StreamOutcome::Completed => {
+                    let usage = translator.usage();
+                    if usage.output_tokens > 0 || usage.input_tokens > 0 {
+                        crate::server::routes::record_vk_tpm(&vk_ctx, usage.output_tokens);
+                        let _ = crate::cost::record_cost(
+                            &shared,
+                            &vk_ctx,
+                            &model,
+                            usage.input_tokens as u64,
+                            usage.output_tokens as u64,
+                        );
+                    }
                     metrics.record_success();
                     metrics.record_stream_completed();
                 }
@@ -141,6 +155,14 @@ pub(crate) async fn gemini_native_handler(
             Ok(gresp) => {
                 state.metrics.record_success();
                 let anthropic_resp = gemini_to_anthropic_response(&gresp, &original_model);
+                crate::server::routes::record_vk_tpm(&vk_ctx, anthropic_resp.usage.output_tokens);
+                let _ = crate::cost::record_cost(
+                    &state.shared,
+                    &vk_ctx,
+                    &model,
+                    anthropic_resp.usage.input_tokens as u64,
+                    anthropic_resp.usage.output_tokens as u64,
+                );
                 let mut response = (StatusCode::OK, Json(anthropic_resp)).into_response();
                 if state.expose_degradation_warnings {
                     let warnings = compute_gemini_request_warnings(&body);
