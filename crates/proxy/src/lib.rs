@@ -25,6 +25,8 @@ pub mod metrics;
 pub mod otel;
 /// Distributed rate limiting via Redis sorted sets (requires `redis` feature).
 pub mod ratelimit;
+/// In-process chat completion runtime without HTTP route ownership.
+pub mod runtime;
 /// Axum HTTP server: routes, middleware (auth, request ID, size/concurrency limits), SSE streaming.
 pub mod server;
 /// Optional built-in server-side tools and registry.
