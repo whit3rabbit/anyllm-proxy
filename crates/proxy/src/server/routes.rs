@@ -1153,8 +1153,18 @@ pub(crate) fn record_vk_tpm(
     output_tokens: u32,
 ) {
     if let Some(ctx) = vk_ctx {
-        ctx.rate_state
-            .record_tpm(crate::admin::keys::now_ms(), output_tokens);
+        let now_ms = crate::admin::keys::now_ms();
+        ctx.rate_state.record_tpm(now_ms, output_tokens);
+
+        #[cfg(feature = "redis")]
+        if let Some(redis_limiter) = crate::ratelimit::get_redis_rate_limiter() {
+            let key_hash_hex = ctx.key_hash_hex.clone();
+            tokio::spawn(async move {
+                redis_limiter
+                    .record_tpm(&key_hash_hex, now_ms, output_tokens)
+                    .await;
+            });
+        }
     }
 }
 
