@@ -43,6 +43,7 @@ pub mod infinity;
 pub mod jina;
 pub mod lambda;
 pub mod lemonade;
+pub mod litellm_snapshot;
 pub mod llamafile;
 pub mod lm_studio;
 pub mod lmsys;

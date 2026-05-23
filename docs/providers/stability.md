@@ -2,7 +2,7 @@
 
 Stability AI primarily provides image generation models (Stable Diffusion). Chat completions are not supported via this proxy stub.
 
-**LiteLLM prefix:** `stability_ai/`
+**LiteLLM prefix:** `stability/`
 **Status:** Stub — non-chat capabilities only
 **API base:** `https://api.stability.ai/v2beta`
 **Docs:** https://platform.stability.ai/docs

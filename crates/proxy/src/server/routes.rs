@@ -265,6 +265,10 @@ fn backend_router(state: AppState, mode: HandlerMode) -> Router<GlobalState> {
 
     let api_routes = match mode {
         HandlerMode::Anthropic => common_routes
+            .route(
+                "/v1/chat/completions",
+                post(super::chat_completions::chat_completions),
+            )
             .route("/v1/messages", post(anthropic_passthrough))
             // Catch-all for batch, file CRUD, and other Anthropic-native endpoints.
             // /v1/messages above takes priority (exact match beats wildcard).
@@ -418,33 +422,45 @@ fn route_scope_forbidden_response(error: super::policy::RouteScopeError) -> Resp
     (StatusCode::FORBIDDEN, Json(err)).into_response()
 }
 
-/// Static Claude model entries, merged with model_list models at runtime.
-static STATIC_CLAUDE_MODELS: std::sync::LazyLock<Vec<serde_json::Value>> = std::sync::LazyLock::new(
-    || {
-        vec![
-            // Claude 4.x
-            serde_json::json!({"id": "claude-opus-4-6",            "object": "model", "created": 1715644800, "owned_by": "anthropic", "display_name": "Claude Opus 4.6"}),
-            serde_json::json!({"id": "claude-sonnet-4-6",          "object": "model", "created": 1715644800, "owned_by": "anthropic", "display_name": "Claude Sonnet 4.6"}),
-            serde_json::json!({"id": "claude-opus-4-5",            "object": "model", "created": 1715644800, "owned_by": "anthropic", "display_name": "Claude Opus 4.5"}),
-            serde_json::json!({"id": "claude-sonnet-4-5",          "object": "model", "created": 1715644800, "owned_by": "anthropic", "display_name": "Claude Sonnet 4.5"}),
-            serde_json::json!({"id": "claude-haiku-4-5",           "object": "model", "created": 1715644800, "owned_by": "anthropic", "display_name": "Claude Haiku 4.5"}),
-            serde_json::json!({"id": "claude-haiku-4-5-20251001",  "object": "model", "created": 1727740800, "owned_by": "anthropic", "display_name": "Claude Haiku 4.5 (Oct 2025)"}),
-            // Claude 3.7
-            serde_json::json!({"id": "claude-3-7-sonnet-20250219", "object": "model", "created": 1708300800, "owned_by": "anthropic", "display_name": "Claude 3.7 Sonnet"}),
-            // Claude 3.5
-            serde_json::json!({"id": "claude-3-5-sonnet-20241022", "object": "model", "created": 1729555200, "owned_by": "anthropic", "display_name": "Claude 3.5 Sonnet (Oct 2024)"}),
-            serde_json::json!({"id": "claude-3-5-sonnet-20240620", "object": "model", "created": 1718841600, "owned_by": "anthropic", "display_name": "Claude 3.5 Sonnet (Jun 2024)"}),
-            serde_json::json!({"id": "claude-3-5-haiku-20241022",  "object": "model", "created": 1729555200, "owned_by": "anthropic", "display_name": "Claude 3.5 Haiku"}),
-            // Claude 3
-            serde_json::json!({"id": "claude-3-opus-20240229",     "object": "model", "created": 1709164800, "owned_by": "anthropic", "display_name": "Claude 3 Opus"}),
-            serde_json::json!({"id": "claude-3-haiku-20240307",    "object": "model", "created": 1709769600, "owned_by": "anthropic", "display_name": "Claude 3 Haiku"}),
-        ]
-    },
-);
+fn anthropic_catalog_model_rows() -> Vec<serde_json::Value> {
+    anyllm_providers::list_models("anthropic")
+        .iter()
+        .map(|model| {
+            serde_json::json!({
+                "id": model.id,
+                "object": "model",
+                "created": 0,
+                "owned_by": "anthropic",
+                "display_name": claude_display_name(model.id),
+            })
+        })
+        .collect()
+}
 
-/// GET /v1/models -- returns static Claude models merged with model_list entries.
+fn claude_display_name(model_id: &str) -> String {
+    let name = model_id
+        .strip_prefix("claude-")
+        .unwrap_or(model_id)
+        .split('-')
+        .take_while(|part| part.len() != 8 || !part.chars().all(|c| c.is_ascii_digit()))
+        .map(|part| {
+            let mut chars = part.chars();
+            match chars.next() {
+                Some(first) if first.is_ascii_alphabetic() => {
+                    format!("{}{}", first.to_ascii_uppercase(), chars.as_str())
+                }
+                Some(first) => format!("{}{}", first, chars.as_str()),
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+    format!("Claude {name}")
+}
+
+/// GET /v1/models -- returns catalog Claude models merged with model_list entries.
 async fn models(State(state): State<AppState>) -> Json<serde_json::Value> {
-    let mut data: Vec<serde_json::Value> = STATIC_CLAUDE_MODELS.clone();
+    let mut data = anthropic_catalog_model_rows();
 
     // Merge models from the model router (LiteLLM model_list config).
     if let Some(ref router_lock) = state.model_router {
@@ -1217,7 +1233,7 @@ pub(crate) fn inject_glm_thinking(
 ) {
     let is_glm = matches!(
         backend,
-        BackendClient::OpenAI(c) if c.provider_id() == Some("zhipuai")
+        BackendClient::OpenAI(c) if c.provider_id() == Some("zai")
     );
     if !is_glm {
         return;
@@ -1312,11 +1328,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn static_model_list_excludes_deprecated_sonnet() {
-        let ids: Vec<&str> = STATIC_CLAUDE_MODELS
-            .iter()
-            .filter_map(|m| m["id"].as_str())
-            .collect();
+    fn catalog_model_list_excludes_deprecated_sonnet() {
+        let rows = anthropic_catalog_model_rows();
+        let ids: Vec<&str> = rows.iter().filter_map(|m| m["id"].as_str()).collect();
         assert!(
             !ids.contains(&"claude-3-sonnet-20240229"),
             "claude-3-sonnet-20240229 is deprecated and must not appear in the model list"

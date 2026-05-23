@@ -13,6 +13,8 @@ const ALIASES: &[(&str, &str)] = &[
     ("AZURE_API_KEY", "AZURE_OPENAI_API_KEY"),
     ("AZURE_API_BASE", "AZURE_OPENAI_ENDPOINT"),
     ("AZURE_API_VERSION", "AZURE_OPENAI_API_VERSION"),
+    // Anthropic
+    ("ANTHROPIC_API_BASE", "ANTHROPIC_BASE_URL"),
     // AWS Bedrock
     ("AWS_REGION_NAME", "AWS_REGION"),
     // IP allowlisting
@@ -95,6 +97,26 @@ mod tests {
         unsafe {
             std::env::remove_var("PROXY_API_KEYS");
             std::env::remove_var("LITELLM_MASTER_KEY");
+        }
+    }
+
+    #[test]
+    fn compute_maps_anthropic_api_base() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        unsafe {
+            std::env::remove_var("ANTHROPIC_BASE_URL");
+            std::env::set_var("ANTHROPIC_API_BASE", "https://anthropic-proxy.example");
+        }
+
+        let overrides = compute_env_aliases();
+        let found = overrides
+            .iter()
+            .find(|(k, _)| *k == "ANTHROPIC_BASE_URL")
+            .map(|(_, v)| v.as_str());
+        assert_eq!(found, Some("https://anthropic-proxy.example"));
+
+        unsafe {
+            std::env::remove_var("ANTHROPIC_API_BASE");
         }
     }
 

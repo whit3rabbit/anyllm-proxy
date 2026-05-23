@@ -29,7 +29,10 @@ If you only need the catalog (for example, you are building your own proxy, a CL
 
 ## What's in the catalog
 
-- **89 providers** across 8 protocol variants: `OpenAICompat`, `AzureOpenAI`, `VertexAI`, `GeminiOpenAI`, `GeminiNative`, `AnthropicNative`, `BedrockNative`, `Custom`.
+- **109 LiteLLM-aligned providers** generated from LiteLLM's `model_prices_and_context_window.json`.
+- **Legacy compatibility aliases** so old anyllm ids such as `zhipuai`, `gmi_cloud`, `public_ai`, `ai_ml_api`, `github`, `jina`, `exa`, and `stability_ai` still resolve to their LiteLLM-canonical ids.
+- **Legacy local-only providers** such as `lm_studio`, `llamafile`, and `hosted_vllm` remain resolvable through lookup functions, but are intentionally omitted from `all_providers()`.
+- **Protocol variants**: `OpenAICompat`, `AzureOpenAI`, `VertexAI`, `GeminiOpenAI`, `GeminiNative`, `AnthropicNative`, `BedrockNative`, `Custom`.
 - **Three status tiers** so callers can decide how to treat each entry:
   - `Implemented` - HTTP client exists in the proxy and has been live-tested.
   - `Wired` - client exists but not live-tested.
@@ -58,7 +61,7 @@ The four most common calls:
 
 ```rust
 use anyllm_providers::{
-    find_by_litellm_prefix, get_provider, list_models, resolve_backend,
+    canonical_provider_id, find_by_litellm_prefix, get_provider, list_models, resolve_backend,
 };
 
 // Look up a provider by id.
@@ -83,19 +86,23 @@ if let Some((kind, url)) = resolve_backend("together_ai") {
 // Map a LiteLLM-style routing prefix back to its provider.
 let p = find_by_litellm_prefix("together_ai/").unwrap();
 assert_eq!(p.id, "together_ai");
+
+// Canonicalize old local ids before persisting new config.
+assert_eq!(canonical_provider_id("zhipuai"), "zai");
 ```
 
 Other public items (re-exported from the crate root):
 
 - Types: `ProviderDef`, `ProviderProtocol`, `ProviderStatus`, `ProviderCapabilities`, `AuthKind`, `ModelDef`, `ModelStatus`, `ModelCapabilities`.
-- Iterators: `all_providers()`.
+- Iterators: `all_providers()` returns the generated LiteLLM snapshot.
 - Single-model lookup: `get_model(provider_id, model_id)`.
+- Migration helper: `canonical_provider_id(provider_id)`.
 
 ## Integrating into a TUI (or any client app)
 
 This crate gives you the catalog. It does **not** ship an HTTP client, an async runtime, or a key store, so a TUI integrates it as a read-only data source and supplies its own transport (typically `reqwest`) and config (typically `std::env` or a config file).
 
-The recommended default integration uses **Ollama** and **LM Studio** as the built-in providers. Both are local, OpenAI-compatible, require no API key, and their catalog entries (`auth: AuthKind::None`, `protocol: ProviderProtocol::OpenAICompat`) reflect that. A TUI shipping with these two enabled by default can run end-to-end on a fresh machine the moment the user starts either server.
+The recommended local integration can use **Ollama** and **LM Studio** as built-in providers. Both are local, OpenAI-compatible, require no API key, and their catalog entries (`auth: AuthKind::None`, `protocol: ProviderProtocol::OpenAICompat`) reflect that. Ollama is part of the LiteLLM snapshot; LM Studio is a legacy-only local provider that still resolves through `get_provider("lm_studio")` but is not returned by `all_providers()`.
 
 ### Worked example: Ollama + LM Studio
 
@@ -219,7 +226,7 @@ for m in anyllm_providers::list_models(p.id) {
 }
 ```
 
-If `list_models(p.id)` returns empty, treat it as a self-hosted provider and fall back to the live `/v1/models` probe shown above. The other self-hosted entries that behave like Ollama and LM Studio are `hosted_vllm`, `llamafile`, `xinference`, `docker_model_runner`, and `lemonade`.
+If `list_models(p.id)` returns empty, treat it as a self-hosted provider and fall back to the live `/v1/models` probe shown above. Local providers that behave like Ollama or LM Studio include `hosted_vllm`, `llamafile`, `xinference`, `docker_model_runner`, and `lemonade`.
 
 ### Non-OpenAI-compatible providers
 
@@ -227,13 +234,13 @@ If `list_models(p.id)` returns empty, treat it as a self-hosted provider and fal
 
 ### Persisting selections
 
-`ProviderDef.id` and `ModelDef.id` are stable strings safe to write to a config file. On the next launch, re-resolve them with `get_provider(id)` and `get_model(provider_id, model_id)`. Both return `Option`, so you can detect entries that were removed from a newer version of the catalog and prompt the user to pick again.
+`ProviderDef.id` and `ModelDef.id` are stable strings safe to write to a config file. For new configs, persist LiteLLM-canonical provider ids; `canonical_provider_id()` exists only to migrate old local ids. On the next launch, re-resolve them with `get_provider(id)` and `get_model(provider_id, model_id)`. Both return `Option`, so you can detect entries that were removed from a newer version of the catalog and prompt the user to pick again.
 
 ## Provider catalog
 
-90 providers, grouped here by what they actually are. The id (in code) is the stable string accepted by `get_provider()`, `list_models()`, and config files.
+The advertised catalog is generated from LiteLLM and should not be maintained as a hand-written provider list. Canonical provider ids are the LiteLLM ids, for example `anthropic`, `openai`, `groq`, `together_ai`, `github_copilot`, `gmi`, `publicai`, `aiml`, `jina_ai`, `exa_ai`, `stability`, and `zai`.
 
-To dump the live list yourself:
+To dump the live advertised list yourself:
 
 ```rust
 for p in anyllm_providers::all_providers() {
@@ -241,147 +248,22 @@ for p in anyllm_providers::all_providers() {
 }
 ```
 
-### Major hosted (native protocols, live-tested)
+To check a legacy id while migrating a config:
 
-| id | display_name |
-|---|---|
-| `openai` | OpenAI |
-| `anthropic` | Anthropic |
-| `gemini` | Google AI Studio (Gemini) |
-| `vertex_ai` | Google Vertex AI |
-| `azure` | Azure OpenAI |
-| `bedrock` | AWS Bedrock |
+```rust
+assert_eq!(anyllm_providers::canonical_provider_id("gmi_cloud"), "gmi");
+assert_eq!(anyllm_providers::canonical_provider_id("public_ai"), "publicai");
+assert_eq!(anyllm_providers::canonical_provider_id("zhipuai"), "zai");
+```
 
-### Self-hosted / local (no API key)
-
-Default base URLs point at localhost. `list_models()` returns empty for these; query the live `/v1/models` endpoint instead.
-
-| id | display_name |
-|---|---|
-| `ollama` | Ollama |
-| `lm_studio` | LM Studio |
-| `hosted_vllm` | vLLM (self-hosted) |
-| `llamafile` | llamafile |
-| `xinference` | Xinference |
-| `docker_model_runner` | Docker Model Runner |
-| `lemonade` | Lemonade |
-| `petals` | Petals |
-| `triton` | NVIDIA Triton |
-| `lmsys` | LMSYS (FastChat) |
-| `infinity` | Infinity |
-| `sagemaker` | AWS SageMaker (Custom protocol; not yet routable, see CLAUDE.md gotcha) |
-
-### Hosted chat / OpenAI-compatible aggregators
-
-All `ProviderProtocol::OpenAICompat`, `AuthKind::Bearer`. The catalog supplies the base URL and the env var name; the proxy (or your TUI) sends standard OpenAI requests.
-
-| id | display_name |
-|---|---|
-| `groq` | Groq |
-| `together_ai` | Together AI |
-| `openrouter` | OpenRouter |
-| `fireworks_ai` | Fireworks AI |
-| `mistral` | Mistral AI |
-| `perplexity` | Perplexity AI |
-| `deepseek` | DeepSeek |
-| `cerebras` | Cerebras |
-| `databricks` | Databricks |
-| `sambanova` | SambaNova |
-| `nebius` | Nebius AI Studio |
-| `deepinfra` | DeepInfra |
-| `novita` | Novita AI |
-| `cohere_chat` | Cohere |
-| `ai21` | AI21 Labs |
-| `huggingface` | HuggingFace |
-| `anyscale` | Anyscale |
-| `xai` | xAI |
-| `nvidia_nim` | NVIDIA NIM |
-| `codestral` | Codestral |
-| `moonshot` | Moonshot AI |
-| `volcengine` | Volcano Engine |
-| `minimax` | MiniMax |
-| `zhipuai` | Zhipu AI (Z.AI) |
-| `featherless_ai` | Featherless AI |
-| `friendliai` | FriendliAI |
-| `lambda_ai` | Lambda AI |
-| `hyperbolic` | Hyperbolic |
-| `nscale` | Nscale |
-| `github` | GitHub Models |
-| `aleph_alpha` | Aleph Alpha |
-| `nlp_cloud` | NLP Cloud |
-| `clarifai` | Clarifai |
-| `predibase` | Predibase |
-| `replicate` | Replicate |
-| `chutes` | Chutes AI |
-| `gmi_cloud` | GMI Cloud |
-| `meta_llama` | Meta Llama API |
-| `ai_ml_api` | AI/ML API |
-| `scaleway` | Scaleway |
-| `baseten` | Baseten |
-| `azure_ai` | Azure AI Foundry |
-| `watsonx` | IBM watsonx.ai |
-| `cloudflare` | Cloudflare Workers AI |
-| `snowflake` | Snowflake Cortex |
-| `dashscope` | Dashscope (Qwen) |
-| `ovhcloud` | OVHCloud AI Endpoints |
-| `gradient_ai` | DigitalOcean Gradient AI |
-| `galadriel` | Galadriel |
-| `morph` | Morph |
-| `xiaomi_mimo` | Xiaomi MiMo |
-| `public_ai` | PublicAI |
-| `nanogpt` | NanoGPT |
-| `wandb` | Weights & Biases Inference |
-| `bytez` | Bytez |
-| `siliconflow` | SiliconFlow |
-| `blackboxai` | Blackbox AI |
-| `pollinations` | Pollinations |
-| `iflytek` | iFlytek Spark |
-| `baidu` | Baidu ERNIE |
-
-### Embeddings-only
-
-| id | display_name |
-|---|---|
-| `voyage` | Voyage AI |
-| `jina` | Jina AI |
-
-### Speech-to-text
-
-| id | display_name |
-|---|---|
-| `deepgram` | Deepgram |
-| `assemblyai` | AssemblyAI |
-
-### Text-to-speech
-
-| id | display_name |
-|---|---|
-| `elevenlabs` | ElevenLabs |
-| `playht` | Play.ht |
-| `cartesia` | Cartesia |
-
-### Image generation
-
-| id | display_name |
-|---|---|
-| `stability_ai` | Stability AI |
-
-### Web search
-
-| id | display_name |
-|---|---|
-| `brave` | Brave Search |
-| `serper` | Serper |
-| `tavily` | Tavily |
-| `exa` | Exa |
-
-The non-chat providers (embeddings, STT, TTS, image, search) carry catalog metadata so a UI can list and key-check them, but are not wired through the proxy's chat-completions path. Use them via their native APIs or via `anyllm_proxy`'s passthrough routes.
+The non-chat providers (embeddings, STT, TTS, image, search) carry catalog metadata so a UI can list and key-check them, but they are not all wired through the proxy's chat-completions path. Use them via their native APIs or provider-specific passthrough support where available.
 
 ## Adding a provider
 
-1. Copy a small stub such as `src/providers/groq.rs` to `src/providers/<your_id>.rs` and edit the `PROVIDER` constant and `MODELS` slice.
-2. Add `pub mod <your_id>;` to `src/providers/mod.rs`.
-3. Add `&providers::<your_id>::PROVIDER` to `ALL_PROVIDERS` in `src/registry.rs`. If your provider has a static model list, also add `("<your_id>", providers::<your_id>::MODELS)` to `ALL_MODELS`.
+1. Prefer adding or correcting provider metadata in `scripts/check_litellm_providers.py` source aliases and regenerating `src/providers/litellm_snapshot.rs`.
+2. Run `python3 scripts/check_litellm_providers.py --all --write-rust-snapshot crates/providers/src/providers/litellm_snapshot.rs`.
+3. Run `python3 scripts/check_litellm_providers.py --all --check`.
+4. Only add a hand-written provider module for a local-only or non-LiteLLM provider that must remain resolvable outside the advertised snapshot.
 
 For OpenAI-compatible providers, no proxy-side HTTP code is required; the catalog entry is enough for the proxy to route via its existing `OpenAIClient`.
 

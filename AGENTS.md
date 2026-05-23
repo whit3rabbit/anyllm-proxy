@@ -36,7 +36,7 @@ OPENAI_API_KEY=sk-... cargo run -p anyllm_proxy -- --webui
 | Var | Purpose |
 |-----|---------|
 | `OPENAI_API_KEY` | Required for default backend |
-| `BACKEND` | `openai` (default), `azure`, `vertex`, `gemini`, `anthropic`, `bedrock`, or any provider id from `crates/providers` (e.g. `groq`, `mistral`, `together_ai`) |
+| `BACKEND` | `openai` (default), `azure`, `vertex`, `gemini`, `anthropic`, `bedrock`, or any LiteLLM provider id from the generated provider snapshot (e.g. `groq`, `mistral`, `together_ai`, `gmi`, `publicai`, `zai`) |
 | `PROXY_CONFIG` | Path to config file (simple YAML, LiteLLM YAML, or TOML) |
 | `PROXY_API_KEYS` | Comma-separated allowed keys (if unset and no `PROXY_OPEN_RELAY`, all requests rejected) |
 | `PROXY_OPEN_RELAY` | `true` to accept any key (local dev only) |
@@ -96,6 +96,8 @@ Five-crate Cargo workspace: `providers` (metadata catalog), `client` (Anthropic 
 
 - **Managed backend fields cannot be cleared to NULL.** `ManagedBackendPatch` has no sentinel to distinguish "omitted" from "set to null". Once a field like `api_base` is set, it cannot be cleared via PATCH. UI should always send the current value in edit forms, not omit fields.
 - **`OPENAI_API_KEY` takes precedence over provider-specific keys for stub backends.** `config/mod.rs` tries `OPENAI_API_KEY` first, then falls back to `GROQ_API_KEY` / `MISTRAL_API_KEY` / etc. If `OPENAI_API_KEY` is set globally, it gets sent to Groq/Mistral/etc. even when `BACKEND=groq`. Unset it or clear it from `.anyllm.env` before switching to a stub provider.
+- **LiteLLM provider IDs are canonical.** Use `gmi`, `publicai`, `zai`, `aiml`, `github_copilot`, `jina_ai`, `exa_ai`, and `stability` instead of older local ids like `gmi_cloud`, `public_ai`, `zhipuai`, `ai_ml_api`, `github`, `jina`, `exa`, and `stability_ai`. Legacy aliases are accepted in lookup paths only for migration.
+- **Known providers with no global base URL must set one.** OpenAI-compatible providers such as `azure_ai`, `cloudflare`, `databricks`, `snowflake`, `vercel_ai_gateway`, and similar workspace/account-scoped providers must set `OPENAI_BASE_URL` or LiteLLM `api_base`; never fall back to OpenAI's base URL for a known provider with an empty catalog default.
 - **`BACKEND=sagemaker` panics at startup.** Its `ProviderProtocol::Custom` makes `resolve_backend()` return `None`, triggering the "unknown backend" panic. Use `BACKEND=bedrock` for AWS-hosted Anthropic models instead.
 - **Adding a passthrough route (Translate mode):** Reuse `passthrough_to_backend(&state, &headers, body, "/v2/path")` in `routes.rs` — it handles content-type forwarding and error mapping. The Anthropic mode equivalent is `anthropic_generic_passthrough` in `passthrough.rs` via `AnthropicClient::forward_generic`.
 - **Header `&str` slices lifetime:** When building `&[(&str, &str)]` from `HeaderMap`, collect values into owned `String` locals first, then create references — the borrow checker rejects inline `.to_str()` in the slice.
@@ -111,7 +113,8 @@ Five-crate Cargo workspace: `providers` (metadata catalog), `client` (Anthropic 
 
 ## Conventions
 
-- **Adding a provider:** `crates/providers/src/providers/<name>.rs` (copy any stub) → add to `providers/mod.rs` + `registry.rs` → done. OpenAI-compat providers need no HTTP code.
+- **Provider catalog is generated for LiteLLM compatibility.** `crates/providers/src/providers/litellm_snapshot.rs` is generated from LiteLLM's `model_prices_and_context_window.json`; do not edit its provider/model rows by hand. Refresh with `python3 scripts/check_litellm_providers.py --all --write-rust-snapshot crates/providers/src/providers/litellm_snapshot.rs`, then verify with `python3 scripts/check_litellm_providers.py --all --check`.
+- **Provider metadata fixes live in the generator or source aliases.** For new provider IDs, update `scripts/check_litellm_providers.py` source alias/default metadata logic, regenerate the snapshot, and keep `registry.rs` focused on lookup/alias behavior. OpenAI-compat providers usually need no HTTP code.
 - Test files live alongside source (`#[cfg(test)]`) and in `crates/proxy/tests/` for integration tests.
 - Error types use `thiserror` derive macros.
 - Fixture-based golden tests for translation correctness.

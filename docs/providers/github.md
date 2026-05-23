@@ -2,7 +2,7 @@
 
 Azure-hosted OpenAI-compatible inference endpoint accessible with a GitHub personal access token, free tier included.
 
-**LiteLLM prefix:** `github/`  
+**LiteLLM prefix:** `github_copilot/`
 **Status:** Stub — routes through OpenAI-compatible client  
 **Docs:** https://docs.github.com/en/github-models
 
@@ -17,9 +17,9 @@ Azure-hosted OpenAI-compatible inference endpoint accessible with a GitHub perso
 ### Single-Backend (env vars)
 
 ```bash
-BACKEND=github GITHUB_TOKEN=your-pat cargo run -p anyllm_proxy
+BACKEND=github_copilot GITHUB_TOKEN=your-pat cargo run -p anyllm_proxy
 # Docker:
-docker run -e BACKEND=github -e GITHUB_TOKEN=your-pat -e PROXY_OPEN_RELAY=true -p 3000:3000 followthewhit3rabbit/anyllm-proxy
+docker run -e BACKEND=github_copilot -e GITHUB_TOKEN=your-pat -e PROXY_OPEN_RELAY=true -p 3000:3000 followthewhit3rabbit/anyllm-proxy
 ```
 
 ### LiteLLM YAML Config
@@ -28,11 +28,11 @@ docker run -e BACKEND=github -e GITHUB_TOKEN=your-pat -e PROXY_OPEN_RELAY=true -
 model_list:
   - model_name: gpt-4o
     litellm_params:
-      model: github/gpt-4o
+      model: github_copilot/gpt-4o
       api_key: "env:GITHUB_TOKEN"
   - model_name: llama-3.3-70b
     litellm_params:
-      model: github/Llama-3.3-70B-Instruct
+      model: github_copilot/Llama-3.3-70B-Instruct
       api_key: "env:GITHUB_TOKEN"
 ```
 

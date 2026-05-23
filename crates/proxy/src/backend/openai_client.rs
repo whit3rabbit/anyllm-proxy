@@ -20,7 +20,7 @@ pub struct OpenAIClient {
     backend_kind: BackendKind,
     /// Raw base URL from config, used to build passthrough endpoint URLs.
     base_url: String,
-    /// Provider ID when this client was built for an OpenAI-compatible stub (e.g. "zhipuai").
+    /// Provider ID when this client was built for an OpenAI-compatible stub (e.g. "zai").
     /// None for first-party OpenAI, Azure, Gemini, and Vertex backends.
     provider_id: Option<&'static str>,
 }

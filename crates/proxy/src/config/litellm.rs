@@ -121,7 +121,10 @@ fn parse_provider_model(
         "azure" => BackendKind::AzureOpenAI,
         "vertex_ai" | "vertex" => BackendKind::Vertex,
         "gemini" => BackendKind::Gemini,
-        "anthropic" => BackendKind::Anthropic,
+        "anthropic" => {
+            stub_provider = anyllm_providers::get_provider("anthropic");
+            BackendKind::Anthropic
+        }
         "bedrock" => BackendKind::Bedrock,
         other => {
             // Try the provider registry for known OpenAI-compatible providers
@@ -412,17 +415,25 @@ fn resolve_base_url(
     match kind {
         BackendKind::OpenAI => {
             // Use the stub provider's default URL when available (e.g. groq, xai, mistral).
-            // Falls back to OpenAI's URL only when the provider has no default or is unknown.
-            let url = stub_provider
-                .map(|p| p.default_base_url)
-                .filter(|u| !u.is_empty())
-                .unwrap_or("https://api.openai.com");
+            // If a known provider has no safe global default, require explicit api_base.
+            let url = if let Some(provider) = stub_provider {
+                if provider.default_base_url.is_empty() {
+                    panic!(
+                        "model_list provider '{}' requires api_base because it has no safe global API base URL",
+                        provider.id
+                    );
+                }
+                provider.default_base_url
+            } else {
+                "https://api.openai.com"
+            };
             super::strip_v1_suffix(url).to_string()
         }
         BackendKind::Gemini => {
             "https://generativelanguage.googleapis.com/v1beta/openai".to_string()
         }
-        BackendKind::Anthropic => "https://api.anthropic.com".to_string(),
+        BackendKind::Anthropic => std::env::var("ANTHROPIC_BASE_URL")
+            .unwrap_or_else(|_| "https://api.anthropic.com".to_string()),
         BackendKind::Bedrock => {
             // For Bedrock, base_url stores the region.
             params
@@ -595,6 +606,22 @@ mod tests {
     }
 
     #[test]
+    fn parse_provider_model_anthropic() {
+        let (kind, model, provider) = parse_provider_model("anthropic/claude-sonnet-4-6");
+        assert_eq!(kind, BackendKind::Anthropic);
+        assert_eq!(model, "claude-sonnet-4-6");
+        assert_eq!(provider.unwrap().id, "anthropic");
+    }
+
+    #[test]
+    fn parse_provider_model_legacy_alias() {
+        let (kind, model, provider) = parse_provider_model("gmi_cloud/openai/gpt-5");
+        assert_eq!(kind, BackendKind::OpenAI);
+        assert_eq!(model, "openai/gpt-5");
+        assert_eq!(provider.unwrap().id, "gmi");
+    }
+
+    #[test]
     fn parse_provider_model_unknown_treated_as_openai() {
         let (kind, model, _) = parse_provider_model("groq/llama-70b");
         assert_eq!(kind, BackendKind::OpenAI);
@@ -617,6 +644,39 @@ model_list:
 
         let routed = router.route("gpt-4o").unwrap();
         assert_eq!(routed.actual_model, "gpt-4o");
+    }
+
+    #[test]
+    #[should_panic(expected = "provider 'azure_ai' requires api_base")]
+    fn known_provider_without_default_base_requires_api_base() {
+        let yaml = r#"
+model_list:
+  - model_name: phi
+    litellm_params:
+      model: azure_ai/Phi-4
+      api_key: sk-test-key
+"#;
+
+        let _ = from_litellm_yaml(yaml);
+    }
+
+    #[test]
+    fn known_provider_without_default_base_accepts_api_base() {
+        let yaml = r#"
+model_list:
+  - model_name: phi
+    litellm_params:
+      model: azure_ai/Phi-4
+      api_key: sk-test-key
+      api_base: https://example.services.ai.azure.com/models
+"#;
+
+        let (multi, router) = from_litellm_yaml(yaml);
+        assert!(router.has_model("phi"));
+        assert_eq!(
+            multi.backends["litellm_0"].base_url,
+            "https://example.services.ai.azure.com/models"
+        );
     }
 
     #[test]
@@ -853,5 +913,35 @@ model_list:
         let bc = multi.backends.values().next().unwrap();
         assert_eq!(bc.kind, BackendKind::Gemini);
         assert!(router.has_model("gemini-pro"));
+    }
+
+    #[test]
+    fn anthropic_provider_uses_env_fallback_and_base_url() {
+        unsafe {
+            std::env::set_var("ANTHROPIC_API_KEY", "sk-anthropic-env");
+            std::env::set_var("ANTHROPIC_BASE_URL", "https://anthropic-proxy.example");
+        }
+
+        let yaml = r#"
+model_list:
+  - model_name: claude
+    litellm_params:
+      model: anthropic/claude-sonnet-4-6
+"#;
+
+        let (multi, router) = from_litellm_yaml(yaml);
+        assert_eq!(multi.backends.len(), 1);
+        let bc = multi.backends.values().next().unwrap();
+        assert_eq!(bc.kind, BackendKind::Anthropic);
+        assert_eq!(bc.api_key, "sk-anthropic-env");
+        assert_eq!(bc.base_url, "https://anthropic-proxy.example");
+
+        let routed = router.route("claude").unwrap();
+        assert_eq!(routed.actual_model, "claude-sonnet-4-6");
+
+        unsafe {
+            std::env::remove_var("ANTHROPIC_API_KEY");
+            std::env::remove_var("ANTHROPIC_BASE_URL");
+        }
     }
 }

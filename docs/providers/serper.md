@@ -2,7 +2,7 @@
 
 Google Search API for AI applications. Chat completions are not supported via this proxy.
 
-**LiteLLM prefix:** *(not in LiteLLM)*
+**LiteLLM prefix:** `serper/`
 **Status:** Stub — non-chat capabilities only
 **API base:** `https://google.serper.dev`
 **Docs:** https://serper.dev/api-reference

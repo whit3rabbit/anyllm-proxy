@@ -67,33 +67,33 @@ model_list:
 | Moonshot AI | `moonshot` | [moonshot.md](moonshot.md) |
 | Volcano Engine | `volcengine` | [volcengine.md](volcengine.md) |
 | MiniMax | `minimax` | [minimax.md](minimax.md) |
-| Zhipu AI | `zhipuai` | [zhipuai.md](zhipuai.md) |
+| Z.ai / Zhipu AI | `zai` | [zhipuai.md](zhipuai.md) |
 | Featherless AI | `featherless_ai` | [featherless_ai.md](featherless_ai.md) |
 | FriendliAI | `friendliai` | [friendliai.md](friendliai.md) |
 | Lambda AI | `lambda_ai` | [lambda_ai.md](lambda_ai.md) |
 | Hyperbolic | `hyperbolic` | [hyperbolic.md](hyperbolic.md) |
 | Nscale | `nscale` | [nscale.md](nscale.md) |
-| GitHub Models | `github` | [github.md](github.md) |
+| GitHub Copilot / Models | `github_copilot` | [github.md](github.md) |
 | Aleph Alpha | `aleph_alpha` | [aleph_alpha.md](aleph_alpha.md) |
 | NLP Cloud | `nlp_cloud` | [nlp_cloud.md](nlp_cloud.md) |
 | Clarifai | `clarifai` | [clarifai.md](clarifai.md) |
 | Predibase | `predibase` | [predibase.md](predibase.md) |
 | Replicate | `replicate` | [replicate.md](replicate.md) |
 | Chutes AI | `chutes` | [chutes.md](chutes.md) |
-| GMI Cloud | `gmi_cloud` | [gmi_cloud.md](gmi_cloud.md) |
+| GMI Cloud | `gmi` | [gmi_cloud.md](gmi_cloud.md) |
 | Meta Llama API | `meta_llama` | [meta_llama.md](meta_llama.md) |
-| AI/ML API | `ai_ml_api` | [ai_ml_api.md](ai_ml_api.md) |
+| AI/ML API | `aiml` | [ai_ml_api.md](ai_ml_api.md) |
 | Voyage AI | `voyage` | [voyage.md](voyage.md) |
 | Scaleway | `scaleway` | [scaleway.md](scaleway.md) |
 | Baseten | `baseten` | [baseten.md](baseten.md) |
 | Dashscope (Qwen) | `dashscope` | [dashscope.md](dashscope.md) |
-| Jina AI | `jina` | [jina.md](jina.md) |
+| Jina AI | `jina_ai` | [jina.md](jina.md) |
 | OVHCloud | `ovhcloud` | [ovhcloud.md](ovhcloud.md) |
 | Gradient AI | `gradient_ai` | [gradient_ai.md](gradient_ai.md) |
 | Galadriel | `galadriel` | [galadriel.md](galadriel.md) |
 | Morph | `morph` | [morph.md](morph.md) |
 | Xiaomi MiMo | `xiaomi_mimo` | [xiaomi_mimo.md](xiaomi_mimo.md) |
-| PublicAI | `public_ai` | [public_ai.md](public_ai.md) |
+| PublicAI | `publicai` | [public_ai.md](public_ai.md) |
 | NanoGPT | `nanogpt` | [nanogpt.md](nanogpt.md) |
 | W&B Inference | `wandb` | [wandb.md](wandb.md) |
 | Bytez | `bytez` | [bytez.md](bytez.md) |

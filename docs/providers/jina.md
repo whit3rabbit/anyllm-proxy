@@ -17,9 +17,9 @@ Embeddings and reranking provider optimized for search and multimodal retrieval.
 ### Single-Backend (env vars)
 
 ```bash
-BACKEND=jina JINA_AI_API_KEY=your-key cargo run -p anyllm_proxy
+BACKEND=jina_ai JINA_AI_API_KEY=your-key cargo run -p anyllm_proxy
 # Docker:
-docker run -e BACKEND=jina -e JINA_AI_API_KEY=your-key -e PROXY_OPEN_RELAY=true -p 3000:3000 followthewhit3rabbit/anyllm-proxy
+docker run -e BACKEND=jina_ai -e JINA_AI_API_KEY=your-key -e PROXY_OPEN_RELAY=true -p 3000:3000 followthewhit3rabbit/anyllm-proxy
 ```
 
 ### LiteLLM YAML Config

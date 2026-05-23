@@ -2,7 +2,7 @@
 
 Semantic search API for AI applications. Chat completions are not supported via this proxy.
 
-**LiteLLM prefix:** *(not in LiteLLM)*
+**LiteLLM prefix:** `exa_ai/`
 **Status:** Stub — non-chat capabilities only
 **API base:** `https://api.exa.ai`
 **Docs:** https://docs.exa.ai

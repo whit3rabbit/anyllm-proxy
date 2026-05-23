@@ -2,7 +2,7 @@
 
 Aggregator with 200+ models from multiple providers under a single OpenAI-compatible endpoint.
 
-**LiteLLM prefix:** `ai_ml_api/`  
+**LiteLLM prefix:** `aiml/`
 **Status:** Stub — routes through OpenAI-compatible client  
 **Docs:** https://docs.aimlapi.com
 
@@ -17,9 +17,9 @@ Aggregator with 200+ models from multiple providers under a single OpenAI-compat
 ### Single-Backend (env vars)
 
 ```bash
-BACKEND=ai_ml_api AIML_API_KEY=your-key cargo run -p anyllm_proxy
+BACKEND=aiml AIML_API_KEY=your-key cargo run -p anyllm_proxy
 # Docker:
-docker run -e BACKEND=ai_ml_api -e AIML_API_KEY=your-key -e PROXY_OPEN_RELAY=true -p 3000:3000 followthewhit3rabbit/anyllm-proxy
+docker run -e BACKEND=aiml -e AIML_API_KEY=your-key -e PROXY_OPEN_RELAY=true -p 3000:3000 followthewhit3rabbit/anyllm-proxy
 ```
 
 ### LiteLLM YAML Config
@@ -28,11 +28,11 @@ docker run -e BACKEND=ai_ml_api -e AIML_API_KEY=your-key -e PROXY_OPEN_RELAY=tru
 model_list:
   - model_name: gpt-4o
     litellm_params:
-      model: ai_ml_api/gpt-4o
+      model: aiml/gpt-4o
       api_key: "env:AIML_API_KEY"
   - model_name: llama-3.3-70b
     litellm_params:
-      model: ai_ml_api/meta-llama/Llama-3.3-70B-Instruct
+      model: aiml/meta-llama/Llama-3.3-70B-Instruct
       api_key: "env:AIML_API_KEY"
 ```
 

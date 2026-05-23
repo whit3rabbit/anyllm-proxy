@@ -2,7 +2,7 @@
 
 Text-to-speech and voice AI. Chat completions are not supported via this proxy — use the ElevenLabs SDK directly for TTS.
 
-**LiteLLM prefix:** *(not in LiteLLM)*
+**LiteLLM prefix:** `elevenlabs/`
 **Status:** Stub — non-chat capabilities only
 **API base:** `https://api.elevenlabs.io`
 **Docs:** https://elevenlabs.io/docs

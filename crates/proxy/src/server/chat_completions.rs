@@ -21,6 +21,17 @@ use super::routes::{
     cache_auth_identity, inject_degradation_header, log_request, set_backend_error_kind, RequestCtx,
 };
 use super::state::{AppState, ConcurrencyPermit};
+use super::streaming::{AnthropicStreamUsage, StreamOutcome};
+
+struct ChatCompletionsStreamMeta {
+    ctx: RequestCtx,
+    original_model: String,
+    mapped_model: String,
+    warnings: TranslationWarnings,
+    safe_headers: Vec<(String, String)>,
+    concurrency_permit: Option<ConcurrencyPermit>,
+    vk_ctx: Option<crate::server::middleware::VirtualKeyContext>,
+}
 
 /// OpenAI-shaped error response body.
 fn openai_error_response(message: &str, error_type: &str, status: StatusCode) -> Response {
@@ -54,6 +65,89 @@ fn backend_error_to_openai_response(error: BackendError) -> Response {
         "server_error",
         StatusCode::INTERNAL_SERVER_ERROR,
     )
+}
+
+fn safe_anthropic_extra_headers(headers: &axum::http::HeaderMap) -> Vec<(String, String)> {
+    ["x-claude-code-session-id", "anthropic-beta"]
+        .iter()
+        .filter_map(|&name| {
+            headers
+                .get(name)
+                .and_then(|v| v.to_str().ok())
+                .map(|v| (name.to_string(), v.to_string()))
+        })
+        .collect()
+}
+
+fn header_refs(headers: &[(String, String)]) -> Vec<(&str, &str)> {
+    headers
+        .iter()
+        .map(|(name, value)| (name.as_str(), value.as_str()))
+        .collect()
+}
+
+fn is_anthropic_backend(state: &AppState) -> bool {
+    matches!(state.backend, BackendClient::Anthropic(_))
+}
+
+fn mapped_model_for_backend(
+    original_model: &str,
+    mapped_model: String,
+    effective: &AppState,
+) -> String {
+    if is_anthropic_backend(effective) && mapped_model.is_empty() {
+        original_model.to_string()
+    } else {
+        mapped_model
+    }
+}
+
+fn apply_anthropic_chat_extensions(
+    openai_req: &openai::ChatCompletionRequest,
+    anthropic_req: &mut anthropic::MessageCreateRequest,
+    warnings: &mut TranslationWarnings,
+) {
+    let mut output_config = anthropic_req
+        .extra
+        .remove("output_config")
+        .unwrap_or_else(|| serde_json::json!({}));
+    if !output_config.is_object() {
+        output_config = serde_json::json!({});
+    }
+
+    if let Some(effort) = openai_req
+        .extra
+        .get("reasoning_effort")
+        .and_then(|v| v.as_str())
+    {
+        output_config["effort"] = serde_json::Value::String(effort.to_string());
+    }
+
+    if let Some(response_format) = &openai_req.response_format {
+        if response_format.format_type == "json_schema" {
+            if let Some(json_schema) = &response_format.json_schema {
+                let schema = json_schema
+                    .get("schema")
+                    .cloned()
+                    .unwrap_or_else(|| json_schema.clone());
+                output_config["format"] = serde_json::json!({
+                    "type": "json_schema",
+                    "schema": schema,
+                });
+                warnings.remove("response_format");
+            }
+        }
+    }
+
+    if output_config
+        .as_object()
+        .map(|o| !o.is_empty())
+        .unwrap_or(false)
+    {
+        anthropic_req
+            .extra
+            .insert("output_config".to_string(), output_config);
+    }
 }
 
 /// Handler for POST /v1/chat/completions (non-streaming and streaming).
@@ -99,63 +193,19 @@ pub(crate) async fn chat_completions(
         }
     }
 
-    // Translate OpenAI request -> Anthropic request
-    let mut warnings = TranslationWarnings::default();
-    let anthropic_req = match translate_openai_to_anthropic_request(&body, &mut warnings) {
-        Ok(req) => req,
-        Err(e) => {
-            return openai_error_response(
-                &e.to_string(),
-                "invalid_request_error",
-                StatusCode::BAD_REQUEST,
-            );
-        }
-    };
-
-    if anthropic_req.messages.is_empty() {
-        return openai_error_response(
-            "messages array must not be empty",
-            "invalid_request_error",
-            StatusCode::BAD_REQUEST,
-        );
-    }
-
     let is_streaming = body.stream == Some(true);
     let original_model = body.model.clone();
+    let safe_headers = safe_anthropic_extra_headers(&headers);
 
-    if is_streaming {
-        let mut response = chat_completions_stream(
-            state,
-            anthropic_req,
-            ctx,
-            original_model,
-            warnings,
-            permit,
-            vk_ctx,
-        )
-        .await;
-        response.headers_mut().insert(
-            "x-anyllm-cache",
-            axum::http::HeaderValue::from_static("bypass"),
-        );
-        return response;
-    }
-
-    // Non-streaming path: check cache before calling backend.
-    let body_value = serde_json::to_value(&body).unwrap_or_default();
-    let cache_ttl = match cache::parse_cache_ttl(&body_value) {
-        Ok(ttl) => ttl,
-        Err(msg) => {
-            return openai_error_response(&msg, "invalid_request_error", StatusCode::BAD_REQUEST);
-        }
-    };
-    let bypass_cache = cache_ttl == Some(0);
-
-    // Resolve model routing before reading cache so route-scoped keys cannot
-    // receive cached disallowed-backend data.
+    // Resolve model routing before translation so Anthropic-targeted requests
+    // can apply LiteLLM's Anthropic defaults without changing other backends.
     let (mapped_model, effective, deployment) = match state.resolve_model_and_state(&original_model)
     {
-        Ok(v) => v,
+        Ok((mapped, effective, deployment)) => (
+            mapped_model_for_backend(&original_model, mapped, &effective),
+            effective,
+            deployment,
+        ),
         Err(resp) => return resp,
     };
     if let Some(ref ctx) = vk_ctx {
@@ -173,6 +223,68 @@ pub(crate) async fn chat_completions(
             );
         }
     }
+
+    let mut translated_body = body.clone();
+    if is_anthropic_backend(&effective)
+        && translated_body.max_tokens.is_none()
+        && translated_body.max_completion_tokens.is_none()
+    {
+        translated_body.max_tokens = Some(4096);
+    }
+
+    // Translate OpenAI request -> Anthropic request.
+    let mut warnings = TranslationWarnings::default();
+    let mut anthropic_req =
+        match translate_openai_to_anthropic_request(&translated_body, &mut warnings) {
+            Ok(req) => req,
+            Err(e) => {
+                return openai_error_response(
+                    &e.to_string(),
+                    "invalid_request_error",
+                    StatusCode::BAD_REQUEST,
+                );
+            }
+        };
+    if is_anthropic_backend(&effective) {
+        apply_anthropic_chat_extensions(&body, &mut anthropic_req, &mut warnings);
+    }
+
+    if anthropic_req.messages.is_empty() {
+        return openai_error_response(
+            "messages array must not be empty",
+            "invalid_request_error",
+            StatusCode::BAD_REQUEST,
+        );
+    }
+
+    if is_streaming {
+        let stream_meta = ChatCompletionsStreamMeta {
+            ctx,
+            original_model,
+            mapped_model,
+            warnings,
+            safe_headers,
+            concurrency_permit: permit,
+            vk_ctx,
+        };
+        let mut response = chat_completions_stream(effective, anthropic_req, stream_meta).await;
+        response.headers_mut().insert(
+            "x-anyllm-cache",
+            axum::http::HeaderValue::from_static("bypass"),
+        );
+        return response;
+    }
+
+    // Non-streaming path: check cache before calling backend.
+    let body_value = serde_json::to_value(&body).unwrap_or_default();
+    let cache_ttl = match cache::parse_cache_ttl(&body_value) {
+        Ok(ttl) => ttl,
+        Err(msg) => {
+            return openai_error_response(&msg, "invalid_request_error", StatusCode::BAD_REQUEST);
+        }
+    };
+    let bypass_cache = cache_ttl == Some(0);
+
     let auth_identity = cache_auth_identity(&headers, &vk_ctx);
     let cache_key = if !bypass_cache {
         Some(cache::cache_key_for_request(
@@ -447,9 +559,122 @@ pub(crate) async fn chat_completions(
                 }
             }
         }
-        BackendClient::Anthropic(_)
-        | BackendClient::Bedrock(_)
-        | BackendClient::GeminiNative(_) => openai_error_response(
+        BackendClient::Anthropic(client) => {
+            let mut upstream_req = anthropic_req.clone();
+            upstream_req.model = mapped_model.clone();
+            upstream_req.stream = Some(false);
+            let body = match serde_json::to_vec(&upstream_req) {
+                Ok(body) => bytes::Bytes::from(body),
+                Err(e) => {
+                    return openai_error_response(
+                        &format!("failed to serialize Anthropic request: {e}"),
+                        "server_error",
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                    );
+                }
+            };
+            let refs = header_refs(&safe_headers);
+
+            match client.forward(body, &refs).await {
+                Ok((resp_body, rate_limits)) => {
+                    if let Some(ref d) = deployment {
+                        d.record_finish(backend_start.elapsed().as_millis() as u64);
+                    }
+                    let anthropic_resp =
+                        match serde_json::from_slice::<anthropic::MessageResponse>(&resp_body) {
+                            Ok(resp) => resp,
+                            Err(e) => {
+                                state.metrics.record_error();
+                                log_request(
+                                    &state.shared,
+                                    ctx.log_entry_with_attribution(
+                                        &state.backend_name,
+                                        Some(mapped_model.clone()),
+                                        StatusCode::BAD_GATEWAY.as_u16(),
+                                        None,
+                                        false,
+                                        Some(format!(
+                                            "failed to parse Anthropic upstream response: {e}"
+                                        )),
+                                        &vk_ctx,
+                                        None,
+                                    ),
+                                );
+                                return openai_error_response(
+                                    "Upstream Anthropic response could not be parsed.",
+                                    "server_error",
+                                    StatusCode::BAD_GATEWAY,
+                                );
+                            }
+                        };
+                    state.metrics.record_success();
+                    let oai_response =
+                        translate_anthropic_to_openai_response(&anthropic_resp, &original_model);
+                    let cost = super::routes::record_virtual_key_usage(
+                        &state.shared,
+                        &vk_ctx,
+                        &mapped_model,
+                        anthropic_resp.usage.input_tokens as u64,
+                        anthropic_resp.usage.output_tokens as u64,
+                    );
+                    log_request(
+                        &state.shared,
+                        ctx.log_entry_with_attribution(
+                            &state.backend_name,
+                            Some(mapped_model.clone()),
+                            200,
+                            Some((
+                                anthropic_resp.usage.input_tokens as u64,
+                                anthropic_resp.usage.output_tokens as u64,
+                            )),
+                            false,
+                            None,
+                            &vk_ctx,
+                            Some(cost),
+                        ),
+                    );
+
+                    super::routes::try_cache_response(
+                        &cache_key,
+                        &state.cache,
+                        cache_ttl,
+                        &oai_response,
+                        original_model.clone(),
+                    )
+                    .await;
+
+                    let cache_hv = super::routes::cache_header_value(bypass_cache);
+                    let mut response = (StatusCode::OK, Json(oai_response)).into_response();
+                    rate_limits.inject_anthropic_response_headers(response.headers_mut());
+                    if state.expose_degradation_warnings {
+                        inject_degradation_header(response.headers_mut(), &warnings);
+                    }
+                    response.headers_mut().insert("x-anyllm-cache", cache_hv);
+                    response
+                }
+                Err(e) => {
+                    if let Some(ref d) = deployment {
+                        d.record_finish(backend_start.elapsed().as_millis() as u64);
+                    }
+                    state.metrics.record_error();
+                    let backend_error = BackendError::from(e);
+                    let mut entry = ctx.log_entry_with_attribution(
+                        &state.backend_name,
+                        Some(mapped_model),
+                        backend_error.status_code(),
+                        None,
+                        false,
+                        Some(backend_error.to_string()),
+                        &vk_ctx,
+                        None,
+                    );
+                    set_backend_error_kind(&mut entry, &backend_error);
+                    log_request(&state.shared, entry);
+                    backend_error_to_openai_response(backend_error)
+                }
+            }
+        }
+        BackendClient::Bedrock(_) | BackendClient::GeminiNative(_) => openai_error_response(
             "This backend does not support /v1/chat/completions. Use /v1/messages instead.",
             "invalid_request_error",
             StatusCode::BAD_REQUEST,
@@ -462,44 +687,240 @@ pub(crate) async fn chat_completions(
 /// Translates the Anthropic request to OpenAI, streams the backend response,
 /// then uses ReverseStreamingTranslator to convert Anthropic SSE events back
 /// to OpenAI ChatCompletionChunk SSE format.
+async fn anthropic_chat_completions_stream(
+    state: AppState,
+    client: crate::backend::anthropic_client::AnthropicClient,
+    mut anthropic_req: anthropic::MessageCreateRequest,
+    meta: ChatCompletionsStreamMeta,
+) -> Response {
+    let ChatCompletionsStreamMeta {
+        ctx,
+        original_model,
+        mapped_model,
+        warnings,
+        safe_headers,
+        concurrency_permit,
+        vk_ctx,
+    } = meta;
+
+    anthropic_req.model = mapped_model.clone();
+    anthropic_req.stream = Some(true);
+    let body = match serde_json::to_vec(&anthropic_req) {
+        Ok(body) => bytes::Bytes::from(body),
+        Err(e) => {
+            return openai_error_response(
+                &format!("failed to serialize Anthropic request: {e}"),
+                "server_error",
+                StatusCode::INTERNAL_SERVER_ERROR,
+            );
+        }
+    };
+    let refs = header_refs(&safe_headers);
+
+    let (response, rate_limits) = match client.forward_stream(body, &refs).await {
+        Ok(result) => result,
+        Err(e) => {
+            state.metrics.record_error();
+            let backend_error = BackendError::from(e);
+            let mut entry = ctx.log_entry_with_attribution(
+                &state.backend_name,
+                Some(mapped_model),
+                backend_error.status_code(),
+                None,
+                true,
+                Some(backend_error.to_string()),
+                &vk_ctx,
+                None,
+            );
+            set_backend_error_kind(&mut entry, &backend_error);
+            log_request(&state.shared, entry);
+            return backend_error_to_openai_response(backend_error);
+        }
+    };
+
+    let (tx, rx) = tokio::sync::mpsc::channel::<Result<String, std::convert::Infallible>>(32);
+    let metrics = state.metrics.clone();
+    let log_shared = state.shared.clone();
+    let log_backend_name = state.backend_name.clone();
+    let stream_timeout_secs = state.stream_timeout_secs;
+    let permit = concurrency_permit;
+
+    tokio::spawn(async move {
+        let _permit = permit;
+        metrics.record_stream_started();
+        let mut translator = ReverseStreamingTranslator::new(
+            format!("chatcmpl-{}", uuid::Uuid::new_v4().as_simple()),
+            original_model,
+        );
+        let mut usage = AnthropicStreamUsage::default();
+        let mut byte_stream = response.bytes_stream();
+        let mut buffer = BytesMut::new();
+        let mut search_from: usize = 0;
+        let mut emitted_done = false;
+
+        let stream_loop = async {
+            while let Some(chunk_result) = byte_stream.next().await {
+                let bytes = match chunk_result {
+                    Ok(bytes) => bytes,
+                    Err(e) => {
+                        tracing::error!("Anthropic chat-completions stream read error: {e}");
+                        metrics.record_error();
+                        return StreamOutcome::UpstreamError;
+                    }
+                };
+
+                if buffer.len() + bytes.len() > MAX_SSE_BUFFER_SIZE {
+                    tracing::error!(
+                        buffer_len = buffer.len(),
+                        "Anthropic chat-completions SSE buffer exceeded maximum size"
+                    );
+                    metrics.record_error();
+                    return StreamOutcome::UpstreamError;
+                }
+                buffer.extend_from_slice(&bytes);
+
+                while let Some((pos, delim_len)) = find_double_newline(&buffer, search_from) {
+                    if let Ok(frame_str) = std::str::from_utf8(&buffer[..pos]) {
+                        for line in frame_str.lines() {
+                            let line = line.trim();
+                            let Some(json_str) = line.strip_prefix("data: ") else {
+                                continue;
+                            };
+                            usage.observe_data(json_str);
+                            let event =
+                                match serde_json::from_str::<anthropic::StreamEvent>(json_str) {
+                                    Ok(event) => event,
+                                    Err(e) => {
+                                        tracing::debug!(
+                                            "failed to parse Anthropic streaming event: {e}"
+                                        );
+                                        continue;
+                                    }
+                                };
+                            let chunks = translator.process_event(&event);
+                            for chunk in chunks {
+                                let Ok(json) = serde_json::to_string(&chunk) else {
+                                    continue;
+                                };
+                                if tx.send(Ok(format!("data: {json}\n\n"))).await.is_err() {
+                                    return StreamOutcome::ClientDisconnected;
+                                }
+                            }
+                            if translator.is_done() && !emitted_done {
+                                emitted_done = true;
+                                if tx.send(Ok("data: [DONE]\n\n".to_string())).await.is_err() {
+                                    return StreamOutcome::ClientDisconnected;
+                                }
+                            }
+                        }
+                    }
+                    let _ = buffer.split_to(pos + delim_len);
+                    search_from = 0;
+                }
+                search_from = buffer.len().saturating_sub(3);
+            }
+            StreamOutcome::Completed
+        };
+
+        let outcome = if stream_timeout_secs > 0 {
+            match tokio::time::timeout(
+                std::time::Duration::from_secs(stream_timeout_secs),
+                stream_loop,
+            )
+            .await
+            {
+                Ok(outcome) => outcome,
+                Err(_) => {
+                    tracing::warn!(
+                        timeout_secs = stream_timeout_secs,
+                        "Anthropic chat-completions stream exceeded wall-clock timeout"
+                    );
+                    metrics.record_error();
+                    StreamOutcome::UpstreamError
+                }
+            }
+        } else {
+            stream_loop.await
+        };
+
+        if matches!(outcome, StreamOutcome::Completed) && !emitted_done {
+            let _ = tx.send(Ok("data: [DONE]\n\n".to_string())).await;
+        }
+
+        let tokens = usage.tokens();
+        let cost = tokens.map(|(input_t, output_t)| {
+            super::routes::record_virtual_key_usage(
+                &log_shared,
+                &vk_ctx,
+                &mapped_model,
+                input_t,
+                output_t,
+            )
+        });
+        let (status, err) = outcome.record(&metrics);
+        log_request(
+            &log_shared,
+            ctx.log_entry_with_attribution(
+                &log_backend_name,
+                Some(mapped_model),
+                status,
+                tokens,
+                true,
+                err,
+                &vk_ctx,
+                cost,
+            ),
+        );
+    });
+
+    let body_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+    let body = axum::body::Body::from_stream(body_stream);
+    let mut response = Response::builder()
+        .status(StatusCode::OK)
+        .header("content-type", "text/event-stream")
+        .header("cache-control", "no-cache")
+        .header("connection", "keep-alive")
+        .body(body)
+        .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response());
+    rate_limits.inject_anthropic_response_headers(response.headers_mut());
+    if state.expose_degradation_warnings {
+        inject_degradation_header(response.headers_mut(), &warnings);
+    }
+    response
+}
+
 async fn chat_completions_stream(
     state: AppState,
     anthropic_req: anthropic::MessageCreateRequest,
-    ctx: RequestCtx,
-    original_model: String,
-    warnings: TranslationWarnings,
-    concurrency_permit: Option<ConcurrencyPermit>,
-    vk_ctx: Option<crate::server::middleware::VirtualKeyContext>,
+    meta: ChatCompletionsStreamMeta,
 ) -> Response {
-    // Resolve model routing (may switch to a different backend).
-    let (mapped_model_resolved, effective, _deployment) =
-        match state.resolve_model_and_state(&original_model) {
-            Ok(v) => v,
-            Err(resp) => return resp,
-        };
-    if let Some(ref ctx) = vk_ctx {
-        if let Err(error) = crate::server::policy::enforce_route_scope(
-            &effective.backend_name,
-            &effective.shared,
-            &ctx.allowed_routes,
+    if let BackendClient::Anthropic(client) = &state.backend {
+        return anthropic_chat_completions_stream(
+            state.clone(),
+            client.clone(),
+            anthropic_req,
+            meta,
         )
-        .await
-        {
-            return openai_error_response(
-                error.message(),
-                "permission_error",
-                StatusCode::FORBIDDEN,
-            );
-        }
+        .await;
     }
+
+    let ChatCompletionsStreamMeta {
+        ctx,
+        original_model,
+        mapped_model: mapped_model_resolved,
+        warnings,
+        safe_headers: _,
+        concurrency_permit,
+        vk_ctx,
+    } = meta;
 
     // Translate to OpenAI format for the backend
     let mut openai_req = mapping::message_map::anthropic_to_openai_request(&anthropic_req);
-    super::routes::inject_gemini_thinking(&anthropic_req, &effective.backend, &mut openai_req);
-    super::routes::inject_glm_thinking(&anthropic_req, &effective.backend, &mut openai_req);
+    super::routes::inject_gemini_thinking(&anthropic_req, &state.backend, &mut openai_req);
+    super::routes::inject_glm_thinking(&anthropic_req, &state.backend, &mut openai_req);
     // Gemini/Vertex rejects standard JSON Schema keywords; sanitize tool schemas.
     if matches!(
-        effective.backend,
+        state.backend,
         BackendClient::GeminiOpenAI(_) | BackendClient::Vertex(_)
     ) {
         if let Some(tools) = openai_req.tools.take() {
@@ -519,13 +940,13 @@ async fn chat_completions_stream(
     }
     openai_req.model = mapped_model_resolved;
     openai_req.stream = Some(true);
-    if !effective.omit_stream_options {
+    if !state.omit_stream_options {
         openai_req.stream_options = Some(openai::StreamOptions {
             include_usage: true,
         });
     }
 
-    let client = match &effective.backend {
+    let client = match &state.backend {
         BackendClient::OpenAI(c)
         | BackendClient::AzureOpenAI(c)
         | BackendClient::Vertex(c)
@@ -559,7 +980,7 @@ async fn chat_completions_stream(
             let tool_engine = state.tool_engine.clone();
             let anthropic_req_for_tools = anthropic_req.clone();
             let client_for_tools = client.clone();
-            let omit_stream_options_for_tools = effective.omit_stream_options;
+            let omit_stream_options_for_tools = state.omit_stream_options;
             let permit = concurrency_permit;
 
             tokio::spawn(async move {

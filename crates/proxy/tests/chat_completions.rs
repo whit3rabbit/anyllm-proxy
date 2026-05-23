@@ -13,7 +13,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
-    Arc,
+    Arc, Mutex,
 };
 use tokio::net::TcpListener;
 
@@ -43,6 +43,25 @@ fn openai_config_with_degradation(base_url: &str) -> Config {
     }
 }
 
+fn anthropic_config_with_base(base_url: &str) -> Config {
+    Config {
+        backend: BackendKind::Anthropic,
+        openai_api_key: "anthropic-backend-key".to_string(),
+        openai_base_url: base_url.to_string(),
+        listen_port: 0,
+        model_mapping: ModelMapping {
+            big_model: String::new(),
+            small_model: String::new(),
+        },
+        tls: config::TlsConfig::default(),
+        backend_auth: BackendAuth::BearerToken("anthropic-backend-key".into()),
+        log_bodies: false,
+        expose_degradation_warnings: true,
+        openai_api_format: OpenAIApiFormat::Chat,
+        provider_id: None,
+    }
+}
+
 /// Mock backend that returns a fixed OpenAI Chat Completions response.
 async fn spawn_mock_chat_backend() -> String {
     let app = Router::new().route(
@@ -67,6 +86,84 @@ async fn spawn_mock_chat_backend() -> String {
                     "total_tokens": 15
                 }
             }))
+        }),
+    );
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    format!("http://{addr}")
+}
+
+async fn spawn_mock_anthropic_backend(
+    captured_body: Arc<Mutex<Option<serde_json::Value>>>,
+    captured_headers: Arc<Mutex<Vec<(String, String)>>>,
+) -> String {
+    let app = Router::new().route(
+        "/v1/messages",
+        post({
+            let captured_body = captured_body.clone();
+            let captured_headers = captured_headers.clone();
+            move |headers: axum::http::HeaderMap,
+                  axum::Json(body): axum::Json<serde_json::Value>| {
+                let captured_body = captured_body.clone();
+                let captured_headers = captured_headers.clone();
+                async move {
+                    *captured_body.lock().unwrap() = Some(body.clone());
+                    let headers_vec = headers
+                        .iter()
+                        .filter_map(|(name, value)| {
+                            value
+                                .to_str()
+                                .ok()
+                                .map(|value| (name.as_str().to_string(), value.to_string()))
+                        })
+                        .collect();
+                    *captured_headers.lock().unwrap() = headers_vec;
+
+                    axum::Json(json!({
+                        "id": "msg_mock123",
+                        "type": "message",
+                        "role": "assistant",
+                        "model": body["model"].as_str().unwrap_or("claude-sonnet-4-6"),
+                        "content": [{"type": "text", "text": "Hello from Anthropic mock!"}],
+                        "stop_reason": "end_turn",
+                        "stop_sequence": null,
+                        "usage": {"input_tokens": 12, "output_tokens": 6}
+                    }))
+                }
+            }
+        }),
+    );
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    format!("http://{addr}")
+}
+
+async fn spawn_mock_anthropic_stream_backend() -> String {
+    let app = Router::new().route(
+        "/v1/messages",
+        post(|| async {
+            let body = concat!(
+                "event: message_start\n",
+                "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_stream123\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"model\":\"claude-sonnet-4-6\",\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":9,\"output_tokens\":0}}}\n\n",
+                "event: content_block_start\n",
+                "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n",
+                "event: content_block_delta\n",
+                "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"stream hello\"}}\n\n",
+                "event: content_block_stop\n",
+                "data: {\"type\":\"content_block_stop\",\"index\":0}\n\n",
+                "event: message_delta\n",
+                "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":4}}\n\n",
+                "event: message_stop\n",
+                "data: {\"type\":\"message_stop\"}\n\n",
+            );
+            (
+                [("content-type", "text/event-stream")],
+                body.to_string(),
+            )
         }),
     );
 
@@ -217,6 +314,122 @@ async fn chat_completions_non_streaming() {
     assert!(body["choices"][0]["message"]["content"].as_str().is_some());
     assert_eq!(body["choices"][0]["finish_reason"], "stop");
     assert!(body["usage"]["prompt_tokens"].as_u64().is_some());
+}
+
+#[tokio::test]
+async fn anthropic_chat_completions_defaults_and_extensions() {
+    let captured_body = Arc::new(Mutex::new(None));
+    let captured_headers = Arc::new(Mutex::new(Vec::new()));
+    let mock = spawn_mock_anthropic_backend(captured_body.clone(), captured_headers.clone()).await;
+    let proxy = spawn_proxy(anthropic_config_with_base(&mock)).await;
+
+    let client = Client::new();
+    let resp = client
+        .post(format!("{proxy}/v1/chat/completions"))
+        .header("x-api-key", "test")
+        .header("authorization", "Bearer caller-secret")
+        .header("anthropic-beta", "test-beta")
+        .header("x-claude-code-session-id", "session-123")
+        .header("content-type", "application/json")
+        .json(&json!({
+            "model": "claude-sonnet-4-6",
+            "messages": [{"role": "user", "content": "Hello"}],
+            "reasoning_effort": "medium",
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "reply",
+                    "strict": true,
+                    "schema": {
+                        "type": "object",
+                        "properties": {"answer": {"type": "string"}},
+                        "required": ["answer"],
+                        "additionalProperties": false
+                    }
+                }
+            },
+            "tools": [{
+                "type": "function",
+                "function": {
+                    "name": "client_tool",
+                    "description": "client-side tool",
+                    "parameters": {"type": "object"}
+                }
+            }]
+        }))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), 200);
+    assert!(
+        resp.headers().get("x-anyllm-degradation").is_none(),
+        "json_schema response_format should be handled by Anthropic output_config"
+    );
+    let body: serde_json::Value = resp.json().await.unwrap();
+    assert_eq!(body["object"], "chat.completion");
+    assert_eq!(
+        body["choices"][0]["message"]["content"],
+        "Hello from Anthropic mock!"
+    );
+
+    let upstream = captured_body.lock().unwrap().clone().unwrap();
+    assert_eq!(upstream["model"], "claude-sonnet-4-6");
+    assert_eq!(upstream["max_tokens"], 4096);
+    assert_eq!(upstream["output_config"]["effort"], "medium");
+    assert_eq!(
+        upstream["output_config"]["format"]["schema"]["properties"]["answer"]["type"],
+        "string"
+    );
+    assert_eq!(upstream["tools"][0]["name"], "client_tool");
+
+    let headers = captured_headers.lock().unwrap().clone();
+    assert!(headers
+        .iter()
+        .any(|(name, value)| name == "anthropic-beta" && value == "test-beta"));
+    assert!(headers
+        .iter()
+        .any(|(name, value)| name == "x-claude-code-session-id" && value == "session-123"));
+    assert!(headers
+        .iter()
+        .any(|(name, value)| name == "x-api-key" && value == "anthropic-backend-key"));
+    assert!(
+        !headers
+            .iter()
+            .any(|(name, value)| name == "authorization" && value == "Bearer caller-secret"),
+        "caller Authorization header must not be forwarded upstream"
+    );
+}
+
+#[tokio::test]
+async fn anthropic_chat_completions_streaming_translates_to_openai_sse() {
+    let mock = spawn_mock_anthropic_stream_backend().await;
+    let proxy = spawn_proxy(anthropic_config_with_base(&mock)).await;
+
+    let client = Client::new();
+    let resp = client
+        .post(format!("{proxy}/v1/chat/completions"))
+        .header("x-api-key", "test")
+        .header("content-type", "application/json")
+        .json(&json!({
+            "model": "claude-sonnet-4-6",
+            "messages": [{"role": "user", "content": "Hello"}],
+            "max_tokens": 100,
+            "stream": true
+        }))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), 200);
+    let text = resp.text().await.unwrap();
+    assert!(
+        text.contains("\"object\":\"chat.completion.chunk\""),
+        "{text}"
+    );
+    assert!(text.contains("stream hello"), "{text}");
+    assert!(text.contains("\"prompt_tokens\":9"), "{text}");
+    assert!(text.contains("data: [DONE]"), "{text}");
 }
 
 #[tokio::test]

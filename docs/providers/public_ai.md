@@ -2,7 +2,7 @@
 
 AI inference platform with an OpenAI-compatible API.
 
-**LiteLLM prefix:** `public_ai/`  
+**LiteLLM prefix:** `publicai/`
 **Status:** Stub — routes through OpenAI-compatible client  
 **Docs:** https://publicai.io/docs
 
@@ -17,9 +17,9 @@ AI inference platform with an OpenAI-compatible API.
 ### Single-Backend (env vars)
 
 ```bash
-BACKEND=public_ai PUBLIC_AI_API_KEY=your-key cargo run -p anyllm_proxy
+BACKEND=publicai PUBLIC_AI_API_KEY=your-key cargo run -p anyllm_proxy
 # Docker:
-docker run -e BACKEND=public_ai -e PUBLIC_AI_API_KEY=your-key -e PROXY_OPEN_RELAY=true -p 3000:3000 followthewhit3rabbit/anyllm-proxy
+docker run -e BACKEND=publicai -e PUBLIC_AI_API_KEY=your-key -e PROXY_OPEN_RELAY=true -p 3000:3000 followthewhit3rabbit/anyllm-proxy
 ```
 
 ### LiteLLM YAML Config
@@ -28,7 +28,7 @@ docker run -e BACKEND=public_ai -e PUBLIC_AI_API_KEY=your-key -e PROXY_OPEN_RELA
 model_list:
   - model_name: public-ai-model
     litellm_params:
-      model: public_ai/<model-id>
+      model: publicai/<model-id>
       api_key: "env:PUBLIC_AI_API_KEY"
 ```
 

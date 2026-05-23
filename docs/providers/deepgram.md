@@ -2,7 +2,7 @@
 
 Speech-to-text and audio AI. Chat completions are not supported via this proxy — use the Deepgram SDK directly for transcription.
 
-**LiteLLM prefix:** *(not in LiteLLM)*
+**LiteLLM prefix:** `deepgram/`
 **Status:** Stub — non-chat capabilities only
 **API base:** `https://api.deepgram.com`
 **Docs:** https://developers.deepgram.com

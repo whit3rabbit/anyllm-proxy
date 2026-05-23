@@ -20,6 +20,11 @@ impl TranslationWarnings {
         self.items.push(feature);
     }
 
+    /// Remove a warning when a downstream-specific path handles it.
+    pub fn remove(&mut self, feature: &'static str) {
+        self.items.retain(|item| *item != feature);
+    }
+
     /// Returns true if no features were dropped.
     pub fn is_empty(&self) -> bool {
         self.items.is_empty()
@@ -64,5 +69,14 @@ mod tests {
             w.as_header_value().unwrap(),
             "top_k, cache_control, document_blocks"
         );
+    }
+
+    #[test]
+    fn remove_deletes_matching_items() {
+        let mut w = TranslationWarnings::default();
+        w.add("response_format");
+        w.add("top_k");
+        w.remove("response_format");
+        assert_eq!(w.as_header_value().unwrap(), "top_k");
     }
 }

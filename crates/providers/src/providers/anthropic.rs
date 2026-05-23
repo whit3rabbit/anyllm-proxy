@@ -22,13 +22,51 @@ pub const PROVIDER: ProviderDef = ProviderDef {
     },
 };
 
-// Model catalog mirrors docs.anthropic.com model overview + deprecations page.
-// Latest GA: Opus 4.6, Sonnet 4.6 (1M context), Haiku 4.5 (200k context).
-// Legacy-but-active: Opus 4.5/4.1, Sonnet 4.5. Deprecated-not-retired: Opus 4 / Sonnet 4 /
-// Haiku 3 (retire mid-2026). Retired models (3.7 Sonnet, 3.5 Sonnet/Haiku, 3 Opus) are omitted.
+// Model catalog mirrors LiteLLM's anthropic entries in
+// model_prices_and_context_window.json. Keep aliases because LiteLLM accepts
+// both dated and family names for Anthropic routing.
 pub const MODELS: &[ModelDef] = &[
     ModelDef {
         id: "claude-opus-4-6",
+        provider_id: "anthropic",
+        context_window: 1_000_000,
+        max_output_tokens: 128_000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "claude-opus-4-6-20260205",
+        provider_id: "anthropic",
+        context_window: 1_000_000,
+        max_output_tokens: 128_000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "claude-opus-4-7",
+        provider_id: "anthropic",
+        context_window: 1_000_000,
+        max_output_tokens: 128_000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "claude-opus-4-7-20260416",
         provider_id: "anthropic",
         context_window: 1_000_000,
         max_output_tokens: 128_000,
@@ -54,7 +92,33 @@ pub const MODELS: &[ModelDef] = &[
         status: ModelStatus::Available,
     },
     ModelDef {
+        id: "claude-haiku-4-5",
+        provider_id: "anthropic",
+        context_window: 200_000,
+        max_output_tokens: 64_000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
         id: "claude-haiku-4-5-20251001",
+        provider_id: "anthropic",
+        context_window: 200_000,
+        max_output_tokens: 64_000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "claude-opus-4-5",
         provider_id: "anthropic",
         context_window: 200_000,
         max_output_tokens: 64_000,
@@ -80,10 +144,36 @@ pub const MODELS: &[ModelDef] = &[
         status: ModelStatus::Available,
     },
     ModelDef {
+        id: "claude-sonnet-4-5",
+        provider_id: "anthropic",
+        context_window: 200_000,
+        max_output_tokens: 64_000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
         id: "claude-sonnet-4-5-20250929",
         provider_id: "anthropic",
         context_window: 200_000,
         max_output_tokens: 64_000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "claude-opus-4-1",
+        provider_id: "anthropic",
+        context_window: 200_000,
+        max_output_tokens: 32_000,
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
@@ -105,11 +195,11 @@ pub const MODELS: &[ModelDef] = &[
         },
         status: ModelStatus::Available,
     },
-    // Deprecated: retires June 15, 2026. Migrate to claude-sonnet-4-6.
+    // Deprecated Claude 4.0 aliases retained for LiteLLM config compatibility.
     ModelDef {
-        id: "claude-sonnet-4-20250514",
+        id: "claude-4-sonnet-20250514",
         provider_id: "anthropic",
-        context_window: 200_000,
+        context_window: 1_000_000,
         max_output_tokens: 64_000,
         capabilities: ModelCapabilities {
             streaming: true,
@@ -119,7 +209,32 @@ pub const MODELS: &[ModelDef] = &[
         },
         status: ModelStatus::Deprecated,
     },
-    // Deprecated: retires June 15, 2026. Migrate to claude-opus-4-6.
+    ModelDef {
+        id: "claude-sonnet-4-20250514",
+        provider_id: "anthropic",
+        context_window: 1_000_000,
+        max_output_tokens: 64_000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Deprecated,
+    },
+    ModelDef {
+        id: "claude-4-opus-20250514",
+        provider_id: "anthropic",
+        context_window: 200_000,
+        max_output_tokens: 32_000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Deprecated,
+    },
     ModelDef {
         id: "claude-opus-4-20250514",
         provider_id: "anthropic",
@@ -133,9 +248,35 @@ pub const MODELS: &[ModelDef] = &[
         },
         status: ModelStatus::Deprecated,
     },
-    // Deprecated: retires April 20, 2026. Migrate to claude-haiku-4-5-20251001.
+    // Older Claude 3.x models are retained because LiteLLM still advertises them.
+    ModelDef {
+        id: "claude-3-7-sonnet-20250219",
+        provider_id: "anthropic",
+        context_window: 200_000,
+        max_output_tokens: 64_000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Deprecated,
+    },
     ModelDef {
         id: "claude-3-haiku-20240307",
+        provider_id: "anthropic",
+        context_window: 200_000,
+        max_output_tokens: 4_096,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Deprecated,
+    },
+    ModelDef {
+        id: "claude-3-opus-20240229",
         provider_id: "anthropic",
         context_window: 200_000,
         max_output_tokens: 4_096,

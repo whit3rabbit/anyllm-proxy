@@ -207,11 +207,11 @@ cargo run -p anyllm_proxy
 
 ## Third-party OpenAI-compatible providers
 
-Any provider id from the built-in catalog can be used as a `BACKEND` value. These providers use the OpenAI Chat Completions protocol and route through the same HTTP client as `BACKEND=openai`.
+Any LiteLLM provider id from the built-in catalog can be used as a `BACKEND` value. These providers use the OpenAI Chat Completions protocol and route through the same HTTP client as `BACKEND=openai`. Legacy local IDs such as `gmi_cloud`, `public_ai`, `zhipuai`, `ai_ml_api`, `github`, `jina`, `exa`, and `stability_ai` are accepted only as migration aliases.
 
 **Resolution order:**
 1. `BACKEND=<provider_id>` — e.g. `BACKEND=groq`
-2. Base URL: `OPENAI_BASE_URL` env var (if set) overrides the provider default; otherwise the catalog default is used.
+2. Base URL: `OPENAI_BASE_URL` env var (if set) overrides the provider default; otherwise the catalog default is used. Known providers without a safe global default require `OPENAI_BASE_URL`.
 3. API key: `OPENAI_API_KEY` (if set) takes precedence; otherwise the provider-specific key var is used (e.g. `GROQ_API_KEY`).
 
 **Example (Groq):**
@@ -255,17 +255,17 @@ cargo run -p anyllm_proxy
 | `clarifai` | `CLARIFAI_API_KEY` | `https://api.clarifai.com/v2` |
 | `predibase` | `PREDIBASE_API_KEY` | `https://serving.app.predibase.com` |
 | `voyage` | `VOYAGE_API_KEY` | `https://api.voyageai.com/v1` (embeddings only) |
-| `jina` | `JINA_AI_API_KEY` | `https://api.jina.ai/v1` (embeddings only) |
-| `github` | `GITHUB_TOKEN` | `https://models.inference.ai.azure.com` |
+| `jina_ai` | `JINA_AI_API_KEY` | `https://api.jina.ai/v1` (embeddings/rerank) |
+| `github_copilot` | `GITHUB_TOKEN` | `https://models.github.ai/inference` |
 | `chutes` | `CHUTES_API_KEY` | `https://llm.chutes.ai/v1` |
-| `gmi_cloud` | `GMI_CLOUD_API_KEY` | `https://api.gmi.ai/v1` |
+| `gmi` | `GMI_CLOUD_API_KEY` | `https://api.gmi-serving.com/v1` |
 | `meta_llama` | `META_LLAMA_API_KEY` | `https://www.llama.com/api/v1` |
-| `ai_ml_api` | `AIML_API_KEY` | `https://api.aimlapi.com/v1` |
+| `aiml` | `AIML_API_KEY` | `https://api.aimlapi.com/v1` |
 | `morph` | `MORPH_API_KEY` | `https://api.morphllm.com/v1` |
 | `galadriel` | `GALADRIEL_API_KEY` | `https://api.galadriel.com/v1` |
 | `nanogpt` | `NANOGPT_API_KEY` | `https://nano-gpt.com/api/v1` |
 | `bytez` | `BYTEZ_KEY` | `https://api.bytez.com/models/v2` |
-| `public_ai` | `PUBLIC_AI_API_KEY` | `https://api.publicai.io/v1` |
+| `publicai` | `PUBLIC_AI_API_KEY` | `https://api.publicai.co/v1` |
 
 ### Regional / specialized
 
@@ -274,7 +274,7 @@ cargo run -p anyllm_proxy
 | `moonshot` | `MOONSHOT_API_KEY` | `https://api.moonshot.cn/v1` |
 | `volcengine` | `VOLCENGINE_API_KEY` | `https://ark.cn-beijing.volces.com/api/v3` |
 | `minimax` | `MINIMAX_API_KEY` | `https://api.minimax.chat/v1` |
-| `zhipuai` | `ZHIPUAI_API_KEY` | `https://open.bigmodel.cn/api/paas/v4` |
+| `zai` | `ZHIPUAI_API_KEY` | `https://open.bigmodel.cn/api/paas/v4` |
 | `dashscope` | `DASHSCOPE_API_KEY` | `https://dashscope.aliyuncs.com/compatible-mode/v1` |
 | `xiaomi_mimo` | `XIAOMI_MIMO_API_KEY` | `https://api.mimo.chat/v1` |
 | `gradient_ai` | `GRADIENT_ACCESS_TOKEN` | `https://api.gradient.ai` |

@@ -2,7 +2,7 @@
 
 AI-optimized search API. Chat completions are not supported via this proxy.
 
-**LiteLLM prefix:** *(not in LiteLLM)*
+**LiteLLM prefix:** `tavily/`
 **Status:** Stub — non-chat capabilities only
 **API base:** `https://api.tavily.com`
 **Docs:** https://docs.tavily.com

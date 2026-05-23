@@ -2,7 +2,7 @@
 
 Audio intelligence and speech-to-text. Chat completions are not supported via this proxy — use the AssemblyAI SDK directly for audio processing.
 
-**LiteLLM prefix:** *(not in LiteLLM)*
+**LiteLLM prefix:** `assemblyai/`
 **Status:** Stub — non-chat capabilities only
 **API base:** `https://api.assemblyai.com`
 **Docs:** https://www.assemblyai.com/docs

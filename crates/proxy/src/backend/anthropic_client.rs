@@ -37,8 +37,7 @@ impl AnthropicClient {
     /// Create from a BackendConfig (used in multi-backend mode).
     pub fn from_backend_config(bc: &BackendConfig) -> Self {
         let client = build_http_client(&bc.tls);
-        let base_url = bc.base_url.trim_end_matches('/').to_string();
-        let messages_url = format!("{base_url}/v1/messages");
+        let (base_url, messages_url) = anthropic_urls(&bc.base_url);
         Self {
             client,
             base_url,
@@ -50,8 +49,7 @@ impl AnthropicClient {
     /// Create from raw parts (used in legacy single-backend mode).
     pub fn new(base_url: &str, api_key: &str, tls: &TlsConfig) -> Self {
         let client = build_http_client(tls);
-        let base_url = base_url.trim_end_matches('/').to_string();
-        let messages_url = format!("{base_url}/v1/messages");
+        let (base_url, messages_url) = anthropic_urls(base_url);
         Self {
             client,
             base_url,
@@ -177,5 +175,59 @@ impl AnthropicClient {
             });
         }
         unreachable!("loop runs MAX_RETRIES+1 times and always returns")
+    }
+}
+
+fn anthropic_urls(base_url: &str) -> (String, String) {
+    let base_url = base_url.trim_end_matches('/').to_string();
+    let disable_suffix = std::env::var("LITELLM_ANTHROPIC_DISABLE_URL_SUFFIX")
+        .map(|v| matches!(v.to_ascii_lowercase().as_str(), "1" | "true" | "yes"))
+        .unwrap_or(false);
+
+    if disable_suffix {
+        return (base_url.clone(), base_url);
+    }
+
+    if let Some(root) = base_url.strip_suffix("/v1/messages") {
+        return (root.to_string(), base_url);
+    }
+
+    let messages_url = format!("{base_url}/v1/messages");
+    (base_url, messages_url)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::anthropic_urls;
+    use std::sync::Mutex;
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn appends_messages_suffix_by_default() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        unsafe { std::env::remove_var("LITELLM_ANTHROPIC_DISABLE_URL_SUFFIX") };
+        let (base, messages) = anthropic_urls("https://api.anthropic.com/");
+        assert_eq!(base, "https://api.anthropic.com");
+        assert_eq!(messages, "https://api.anthropic.com/v1/messages");
+    }
+
+    #[test]
+    fn does_not_double_append_messages_suffix() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        unsafe { std::env::remove_var("LITELLM_ANTHROPIC_DISABLE_URL_SUFFIX") };
+        let (base, messages) = anthropic_urls("https://proxy.example/v1/messages");
+        assert_eq!(base, "https://proxy.example");
+        assert_eq!(messages, "https://proxy.example/v1/messages");
+    }
+
+    #[test]
+    fn disable_suffix_uses_base_url_as_messages_url() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        unsafe { std::env::set_var("LITELLM_ANTHROPIC_DISABLE_URL_SUFFIX", "true") };
+        let (base, messages) = anthropic_urls("https://proxy.example/custom/path");
+        assert_eq!(base, "https://proxy.example/custom/path");
+        assert_eq!(messages, "https://proxy.example/custom/path");
+        unsafe { std::env::remove_var("LITELLM_ANTHROPIC_DISABLE_URL_SUFFIX") };
     }
 }

@@ -2,7 +2,7 @@
 
 Cloud inference platform for open-source LLMs with OpenAI-compatible API.
 
-**LiteLLM prefix:** `gmi_cloud/`  
+**LiteLLM prefix:** `gmi/`
 **Status:** Stub — routes through OpenAI-compatible client  
 **Docs:** https://www.gmi.ai/docs
 
@@ -17,9 +17,9 @@ Cloud inference platform for open-source LLMs with OpenAI-compatible API.
 ### Single-Backend (env vars)
 
 ```bash
-BACKEND=gmi_cloud GMI_CLOUD_API_KEY=your-key cargo run -p anyllm_proxy
+BACKEND=gmi GMI_CLOUD_API_KEY=your-key cargo run -p anyllm_proxy
 # Docker:
-docker run -e BACKEND=gmi_cloud -e GMI_CLOUD_API_KEY=your-key -e PROXY_OPEN_RELAY=true -p 3000:3000 followthewhit3rabbit/anyllm-proxy
+docker run -e BACKEND=gmi -e GMI_CLOUD_API_KEY=your-key -e PROXY_OPEN_RELAY=true -p 3000:3000 followthewhit3rabbit/anyllm-proxy
 ```
 
 ### LiteLLM YAML Config
@@ -28,7 +28,7 @@ docker run -e BACKEND=gmi_cloud -e GMI_CLOUD_API_KEY=your-key -e PROXY_OPEN_RELA
 model_list:
   - model_name: llama-3.3-70b
     litellm_params:
-      model: gmi_cloud/meta-llama/Llama-3.3-70B-Instruct
+      model: gmi/meta-llama/Llama-3.3-70B-Instruct
       api_key: "env:GMI_CLOUD_API_KEY"
 ```
 

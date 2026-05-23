@@ -2,208 +2,114 @@ use crate::model::ModelDef;
 use crate::provider::{ProviderDef, ProviderProtocol};
 use crate::providers;
 
-/// All registered providers. Add new providers here and in `crates/providers/src/providers/`.
-static ALL_PROVIDERS: &[&ProviderDef] = &[
-    // Implemented / wired
-    &providers::openai::PROVIDER,
-    &providers::anthropic::PROVIDER,
-    &providers::gemini::PROVIDER,
-    &providers::vertex::PROVIDER,
-    &providers::azure::PROVIDER,
-    &providers::bedrock::PROVIDER,
-    // Stubs (OpenAI-compatible)
-    &providers::groq::PROVIDER,
-    &providers::together::PROVIDER,
-    &providers::openrouter::PROVIDER,
-    &providers::fireworks::PROVIDER,
-    &providers::mistral::PROVIDER,
-    &providers::perplexity::PROVIDER,
-    &providers::deepseek::PROVIDER,
-    &providers::cerebras::PROVIDER,
-    &providers::ollama::PROVIDER,
-    &providers::vllm::PROVIDER,
-    &providers::databricks::PROVIDER,
-    &providers::sambanova::PROVIDER,
-    &providers::nebius::PROVIDER,
-    &providers::deepinfra::PROVIDER,
-    &providers::novita::PROVIDER,
-    &providers::cohere::PROVIDER,
-    &providers::ai21::PROVIDER,
-    &providers::huggingface::PROVIDER,
-    &providers::anyscale::PROVIDER,
-    // New stubs (LiteLLM parity)
-    &providers::xai::PROVIDER,
-    &providers::nvidia_nim::PROVIDER,
-    &providers::codestral::PROVIDER,
-    &providers::moonshot::PROVIDER,
-    &providers::volcengine::PROVIDER,
-    &providers::minimax::PROVIDER,
-    &providers::zhipuai::PROVIDER,
-    &providers::featherless::PROVIDER,
-    &providers::friendliai::PROVIDER,
-    &providers::lambda::PROVIDER,
-    &providers::hyperbolic::PROVIDER,
-    &providers::nscale::PROVIDER,
-    &providers::github::PROVIDER,
-    &providers::aleph_alpha::PROVIDER,
-    &providers::nlp_cloud::PROVIDER,
-    &providers::clarifai::PROVIDER,
-    &providers::predibase::PROVIDER,
-    &providers::replicate::PROVIDER,
-    &providers::chutes::PROVIDER,
-    &providers::gmi_cloud::PROVIDER,
-    &providers::meta_llama::PROVIDER,
-    &providers::ai_ml_api::PROVIDER,
-    &providers::voyage::PROVIDER,
-    &providers::scaleway::PROVIDER,
-    &providers::baseten::PROVIDER,
-    &providers::lm_studio::PROVIDER,
-    &providers::llamafile::PROVIDER,
-    &providers::xinference::PROVIDER,
-    &providers::azure_ai::PROVIDER,
-    &providers::watsonx::PROVIDER,
-    &providers::cloudflare::PROVIDER,
-    &providers::snowflake::PROVIDER,
-    &providers::sagemaker::PROVIDER,
-    &providers::petals::PROVIDER,
-    &providers::triton::PROVIDER,
-    // New stubs (round 2)
-    &providers::dashscope::PROVIDER,
-    &providers::jina::PROVIDER,
-    &providers::ovhcloud::PROVIDER,
-    &providers::infinity::PROVIDER,
-    &providers::gradient_ai::PROVIDER,
-    &providers::galadriel::PROVIDER,
-    &providers::morph::PROVIDER,
-    &providers::lemonade::PROVIDER,
-    &providers::docker_model_runner::PROVIDER,
-    &providers::xiaomi_mimo::PROVIDER,
-    &providers::public_ai::PROVIDER,
-    &providers::nanogpt::PROVIDER,
-    &providers::wandb::PROVIDER,
-    &providers::bytez::PROVIDER,
-    // New stubs (OmniRoute parity)
-    &providers::siliconflow::PROVIDER,
-    &providers::blackboxai::PROVIDER,
-    &providers::pollinations::PROVIDER,
-    &providers::stability::PROVIDER,
-    &providers::iflytek::PROVIDER,
-    &providers::baidu::PROVIDER,
-    &providers::lmsys::PROVIDER,
-    &providers::deepgram::PROVIDER,
-    &providers::assemblyai::PROVIDER,
-    &providers::elevenlabs::PROVIDER,
-    &providers::playht::PROVIDER,
-    &providers::cartesia::PROVIDER,
-    &providers::brave::PROVIDER,
-    &providers::serper::PROVIDER,
-    &providers::tavily::PROVIDER,
-    &providers::exa::PROVIDER,
+/// All registered LiteLLM-compatible providers.
+///
+/// The compatibility snapshot is generated from LiteLLM's
+/// `model_prices_and_context_window.json` by `scripts/check_litellm_providers.py`.
+static ALL_PROVIDERS: &[&ProviderDef] = providers::litellm_snapshot::ALL_PROVIDERS;
+
+/// Models keyed by LiteLLM provider id, in the same order as `ALL_PROVIDERS`.
+static ALL_MODELS: &[(&str, &[ModelDef])] = providers::litellm_snapshot::ALL_MODELS;
+
+/// Legacy anyllm provider ids accepted as aliases for their LiteLLM provider ids.
+///
+/// Do not add aliases here unless the target provider speaks the same upstream
+/// API and model namespace closely enough to be a compatibility migration.
+static PROVIDER_ALIASES: &[(&str, &str)] = &[
+    ("ai_ml_api", "aiml"),
+    ("exa", "exa_ai"),
+    ("github", "github_copilot"),
+    ("gmi_cloud", "gmi"),
+    ("jina", "jina_ai"),
+    ("public_ai", "publicai"),
+    ("stability_ai", "stability"),
+    ("zhipuai", "zai"),
 ];
 
-/// Models keyed by provider id, in the same order as `ALL_PROVIDERS`.
-static ALL_MODELS: &[(&str, &[ModelDef])] = &[
-    ("openai", providers::openai::MODELS),
-    ("anthropic", providers::anthropic::MODELS),
-    ("gemini", providers::gemini::MODELS),
-    ("vertex_ai", providers::vertex::MODELS),
-    ("azure", providers::azure::MODELS),
-    ("bedrock", providers::bedrock::MODELS),
-    ("groq", providers::groq::MODELS),
-    ("together_ai", providers::together::MODELS),
-    ("openrouter", providers::openrouter::MODELS),
-    ("fireworks_ai", providers::fireworks::MODELS),
-    ("mistral", providers::mistral::MODELS),
-    ("perplexity", providers::perplexity::MODELS),
-    ("deepseek", providers::deepseek::MODELS),
-    ("cerebras", providers::cerebras::MODELS),
-    ("ollama", providers::ollama::MODELS),
-    ("hosted_vllm", providers::vllm::MODELS),
-    ("databricks", providers::databricks::MODELS),
-    ("sambanova", providers::sambanova::MODELS),
-    ("nebius", providers::nebius::MODELS),
-    ("deepinfra", providers::deepinfra::MODELS),
-    ("novita", providers::novita::MODELS),
-    ("cohere_chat", providers::cohere::MODELS),
-    ("ai21", providers::ai21::MODELS),
-    ("huggingface", providers::huggingface::MODELS),
-    ("anyscale", providers::anyscale::MODELS),
-    // New stubs (LiteLLM parity)
-    ("xai", providers::xai::MODELS),
-    ("nvidia_nim", providers::nvidia_nim::MODELS),
-    ("codestral", providers::codestral::MODELS),
-    ("moonshot", providers::moonshot::MODELS),
-    ("volcengine", providers::volcengine::MODELS),
-    ("minimax", providers::minimax::MODELS),
-    ("zhipuai", providers::zhipuai::MODELS),
-    ("featherless_ai", providers::featherless::MODELS),
-    ("friendliai", providers::friendliai::MODELS),
-    ("lambda_ai", providers::lambda::MODELS),
-    ("hyperbolic", providers::hyperbolic::MODELS),
-    ("nscale", providers::nscale::MODELS),
-    ("github", providers::github::MODELS),
+/// Legacy local-only providers that are not in LiteLLM's pricing/model snapshot.
+///
+/// They stay resolvable for existing configs, but are intentionally omitted from
+/// `all_providers()` so the primary advertised catalog remains LiteLLM-aligned.
+static LEGACY_ONLY_PROVIDERS: &[&ProviderDef] = &[
+    &providers::aleph_alpha::PROVIDER,
+    &providers::baidu::PROVIDER,
+    &providers::blackboxai::PROVIDER,
+    &providers::brave::PROVIDER,
+    &providers::bytez::PROVIDER,
+    &providers::cartesia::PROVIDER,
+    &providers::chutes::PROVIDER,
+    &providers::clarifai::PROVIDER,
+    &providers::docker_model_runner::PROVIDER,
+    &providers::galadriel::PROVIDER,
+    &providers::huggingface::PROVIDER,
+    &providers::iflytek::PROVIDER,
+    &providers::infinity::PROVIDER,
+    &providers::llamafile::PROVIDER,
+    &providers::lm_studio::PROVIDER,
+    &providers::lmsys::PROVIDER,
+    &providers::nanogpt::PROVIDER,
+    &providers::petals::PROVIDER,
+    &providers::playht::PROVIDER,
+    &providers::pollinations::PROVIDER,
+    &providers::predibase::PROVIDER,
+    &providers::scaleway::PROVIDER,
+    &providers::siliconflow::PROVIDER,
+    &providers::triton::PROVIDER,
+    &providers::vllm::PROVIDER,
+    &providers::xiaomi_mimo::PROVIDER,
+    &providers::xinference::PROVIDER,
+];
+
+static LEGACY_ONLY_MODELS: &[(&str, &[ModelDef])] = &[
     ("aleph_alpha", providers::aleph_alpha::MODELS),
-    ("nlp_cloud", providers::nlp_cloud::MODELS),
-    ("clarifai", providers::clarifai::MODELS),
-    ("predibase", providers::predibase::MODELS),
-    ("replicate", providers::replicate::MODELS),
+    ("baidu", providers::baidu::MODELS),
+    ("blackboxai", providers::blackboxai::MODELS),
+    ("brave", providers::brave::MODELS),
+    ("bytez", providers::bytez::MODELS),
+    ("cartesia", providers::cartesia::MODELS),
     ("chutes", providers::chutes::MODELS),
-    ("gmi_cloud", providers::gmi_cloud::MODELS),
-    ("meta_llama", providers::meta_llama::MODELS),
-    ("ai_ml_api", providers::ai_ml_api::MODELS),
-    ("voyage", providers::voyage::MODELS),
-    ("scaleway", providers::scaleway::MODELS),
-    ("baseten", providers::baseten::MODELS),
-    ("lm_studio", providers::lm_studio::MODELS),
-    ("llamafile", providers::llamafile::MODELS),
-    ("xinference", providers::xinference::MODELS),
-    ("azure_ai", providers::azure_ai::MODELS),
-    ("watsonx", providers::watsonx::MODELS),
-    ("cloudflare", providers::cloudflare::MODELS),
-    ("snowflake", providers::snowflake::MODELS),
-    ("sagemaker", providers::sagemaker::MODELS),
-    ("petals", providers::petals::MODELS),
-    ("triton", providers::triton::MODELS),
-    // New stubs (round 2)
-    ("dashscope", providers::dashscope::MODELS),
-    ("jina", providers::jina::MODELS),
-    ("ovhcloud", providers::ovhcloud::MODELS),
-    ("infinity", providers::infinity::MODELS),
-    ("gradient_ai", providers::gradient_ai::MODELS),
-    ("galadriel", providers::galadriel::MODELS),
-    ("morph", providers::morph::MODELS),
-    ("lemonade", providers::lemonade::MODELS),
+    ("clarifai", providers::clarifai::MODELS),
     (
         "docker_model_runner",
         providers::docker_model_runner::MODELS,
     ),
-    ("xiaomi_mimo", providers::xiaomi_mimo::MODELS),
-    ("public_ai", providers::public_ai::MODELS),
-    ("nanogpt", providers::nanogpt::MODELS),
-    ("wandb", providers::wandb::MODELS),
-    ("bytez", providers::bytez::MODELS),
-    // New stubs (OmniRoute parity)
-    ("siliconflow", providers::siliconflow::MODELS),
-    ("blackboxai", providers::blackboxai::MODELS),
-    ("pollinations", providers::pollinations::MODELS),
-    ("stability_ai", providers::stability::MODELS),
+    ("galadriel", providers::galadriel::MODELS),
+    ("huggingface", providers::huggingface::MODELS),
     ("iflytek", providers::iflytek::MODELS),
-    ("baidu", providers::baidu::MODELS),
+    ("infinity", providers::infinity::MODELS),
+    ("llamafile", providers::llamafile::MODELS),
+    ("lm_studio", providers::lm_studio::MODELS),
     ("lmsys", providers::lmsys::MODELS),
-    ("deepgram", providers::deepgram::MODELS),
-    ("assemblyai", providers::assemblyai::MODELS),
-    ("elevenlabs", providers::elevenlabs::MODELS),
+    ("nanogpt", providers::nanogpt::MODELS),
+    ("petals", providers::petals::MODELS),
     ("playht", providers::playht::MODELS),
-    ("cartesia", providers::cartesia::MODELS),
-    ("brave", providers::brave::MODELS),
-    ("serper", providers::serper::MODELS),
-    ("tavily", providers::tavily::MODELS),
-    ("exa", providers::exa::MODELS),
+    ("pollinations", providers::pollinations::MODELS),
+    ("predibase", providers::predibase::MODELS),
+    ("scaleway", providers::scaleway::MODELS),
+    ("siliconflow", providers::siliconflow::MODELS),
+    ("triton", providers::triton::MODELS),
+    ("hosted_vllm", providers::vllm::MODELS),
+    ("xiaomi_mimo", providers::xiaomi_mimo::MODELS),
+    ("xinference", providers::xinference::MODELS),
 ];
+
+/// Return the LiteLLM-canonical provider id for a local legacy provider id.
+pub fn canonical_provider_id(id: &str) -> &str {
+    PROVIDER_ALIASES
+        .iter()
+        .find(|(legacy, _)| *legacy == id)
+        .map(|(_, canonical)| *canonical)
+        .unwrap_or(id)
+}
 
 /// Look up a provider by its `id` field (e.g. `"groq"`, `"together_ai"`).
 pub fn get_provider(id: &str) -> Option<&'static ProviderDef> {
-    ALL_PROVIDERS.iter().find(|p| p.id == id).copied()
+    let id = canonical_provider_id(id);
+    ALL_PROVIDERS
+        .iter()
+        .find(|p| p.id == id)
+        .copied()
+        .or_else(|| LEGACY_ONLY_PROVIDERS.iter().find(|p| p.id == id).copied())
 }
 
 /// All registered providers.
@@ -213,10 +119,17 @@ pub fn all_providers() -> impl Iterator<Item = &'static ProviderDef> {
 
 /// All models registered for a given provider id.
 pub fn list_models(provider_id: &str) -> &'static [ModelDef] {
+    let provider_id = canonical_provider_id(provider_id);
     ALL_MODELS
         .iter()
         .find(|(id, _)| *id == provider_id)
         .map(|(_, models)| *models)
+        .or_else(|| {
+            LEGACY_ONLY_MODELS
+                .iter()
+                .find(|(id, _)| *id == provider_id)
+                .map(|(_, models)| *models)
+        })
         .unwrap_or(&[])
 }
 
@@ -250,10 +163,23 @@ pub fn resolve_backend(provider_id: &str) -> Option<(&'static str, &'static str)
 /// Find a provider by its LiteLLM routing prefix (e.g. `"groq/"` or `"together_ai/"`).
 /// Used by `parse_provider_model()` in litellm config parsing.
 pub fn find_by_litellm_prefix(prefix: &str) -> Option<&'static ProviderDef> {
-    ALL_PROVIDERS
+    let direct = ALL_PROVIDERS
         .iter()
         .find(|p| !p.litellm_prefix.is_empty() && prefix == p.litellm_prefix)
-        .copied()
+        .copied();
+    if direct.is_some() {
+        return direct;
+    }
+
+    let provider_id = prefix.strip_suffix('/')?;
+    let canonical = canonical_provider_id(provider_id);
+    if canonical == provider_id {
+        return LEGACY_ONLY_PROVIDERS
+            .iter()
+            .find(|p| !p.litellm_prefix.is_empty() && prefix == p.litellm_prefix)
+            .copied();
+    }
+    ALL_PROVIDERS.iter().find(|p| p.id == canonical).copied()
 }
 
 #[cfg(test)]
@@ -293,10 +219,43 @@ mod tests {
     }
 
     #[test]
-    fn self_hosted_models_empty() {
-        // Self-hosted providers have no static model list by design.
-        assert!(list_models("ollama").is_empty());
-        assert!(list_models("hosted_vllm").is_empty());
+    fn anthropic_models_match_litellm_snapshot() {
+        let models = list_models("anthropic");
+        assert_eq!(models.len(), 20);
+
+        for id in [
+            "claude-opus-4-7",
+            "claude-opus-4-7-20260416",
+            "claude-opus-4-6-20260205",
+            "claude-haiku-4-5",
+            "claude-opus-4-5",
+            "claude-sonnet-4-5",
+            "claude-opus-4-1",
+            "claude-3-7-sonnet-20250219",
+            "claude-3-opus-20240229",
+        ] {
+            assert!(get_model("anthropic", id).is_some(), "missing {id}");
+        }
+
+        let opus_47 = get_model("anthropic", "claude-opus-4-7").unwrap();
+        assert_eq!(opus_47.context_window, 1_000_000);
+        assert_eq!(opus_47.max_output_tokens, 128_000);
+
+        let sonnet_40 = get_model("anthropic", "claude-sonnet-4-20250514").unwrap();
+        assert_eq!(sonnet_40.context_window, 1_000_000);
+        assert_eq!(sonnet_40.status, crate::model::ModelStatus::Deprecated);
+    }
+
+    #[test]
+    fn litellm_snapshot_provider_names_are_canonical() {
+        assert!(get_provider("gmi").is_some());
+        assert!(get_provider("publicai").is_some());
+        assert!(get_provider("zai").is_some());
+        assert_eq!(get_provider("gmi_cloud").unwrap().id, "gmi");
+        assert_eq!(get_provider("public_ai").unwrap().id, "publicai");
+        assert_eq!(get_provider("zhipuai").unwrap().id, "zai");
+        assert_eq!(list_models("zhipuai").len(), list_models("zai").len());
+        assert_eq!(get_provider("lm_studio").unwrap().id, "lm_studio");
     }
 
     #[test]
@@ -306,6 +265,15 @@ mod tests {
 
         let p = find_by_litellm_prefix("together_ai/").unwrap();
         assert_eq!(p.id, "together_ai");
+
+        let p = find_by_litellm_prefix("github_copilot/").unwrap();
+        assert_eq!(p.id, "github_copilot");
+
+        let p = find_by_litellm_prefix("gmi_cloud/").unwrap();
+        assert_eq!(p.id, "gmi");
+
+        let p = find_by_litellm_prefix("lm_studio/").unwrap();
+        assert_eq!(p.id, "lm_studio");
 
         assert!(find_by_litellm_prefix("unknown/").is_none());
     }

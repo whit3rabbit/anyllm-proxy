@@ -104,7 +104,7 @@ pub struct Config {
     pub expose_degradation_warnings: bool,
     /// Which OpenAI API format to use (only relevant when BACKEND=openai).
     pub openai_api_format: OpenAIApiFormat,
-    /// Provider ID when backend is an OpenAI-compatible stub (e.g. "zhipuai", "groq").
+    /// Provider ID when backend is an OpenAI-compatible stub (e.g. "zai", "groq").
     /// None for first-party backends (OpenAI, Azure, Gemini, etc.).
     pub provider_id: Option<&'static str>,
 }
@@ -191,12 +191,19 @@ impl Config {
 
         match backend {
             BackendKind::OpenAI => {
-                let provider_default_url = stub_provider
-                    .map(|p| p.default_base_url)
-                    .filter(|u| !u.is_empty())
-                    .unwrap_or("https://api.openai.com");
-                let base_url = std::env::var("OPENAI_BASE_URL")
-                    .unwrap_or_else(|_| provider_default_url.to_string());
+                let base_url = std::env::var("OPENAI_BASE_URL").unwrap_or_else(|_| {
+                    if let Some(provider) = stub_provider {
+                        if provider.default_base_url.is_empty() {
+                            panic!(
+                                "BACKEND={} requires OPENAI_BASE_URL because this provider has no safe global API base URL",
+                                provider.id
+                            );
+                        }
+                        provider.default_base_url.to_string()
+                    } else {
+                        "https://api.openai.com".to_string()
+                    }
+                });
                 let base_url = strip_v1_suffix(&base_url).to_string();
                 if let Err(e) = validate_base_url(&base_url) {
                     panic!("OPENAI_BASE_URL rejected: {e}");

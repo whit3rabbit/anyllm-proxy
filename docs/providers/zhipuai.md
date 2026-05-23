@@ -2,7 +2,7 @@
 
 Zhipu AI provides the GLM model series, including vision-capable, reasoning, and free-tier models, via an OpenAI-compatible API. The platform rebranded to Z.AI and updated its endpoint to `api.z.ai`.
 
-**LiteLLM prefix:** `zhipuai/`  
+**LiteLLM prefix:** `zai/`
 **Status:** Stub — routes through OpenAI-compatible client  
 **Docs:** https://docs.z.ai
 
@@ -18,9 +18,9 @@ Zhipu AI provides the GLM model series, including vision-capable, reasoning, and
 ### Single-Backend (env vars)
 
 ```bash
-BACKEND=zhipuai ZHIPUAI_API_KEY=your-key cargo run -p anyllm_proxy
+BACKEND=zai ZHIPUAI_API_KEY=your-key cargo run -p anyllm_proxy
 # Docker:
-docker run -e BACKEND=zhipuai -e ZHIPUAI_API_KEY=your-key -e PROXY_OPEN_RELAY=true -p 3000:3000 followthewhit3rabbit/anyllm-proxy
+docker run -e BACKEND=zai -e ZHIPUAI_API_KEY=your-key -e PROXY_OPEN_RELAY=true -p 3000:3000 followthewhit3rabbit/anyllm-proxy
 ```
 
 ### LiteLLM YAML Config
@@ -29,7 +29,7 @@ docker run -e BACKEND=zhipuai -e ZHIPUAI_API_KEY=your-key -e PROXY_OPEN_RELAY=tr
 model_list:
   - model_name: glm-5.1
     litellm_params:
-      model: zhipuai/glm-5.1
+      model: zai/glm-5.1
       api_key: "env:ZHIPUAI_API_KEY"
 ```
 
