@@ -14,6 +14,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use tokio::sync::Semaphore;
@@ -505,6 +506,34 @@ pub(crate) fn cache_header_value(bypass: bool) -> axum::http::HeaderValue {
     }
 }
 
+pub(crate) fn cache_auth_identity(
+    headers: &axum::http::HeaderMap,
+    vk_ctx: &Option<super::middleware::VirtualKeyContext>,
+) -> String {
+    if let Some(ctx) = vk_ctx {
+        return format!("virtual-key:{}", ctx.key_id);
+    }
+
+    let credential = headers
+        .get("x-api-key")
+        .or_else(|| headers.get("x-goog-api-key"))
+        .and_then(|v| v.to_str().ok())
+        .or_else(|| {
+            headers
+                .get(axum::http::header::AUTHORIZATION)
+                .and_then(|v| v.to_str().ok())
+                .and_then(|v| v.strip_prefix("Bearer "))
+        });
+
+    match credential {
+        Some(value) => {
+            let digest = Sha256::digest(value.as_bytes());
+            format!("credential:{}", hex::encode(digest))
+        }
+        None => "anonymous".to_string(),
+    }
+}
+
 /// Store a serializable response in the cache if caching is enabled.
 pub(crate) async fn try_cache_response<T: serde::Serialize>(
     cache_key: &Option<String>,
@@ -735,18 +764,14 @@ async fn messages(
             return route_scope_forbidden_response(error);
         }
     }
-    let auth_identity = headers
-        .get(axum::http::header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .map(str::trim)
-        .unwrap_or("");
+    let auth_identity = cache_auth_identity(&headers, &vk_ctx);
     let cache_key = if !bypass_cache {
         Some(cache::cache_key_for_request(
             &body_value,
             CacheNamespace::Anthropic,
             &cache::CacheScope {
                 backend_name: &effective.backend_name,
-                auth_identity,
+                auth_identity: &auth_identity,
             },
         ))
     } else {
@@ -1231,5 +1256,34 @@ mod tests {
             !ids.contains(&"claude-3-sonnet-20240229"),
             "claude-3-sonnet-20240229 is deprecated and must not appear in the model list"
         );
+    }
+
+    #[test]
+    fn cache_auth_identity_uses_x_api_key() {
+        let mut headers = axum::http::HeaderMap::new();
+        headers.insert("x-api-key", "key-a".parse().unwrap());
+        let first = cache_auth_identity(&headers, &None);
+
+        headers.insert("x-api-key", "key-b".parse().unwrap());
+        let second = cache_auth_identity(&headers, &None);
+
+        assert_ne!(first, second);
+        assert!(first.starts_with("credential:"));
+        assert!(!first.contains("key-a"));
+    }
+
+    #[test]
+    fn cache_auth_identity_prefers_virtual_key_context() {
+        let ctx = super::super::middleware::VirtualKeyContext {
+            key_id: 42,
+            rate_state: Arc::new(crate::admin::keys::RateLimitState::new()),
+            allowed_models: None,
+            allowed_routes: None,
+            period_reset: None,
+        };
+        let mut headers = axum::http::HeaderMap::new();
+        headers.insert("x-api-key", "key-a".parse().unwrap());
+
+        assert_eq!(cache_auth_identity(&headers, &Some(ctx)), "virtual-key:42");
     }
 }
