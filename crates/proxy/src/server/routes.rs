@@ -634,16 +634,15 @@ fn enforce_model_allowlist_from_json_body(
         });
 
     match model {
-        Some(model) => {
-            if !super::policy::is_model_allowed(&model, &ctx.allowed_models) {
-                let err = mapping::errors_map::create_anthropic_error(
-                    anthropic::ErrorType::PermissionError,
-                    format!("Model '{}' is not allowed for this API key.", model),
-                    None,
-                );
-                return Some((StatusCode::FORBIDDEN, Json(err)).into_response());
-            }
+        Some(model) if !super::policy::is_model_allowed(&model, &ctx.allowed_models) => {
+            let err = mapping::errors_map::create_anthropic_error(
+                anthropic::ErrorType::PermissionError,
+                format!("Model '{}' is not allowed for this API key.", model),
+                None,
+            );
+            return Some((StatusCode::FORBIDDEN, Json(err)).into_response());
         }
+        Some(_) => {}
         None if ctx.allowed_models.is_some() => {
             let err = mapping::errors_map::create_anthropic_error(
                 anthropic::ErrorType::InvalidRequestError,

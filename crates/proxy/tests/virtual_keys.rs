@@ -865,19 +865,28 @@ async fn spawn_gemini_native_proxy_with_state(
 }
 
 async fn spawn_counting_openai_backend(hits: Arc<AtomicUsize>) -> String {
-    let app = Router::new().route(
-        "/v1/responses",
-        post({
+    let count = {
+        let hits = hits.clone();
+        move || {
             let hits = hits.clone();
-            move || {
+            async move {
+                hits.fetch_add(1, Ordering::SeqCst);
+                axum::Json(json!({"id": "resp_mock", "object": "response"}))
+            }
+        }
+    };
+    let app = Router::new()
+        .route("/v1/responses", post(count.clone()))
+        .route(
+            "/v1/{*path}",
+            any(move || {
                 let hits = hits.clone();
                 async move {
                     hits.fetch_add(1, Ordering::SeqCst);
                     axum::Json(json!({"id": "resp_mock", "object": "response"}))
                 }
-            }
-        }),
-    );
+            }),
+        );
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
@@ -1592,6 +1601,54 @@ async fn translate_generic_passthrough_rejects_virtual_key_without_upstream_call
         upstream_hits.load(Ordering::SeqCst),
         0,
         "denied generic passthrough must not reach upstream"
+    );
+}
+
+#[tokio::test]
+async fn translate_model_passthrough_routes_enforce_virtual_key_model_allowlist() {
+    let upstream_hits = Arc::new(AtomicUsize::new(0));
+    let mock = spawn_counting_openai_backend(upstream_hits.clone()).await;
+    let proxy_url = spawn_proxy_with_shared_vk(openai_config_with_base(&mock)).await;
+    let raw_key = "sk-vkmodelpassthroughdenied";
+    insert_test_virtual_key(raw_key, 90_003, Some(vec!["allowed-model".to_string()]));
+
+    let client = Client::new();
+    for (path, body) in [
+        (
+            "/v1/embeddings",
+            json!({"model": "denied-model", "input": "hello"}),
+        ),
+        ("/v1/images/generations", json!({"model": "denied-model"})),
+        (
+            "/v1/audio/speech",
+            json!({"model": "denied-model", "input": "hello", "voice": "alloy"}),
+        ),
+    ] {
+        let resp = client
+            .post(format!("{proxy_url}{path}"))
+            .header("x-api-key", raw_key)
+            .json(&body)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), 403, "path {path} should be denied");
+        let body: serde_json::Value = resp.json().await.unwrap();
+        assert_eq!(body["error"]["type"], "permission_error");
+    }
+
+    let resp = client
+        .post(format!("{proxy_url}/v1/audio/transcriptions"))
+        .header("x-api-key", raw_key)
+        .header("content-type", "multipart/form-data; boundary=test")
+        .body("--test\r\n--test--\r\n")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 403);
+    assert_eq!(
+        upstream_hits.load(Ordering::SeqCst),
+        0,
+        "denied model passthrough routes must not reach upstream"
     );
 }
 

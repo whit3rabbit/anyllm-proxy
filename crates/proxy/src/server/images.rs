@@ -22,16 +22,17 @@ pub async fn image_generations(
             .and_then(|v| v.get("model").and_then(|m| m.as_str()).map(str::to_string));
         let ctx = &ext.0;
         match model {
-            Some(model) => {
-                if !crate::server::policy::is_model_allowed(&model, &ctx.allowed_models) {
-                    let err = anyllm_translate::mapping::errors_map::create_anthropic_error(
-                        anyllm_translate::anthropic::ErrorType::PermissionError,
-                        format!("Model '{}' is not allowed for this API key.", model),
-                        None,
-                    );
-                    return (StatusCode::FORBIDDEN, Json(err)).into_response();
-                }
+            Some(model)
+                if !crate::server::policy::is_model_allowed(&model, &ctx.allowed_models) =>
+            {
+                let err = anyllm_translate::mapping::errors_map::create_anthropic_error(
+                    anyllm_translate::anthropic::ErrorType::PermissionError,
+                    format!("Model '{}' is not allowed for this API key.", model),
+                    None,
+                );
+                return (StatusCode::FORBIDDEN, Json(err)).into_response();
             }
+            Some(_) => {}
             None if ctx.allowed_models.is_some() => {
                 let err = anyllm_translate::mapping::errors_map::create_anthropic_error(
                     anyllm_translate::anthropic::ErrorType::InvalidRequestError,
