@@ -601,9 +601,9 @@ async fn async_main(args: Vec<String>, data_dir: PathBuf) {
     // --- Admin setup (enabled only when --webui or --admin flag is passed) ---
     // Returns Some((SharedState, admin Router, admin TcpListener)) when enabled.
     // admin_redirect_port: passed to the proxy router to enable GET / redirect.
-    // admin_startup_info: (admin_url, token_str) printed in the startup banner.
+    // admin_startup_info: admin_url printed in the startup banner.
     let mut admin_redirect_port: Option<u16> = None;
-    let mut admin_startup_info: Option<(String, String)> = None;
+    let mut admin_startup_info: Option<String> = None;
     let admin_parts = if enable_admin {
         let admin_port: u16 = match std::env::var("ADMIN_PORT") {
             Ok(val) => val
@@ -1008,7 +1008,7 @@ async fn async_main(args: Vec<String>, data_dir: PathBuf) {
             &admin_bind
         };
         let admin_ui_url = format!("http://{}:{}/admin/", admin_display_host, admin_port);
-        admin_startup_info = Some((admin_ui_url, admin_token.as_str().to_owned()));
+        admin_startup_info = Some(admin_ui_url);
 
         // Spawn periodic tasks: log retention and metrics snapshot broadcast.
         let retention_days: u32 = std::env::var("ADMIN_LOG_RETENTION_DAYS")
@@ -1181,16 +1181,9 @@ async fn async_main(args: Vec<String>, data_dir: PathBuf) {
         .unwrap_or_else(|e| panic!("failed to bind proxy to {proxy_addr}: {e}"));
     tracing::info!("proxy listening on {proxy_addr}");
 
-    // Print a clear startup banner once both servers are bound, so it appears
-    // at the bottom of startup output and is easy to find and copy from.
-    if let Some((admin_url, token)) = &admin_startup_info {
-        let proxy_display = proxy_addr.replace("0.0.0.0", "localhost");
-        let border = "─".repeat(56);
-        println!("{border}");
-        println!("  Proxy API  http://{proxy_display}");
-        println!("  Admin UI   {admin_url}");
-        println!("  Token      {token}");
-        println!("{border}");
+    // Print non-secret startup details once both servers are bound.
+    if let Some(admin_url) = &admin_startup_info {
+        println!("{}", format_startup_banner(&proxy_addr, admin_url));
     }
 
     // Warn if API keys are configured and listener is on a non-loopback address.
@@ -1266,6 +1259,12 @@ async fn async_main(args: Vec<String>, data_dir: PathBuf) {
         let _ = h.await;
     }
     tracing::info!("server shut down gracefully");
+}
+
+fn format_startup_banner(proxy_addr: &str, admin_url: &str) -> String {
+    let proxy_display = proxy_addr.replace("0.0.0.0", "localhost");
+    let border = "─".repeat(56);
+    format!("{border}\n  Proxy API  http://{proxy_display}\n  Admin UI   {admin_url}\n{border}")
 }
 
 /// Parse a `.env`-format file and return `(key, value)` pairs to set.
@@ -1652,6 +1651,18 @@ fn run_subcommand(proxy_args: Vec<String>, tool_argv: Vec<String>) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn startup_banner_does_not_include_admin_token() {
+        let token = "sentinel-admin-token-0123456789abcdef";
+        let banner = format_startup_banner("0.0.0.0:3000", "http://127.0.0.1:3001/admin/");
+
+        assert!(banner.contains("Proxy API  http://localhost:3000"));
+        assert!(banner.contains("Admin UI   http://127.0.0.1:3001/admin/"));
+        assert!(!banner.contains(token));
+        assert!(!banner.contains("Admin token:"));
+        assert!(!banner.contains("Token      "));
+    }
 
     #[test]
     fn parse_env_file_double_quoted_newline_escape() {

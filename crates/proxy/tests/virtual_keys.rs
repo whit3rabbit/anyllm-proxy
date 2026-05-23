@@ -10,13 +10,16 @@ use anyllm_proxy::server::routes;
 use axum::body::Body;
 use axum::extract::connect_info::MockConnectInfo;
 use axum::http::Request;
-use axum::routing::post;
+use axum::routing::{any, post};
 use axum::Router;
 use dashmap::DashMap;
 use reqwest::Client;
 use serde_json::json;
 use std::net::SocketAddr;
-use std::sync::{Arc, OnceLock};
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc, OnceLock,
+};
 use tokio::net::TcpListener;
 use tower::ServiceExt;
 
@@ -57,6 +60,29 @@ fn shared_state() -> admin::state::SharedState {
     state.virtual_keys = shared_vk_map();
     state.hmac_secret = shared_hmac_secret();
     state
+}
+
+fn insert_test_virtual_key(raw_key: &str, key_id: i64, allowed_models: Option<Vec<String>>) {
+    let hash = admin::keys::hmac_hash_key(raw_key, &shared_hmac_secret());
+    let hash_bytes = admin::keys::hash_from_hex(&hash).unwrap();
+    shared_vk_map().insert(
+        hash_bytes,
+        admin::keys::VirtualKeyMeta {
+            id: key_id,
+            description: Some("generic-passthrough-test".to_string()),
+            expires_at: None,
+            rpm_limit: None,
+            tpm_limit: None,
+            rate_state: Arc::new(admin::keys::RateLimitState::new()),
+            role: admin::keys::KeyRole::Developer,
+            max_budget_usd: None,
+            budget_duration: None,
+            period_start: None,
+            period_spend_usd: 0.0,
+            allowed_models,
+            allowed_routes: None,
+        },
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -426,6 +452,25 @@ fn openai_config_with_base(base_url: &str) -> Config {
     }
 }
 
+fn anthropic_config_with_base(base_url: &str) -> Config {
+    Config {
+        backend: BackendKind::Anthropic,
+        openai_api_key: "test-key".to_string(),
+        openai_base_url: base_url.to_string(),
+        listen_port: 0,
+        model_mapping: ModelMapping {
+            big_model: "claude-sonnet-4-6".into(),
+            small_model: "claude-haiku-4-5".into(),
+        },
+        tls: anyllm_proxy::config::TlsConfig::default(),
+        backend_auth: BackendAuth::BearerToken("test-key".into()),
+        log_bodies: false,
+        expose_degradation_warnings: false,
+        openai_api_format: OpenAIApiFormat::Chat,
+        provider_id: None,
+    }
+}
+
 async fn spawn_mock_backend() -> String {
     let app = Router::new().route(
         "/v1/chat/completions",
@@ -444,6 +489,69 @@ async fn spawn_mock_backend() -> String {
             }))
         }),
     );
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    format!("http://{addr}")
+}
+
+async fn spawn_counting_openai_backend(hits: Arc<AtomicUsize>) -> String {
+    let app = Router::new().route(
+        "/v1/responses",
+        post({
+            let hits = hits.clone();
+            move || {
+                let hits = hits.clone();
+                async move {
+                    hits.fetch_add(1, Ordering::SeqCst);
+                    axum::Json(json!({"id": "resp_mock", "object": "response"}))
+                }
+            }
+        }),
+    );
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    format!("http://{addr}")
+}
+
+async fn spawn_counting_anthropic_backend(hits: Arc<AtomicUsize>) -> String {
+    let app = Router::new()
+        .route(
+            "/v1/messages",
+            post({
+                let hits = hits.clone();
+                move || {
+                    let hits = hits.clone();
+                    async move {
+                        hits.fetch_add(1, Ordering::SeqCst);
+                        axum::Json(json!({
+                            "id": "msg_mock",
+                            "type": "message",
+                            "role": "assistant",
+                            "model": "claude-haiku-4-5",
+                            "content": [{"type": "text", "text": "ok"}],
+                            "stop_reason": "end_turn",
+                            "stop_sequence": null,
+                            "usage": {"input_tokens": 1, "output_tokens": 1}
+                        }))
+                    }
+                }
+            }),
+        )
+        .route(
+            "/v1/{*path}",
+            any({
+                let hits = hits.clone();
+                move || {
+                    let hits = hits.clone();
+                    async move {
+                        hits.fetch_add(1, Ordering::SeqCst);
+                        axum::Json(json!({"ok": true}))
+                    }
+                }
+            }),
+        );
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });

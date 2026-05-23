@@ -137,12 +137,25 @@ pub(crate) async fn anthropic_passthrough(
 /// route retains its dedicated streaming/model-peek logic.
 pub(crate) async fn anthropic_generic_passthrough(
     State(state): State<AppState>,
+    vk_ctx: Option<axum::Extension<super::middleware::VirtualKeyContext>>,
     OriginalUri(uri): OriginalUri,
     method: axum::http::Method,
     headers: axum::http::HeaderMap,
     body: Bytes,
 ) -> Response {
     state.metrics.record_request();
+
+    // Virtual keys must use policy-aware handlers only. The generic passthrough
+    // can reach Anthropic-native endpoints that lack per-key authorization,
+    // resource ownership checks, and usage accounting.
+    if vk_ctx.is_some() {
+        let err = mapping::errors_map::create_anthropic_error(
+            anthropic::ErrorType::PermissionError,
+            "This endpoint is not available for virtual API keys.".to_string(),
+            None,
+        );
+        return (StatusCode::FORBIDDEN, Json(err)).into_response();
+    }
 
     let client = match &state.backend {
         BackendClient::Anthropic(c) => c,
