@@ -2,12 +2,13 @@
 // POST /v1/files, POST /v1/batches, GET /v1/batches/{id}, GET /v1/batches
 
 use crate::backend::BackendClient;
+use crate::server::middleware::VirtualKeyContext;
 use crate::server::state::AppState;
 use anyllm_batch_engine::job::{BatchSubmission, ExecutionMode, SourceFormat, SubmissionItem};
 use anyllm_translate::anthropic;
 use anyllm_translate::mapping::errors_map::create_anthropic_error;
 use axum::{
-    extract::{Multipart, Path, Query, State},
+    extract::{Extension, Multipart, Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
@@ -15,7 +16,11 @@ use serde::Deserialize;
 use std::io::{BufReader, Cursor};
 
 /// POST /v1/files - Upload a JSONL batch file via multipart/form-data.
-pub async fn upload_file(State(state): State<AppState>, mut multipart: Multipart) -> Response {
+pub async fn upload_file(
+    State(state): State<AppState>,
+    vk_ctx: Option<Extension<VirtualKeyContext>>,
+    mut multipart: Multipart,
+) -> Response {
     let engine = match state.batch_engine.as_ref() {
         Some(e) => e.clone(),
         None => return service_unavailable("Batch storage not available"),
@@ -61,12 +66,13 @@ pub async fn upload_file(State(state): State<AppState>, mut multipart: Multipart
     let file_id = format!("file-{}", uuid::Uuid::new_v4());
     let byte_size = data.len() as i64;
     let line_count = validated.line_count as i64;
+    let key_id = key_id_from_context(&vk_ctx);
 
     match engine
         .file_store
         .insert(
             &file_id,
-            None,
+            key_id,
             filename.as_deref(),
             data.as_ref(),
             line_count,
@@ -120,7 +126,7 @@ fn default_completion_window() -> String {
 /// POST /v1/batches - Create a new batch job.
 pub async fn create_batch(
     State(state): State<AppState>,
-    vk_ctx: Option<axum::Extension<crate::server::middleware::VirtualKeyContext>>,
+    vk_ctx: Option<Extension<VirtualKeyContext>>,
     Json(req): Json<CreateBatchRequest>,
 ) -> Response {
     // Check backend support: only openai and azure are supported
@@ -134,6 +140,19 @@ pub async fn create_batch(
     let engine = match state.batch_engine.as_ref() {
         Some(e) => e.clone(),
         None => return service_unavailable("Batch storage not available"),
+    };
+
+    let key_id = key_id_from_context(&vk_ctx);
+
+    let file_meta = match engine.file_store.get_meta(&req.input_file_id).await {
+        Ok(Some(meta)) if owns_resource(key_id, meta.key_id) => meta,
+        Ok(Some(_)) | Ok(None) => {
+            return bad_request(&format!("Input file '{}' not found", req.input_file_id));
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "failed to read batch file metadata");
+            return internal_error("Failed to read file");
+        }
     };
 
     // Read file content from file store.
@@ -182,8 +201,8 @@ pub async fn create_batch(
     let submission = BatchSubmission {
         items,
         execution_mode,
-        input_file_id: req.input_file_id.clone(),
-        key_id: None,
+        input_file_id: file_meta.file_id,
+        key_id,
         webhook_url: req.webhook_url.clone(),
         metadata: req.metadata.clone(),
         priority: 0,
@@ -202,22 +221,22 @@ pub async fn create_batch(
 }
 
 /// GET /v1/batches/{batch_id}
-pub async fn get_batch(State(state): State<AppState>, Path(batch_id): Path<String>) -> Response {
+pub async fn get_batch(
+    State(state): State<AppState>,
+    vk_ctx: Option<Extension<VirtualKeyContext>>,
+    Path(batch_id): Path<String>,
+) -> Response {
     let engine = match state.batch_engine.as_ref() {
         Some(e) => e.clone(),
         None => return service_unavailable("Batch storage not available"),
     };
 
+    let key_id = key_id_from_context(&vk_ctx);
     match engine.get(&anyllm_batch_engine::BatchId(batch_id)).await {
-        Ok(Some(job)) => (StatusCode::OK, Json(job_to_openai_response(&job))).into_response(),
-        Ok(None) => {
-            let err = create_anthropic_error(
-                anthropic::ErrorType::NotFoundError,
-                "Batch not found".to_string(),
-                None,
-            );
-            (StatusCode::NOT_FOUND, Json(err)).into_response()
+        Ok(Some(job)) if owns_resource(key_id, job.key_id) => {
+            (StatusCode::OK, Json(job_to_openai_response(&job))).into_response()
         }
+        Ok(Some(_)) | Ok(None) => not_found_response("Batch not found"),
         Err(e) => {
             tracing::error!(error = %e, "failed to fetch batch job");
             internal_error("Failed to fetch batch job")
@@ -240,6 +259,7 @@ fn default_limit() -> u32 {
 /// GET /v1/batches
 pub async fn list_batches(
     State(state): State<AppState>,
+    vk_ctx: Option<Extension<VirtualKeyContext>>,
     Query(query): Query<ListBatchesQuery>,
 ) -> Response {
     let engine = match state.batch_engine.as_ref() {
@@ -248,8 +268,9 @@ pub async fn list_batches(
     };
 
     let limit = query.limit.min(100);
+    let key_id = key_id_from_context(&vk_ctx);
 
-    match engine.list(None, query.after.as_deref(), limit).await {
+    match engine.list(key_id, query.after.as_deref(), limit).await {
         Ok(jobs) => {
             let has_more = jobs.len() as u32 == limit;
             let first_id = jobs.first().map(|j| j.id.0.clone());
@@ -272,12 +293,23 @@ pub async fn list_batches(
 }
 
 /// POST /v1/batches/{batch_id}/cancel
-pub async fn cancel_batch(State(state): State<AppState>, Path(batch_id): Path<String>) -> Response {
+pub async fn cancel_batch(
+    State(state): State<AppState>,
+    vk_ctx: Option<Extension<VirtualKeyContext>>,
+    Path(batch_id): Path<String>,
+) -> Response {
     let Some(engine) = state.batch_engine.as_ref() else {
         return not_implemented("batch engine not available");
     };
 
     let id = anyllm_batch_engine::BatchId(batch_id);
+    let key_id = key_id_from_context(&vk_ctx);
+    match engine.get(&id).await {
+        Ok(Some(job)) if owns_resource(key_id, job.key_id) => {}
+        Ok(Some(_)) | Ok(None) => return not_found_response("batch not found"),
+        Err(e) => return internal_error(&e.to_string()),
+    }
+
     match engine.cancel(&id).await {
         Ok(job) => (StatusCode::OK, Json(job_to_openai_response(&job))).into_response(),
         Err(anyllm_batch_engine::EngineError::Queue(anyllm_batch_engine::QueueError::NotFound)) => {
@@ -285,6 +317,14 @@ pub async fn cancel_batch(State(state): State<AppState>, Path(batch_id): Path<St
         }
         Err(e) => internal_error(&e.to_string()),
     }
+}
+
+fn key_id_from_context(ctx: &Option<Extension<VirtualKeyContext>>) -> Option<i64> {
+    ctx.as_ref().map(|Extension(ctx)| ctx.key_id)
+}
+
+fn owns_resource(request_key_id: Option<i64>, resource_key_id: Option<i64>) -> bool {
+    request_key_id.is_none_or(|key_id| resource_key_id == Some(key_id))
 }
 
 /// Map a BatchJob to an OpenAI-compatible batch response JSON.

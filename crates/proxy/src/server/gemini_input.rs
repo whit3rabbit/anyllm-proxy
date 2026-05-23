@@ -10,8 +10,12 @@
 use crate::backend::anthropic_client::AnthropicClientError;
 use crate::backend::bedrock_client::BedrockClientError;
 use crate::backend::{find_double_newline, BackendClient, BackendError, MAX_SSE_BUFFER_SIZE};
-use crate::server::routes::backend_error_to_response;
-use crate::server::state::AppState;
+use crate::server::routes::{
+    backend_error_to_response, log_request, record_virtual_key_usage, set_backend_error_kind,
+    RequestCtx,
+};
+use crate::server::state::{AppState, ConcurrencyPermit};
+use crate::server::streaming::StreamOutcome;
 use anyllm_translate::anthropic;
 use anyllm_translate::gemini::request::GenerateContentRequest;
 use anyllm_translate::gemini::response::GenerateContentResponse;
@@ -81,10 +85,14 @@ async fn gemini_count_tokens(model: &str, gemini_req: GenerateContentRequest) ->
 pub(crate) async fn gemini_input_handler(
     Path(model_action): Path<String>,
     State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
+    permit: Option<axum::Extension<ConcurrencyPermit>>,
     vk_ctx: Option<axum::Extension<crate::server::middleware::VirtualKeyContext>>,
     Json(gemini_req): Json<GenerateContentRequest>,
 ) -> Response {
     let (model, action) = parse_model_action(&model_action);
+    let permit = permit.map(|axum::Extension(p)| p);
+    let vk_ctx = vk_ctx.map(|axum::Extension(c)| c);
 
     // countTokens: local computation only, no backend call needed.
     if matches!(action, GeminiAction::CountTokens) {
@@ -102,7 +110,7 @@ pub(crate) async fn gemini_input_handler(
     }
 
     // Enforce model allowlist for virtual keys.
-    if let Some(axum::Extension(ref ctx)) = vk_ctx {
+    if let Some(ref ctx) = vk_ctx {
         if !crate::server::policy::is_model_allowed(&anthropic_req.model, &ctx.allowed_models) {
             return (
                 StatusCode::FORBIDDEN,
@@ -120,12 +128,47 @@ pub(crate) async fn gemini_input_handler(
             Ok(v) => v,
             Err(resp) => return resp,
         };
+    if let Some(ref ctx) = vk_ctx {
+        if let Err(error) = crate::server::policy::enforce_route_scope(
+            &effective.backend_name,
+            &effective.shared,
+            &ctx.allowed_routes,
+        )
+        .await
+        {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(serde_json::json!({
+                    "error": {"code": 403, "message": error.message(), "status": "PERMISSION_DENIED"}
+                })),
+            )
+                .into_response();
+        }
+    }
+    let ctx = RequestCtx {
+        request_id: headers
+            .get("x-request-id")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("unknown")
+            .to_string(),
+        start: std::time::Instant::now(),
+        model_requested: anthropic_req.model.clone(),
+    };
     if let Some(ref d) = deployment {
         d.record_start();
     }
 
     if is_streaming {
-        return gemini_stream(effective, anthropic_req, mapped_model, deployment).await;
+        return gemini_stream(
+            effective,
+            anthropic_req,
+            ctx,
+            mapped_model,
+            deployment,
+            permit,
+            vk_ctx,
+        )
+        .await;
     }
 
     // ------------------------------------------------------------------ non-streaming
@@ -140,11 +183,47 @@ pub(crate) async fn gemini_input_handler(
     match result {
         Ok(anthropic_resp) => {
             effective.metrics.record_success();
+            let tokens = (
+                anthropic_resp.usage.input_tokens as u64,
+                anthropic_resp.usage.output_tokens as u64,
+            );
+            let cost = record_virtual_key_usage(
+                &effective.shared,
+                &vk_ctx,
+                &mapped_model,
+                tokens.0,
+                tokens.1,
+            );
+            log_request(
+                &effective.shared,
+                ctx.log_entry_with_attribution(
+                    &effective.backend_name,
+                    Some(mapped_model),
+                    200,
+                    Some(tokens),
+                    false,
+                    None,
+                    &vk_ctx,
+                    Some(cost),
+                ),
+            );
             let gemini_resp = gemini_message_map::anthropic_to_gemini_response(&anthropic_resp);
             Json(gemini_resp).into_response()
         }
         Err(e) => {
             effective.metrics.record_error();
+            let mut entry = ctx.log_entry_with_attribution(
+                &effective.backend_name,
+                Some(mapped_model),
+                e.status_code(),
+                None,
+                false,
+                Some(e.to_string()),
+                &vk_ctx,
+                None,
+            );
+            set_backend_error_kind(&mut entry, &e);
+            log_request(&effective.shared, entry);
             // Return Gemini-shaped error (Google API error format).
             let (status, msg) = gemini_error_from_backend(&e);
             (
@@ -227,8 +306,11 @@ async fn call_backend_non_streaming(
 async fn gemini_stream(
     state: AppState,
     body: anthropic::MessageCreateRequest,
+    ctx: RequestCtx,
     mapped_model: String,
     deployment: Option<std::sync::Arc<crate::config::model_router::Deployment>>,
+    concurrency_permit: Option<ConcurrencyPermit>,
+    vk_ctx: Option<crate::server::middleware::VirtualKeyContext>,
 ) -> Response {
     match &state.backend {
         BackendClient::OpenAI(client)
@@ -238,12 +320,17 @@ async fn gemini_stream(
             let client = client.clone();
             let (tx, rx) = mpsc::channel::<Result<Event, std::convert::Infallible>>(32);
             let metrics = state.metrics.clone();
+            let log_shared = state.shared.clone();
+            let log_backend_name = state.backend_name.clone();
             let model = body.model.clone();
+            let permit = concurrency_permit;
+            let cost_model = mapped_model.clone();
 
             let mut openai_req = message_map::anthropic_to_openai_request(&body);
-            openai_req.model = mapped_model;
+            openai_req.model = mapped_model.clone();
 
             tokio::spawn(async move {
+                let _permit = permit;
                 let _deployment = deployment;
                 metrics.record_stream_started();
 
@@ -251,8 +338,21 @@ async fn gemini_stream(
                     match client.chat_completion_stream(&openai_req).await {
                         Ok(v) => v,
                         Err(e) => {
+                            let backend_error = BackendError::from(e);
                             metrics.record_error();
-                            tracing::error!("gemini input stream backend error: {e}");
+                            tracing::error!("gemini input stream backend error: {backend_error}");
+                            let mut entry = ctx.log_entry_with_attribution(
+                                &log_backend_name,
+                                Some(mapped_model),
+                                backend_error.status_code(),
+                                None,
+                                true,
+                                Some(backend_error.to_string()),
+                                &vk_ctx,
+                                None,
+                            );
+                            set_backend_error_kind(&mut entry, &backend_error);
+                            log_request(&log_shared, entry);
                             return;
                         }
                     };
@@ -262,20 +362,27 @@ async fn gemini_stream(
                 let mut search_from: usize = 0;
                 let mut byte_stream = response.bytes_stream();
 
+                let mut outcome = StreamOutcome::Completed;
+                let mut done = false;
+
                 'outer: while let Some(chunk) = byte_stream.next().await {
                     let bytes = match chunk {
                         Ok(b) => b,
                         Err(e) => {
                             tracing::error!("stream read error: {e}");
+                            metrics.record_error();
+                            outcome = StreamOutcome::UpstreamError;
                             break;
                         }
                     };
-                    buffer.extend_from_slice(&bytes);
 
-                    if buffer.len() > MAX_SSE_BUFFER_SIZE {
+                    if buffer.len() + bytes.len() > MAX_SSE_BUFFER_SIZE {
                         tracing::error!("SSE buffer exceeded max, aborting gemini input stream");
+                        metrics.record_error();
+                        outcome = StreamOutcome::UpstreamError;
                         break;
                     }
+                    buffer.extend_from_slice(&bytes);
 
                     while let Some((pos, delim_len)) = find_double_newline(&buffer, search_from) {
                         if let Ok(frame_str) = std::str::from_utf8(&buffer[..pos]) {
@@ -283,6 +390,7 @@ async fn gemini_stream(
                                 let line = line.trim();
                                 if let Some(json_str) = line.strip_prefix("data: ") {
                                     let events = if json_str == "[DONE]" {
+                                        done = true;
                                         translator.finish()
                                     } else {
                                         match serde_json::from_str(json_str) {
@@ -303,6 +411,7 @@ async fn gemini_stream(
                                                 .await
                                                 .is_err()
                                             {
+                                                outcome = StreamOutcome::ClientDisconnected;
                                                 break 'outer;
                                             }
                                         }
@@ -315,7 +424,29 @@ async fn gemini_stream(
                     }
                     search_from = buffer.len().saturating_sub(3);
                 }
-                metrics.record_success();
+                if matches!(outcome, StreamOutcome::Completed) && !done {
+                    let _ = translator.finish();
+                }
+                let tokens = translator
+                    .usage()
+                    .map(|u| (u.input_tokens as u64, u.output_tokens as u64));
+                let cost = tokens.map(|(input_t, output_t)| {
+                    record_virtual_key_usage(&log_shared, &vk_ctx, &cost_model, input_t, output_t)
+                });
+                let (status, err) = outcome.record(&metrics);
+                log_request(
+                    &log_shared,
+                    ctx.log_entry_with_attribution(
+                        &log_backend_name,
+                        Some(mapped_model),
+                        status,
+                        tokens,
+                        true,
+                        err,
+                        &vk_ctx,
+                        cost,
+                    ),
+                );
             });
 
             let stream = ReceiverStream::new(rx);
@@ -329,17 +460,55 @@ async fn gemini_stream(
             match call_backend_non_streaming(&state, &body, &mapped_model).await {
                 Ok(anthropic_resp) => {
                     state.metrics.record_success();
+                    let tokens = (
+                        anthropic_resp.usage.input_tokens as u64,
+                        anthropic_resp.usage.output_tokens as u64,
+                    );
+                    let cost = record_virtual_key_usage(
+                        &state.shared,
+                        &vk_ctx,
+                        &mapped_model,
+                        tokens.0,
+                        tokens.1,
+                    );
+                    log_request(
+                        &state.shared,
+                        ctx.log_entry_with_attribution(
+                            &state.backend_name,
+                            Some(mapped_model),
+                            200,
+                            Some(tokens),
+                            true,
+                            None,
+                            &vk_ctx,
+                            Some(cost),
+                        ),
+                    );
                     let gemini_resp =
                         gemini_message_map::anthropic_to_gemini_response(&anthropic_resp);
                     let data = serde_json::to_string(&gemini_resp).unwrap_or_default();
+                    let permit = concurrency_permit;
                     // Single SSE event containing the full response.
                     let stream = futures::stream::once(async move {
+                        let _permit = permit;
                         Ok::<_, std::convert::Infallible>(Event::default().data(data))
                     });
                     Sse::new(stream).into_response()
                 }
                 Err(e) => {
                     state.metrics.record_error();
+                    let mut entry = ctx.log_entry_with_attribution(
+                        &state.backend_name,
+                        Some(mapped_model),
+                        e.status_code(),
+                        None,
+                        true,
+                        Some(e.to_string()),
+                        &vk_ctx,
+                        None,
+                    );
+                    set_backend_error_kind(&mut entry, &e);
+                    log_request(&state.shared, entry);
                     backend_error_to_response(e)
                 }
             }

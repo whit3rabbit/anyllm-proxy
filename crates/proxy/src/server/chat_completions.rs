@@ -157,6 +157,29 @@ pub(crate) async fn chat_completions(
         None
     };
 
+    // Resolve model routing before reading cache so route-scoped keys cannot
+    // receive cached disallowed-backend data.
+    let (mapped_model, effective, deployment) = match state.resolve_model_and_state(&original_model)
+    {
+        Ok(v) => v,
+        Err(resp) => return resp,
+    };
+    if let Some(ref ctx) = vk_ctx {
+        if let Err(error) = crate::server::policy::enforce_route_scope(
+            &effective.backend_name,
+            &effective.shared,
+            &ctx.allowed_routes,
+        )
+        .await
+        {
+            return openai_error_response(
+                error.message(),
+                "permission_error",
+                StatusCode::FORBIDDEN,
+            );
+        }
+    }
+
     // Check cache on non-bypass requests
     if let (Some(ref key), Some(ref c)) = (&cache_key, &state.cache) {
         if let Some(entry) = c.get(key).await {
@@ -174,12 +197,6 @@ pub(crate) async fn chat_completions(
         }
     }
 
-    // Resolve model routing (may switch to a different backend).
-    let (mapped_model, effective, deployment) = match state.resolve_model_and_state(&original_model)
-    {
-        Ok(v) => v,
-        Err(resp) => return resp,
-    };
     if let Some(ref d) = deployment {
         d.record_start();
     }
@@ -242,9 +259,11 @@ pub(crate) async fn chat_completions(
                         let client_for_tools = client.clone();
                         let model_for_tools = mapped_model.clone();
                         let orig_model_for_tools = original_model.clone();
+                        let server_advertised_tool_names = std::collections::HashSet::new();
                         let (resp, _trace) = crate::tools::execution::maybe_execute_tools(
                             engine,
                             &anthropic_req,
+                            &server_advertised_tool_names,
                             anthropic_resp,
                             |follow_up_req| {
                                 let c = client_for_tools.clone();
@@ -275,8 +294,7 @@ pub(crate) async fn chat_completions(
 
                     let oai_response =
                         translate_anthropic_to_openai_response(&anthropic_resp, &original_model);
-                    super::routes::record_vk_tpm(&vk_ctx, anthropic_resp.usage.output_tokens);
-                    let cost = crate::cost::record_cost(
+                    let cost = super::routes::record_virtual_key_usage(
                         &state.shared,
                         &vk_ctx,
                         &mapped_model,
@@ -358,8 +376,7 @@ pub(crate) async fn chat_completions(
                         );
                     let oai_response =
                         translate_anthropic_to_openai_response(&anthropic_resp, &original_model);
-                    super::routes::record_vk_tpm(&vk_ctx, anthropic_resp.usage.output_tokens);
-                    let cost = crate::cost::record_cost(
+                    let cost = super::routes::record_virtual_key_usage(
                         &state.shared,
                         &vk_ctx,
                         &mapped_model,
@@ -453,6 +470,21 @@ async fn chat_completions_stream(
             Ok(v) => v,
             Err(resp) => return resp,
         };
+    if let Some(ref ctx) = vk_ctx {
+        if let Err(error) = crate::server::policy::enforce_route_scope(
+            &effective.backend_name,
+            &effective.shared,
+            &ctx.allowed_routes,
+        )
+        .await
+        {
+            return openai_error_response(
+                error.message(),
+                "permission_error",
+                StatusCode::FORBIDDEN,
+            );
+        }
+    }
 
     // Translate to OpenAI format for the backend
     let mut openai_req = mapping::message_map::anthropic_to_openai_request(&anthropic_req);
@@ -521,9 +553,10 @@ async fn chat_completions_stream(
             let anthropic_req_for_tools = anthropic_req.clone();
             let client_for_tools = client.clone();
             let omit_stream_options_for_tools = effective.omit_stream_options;
-            let _permit = concurrency_permit;
+            let permit = concurrency_permit;
 
             tokio::spawn(async move {
+                let _permit = permit;
                 metrics.record_stream_started();
                 let mut translator = ReverseStreamingTranslator::new(
                     format!("chatcmpl-{}", uuid::Uuid::new_v4().as_simple()),
@@ -700,6 +733,7 @@ async fn chat_completions_stream(
                     if let Some(ref engine) = tool_engine {
                         let loop_start = std::time::Instant::now();
                         let mut current_messages = anthropic_req_for_tools.messages.clone();
+                        let server_advertised_tool_names = std::collections::HashSet::new();
 
                         'tool_loop: for _iteration in 0..engine.loop_config.max_iterations {
                             if loop_start.elapsed() > engine.loop_config.total_timeout {
@@ -723,6 +757,7 @@ async fn chat_completions_stream(
                                     &tool_calls,
                                     &engine.registry,
                                     &engine.policy,
+                                    &server_advertised_tool_names,
                                 );
                             let denied_results =
                                 crate::tools::execution::denied_tool_results(&denied);
@@ -951,7 +986,7 @@ async fn chat_completions_stream(
                 let usage = stream_translator.usage();
                 let tokens = usage.map(|u| (u.input_tokens as u64, u.output_tokens as u64));
                 let cost = if let Some((input_t, output_t)) = tokens {
-                    Some(crate::cost::record_cost(
+                    Some(super::routes::record_virtual_key_usage(
                         &log_shared,
                         &vk_ctx,
                         &cost_model,

@@ -700,6 +700,21 @@ pub fn list_route_providers(
     rows.collect()
 }
 
+pub fn enabled_route_ids_for_backend_name(
+    conn: &Connection,
+    backend_name: &str,
+) -> rusqlite::Result<Vec<String>> {
+    let mut stmt = conn.prepare(
+        "SELECT DISTINCT rp.route_id
+         FROM route_providers rp
+         JOIN managed_backends mb ON mb.id = rp.backend_id
+         WHERE mb.name = ?1 AND rp.enabled = 1
+         ORDER BY rp.route_id",
+    )?;
+    let rows = stmt.query_map([backend_name], |row| row.get::<_, String>(0))?;
+    rows.collect()
+}
+
 pub fn count_route_providers(conn: &Connection, route_id: &str) -> rusqlite::Result<usize> {
     let n: i64 = conn.query_row(
         "SELECT COUNT(*) FROM route_providers WHERE route_id = ?1",

@@ -5,20 +5,24 @@
 // Tests inject a fixed test token via X-CSRF-Token header + Cookie to satisfy the middleware.
 
 use anyllm_proxy::admin;
-use anyllm_proxy::config::{BackendAuth, BackendKind, Config, ModelMapping, OpenAIApiFormat};
+use anyllm_proxy::config::{
+    BackendAuth, BackendConfig, BackendKind, Config, ModelMapping, MultiConfig, OpenAIApiFormat,
+};
 use anyllm_proxy::server::routes;
 use axum::body::Body;
 use axum::extract::connect_info::MockConnectInfo;
 use axum::http::Request;
+use axum::response::{IntoResponse, Response};
 use axum::routing::{any, post};
 use axum::Router;
 use dashmap::DashMap;
+use indexmap::IndexMap;
 use reqwest::Client;
 use serde_json::json;
 use std::net::SocketAddr;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
-    Arc, OnceLock,
+    Arc, Mutex, OnceLock,
 };
 use tokio::net::TcpListener;
 use tower::ServiceExt;
@@ -32,6 +36,7 @@ use tower::ServiceExt;
 
 static TEST_VK_MAP: OnceLock<Arc<DashMap<[u8; 32], admin::keys::VirtualKeyMeta>>> = OnceLock::new();
 static TEST_HMAC_SECRET: OnceLock<Arc<Vec<u8>>> = OnceLock::new();
+static GEMINI_NATIVE_ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
 fn shared_vk_map() -> Arc<DashMap<[u8; 32], admin::keys::VirtualKeyMeta>> {
     TEST_VK_MAP
@@ -63,6 +68,15 @@ fn shared_state() -> admin::state::SharedState {
 }
 
 fn insert_test_virtual_key(raw_key: &str, key_id: i64, allowed_models: Option<Vec<String>>) {
+    insert_test_virtual_key_with_tpm(raw_key, key_id, None, allowed_models);
+}
+
+fn insert_test_virtual_key_with_tpm(
+    raw_key: &str,
+    key_id: i64,
+    tpm_limit: Option<u32>,
+    allowed_models: Option<Vec<String>>,
+) {
     let hash = admin::keys::hmac_hash_key(raw_key, &shared_hmac_secret());
     let hash_bytes = admin::keys::hash_from_hex(&hash).unwrap();
     shared_vk_map().insert(
@@ -72,7 +86,7 @@ fn insert_test_virtual_key(raw_key: &str, key_id: i64, allowed_models: Option<Ve
             description: Some("generic-passthrough-test".to_string()),
             expires_at: None,
             rpm_limit: None,
-            tpm_limit: None,
+            tpm_limit,
             rate_state: Arc::new(admin::keys::RateLimitState::new()),
             role: admin::keys::KeyRole::Developer,
             max_budget_usd: None,
@@ -83,6 +97,23 @@ fn insert_test_virtual_key(raw_key: &str, key_id: i64, allowed_models: Option<Ve
             allowed_routes: None,
         },
     );
+}
+
+async fn recv_request_completed(
+    rx: &mut tokio::sync::broadcast::Receiver<admin::state::AdminEvent>,
+) -> admin::state::RequestLogEntry {
+    tokio::time::timeout(std::time::Duration::from_secs(2), async {
+        loop {
+            match rx.recv().await {
+                Ok(admin::state::AdminEvent::RequestCompleted(entry)) => return entry,
+                Ok(_) => {}
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {}
+                Err(e) => panic!("request log channel closed: {e}"),
+            }
+        }
+    })
+    .await
+    .expect("request log event")
 }
 
 // ---------------------------------------------------------------------------
@@ -112,6 +143,16 @@ fn test_admin_router() -> (Router, admin::state::SharedState) {
         // MockConnectInfo so handlers can extract a fake peer address.
         .layer(MockConnectInfo(SocketAddr::from(([127, 0, 0, 1], 0))));
     (router, state)
+}
+
+fn test_admin_router_with_state(state: admin::state::SharedState) -> Router {
+    admin::routes::set_admin_rpm(10_000);
+    state
+        .issued_csrf_tokens
+        .insert(TEST_CSRF_TOKEN.to_string(), ());
+    let token = Arc::new(zeroize::Zeroizing::new("test-admin-token".to_string()));
+    admin::routes::admin_router(state, token)
+        .layer(MockConnectInfo(SocketAddr::from(([127, 0, 0, 1], 0))))
 }
 
 /// Re-register the test CSRF token before a subsequent mutating request.
@@ -405,7 +446,7 @@ async fn update_key_refreshes_dashmap() {
     let raw_key = body["key"].as_str().unwrap().to_string();
 
     reinsert_csrf(&state);
-    // Update rpm_limit via PUT.
+    // Update rpm_limit and allowed_routes via PUT.
     let update_req = Request::put(format!("/admin/api/keys/{id}"))
         .header("host", "localhost:9090")
         .header("authorization", "Bearer test-admin-token")
@@ -413,7 +454,11 @@ async fn update_key_refreshes_dashmap() {
         .header("x-csrf-token", TEST_CSRF_TOKEN)
         .header("cookie", TEST_CSRF_COOKIE)
         .body(Body::from(
-            serde_json::to_string(&json!({"rpm_limit": 500})).unwrap(),
+            serde_json::to_string(&json!({
+                "rpm_limit": 500,
+                "allowed_routes": ["route-allowed"]
+            }))
+            .unwrap(),
         ))
         .unwrap();
     let resp = app.oneshot(update_req).await.unwrap();
@@ -427,6 +472,10 @@ async fn update_key_refreshes_dashmap() {
         .get(&hash_bytes)
         .expect("key should exist in DashMap");
     assert_eq!(meta.rpm_limit, Some(500));
+    assert_eq!(
+        meta.allowed_routes.as_ref().unwrap(),
+        &vec!["route-allowed".to_string()]
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -471,6 +520,25 @@ fn anthropic_config_with_base(base_url: &str) -> Config {
     }
 }
 
+fn gemini_config_with_base(base_url: &str) -> Config {
+    Config {
+        backend: BackendKind::Gemini,
+        openai_api_key: "test-key".to_string(),
+        openai_base_url: base_url.to_string(),
+        listen_port: 0,
+        model_mapping: ModelMapping {
+            big_model: "gemini-2.5-pro".into(),
+            small_model: "gemini-2.5-flash".into(),
+        },
+        tls: anyllm_proxy::config::TlsConfig::default(),
+        backend_auth: BackendAuth::GoogleApiKey("test-key".into()),
+        log_bodies: false,
+        expose_degradation_warnings: false,
+        openai_api_format: OpenAIApiFormat::Chat,
+        provider_id: None,
+    }
+}
+
 async fn spawn_mock_backend() -> String {
     let app = Router::new().route(
         "/v1/chat/completions",
@@ -489,6 +557,307 @@ async fn spawn_mock_backend() -> String {
             }))
         }),
     );
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    format!("http://{addr}")
+}
+
+async fn spawn_openai_streaming_backend() -> String {
+    let app = Router::new().route(
+        "/v1/chat/completions",
+        post(|| async {
+            Response::builder()
+                .status(200)
+                .header("content-type", "text/event-stream")
+                .body(Body::from(concat!(
+                    "data: {\"id\":\"chatcmpl-mock\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\"}}]}\n\n",
+                    "data: {\"id\":\"chatcmpl-mock\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hello\"}}]}\n\n",
+                    "data: {\"id\":\"chatcmpl-mock\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":5,\"total_tokens\":15}}\n\n",
+                    "data: [DONE]\n\n"
+                )))
+                .unwrap()
+        }),
+    );
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    format!("http://{addr}")
+}
+
+async fn spawn_hanging_openai_streaming_backend() -> (String, Arc<tokio::sync::Notify>) {
+    let release = Arc::new(tokio::sync::Notify::new());
+    let app = Router::new().route(
+        "/v1/chat/completions",
+        post({
+            let release = release.clone();
+            move || {
+                let release = release.clone();
+                async move {
+                    let stream = futures::stream::once(async move {
+                        release.notified().await;
+                        Ok::<_, std::convert::Infallible>(bytes::Bytes::from_static(
+                            b"data: [DONE]\n\n",
+                        ))
+                    });
+                    Response::builder()
+                        .status(200)
+                        .header("content-type", "text/event-stream")
+                        .body(Body::from_stream(stream))
+                        .unwrap()
+                }
+            }
+        }),
+    );
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    (format!("http://{addr}"), release)
+}
+
+async fn spawn_gemini_native_backend() -> String {
+    let app = Router::new().route(
+        "/v1beta/models/{model_action}",
+        post(
+            |axum::extract::Path(model_action): axum::extract::Path<String>| async move {
+                let payload = r#"{"candidates":[{"content":{"role":"model","parts":[{"text":"ok"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":7,"candidatesTokenCount":3,"totalTokenCount":10}}"#;
+                if model_action.ends_with(":streamGenerateContent") {
+                    Response::builder()
+                        .status(200)
+                        .header("content-type", "text/event-stream")
+                        .body(Body::from(format!("data: {payload}\n\n")))
+                        .unwrap()
+                } else {
+                    ([(axum::http::header::CONTENT_TYPE, "application/json")], payload)
+                        .into_response()
+                }
+            },
+        ),
+    );
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    format!("http://{addr}")
+}
+
+async fn spawn_anthropic_streaming_backend() -> String {
+    let app = Router::new().route(
+        "/v1/messages",
+        post(|| async {
+            Response::builder()
+                .status(200)
+                .header("content-type", "text/event-stream")
+                .body(Body::from(concat!(
+                    "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_mock\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"model\":\"claude-haiku-4-5\",\"usage\":{\"input_tokens\":2,\"output_tokens\":0}}}\n\n",
+                    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"ok\"}}\n\n",
+                    "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"output_tokens\":2}}\n\n",
+                    "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
+                )))
+                .unwrap()
+        }),
+    );
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    format!("http://{addr}")
+}
+
+async fn spawn_counting_chat_backend() -> (String, Arc<AtomicUsize>) {
+    let hits = Arc::new(AtomicUsize::new(0));
+    let app = Router::new().route(
+        "/v1/chat/completions",
+        post({
+            let hits = hits.clone();
+            move || {
+                let hits = hits.clone();
+                async move {
+                    hits.fetch_add(1, Ordering::SeqCst);
+                    axum::Json(json!({
+                        "id": "chatcmpl-mock",
+                        "object": "chat.completion",
+                        "created": 1700000000,
+                        "model": "gpt-4o",
+                        "choices": [{
+                            "index": 0,
+                            "message": {"role": "assistant", "content": "Hello"},
+                            "finish_reason": "stop"
+                        }],
+                        "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
+                    }))
+                }
+            }
+        }),
+    );
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    (format!("http://{addr}"), hits)
+}
+
+fn openai_backend_config_with_base(base_url: &str) -> BackendConfig {
+    BackendConfig {
+        kind: BackendKind::OpenAI,
+        api_key: "test-key".to_string(),
+        base_url: base_url.to_string(),
+        api_format: OpenAIApiFormat::Chat,
+        model_mapping: ModelMapping {
+            big_model: "gpt-4o".into(),
+            small_model: "gpt-4o-mini".into(),
+        },
+        tls: anyllm_proxy::config::TlsConfig::default(),
+        backend_auth: BackendAuth::BearerToken("test-key".into()),
+        log_bodies: false,
+        omit_stream_options: false,
+        stream_timeout_secs: 900,
+        bedrock_credentials: None,
+    }
+}
+
+fn multi_config_with_backend_bases(allowed_base: &str, denied_base: &str) -> MultiConfig {
+    let mut backends = IndexMap::new();
+    backends.insert(
+        "allowed".to_string(),
+        openai_backend_config_with_base(allowed_base),
+    );
+    backends.insert(
+        "denied".to_string(),
+        openai_backend_config_with_base(denied_base),
+    );
+    MultiConfig {
+        listen_port: 0,
+        log_bodies: false,
+        default_backend: "allowed".to_string(),
+        backends,
+        expose_degradation_warnings: false,
+    }
+}
+
+fn seed_route_scope(
+    state: &admin::state::SharedState,
+    route_id: &str,
+    allowed_base: &str,
+    denied_base: &str,
+) {
+    let conn = state.db.lock().unwrap_or_else(|e| e.into_inner());
+    let now = admin::db::now_iso8601();
+    for (id, name, base) in [
+        ("backend-allowed", "allowed", allowed_base),
+        ("backend-denied", "denied", denied_base),
+    ] {
+        admin::db::insert_managed_backend(
+            &conn,
+            &admin::db::ManagedBackendRow {
+                id: id.to_string(),
+                name: name.to_string(),
+                provider_id: "openai".to_string(),
+                api_key: Some("test-key".to_string()),
+                api_base: Some(base.to_string()),
+                deployment: None,
+                api_version: None,
+                project: None,
+                region: None,
+                aws_access_key_id: None,
+                aws_secret_access_key: None,
+                aws_session_token: None,
+                rpm: None,
+                tpm: None,
+                created_at: now.clone(),
+                updated_at: now.clone(),
+            },
+        )
+        .unwrap();
+    }
+
+    admin::db::insert_route(
+        &conn,
+        &admin::db::RouteRow {
+            id: route_id.to_string(),
+            name: "allowed-route".to_string(),
+            description: None,
+            strategy: "failover".to_string(),
+            rpm: None,
+            tpm: None,
+            budget_usd: None,
+            created_at: now.clone(),
+            updated_at: now,
+        },
+    )
+    .unwrap();
+    admin::db::add_route_provider(
+        &conn,
+        route_id,
+        "backend-allowed",
+        &["*".to_string()],
+        0,
+        true,
+    )
+    .unwrap();
+}
+
+async fn create_route_scoped_key(app: Router, route_id: &str) -> String {
+    let req = Request::post("/admin/api/keys")
+        .header("host", "localhost:9090")
+        .header("authorization", "Bearer test-admin-token")
+        .header("content-type", "application/json")
+        .header("x-csrf-token", TEST_CSRF_TOKEN)
+        .header("cookie", TEST_CSRF_COOKIE)
+        .body(Body::from(
+            serde_json::to_string(&json!({
+                "description": "route-scope-test",
+                "allowed_routes": [route_id]
+            }))
+            .unwrap(),
+        ))
+        .unwrap();
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), 201);
+    let body: serde_json::Value = serde_json::from_slice(
+        &axum::body::to_bytes(resp.into_body(), 1 << 20)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    body["key"].as_str().unwrap().to_string()
+}
+
+async fn spawn_proxy_with_multi(
+    config: MultiConfig,
+    state: admin::state::SharedState,
+    model_router: Option<Arc<std::sync::RwLock<anyllm_proxy::config::model_router::ModelRouter>>>,
+) -> String {
+    let app = routes::app_multi_with_shared(config, Some(state), model_router, None, None, None);
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    format!("http://{addr}")
+}
+
+async fn spawn_gemini_native_proxy_with_state(
+    base_url: &str,
+    state: admin::state::SharedState,
+) -> String {
+    let app = {
+        let _guard = GEMINI_NATIVE_ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let previous = std::env::var_os("GEMINI_API_FORMAT");
+        std::env::set_var("GEMINI_API_FORMAT", "native");
+        let native_base_url = format!("{}/v1beta", base_url.trim_end_matches('/'));
+        let app = routes::app_multi_with_shared(
+            MultiConfig::from_single_config(&gemini_config_with_base(&native_base_url)),
+            Some(state),
+            None,
+            None,
+            None,
+            None,
+        );
+        match previous {
+            Some(value) => std::env::set_var("GEMINI_API_FORMAT", value),
+            None => std::env::remove_var("GEMINI_API_FORMAT"),
+        }
+        app
+    };
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
@@ -582,6 +951,471 @@ async fn spawn_proxy_with_shared_vk(config: Config) -> String {
     format!("http://{addr}")
 }
 
+#[tokio::test]
+async fn route_allowlist_denies_unassigned_backend_prefix() {
+    let (allowed_base, allowed_hits) = spawn_counting_chat_backend().await;
+    let (denied_base, denied_hits) = spawn_counting_chat_backend().await;
+    let state = shared_state();
+    let route_id = "route-prefix-allowed";
+    seed_route_scope(&state, route_id, &allowed_base, &denied_base);
+
+    let admin_app = test_admin_router_with_state(state.clone());
+    let raw_key = create_route_scoped_key(admin_app, route_id).await;
+    let proxy_url = spawn_proxy_with_multi(
+        multi_config_with_backend_bases(&allowed_base, &denied_base),
+        state,
+        None,
+    )
+    .await;
+
+    let client = Client::new();
+    let msg = json!({
+        "model": "claude-sonnet-4-20250514",
+        "max_tokens": 100,
+        "messages": [{"role": "user", "content": "Hi"}]
+    });
+
+    let resp = client
+        .post(format!("{proxy_url}/allowed/v1/messages"))
+        .header("x-api-key", &raw_key)
+        .json(&msg)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+    assert_eq!(allowed_hits.load(Ordering::SeqCst), 1);
+
+    let resp = client
+        .post(format!("{proxy_url}/denied/v1/messages"))
+        .header("x-api-key", &raw_key)
+        .json(&msg)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 403);
+    assert_eq!(denied_hits.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn route_allowlist_denies_model_router_cross_backend_dispatch() {
+    use anyllm_proxy::config::model_router::{Deployment, ModelRouter};
+    use std::collections::HashMap;
+    use std::sync::RwLock;
+
+    let (allowed_base, allowed_hits) = spawn_counting_chat_backend().await;
+    let (denied_base, denied_hits) = spawn_counting_chat_backend().await;
+    let state = shared_state();
+    let route_id = "route-model-router-allowed";
+    seed_route_scope(&state, route_id, &allowed_base, &denied_base);
+
+    let admin_app = test_admin_router_with_state(state.clone());
+    let raw_key = create_route_scoped_key(admin_app, route_id).await;
+
+    let mut model_routes = HashMap::new();
+    model_routes.insert(
+        "claude-sonnet-4-20250514".to_string(),
+        vec![Arc::new(Deployment::new(
+            "denied".to_string(),
+            "gpt-4o".to_string(),
+            None,
+            None,
+        ))],
+    );
+    let model_router = Some(Arc::new(RwLock::new(ModelRouter::new(model_routes))));
+    let proxy_url = spawn_proxy_with_multi(
+        multi_config_with_backend_bases(&allowed_base, &denied_base),
+        state,
+        model_router,
+    )
+    .await;
+
+    let resp = Client::new()
+        .post(format!("{proxy_url}/v1/messages"))
+        .header("x-api-key", &raw_key)
+        .json(&json!({
+            "model": "claude-sonnet-4-20250514",
+            "max_tokens": 100,
+            "messages": [{"role": "user", "content": "Hi"}]
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 403);
+    assert_eq!(allowed_hits.load(Ordering::SeqCst), 0);
+    assert_eq!(denied_hits.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn gemini_input_generate_content_records_virtual_key_usage_and_tpm() {
+    let mock = spawn_mock_backend().await;
+    let state = shared_state();
+    let mut events = state.events_tx.subscribe();
+    let proxy_url = spawn_proxy_with_multi(
+        MultiConfig::from_single_config(&openai_config_with_base(&mock)),
+        state,
+        None,
+    )
+    .await;
+    let raw_key = "sk-vkgeminiinputusage";
+    insert_test_virtual_key_with_tpm(raw_key, 91_001, Some(5), Some(vec!["claude-*".to_string()]));
+
+    let client = Client::new();
+    let body = json!({"contents": [{"role": "user", "parts": [{"text": "Hi"}]}]});
+    let resp = client
+        .post(format!(
+            "{proxy_url}/v1beta/models/claude-sonnet-4-20250514:generateContent"
+        ))
+        .header("x-goog-api-key", raw_key)
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+
+    let entry = recv_request_completed(&mut events).await;
+    assert_eq!(entry.key_id, Some(91_001));
+    assert_eq!(entry.input_tokens, Some(10));
+    assert_eq!(entry.output_tokens, Some(5));
+    assert!(entry.cost_usd.unwrap_or(0.0) > 0.0);
+
+    let resp = client
+        .post(format!(
+            "{proxy_url}/v1beta/models/claude-sonnet-4-20250514:generateContent"
+        ))
+        .header("x-goog-api-key", raw_key)
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 429);
+}
+
+#[tokio::test]
+async fn gemini_input_stream_holds_concurrency_permits_until_body_drop() {
+    let (mock, release) = spawn_hanging_openai_streaming_backend().await;
+    let state = shared_state();
+    let proxy_url = spawn_proxy_with_multi(
+        MultiConfig::from_single_config(&openai_config_with_base(&mock)),
+        state,
+        None,
+    )
+    .await;
+    let raw_key = "sk-vkgeminiinputstreampermit";
+    insert_test_virtual_key(raw_key, 91_002, Some(vec!["claude-*".to_string()]));
+
+    let client = Client::new();
+    let body = json!({"contents": [{"role": "user", "parts": [{"text": "Hi"}]}]});
+    let mut held = Vec::new();
+    for _ in 0..100 {
+        let resp = client
+            .post(format!(
+                "{proxy_url}/v1beta/models/claude-sonnet-4-20250514:streamGenerateContent"
+            ))
+            .header("x-goog-api-key", raw_key)
+            .json(&body)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), 200);
+        held.push(resp);
+    }
+
+    let resp = client
+        .post(format!(
+            "{proxy_url}/v1beta/models/claude-sonnet-4-20250514:streamGenerateContent"
+        ))
+        .header("x-goog-api-key", raw_key)
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 429);
+
+    drop(held);
+    release.notify_waiters();
+}
+
+#[tokio::test]
+async fn translated_messages_stream_records_virtual_key_tpm() {
+    let mock = spawn_openai_streaming_backend().await;
+    let state = shared_state();
+    let mut events = state.events_tx.subscribe();
+    let proxy_url = spawn_proxy_with_multi(
+        MultiConfig::from_single_config(&openai_config_with_base(&mock)),
+        state,
+        None,
+    )
+    .await;
+    let raw_key = "sk-vkmessagesstreamusage";
+    insert_test_virtual_key_with_tpm(raw_key, 91_003, Some(5), Some(vec!["claude-*".to_string()]));
+
+    let client = Client::new();
+    let body = json!({
+        "model": "claude-sonnet-4-20250514",
+        "max_tokens": 100,
+        "stream": true,
+        "messages": [{"role": "user", "content": "Hi"}]
+    });
+    let resp = client
+        .post(format!("{proxy_url}/v1/messages"))
+        .header("x-api-key", raw_key)
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+    let text = resp.text().await.unwrap();
+    assert!(text.contains("message_delta"));
+
+    let entry = recv_request_completed(&mut events).await;
+    assert_eq!(entry.key_id, Some(91_003));
+    assert_eq!(entry.input_tokens, Some(10));
+    assert_eq!(entry.output_tokens, Some(5));
+    assert!(entry.is_streaming);
+
+    let resp = client
+        .post(format!("{proxy_url}/v1/messages"))
+        .header("x-api-key", raw_key)
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 429);
+}
+
+#[tokio::test]
+async fn openai_chat_completions_stream_records_virtual_key_tpm() {
+    let mock = spawn_openai_streaming_backend().await;
+    let state = shared_state();
+    let mut events = state.events_tx.subscribe();
+    let proxy_url = spawn_proxy_with_multi(
+        MultiConfig::from_single_config(&openai_config_with_base(&mock)),
+        state,
+        None,
+    )
+    .await;
+    let raw_key = "sk-vkchatstreamusage";
+    insert_test_virtual_key_with_tpm(raw_key, 91_004, Some(5), Some(vec!["gpt-4o".to_string()]));
+
+    let client = Client::new();
+    let body = json!({
+        "model": "gpt-4o",
+        "max_tokens": 100,
+        "stream": true,
+        "messages": [{"role": "user", "content": "Hi"}]
+    });
+    let resp = client
+        .post(format!("{proxy_url}/v1/chat/completions"))
+        .header("x-api-key", raw_key)
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+    let text = resp.text().await.unwrap();
+    assert!(text.contains("[DONE]"));
+
+    let entry = recv_request_completed(&mut events).await;
+    assert_eq!(entry.key_id, Some(91_004));
+    assert_eq!(entry.input_tokens, Some(10));
+    assert_eq!(entry.output_tokens, Some(5));
+    assert!(entry.is_streaming);
+
+    let resp = client
+        .post(format!("{proxy_url}/v1/chat/completions"))
+        .header("x-api-key", raw_key)
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 429);
+}
+
+#[tokio::test]
+async fn gemini_native_messages_records_virtual_key_usage_and_tpm() {
+    let mock = spawn_gemini_native_backend().await;
+    let state = shared_state();
+    let mut events = state.events_tx.subscribe();
+    let proxy_url = spawn_gemini_native_proxy_with_state(&mock, state).await;
+    let raw_key = "sk-vkgemininativeusage";
+    insert_test_virtual_key_with_tpm(raw_key, 91_005, Some(3), Some(vec!["claude-*".to_string()]));
+
+    let client = Client::new();
+    let body = json!({
+        "model": "claude-sonnet-4-20250514",
+        "max_tokens": 100,
+        "messages": [{"role": "user", "content": "Hi"}]
+    });
+    let resp = client
+        .post(format!("{proxy_url}/v1/messages"))
+        .header("x-api-key", raw_key)
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+
+    let entry = recv_request_completed(&mut events).await;
+    assert_eq!(entry.key_id, Some(91_005));
+    assert_eq!(entry.input_tokens, Some(7));
+    assert_eq!(entry.output_tokens, Some(3));
+
+    let resp = client
+        .post(format!("{proxy_url}/v1/messages"))
+        .header("x-api-key", raw_key)
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 429);
+}
+
+#[tokio::test]
+async fn gemini_native_messages_stream_records_virtual_key_usage_and_tpm() {
+    let mock = spawn_gemini_native_backend().await;
+    let state = shared_state();
+    let mut events = state.events_tx.subscribe();
+    let proxy_url = spawn_gemini_native_proxy_with_state(&mock, state).await;
+    let raw_key = "sk-vkgemininativestreamusage";
+    insert_test_virtual_key_with_tpm(raw_key, 91_006, Some(3), Some(vec!["claude-*".to_string()]));
+
+    let client = Client::new();
+    let body = json!({
+        "model": "claude-sonnet-4-20250514",
+        "max_tokens": 100,
+        "stream": true,
+        "messages": [{"role": "user", "content": "Hi"}]
+    });
+    let resp = client
+        .post(format!("{proxy_url}/v1/messages"))
+        .header("x-api-key", raw_key)
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+    let text = resp.text().await.unwrap();
+    assert!(text.contains("message_delta"));
+
+    let entry = recv_request_completed(&mut events).await;
+    assert_eq!(entry.key_id, Some(91_006));
+    assert_eq!(entry.input_tokens, Some(7));
+    assert_eq!(entry.output_tokens, Some(3));
+    assert!(entry.is_streaming);
+
+    let resp = client
+        .post(format!("{proxy_url}/v1/messages"))
+        .header("x-api-key", raw_key)
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 429);
+}
+
+#[tokio::test]
+async fn anthropic_passthrough_messages_records_virtual_key_usage_and_tpm() {
+    let hits = Arc::new(AtomicUsize::new(0));
+    let mock = spawn_counting_anthropic_backend(hits).await;
+    let state = shared_state();
+    let mut events = state.events_tx.subscribe();
+    let proxy_url = spawn_proxy_with_multi(
+        MultiConfig::from_single_config(&anthropic_config_with_base(&mock)),
+        state,
+        None,
+    )
+    .await;
+    let raw_key = "sk-vkanthropicusage";
+    insert_test_virtual_key_with_tpm(
+        raw_key,
+        91_007,
+        Some(1),
+        Some(vec!["claude-haiku-4-5".to_string()]),
+    );
+
+    let client = Client::new();
+    let body = json!({
+        "model": "claude-haiku-4-5",
+        "max_tokens": 100,
+        "messages": [{"role": "user", "content": "Hi"}]
+    });
+    let resp = client
+        .post(format!("{proxy_url}/v1/messages"))
+        .header("x-api-key", raw_key)
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+
+    let entry = recv_request_completed(&mut events).await;
+    assert_eq!(entry.key_id, Some(91_007));
+    assert_eq!(entry.input_tokens, Some(1));
+    assert_eq!(entry.output_tokens, Some(1));
+
+    let resp = client
+        .post(format!("{proxy_url}/v1/messages"))
+        .header("x-api-key", raw_key)
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 429);
+}
+
+#[tokio::test]
+async fn anthropic_passthrough_messages_stream_records_virtual_key_usage_and_tpm() {
+    let mock = spawn_anthropic_streaming_backend().await;
+    let state = shared_state();
+    let mut events = state.events_tx.subscribe();
+    let proxy_url = spawn_proxy_with_multi(
+        MultiConfig::from_single_config(&anthropic_config_with_base(&mock)),
+        state,
+        None,
+    )
+    .await;
+    let raw_key = "sk-vkanthropicstreamusage";
+    insert_test_virtual_key_with_tpm(
+        raw_key,
+        91_008,
+        Some(2),
+        Some(vec!["claude-haiku-4-5".to_string()]),
+    );
+
+    let client = Client::new();
+    let body = json!({
+        "model": "claude-haiku-4-5",
+        "max_tokens": 100,
+        "stream": true,
+        "messages": [{"role": "user", "content": "Hi"}]
+    });
+    let resp = client
+        .post(format!("{proxy_url}/v1/messages"))
+        .header("x-api-key", raw_key)
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+    let text = resp.text().await.unwrap();
+    assert!(text.contains("message_delta"));
+
+    let entry = recv_request_completed(&mut events).await;
+    assert_eq!(entry.key_id, Some(91_008));
+    assert_eq!(entry.input_tokens, Some(2));
+    assert_eq!(entry.output_tokens, Some(2));
+    assert!(entry.is_streaming);
+
+    let resp = client
+        .post(format!("{proxy_url}/v1/messages"))
+        .header("x-api-key", raw_key)
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 429);
+}
+
 // ---------------------------------------------------------------------------
 // Virtual key auth lifecycle (T038): create → use → revoke → rejected
 // ---------------------------------------------------------------------------
@@ -669,6 +1503,96 @@ async fn virtual_key_auth_and_revocation_lifecycle() {
         .await
         .unwrap();
     assert_eq!(resp.status(), 401, "revoked key should be rejected");
+}
+
+#[tokio::test]
+async fn anthropic_generic_passthrough_rejects_virtual_key_without_upstream_call() {
+    let upstream_hits = Arc::new(AtomicUsize::new(0));
+    let mock = spawn_counting_anthropic_backend(upstream_hits.clone()).await;
+    let proxy_url = spawn_proxy_with_shared_vk(anthropic_config_with_base(&mock)).await;
+    let raw_key = "sk-vkanthropicgenericdenied";
+    insert_test_virtual_key(raw_key, 90_001, Some(vec!["claude-haiku-4-5".to_string()]));
+
+    let client = Client::new();
+    let resp = client
+        .post(format!("{proxy_url}/v1/messages"))
+        .header("x-api-key", raw_key)
+        .json(&json!({
+            "model": "claude-haiku-4-5",
+            "max_tokens": 100,
+            "messages": [{"role": "user", "content": "Hi"}]
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(
+        resp.status(),
+        200,
+        "virtual key should still work on policy-aware /v1/messages"
+    );
+    assert_eq!(upstream_hits.load(Ordering::SeqCst), 1);
+
+    let resp = client
+        .post(format!("{proxy_url}/v1/messages/batches"))
+        .header("x-api-key", raw_key)
+        .json(&json!({
+            "requests": [{
+                "custom_id": "req-1",
+                "params": {
+                    "model": "claude-opus-4-5",
+                    "max_tokens": 100,
+                    "messages": [{"role": "user", "content": "Hi"}]
+                }
+            }]
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 403);
+    let body: serde_json::Value = resp.json().await.unwrap();
+    assert_eq!(body["error"]["type"], "permission_error");
+    assert_eq!(
+        body["error"]["message"],
+        "This endpoint is not available for virtual API keys."
+    );
+    assert_eq!(
+        upstream_hits.load(Ordering::SeqCst),
+        1,
+        "denied generic passthrough must not reach upstream"
+    );
+}
+
+#[tokio::test]
+async fn translate_generic_passthrough_rejects_virtual_key_without_upstream_call() {
+    let upstream_hits = Arc::new(AtomicUsize::new(0));
+    let mock = spawn_counting_openai_backend(upstream_hits.clone()).await;
+    let proxy_url = spawn_proxy_with_shared_vk(openai_config_with_base(&mock)).await;
+    let raw_key = "sk-vktranslategenericdenied";
+    insert_test_virtual_key(raw_key, 90_002, Some(vec!["claude-*".to_string()]));
+
+    let client = Client::new();
+    let resp = client
+        .post(format!("{proxy_url}/v1/responses"))
+        .header("x-api-key", raw_key)
+        .json(&json!({
+            "model": "claude-sonnet-4-6",
+            "input": "Hi"
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 403);
+    let body: serde_json::Value = resp.json().await.unwrap();
+    assert_eq!(body["error"]["type"], "permission_error");
+    assert_eq!(
+        body["error"]["message"],
+        "This endpoint is not available for virtual API keys."
+    );
+    assert_eq!(
+        upstream_hits.load(Ordering::SeqCst),
+        0,
+        "denied generic passthrough must not reach upstream"
+    );
 }
 
 // ---------------------------------------------------------------------------

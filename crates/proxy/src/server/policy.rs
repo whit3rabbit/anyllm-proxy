@@ -39,6 +39,78 @@ pub fn is_route_allowed(route_id: &str, allowed_routes: &Option<Vec<String>>) ->
     allowed.iter().any(|r| r == route_id)
 }
 
+#[derive(Debug)]
+pub(crate) struct RouteScopeError;
+
+impl RouteScopeError {
+    pub(crate) fn message(&self) -> &'static str {
+        "This API key is not allowed to access this route."
+    }
+}
+
+/// Enforce virtual-key route scoping for a resolved backend name.
+///
+/// Scoped keys fail closed when shared route state cannot be resolved. Route
+/// IDs are the operator-facing `routes.id` UUIDs stored in `allowed_routes`.
+pub(crate) async fn enforce_route_scope(
+    backend_name: &str,
+    shared: &Option<crate::admin::state::SharedState>,
+    allowed_routes: &Option<Vec<String>>,
+) -> Result<(), RouteScopeError> {
+    let Some(allowed) = allowed_routes else {
+        return Ok(());
+    };
+
+    if allowed.is_empty() {
+        tracing::warn!(backend_name, "route scope denied by empty allowlist");
+        return Err(RouteScopeError);
+    }
+
+    let Some(shared) = shared else {
+        tracing::warn!(
+            backend_name,
+            "route scope denied because shared state is unavailable"
+        );
+        return Err(RouteScopeError);
+    };
+
+    let backend = backend_name.to_string();
+    let result = crate::admin::state::with_db(&shared.db, move |conn| {
+        crate::admin::db::enabled_route_ids_for_backend_name(conn, &backend)
+    })
+    .await;
+
+    match result {
+        Some(Ok(route_ids)) => {
+            if route_ids.iter().any(|route_id| allowed.contains(route_id)) {
+                Ok(())
+            } else {
+                tracing::warn!(
+                    backend_name,
+                    route_count = route_ids.len(),
+                    "route scope denied because backend is not in an allowed route"
+                );
+                Err(RouteScopeError)
+            }
+        }
+        Some(Err(error)) => {
+            tracing::error!(
+                backend_name,
+                %error,
+                "route scope denied because route lookup failed"
+            );
+            Err(RouteScopeError)
+        }
+        None => {
+            tracing::error!(
+                backend_name,
+                "route scope denied because route lookup task failed"
+            );
+            Err(RouteScopeError)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

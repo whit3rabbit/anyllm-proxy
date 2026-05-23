@@ -3,6 +3,9 @@
 
 use crate::backend::bedrock_client::{eventstream, BedrockClientError};
 use crate::backend::BackendClient;
+use crate::server::routes::{log_request, record_virtual_key_usage, RequestCtx};
+use crate::server::state::ConcurrencyPermit;
+use crate::server::streaming::{AnthropicStreamUsage, StreamOutcome};
 use anyllm_translate::{anthropic, mapping};
 use axum::{
     body::Bytes,
@@ -21,9 +24,13 @@ use super::state::AppState;
 /// for streaming responses.
 pub(crate) async fn bedrock_passthrough(
     State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
+    permit: Option<axum::Extension<ConcurrencyPermit>>,
     vk_ctx: Option<axum::Extension<crate::server::middleware::VirtualKeyContext>>,
     body: Bytes,
 ) -> Response {
+    let permit = permit.map(|axum::Extension(p)| p);
+    let vk_ctx = vk_ctx.map(|axum::Extension(c)| c);
     state.metrics.record_request();
 
     let client = match &state.backend {
@@ -67,7 +74,7 @@ pub(crate) async fn bedrock_passthrough(
     }
 
     // Enforce model allowlist policy for virtual keys.
-    if let Some(axum::Extension(ref ctx)) = vk_ctx {
+    if let Some(ref ctx) = vk_ctx {
         if !crate::server::policy::is_model_allowed(&model_id, &ctx.allowed_models) {
             let err = mapping::errors_map::create_anthropic_error(
                 anthropic::ErrorType::PermissionError,
@@ -96,6 +103,15 @@ pub(crate) async fn bedrock_passthrough(
         .get("stream")
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
+    let ctx = super::routes::RequestCtx {
+        request_id: headers
+            .get("x-request-id")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("unknown")
+            .to_string(),
+        start: std::time::Instant::now(),
+        model_requested: model_id.clone(),
+    };
 
     // Bedrock: model goes in URL, not body. Add anthropic_version.
     if let Some(obj) = parsed.as_object_mut() {
@@ -119,9 +135,18 @@ pub(crate) async fn bedrock_passthrough(
     };
 
     if is_stream {
-        bedrock_stream(state, &client, bedrock_body, &mapped_model).await
+        bedrock_stream(
+            state,
+            &client,
+            bedrock_body,
+            &mapped_model,
+            ctx,
+            permit,
+            vk_ctx,
+        )
+        .await
     } else {
-        bedrock_non_stream(state, &client, bedrock_body, &mapped_model).await
+        bedrock_non_stream(state, &client, bedrock_body, &mapped_model, ctx, vk_ctx).await
     }
 }
 
@@ -131,10 +156,58 @@ async fn bedrock_non_stream(
     client: &crate::backend::bedrock_client::BedrockClient,
     body: bytes::Bytes,
     model_id: &str,
+    ctx: RequestCtx,
+    vk_ctx: Option<crate::server::middleware::VirtualKeyContext>,
 ) -> Response {
     match client.forward(body, model_id).await {
         Ok((resp_body, rate_limits)) => {
-            state.metrics.record_success();
+            if vk_ctx.is_some() {
+                let parsed = serde_json::from_slice::<anthropic::MessageResponse>(&resp_body);
+                let anthropic_resp = match parsed {
+                    Ok(resp) => resp,
+                    Err(e) => {
+                        state.metrics.record_error();
+                        log_request(
+                            &state.shared,
+                            ctx.log_entry_with_attribution(
+                                &state.backend_name,
+                                Some(model_id.to_string()),
+                                StatusCode::BAD_GATEWAY.as_u16(),
+                                None,
+                                false,
+                                Some(format!(
+                                    "failed to parse upstream usage for virtual key accounting: {e}"
+                                )),
+                                &vk_ctx,
+                                None,
+                            ),
+                        );
+                        return virtual_key_accounting_parse_error();
+                    }
+                };
+                state.metrics.record_success();
+                let tokens = (
+                    anthropic_resp.usage.input_tokens as u64,
+                    anthropic_resp.usage.output_tokens as u64,
+                );
+                let cost =
+                    record_virtual_key_usage(&state.shared, &vk_ctx, model_id, tokens.0, tokens.1);
+                log_request(
+                    &state.shared,
+                    ctx.log_entry_with_attribution(
+                        &state.backend_name,
+                        Some(model_id.to_string()),
+                        200,
+                        Some(tokens),
+                        false,
+                        None,
+                        &vk_ctx,
+                        Some(cost),
+                    ),
+                );
+            } else {
+                state.metrics.record_success();
+            }
             let mut resp = (
                 StatusCode::OK,
                 [("content-type", "application/json")],
@@ -146,6 +219,19 @@ async fn bedrock_non_stream(
         }
         Err(e) => {
             state.metrics.record_error();
+            log_request(
+                &state.shared,
+                ctx.log_entry_with_attribution(
+                    &state.backend_name,
+                    Some(model_id.to_string()),
+                    bedrock_error_status(&e),
+                    None,
+                    false,
+                    Some(e.to_string()),
+                    &vk_ctx,
+                    None,
+                ),
+            );
             bedrock_error_to_response(e)
         }
     }
@@ -158,21 +244,44 @@ async fn bedrock_stream(
     client: &crate::backend::bedrock_client::BedrockClient,
     body: bytes::Bytes,
     model_id: &str,
+    ctx: RequestCtx,
+    concurrency_permit: Option<ConcurrencyPermit>,
+    vk_ctx: Option<crate::server::middleware::VirtualKeyContext>,
 ) -> Response {
     let (response, rate_limits) = match client.forward_stream(body, model_id).await {
         Ok(r) => r,
         Err(e) => {
             state.metrics.record_error();
+            log_request(
+                &state.shared,
+                ctx.log_entry_with_attribution(
+                    &state.backend_name,
+                    Some(model_id.to_string()),
+                    bedrock_error_status(&e),
+                    None,
+                    true,
+                    Some(e.to_string()),
+                    &vk_ctx,
+                    None,
+                ),
+            );
             return bedrock_error_to_response(e);
         }
     };
 
     let (tx, rx) = tokio::sync::mpsc::channel::<Result<String, std::convert::Infallible>>(32);
     let metrics = state.metrics.clone();
+    let log_shared = state.shared.clone();
+    let log_backend_name = state.backend_name.clone();
+    let cost_model = model_id.to_string();
 
     tokio::spawn(async move {
+        let _permit = concurrency_permit;
+        metrics.record_stream_started();
         let mut byte_stream = response.bytes_stream();
         let mut event_buf = BytesMut::new();
+        let mut usage = AnthropicStreamUsage::default();
+        let mut outcome = StreamOutcome::Completed;
 
         while let Some(chunk_result) = byte_stream.next().await {
             let bytes = match chunk_result {
@@ -180,19 +289,21 @@ async fn bedrock_stream(
                 Err(e) => {
                     tracing::error!("Bedrock stream read error: {e}");
                     metrics.record_error();
-                    return;
+                    outcome = StreamOutcome::UpstreamError;
+                    break;
                 }
             };
-            event_buf.extend_from_slice(&bytes);
 
-            if event_buf.len() > crate::backend::MAX_SSE_BUFFER_SIZE {
+            if event_buf.len() + bytes.len() > crate::backend::MAX_SSE_BUFFER_SIZE {
                 tracing::error!(
                     buffer_len = event_buf.len(),
                     "Bedrock event stream buffer exceeded maximum size, aborting"
                 );
                 metrics.record_error();
-                return;
+                outcome = StreamOutcome::UpstreamError;
+                break;
             }
+            event_buf.extend_from_slice(&bytes);
 
             // Decode all complete frames in the buffer
             loop {
@@ -206,25 +317,51 @@ async fn bedrock_stream(
                         // the decoder's contract ("caller closes the connection").
                         tracing::error!(error = %e, "Bedrock event stream CRC error; closing connection");
                         metrics.record_error();
-                        return;
+                        outcome = StreamOutcome::UpstreamError;
+                        break;
                     }
                     Ok(None) => break, // no complete frame yet
                     Ok(Some(payload)) => {
                         if let Some(event_json) = eventstream::extract_event_from_payload(&payload)
                         {
+                            usage.observe_data(&event_json);
                             // Re-emit as SSE: "event: <type>\ndata: <json>\n\n"
                             // Bedrock events are raw Anthropic JSON; detect the event type.
                             let event_type = detect_event_type(&event_json);
                             let sse_line = format!("event: {event_type}\ndata: {event_json}\n\n");
                             if tx.send(Ok(sse_line)).await.is_err() {
-                                return; // client disconnected
+                                outcome = StreamOutcome::ClientDisconnected;
+                                break;
                             }
                         }
                     }
                 }
+                if !matches!(outcome, StreamOutcome::Completed) {
+                    break;
+                }
+            }
+            if !matches!(outcome, StreamOutcome::Completed) {
+                break;
             }
         }
-        metrics.record_success();
+        let tokens = usage.tokens();
+        let cost = tokens.map(|(input_t, output_t)| {
+            record_virtual_key_usage(&log_shared, &vk_ctx, &cost_model, input_t, output_t)
+        });
+        let (status, err) = outcome.record(&metrics);
+        log_request(
+            &log_shared,
+            ctx.log_entry_with_attribution(
+                &log_backend_name,
+                Some(cost_model),
+                status,
+                tokens,
+                true,
+                err,
+                &vk_ctx,
+                cost,
+            ),
+        );
     });
 
     let body_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
@@ -291,6 +428,23 @@ fn bedrock_error_to_response(error: BedrockClientError) -> Response {
             (StatusCode::INTERNAL_SERVER_ERROR, Json(err)).into_response()
         }
     }
+}
+
+fn bedrock_error_status(error: &BedrockClientError) -> u16 {
+    match error {
+        BedrockClientError::ApiError { status, .. } => *status,
+        BedrockClientError::Transport(_) => StatusCode::BAD_GATEWAY.as_u16(),
+        BedrockClientError::Signing(_) => StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
+    }
+}
+
+fn virtual_key_accounting_parse_error() -> Response {
+    let err = mapping::errors_map::create_anthropic_error(
+        anthropic::ErrorType::ApiError,
+        "Upstream response could not be accounted for this virtual API key.".to_string(),
+        None,
+    );
+    (StatusCode::BAD_GATEWAY, Json(err)).into_response()
 }
 
 #[cfg(test)]
