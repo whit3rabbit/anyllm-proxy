@@ -96,6 +96,14 @@ pub(crate) async fn bedrock_passthrough(
             );
             return (StatusCode::TOO_MANY_REQUESTS, Json(err)).into_response();
         }
+        super::state::ResolvedModel::UnknownModel => {
+            let err = anyllm_translate::mapping::errors_map::create_anthropic_error(
+                anyllm_translate::anthropic::ErrorType::InvalidRequestError,
+                format!("model '{}' is not configured in model_list", model_id),
+                None,
+            );
+            return (StatusCode::BAD_REQUEST, Json(err)).into_response();
+        }
         super::state::ResolvedModel::Legacy(m) => m,
     };
 
