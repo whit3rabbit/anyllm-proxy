@@ -270,7 +270,7 @@ impl ChatCompletionRuntime {
                     "all deployments for this model are at their RPM limit".to_string(),
                 ));
             }
-            return Err(ChatCompletionError::InvalidInput(format!(
+            return Err(ChatCompletionError::InvalidRequest(format!(
                 "model '{model}' is not configured in model_list"
             )));
         }

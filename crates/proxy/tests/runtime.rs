@@ -230,7 +230,7 @@ async fn runtime_model_router_rejects_unconfigured_model() {
     .unwrap();
 
     let err = runtime.complete(req).await.unwrap_err();
-    assert!(matches!(err, ChatCompletionError::InvalidInput(_)));
+    assert!(matches!(err, ChatCompletionError::InvalidRequest(_)));
     assert!(captured_a.lock().unwrap().is_none());
 }
 
