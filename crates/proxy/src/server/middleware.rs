@@ -46,6 +46,7 @@ pub struct VirtualKeyContext {
     /// Database row ID for the virtual key (used for cost accumulation).
     pub(crate) key_id: i64,
     /// Hex-encoded credential hash used as stable distributed rate-limit key.
+    #[cfg(feature = "redis")]
     pub(crate) key_hash_hex: String,
     pub(crate) rate_state: Arc<RateLimitState>,
     /// Optional model allowlist from the virtual key policy.
@@ -345,6 +346,7 @@ pub async fn validate_auth(
                 }
             }
 
+            #[cfg(feature = "redis")]
             let key_hash_hex: String = credential_hash.iter().map(|b| format!("{b:02x}")).collect();
 
             // Enforce TPM limit pre-check
@@ -413,6 +415,7 @@ pub async fn validate_auth(
             // Always insert context for post-response TPM recording and cost tracking.
             request.extensions_mut().insert(VirtualKeyContext {
                 key_id: meta.id,
+                #[cfg(feature = "redis")]
                 key_hash_hex,
                 rate_state: meta.rate_state.clone(),
                 allowed_models: meta.allowed_models.clone(),
