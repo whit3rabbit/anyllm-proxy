@@ -4,16 +4,48 @@ use crate::server::state::AppState;
 use axum::{
     extract::State,
     http::{header, HeaderMap, StatusCode},
-    response::{IntoResponse, Response},
+    response::{IntoResponse, Json, Response},
+    Extension,
 };
 
 /// POST /v1/images/generations -- JSON passthrough.
 /// Forwards the request body to the backend and returns the response unchanged.
 pub async fn image_generations(
     State(state): State<AppState>,
+    vk_ctx: Option<Extension<crate::server::middleware::VirtualKeyContext>>,
     headers: HeaderMap,
     body: axum::body::Bytes,
 ) -> Response {
+    if let Some(ref ext) = vk_ctx {
+        let model = serde_json::from_slice::<serde_json::Value>(&body)
+            .ok()
+            .and_then(|v| v.get("model").and_then(|m| m.as_str()).map(str::to_string));
+        let ctx = &ext.0;
+        match model {
+            Some(model)
+                if !crate::server::policy::is_model_allowed(&model, &ctx.allowed_models) =>
+            {
+                let err = anyllm_translate::mapping::errors_map::create_anthropic_error(
+                    anyllm_translate::anthropic::ErrorType::PermissionError,
+                    format!("Model '{}' is not allowed for this API key.", model),
+                    None,
+                );
+                return (StatusCode::FORBIDDEN, Json(err)).into_response();
+            }
+            Some(_) => {}
+            None if ctx.allowed_models.is_some() => {
+                let err = anyllm_translate::mapping::errors_map::create_anthropic_error(
+                    anyllm_translate::anthropic::ErrorType::InvalidRequestError,
+                    "Request must include a 'model' field when a model allowlist is configured."
+                        .to_string(),
+                    None,
+                );
+                return (StatusCode::BAD_REQUEST, Json(err)).into_response();
+            }
+            None => {}
+        }
+    }
+
     let content_type = headers
         .get(header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
