@@ -193,6 +193,36 @@ async fn non_streaming_request_translates_roundtrip() {
 }
 
 #[tokio::test]
+async fn router_rejects_missing_client_api_key() {
+    let mock = Router::new().route("/v1/chat/completions", post(mock_chat_completion));
+    let base_url = start_mock_server(mock).await;
+
+    let config = test_config(&base_url);
+    let app = anthropic_compat_router(config);
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+
+    let client = reqwest::Client::new();
+    let resp = client
+        .post(format!("http://{addr}/v1/messages"))
+        .json(&serde_json::json!({
+            "model": "claude-sonnet-4-6",
+            "max_tokens": 100,
+            "messages": [{"role": "user", "content": "Hello"}]
+        }))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), 401);
+    let body: serde_json::Value = resp.json().await.unwrap();
+    assert_eq!(body["error"]["type"], "authentication_error");
+}
+
+#[tokio::test]
 async fn streaming_request_produces_anthropic_sse_events() {
     let mock = Router::new().route("/v1/chat/completions", post(mock_chat_completion));
     let base_url = start_mock_server(mock).await;

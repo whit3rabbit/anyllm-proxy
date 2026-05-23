@@ -14,6 +14,7 @@
 //! let config = AnthropicCompatConfig::builder()
 //!     .backend_url("https://api.openai.com")
 //!     .api_key("sk-...")
+//!     .client_api_key("client-facing-key")
 //!     .translation(
 //!         TranslationConfig::builder()
 //!             .model_map("haiku", "gpt-4o-mini")
