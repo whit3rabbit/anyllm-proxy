@@ -14,6 +14,7 @@
 //! let config = AnthropicCompatConfig::builder()
 //!     .backend_url("https://api.openai.com")
 //!     .api_key("sk-...")
+//!     .client_api_key("client-facing-key")
 //!     .translation(
 //!         TranslationConfig::builder()
 //!             .model_map("haiku", "gpt-4o-mini")
@@ -41,7 +42,7 @@ use std::task::{Context, Poll};
 
 use axum::body::Body;
 use axum::extract::Json;
-use axum::http::{Method, Request};
+use axum::http::{header, HeaderMap, Method, Request};
 use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 use axum::Router;
@@ -61,6 +62,8 @@ pub struct AnthropicCompatConfig {
     pub backend_url: String,
     /// API key for the backend (sent as Bearer token).
     pub api_key: String,
+    /// API key required from incoming clients via `x-api-key` or `Authorization: Bearer ...`.
+    pub client_api_key: String,
     /// Translation settings (model mapping, lossy behavior).
     pub translation: TranslationConfig,
 }
@@ -71,6 +74,7 @@ impl AnthropicCompatConfig {
         AnthropicCompatConfigBuilder {
             backend_url: String::new(),
             api_key: String::new(),
+            client_api_key: String::new(),
             translation: TranslationConfig::default(),
         }
     }
@@ -80,6 +84,7 @@ impl AnthropicCompatConfig {
 pub struct AnthropicCompatConfigBuilder {
     backend_url: String,
     api_key: String,
+    client_api_key: String,
     translation: TranslationConfig,
 }
 
@@ -96,6 +101,15 @@ impl AnthropicCompatConfigBuilder {
         self
     }
 
+    /// Set the API key required from incoming clients.
+    ///
+    /// Requests must include this value in either `x-api-key` or
+    /// `Authorization: Bearer <key>`.
+    pub fn client_api_key(mut self, key: impl Into<String>) -> Self {
+        self.client_api_key = key.into();
+        self
+    }
+
     /// Set translation settings (model mapping, lossy behavior).
     pub fn translation(mut self, config: TranslationConfig) -> Self {
         self.translation = config;
@@ -107,6 +121,7 @@ impl AnthropicCompatConfigBuilder {
         AnthropicCompatConfig {
             backend_url: self.backend_url,
             api_key: self.api_key,
+            client_api_key: self.client_api_key,
             translation: self.translation,
         }
     }
@@ -125,6 +140,33 @@ fn make_state(config: AnthropicCompatConfig) -> Arc<MiddlewareState> {
     Arc::new(MiddlewareState { config, client })
 }
 
+fn request_has_valid_client_api_key(headers: &HeaderMap, expected: &str) -> bool {
+    if expected.is_empty() {
+        return false;
+    }
+
+    if let Some(x_api_key) = headers.get("x-api-key").and_then(|v| v.to_str().ok()) {
+        if x_api_key == expected {
+            return true;
+        }
+    }
+
+    headers
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .is_some_and(|token| token == expected)
+}
+
+fn unauthorized_response() -> Response {
+    let err = crate::mapping::errors_map::create_anthropic_error(
+        crate::anthropic::ErrorType::AuthenticationError,
+        "Invalid or missing API key".to_string(),
+        None,
+    );
+    (axum::http::StatusCode::UNAUTHORIZED, Json(err)).into_response()
+}
+
 // --- Router factory ---
 
 /// Create an axum [`Router`] that handles `POST /v1/messages`.
@@ -138,9 +180,14 @@ pub fn anthropic_compat_router(config: AnthropicCompatConfig) -> Router {
     Router::new().route(
         "/v1/messages",
         post(
-            move |Json(body): Json<crate::anthropic::MessageCreateRequest>| {
+            move |headers: HeaderMap, Json(body): Json<crate::anthropic::MessageCreateRequest>| {
                 let state = Arc::clone(&state);
-                async move { handler::handle_messages(state, body).await }
+                async move {
+                    if !request_has_valid_client_api_key(&headers, &state.config.client_api_key) {
+                        return unauthorized_response();
+                    }
+                    handler::handle_messages(state, body).await
+                }
             },
         ),
     )
@@ -204,7 +251,12 @@ where
         // Only intercept POST /v1/messages
         if req.method() == Method::POST && req.uri().path() == "/v1/messages" {
             let state = Arc::clone(&self.state);
+            let headers = req.headers().clone();
             Box::pin(async move {
+                if !request_has_valid_client_api_key(&headers, &state.config.client_api_key) {
+                    return Ok(unauthorized_response());
+                }
+
                 // Read the full body
                 let body_bytes =
                     match axum::body::to_bytes(req.into_body(), 32 * 1024 * 1024).await {
