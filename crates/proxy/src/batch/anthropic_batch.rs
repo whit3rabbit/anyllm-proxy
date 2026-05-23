@@ -8,6 +8,7 @@
 use super::db;
 use super::openai_batch_client::{openai_batch_to_message_batch, OpenAIBatchClient};
 use crate::backend::BackendClient;
+use crate::server::middleware::VirtualKeyContext;
 use crate::server::state::{AnthropicJson, AppState};
 use anyllm_translate::anthropic::batch::CreateBatchRequest;
 use anyllm_translate::anthropic::errors::ErrorType;
@@ -35,8 +36,27 @@ fn extract_openai_credentials(backend: &BackendClient) -> Option<(String, String
 /// POST /v1/messages/batches
 pub(crate) async fn create_anthropic_batch(
     State(state): State<AppState>,
+    vk_ctx: Option<axum::Extension<VirtualKeyContext>>,
     AnthropicJson(req): AnthropicJson<CreateBatchRequest>,
 ) -> Response {
+    let vk_ctx = vk_ctx.map(|axum::Extension(c)| c);
+
+    // Enforce model allowlist policy for virtual keys on every batch item.
+    if let Some(ref ctx) = vk_ctx {
+        if let Some(disallowed) = req.requests.iter().find(|r| {
+            !crate::server::policy::is_model_allowed(&r.params.model, &ctx.allowed_models)
+        }) {
+            return error_response(
+                StatusCode::FORBIDDEN,
+                ErrorType::PermissionError,
+                &format!(
+                    "Model '{}' is not allowed for this API key.",
+                    disallowed.params.model
+                ),
+            );
+        }
+    }
+
     if req.requests.is_empty() {
         return error_response(
             StatusCode::BAD_REQUEST,
