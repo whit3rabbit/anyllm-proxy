@@ -13,7 +13,7 @@ The crate answers questions like:
 - For a given provider id, which backend protocol (OpenAI-compat, Vertex, Bedrock, ...) should the proxy route through?
 - Which provider owns the LiteLLM prefix `together_ai/`?
 
-What it deliberately does **not** contain: pricing data (lives in `assets/model_pricing.json` at the workspace root, embedded into the proxy at compile time and overridable at runtime via `MODEL_PRICING_FILE`).
+What it deliberately does **not** contain: pricing data (lives in `assets/model_pricing.json` at the workspace root and a packaged proxy copy, embedded into the proxy at compile time and overridable at runtime via `MODEL_PRICING_FILE`).
 
 ## Where it fits
 

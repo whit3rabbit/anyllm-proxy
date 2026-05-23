@@ -115,7 +115,7 @@ Five-crate Cargo workspace: `providers` (metadata catalog), `client` (Anthropic 
 - Test files live alongside source (`#[cfg(test)]`) and in `crates/proxy/tests/` for integration tests.
 - Error types use `thiserror` derive macros.
 - Fixture-based golden tests for translation correctness.
-- **Model pricing is auto-updated.** `scripts/update_pricing.py` pulls from LiteLLM's `model_prices_and_context_window.json` and writes `assets/model_pricing.json`. Run manually or via `.github/workflows/update-pricing.yml` (weekly, Monday 06:00 UTC). The file is embedded at compile time (`include_str!` in `crates/proxy/src/cost/mod.rs`); editing it requires recompile. Override at runtime with `MODEL_PRICING_FILE`.
+- **Model pricing is auto-updated.** `scripts/update_pricing.py` pulls from LiteLLM's `model_prices_and_context_window.json` and writes `assets/model_pricing.json` plus the packaged proxy copy at `crates/proxy/assets/model_pricing.json`. Run manually or via `.github/workflows/update-pricing.yml` (weekly, Monday 06:00 UTC). The proxy copy is embedded at compile time (`include_str!` in `crates/proxy/src/cost/mod.rs`); editing it requires recompile. Override at runtime with `MODEL_PRICING_FILE`.
 
 ## Active Technologies
 

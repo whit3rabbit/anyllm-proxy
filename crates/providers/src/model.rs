@@ -17,7 +17,7 @@ pub enum ModelStatus {
     Stub,
 }
 
-/// Metadata for a specific model. No pricing data — that lives in `assets/model_pricing.json`.
+/// Metadata for a specific model. No pricing data; that lives in the model pricing JSON assets.
 ///
 /// All fields are `'static` so model definitions can be compile-time constants.
 #[derive(Debug, Clone)]
