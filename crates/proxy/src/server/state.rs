@@ -52,6 +52,8 @@ pub(crate) enum ResolvedModel {
     },
     /// Model is known but all deployments are at their RPM limit.
     AllAtLimit,
+    /// Model router is active but the model alias is not configured.
+    UnknownModel,
     /// No model router, or model not in router. Used legacy ModelMapping.
     Legacy(String),
 }
@@ -140,6 +142,7 @@ impl AppState {
             if router.has_model(model) {
                 return ResolvedModel::AllAtLimit;
             }
+            return ResolvedModel::UnknownModel;
         }
         ResolvedModel::Legacy(self.map_model(model))
     }
@@ -199,6 +202,14 @@ impl AppState {
                     None,
                 );
                 Err((StatusCode::TOO_MANY_REQUESTS, Json(err)).into_response())
+            }
+            ResolvedModel::UnknownModel => {
+                let err = mapping::errors_map::create_anthropic_error(
+                    anthropic::ErrorType::InvalidRequestError,
+                    format!("model '{model}' is not configured in model_list"),
+                    None,
+                );
+                Err((StatusCode::BAD_REQUEST, Json(err)).into_response())
             }
             ResolvedModel::Legacy(mapped) => Ok((mapped, self.clone(), None)),
         }

@@ -199,6 +199,42 @@ async fn runtime_model_router_selects_backend_and_mapped_model() {
 }
 
 #[tokio::test]
+async fn runtime_model_router_rejects_unconfigured_model() {
+    let captured_a = Arc::new(Mutex::new(None));
+    let base_a = spawn_json_backend(captured_a.clone(), chat_response("unused")).await;
+
+    let mut backends = IndexMap::new();
+    backends.insert("a".to_string(), backend_config(BackendKind::OpenAI, base_a));
+
+    let deployment = Arc::new(anyllm_proxy::config::model_router::Deployment::new(
+        "a".to_string(),
+        "actual-model".to_string(),
+        None,
+        None,
+    ));
+    let mut routes = HashMap::new();
+    routes.insert("virtual-model".to_string(), vec![deployment]);
+    let router = Arc::new(RwLock::new(
+        anyllm_proxy::config::model_router::ModelRouter::new(routes),
+    ));
+
+    let runtime = ChatCompletionRuntime::from_multi_config_with_model_router(
+        multi_config(backends, "a"),
+        Some(router),
+    );
+    let req = serde_json::from_value(json!({
+        "model": "unconfigured-model",
+        "messages": [{"role": "user", "content": "hello"}],
+        "max_tokens": 32
+    }))
+    .unwrap();
+
+    let err = runtime.complete(req).await.unwrap_err();
+    assert!(matches!(err, ChatCompletionError::InvalidRequest(_)));
+    assert!(captured_a.lock().unwrap().is_none());
+}
+
+#[tokio::test]
 async fn runtime_returns_typed_error_for_unsupported_backend() {
     let mut backends = IndexMap::new();
     backends.insert(
