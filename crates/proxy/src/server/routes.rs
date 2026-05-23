@@ -573,34 +573,90 @@ async fn passthrough_to_backend(
 
 async fn embeddings(
     State(state): State<AppState>,
+    vk_ctx: Option<axum::Extension<super::middleware::VirtualKeyContext>>,
     headers: axum::http::HeaderMap,
     body: axum::body::Bytes,
 ) -> Response {
+    if let Some(resp) = enforce_model_allowlist_from_json_body(vk_ctx.as_ref(), &body) {
+        return resp;
+    }
     passthrough_to_backend(&state, &headers, body, "/v1/embeddings").await
 }
 
 async fn rerank(
     State(state): State<AppState>,
+    vk_ctx: Option<axum::Extension<super::middleware::VirtualKeyContext>>,
     headers: axum::http::HeaderMap,
     body: axum::body::Bytes,
 ) -> Response {
+    if let Some(resp) = enforce_model_allowlist_from_json_body(vk_ctx.as_ref(), &body) {
+        return resp;
+    }
     passthrough_to_backend(&state, &headers, body, "/v1/rerank").await
 }
 
 async fn v2_rerank(
     State(state): State<AppState>,
+    vk_ctx: Option<axum::Extension<super::middleware::VirtualKeyContext>>,
     headers: axum::http::HeaderMap,
     body: axum::body::Bytes,
 ) -> Response {
+    if let Some(resp) = enforce_model_allowlist_from_json_body(vk_ctx.as_ref(), &body) {
+        return resp;
+    }
     passthrough_to_backend(&state, &headers, body, "/v2/rerank").await
 }
 
 async fn completions(
     State(state): State<AppState>,
+    vk_ctx: Option<axum::Extension<super::middleware::VirtualKeyContext>>,
     headers: axum::http::HeaderMap,
     body: axum::body::Bytes,
 ) -> Response {
+    if let Some(resp) = enforce_model_allowlist_from_json_body(vk_ctx.as_ref(), &body) {
+        return resp;
+    }
     passthrough_to_backend(&state, &headers, body, "/v1/completions").await
+}
+
+fn enforce_model_allowlist_from_json_body(
+    vk_ctx: Option<&axum::Extension<super::middleware::VirtualKeyContext>>,
+    body: &[u8],
+) -> Option<Response> {
+    let ctx = vk_ctx.map(|axum::Extension(c)| c)?;
+    let model = serde_json::from_slice::<serde_json::Value>(body)
+        .ok()
+        .and_then(|v| {
+            v.as_object()
+                .and_then(|obj| obj.get("model"))
+                .and_then(|m| m.as_str())
+                .map(str::to_string)
+        });
+
+    match model {
+        Some(model) => {
+            if !super::policy::is_model_allowed(&model, &ctx.allowed_models) {
+                let err = mapping::errors_map::create_anthropic_error(
+                    anthropic::ErrorType::PermissionError,
+                    format!("Model '{}' is not allowed for this API key.", model),
+                    None,
+                );
+                return Some((StatusCode::FORBIDDEN, Json(err)).into_response());
+            }
+        }
+        None if ctx.allowed_models.is_some() => {
+            let err = mapping::errors_map::create_anthropic_error(
+                anthropic::ErrorType::InvalidRequestError,
+                "Request must include a 'model' field when a model allowlist is configured."
+                    .to_string(),
+                None,
+            );
+            return Some((StatusCode::BAD_REQUEST, Json(err)).into_response());
+        }
+        None => {}
+    }
+
+    None
 }
 
 async fn messages(
