@@ -75,7 +75,11 @@ pub trait CacheBackend: Send + Sync {
 /// Extracts the fields that affect response content, sorts them via BTreeMap,
 /// serializes to canonical JSON, SHA-256 hashes the result, and prepends the
 /// namespace prefix.
-pub fn cache_key_for_request(body: &serde_json::Value, ns: CacheNamespace) -> String {
+pub fn cache_key_for_request(
+    body: &serde_json::Value,
+    ns: CacheNamespace,
+    scope: &CacheScope<'_>,
+) -> String {
     // Fields that affect the backend response. Order does not matter because
     // BTreeMap sorts keys alphabetically before serialization.
     const CACHE_FIELDS: &[&str] = &[
@@ -83,6 +87,7 @@ pub fn cache_key_for_request(body: &serde_json::Value, ns: CacheNamespace) -> St
         "max_tokens",
         "messages",
         "model",
+        "system",
         "stop",
         "temperature",
         "tool_choice",
@@ -101,12 +106,25 @@ pub fn cache_key_for_request(body: &serde_json::Value, ns: CacheNamespace) -> St
             }
         }
     }
+    canonical.insert(
+        "_scope_backend",
+        serde_json::Value::String(scope.backend_name.to_string()),
+    );
+    canonical.insert(
+        "_scope_auth",
+        serde_json::Value::String(scope.auth_identity.to_string()),
+    );
 
     // serde_json serializes BTreeMap in key order, giving us canonical JSON.
     let json = serde_json::to_string(&canonical).unwrap_or_default();
     let hash = Sha256::digest(json.as_bytes());
     let hex = hex::encode(hash);
     format!("{}:{}", ns.prefix(), hex)
+}
+
+pub struct CacheScope<'a> {
+    pub backend_name: &'a str,
+    pub auth_identity: &'a str,
 }
 
 /// Parse the optional `cache_ttl_secs` field from a request body.
@@ -203,8 +221,22 @@ mod tests {
             "temperature": 0.7,
             "max_tokens": 100
         });
-        let key1 = cache_key_for_request(&body, CacheNamespace::Anthropic);
-        let key2 = cache_key_for_request(&body, CacheNamespace::Anthropic);
+        let key1 = cache_key_for_request(
+            &body,
+            CacheNamespace::Anthropic,
+            &CacheScope {
+                backend_name: "openai",
+                auth_identity: "k1",
+            },
+        );
+        let key2 = cache_key_for_request(
+            &body,
+            CacheNamespace::Anthropic,
+            &CacheScope {
+                backend_name: "openai",
+                auth_identity: "k1",
+            },
+        );
         assert_eq!(key1, key2);
         assert!(key1.starts_with("anth:"));
     }
@@ -221,8 +253,22 @@ mod tests {
             "messages": [{"role": "user", "content": "hello"}],
             "temperature": 0.9
         });
-        let key1 = cache_key_for_request(&body1, CacheNamespace::Anthropic);
-        let key2 = cache_key_for_request(&body2, CacheNamespace::Anthropic);
+        let key1 = cache_key_for_request(
+            &body1,
+            CacheNamespace::Anthropic,
+            &CacheScope {
+                backend_name: "openai",
+                auth_identity: "k1",
+            },
+        );
+        let key2 = cache_key_for_request(
+            &body2,
+            CacheNamespace::Anthropic,
+            &CacheScope {
+                backend_name: "openai",
+                auth_identity: "k1",
+            },
+        );
         assert_ne!(key1, key2);
     }
 
@@ -240,8 +286,22 @@ mod tests {
             "model": "gpt-4o",
             "temperature": 0.5
         });
-        let key1 = cache_key_for_request(&body1, CacheNamespace::OpenAI);
-        let key2 = cache_key_for_request(&body2, CacheNamespace::OpenAI);
+        let key1 = cache_key_for_request(
+            &body1,
+            CacheNamespace::OpenAI,
+            &CacheScope {
+                backend_name: "openai",
+                auth_identity: "k1",
+            },
+        );
+        let key2 = cache_key_for_request(
+            &body2,
+            CacheNamespace::OpenAI,
+            &CacheScope {
+                backend_name: "openai",
+                auth_identity: "k1",
+            },
+        );
         assert_eq!(key1, key2);
     }
 
@@ -256,8 +316,22 @@ mod tests {
             "model": "gpt-4o",
             "messages": [{"role": "user", "content": "hi"}]
         });
-        let key1 = cache_key_for_request(&body1, CacheNamespace::OpenAI);
-        let key2 = cache_key_for_request(&body2, CacheNamespace::OpenAI);
+        let key1 = cache_key_for_request(
+            &body1,
+            CacheNamespace::OpenAI,
+            &CacheScope {
+                backend_name: "openai",
+                auth_identity: "k1",
+            },
+        );
+        let key2 = cache_key_for_request(
+            &body2,
+            CacheNamespace::OpenAI,
+            &CacheScope {
+                backend_name: "openai",
+                auth_identity: "k1",
+            },
+        );
         assert_eq!(key1, key2);
     }
 
@@ -267,8 +341,22 @@ mod tests {
             "model": "test",
             "messages": []
         });
-        let anth = cache_key_for_request(&body, CacheNamespace::Anthropic);
-        let oai = cache_key_for_request(&body, CacheNamespace::OpenAI);
+        let anth = cache_key_for_request(
+            &body,
+            CacheNamespace::Anthropic,
+            &CacheScope {
+                backend_name: "openai",
+                auth_identity: "k1",
+            },
+        );
+        let oai = cache_key_for_request(
+            &body,
+            CacheNamespace::OpenAI,
+            &CacheScope {
+                backend_name: "openai",
+                auth_identity: "k1",
+            },
+        );
         assert_ne!(anth, oai);
         assert!(anth.starts_with("anth:"));
         assert!(oai.starts_with("oai:"));
@@ -285,8 +373,22 @@ mod tests {
             "model": "gpt-4o",
             "messages": []
         });
-        let key1 = cache_key_for_request(&body1, CacheNamespace::OpenAI);
-        let key2 = cache_key_for_request(&body2, CacheNamespace::OpenAI);
+        let key1 = cache_key_for_request(
+            &body1,
+            CacheNamespace::OpenAI,
+            &CacheScope {
+                backend_name: "openai",
+                auth_identity: "k1",
+            },
+        );
+        let key2 = cache_key_for_request(
+            &body2,
+            CacheNamespace::OpenAI,
+            &CacheScope {
+                backend_name: "openai",
+                auth_identity: "k1",
+            },
+        );
         assert_eq!(key1, key2);
     }
 
@@ -350,8 +452,22 @@ mod tests {
             "messages": [{"role": "user", "content": "hi"}],
             "cache_ttl_secs": 3600
         });
-        let key1 = cache_key_for_request(&body1, CacheNamespace::OpenAI);
-        let key2 = cache_key_for_request(&body2, CacheNamespace::OpenAI);
+        let key1 = cache_key_for_request(
+            &body1,
+            CacheNamespace::OpenAI,
+            &CacheScope {
+                backend_name: "openai",
+                auth_identity: "k1",
+            },
+        );
+        let key2 = cache_key_for_request(
+            &body2,
+            CacheNamespace::OpenAI,
+            &CacheScope {
+                backend_name: "openai",
+                auth_identity: "k1",
+            },
+        );
         assert_ne!(
             key1, key2,
             "different cache_ttl_secs must produce different cache keys"
