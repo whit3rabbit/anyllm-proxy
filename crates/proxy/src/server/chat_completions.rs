@@ -17,7 +17,9 @@ use axum::{
 use bytes::BytesMut;
 use futures::StreamExt;
 
-use super::routes::{inject_degradation_header, log_request, set_backend_error_kind, RequestCtx};
+use super::routes::{
+    cache_auth_identity, inject_degradation_header, log_request, set_backend_error_kind, RequestCtx,
+};
 use super::state::{AppState, ConcurrencyPermit};
 
 /// OpenAI-shaped error response body.
@@ -148,14 +150,6 @@ pub(crate) async fn chat_completions(
         }
     };
     let bypass_cache = cache_ttl == Some(0);
-    let cache_key = if !bypass_cache {
-        Some(cache::cache_key_for_request(
-            &body_value,
-            CacheNamespace::OpenAI,
-        ))
-    } else {
-        None
-    };
 
     // Resolve model routing before reading cache so route-scoped keys cannot
     // receive cached disallowed-backend data.
@@ -179,6 +173,19 @@ pub(crate) async fn chat_completions(
             );
         }
     }
+    let auth_identity = cache_auth_identity(&headers, &vk_ctx);
+    let cache_key = if !bypass_cache {
+        Some(cache::cache_key_for_request(
+            &body_value,
+            CacheNamespace::OpenAI,
+            &cache::CacheScope {
+                backend_name: &effective.backend_name,
+                auth_identity: &auth_identity,
+            },
+        ))
+    } else {
+        None
+    };
 
     // Check cache on non-bypass requests
     if let (Some(ref key), Some(ref c)) = (&cache_key, &state.cache) {
