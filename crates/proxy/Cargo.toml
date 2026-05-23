@@ -7,10 +7,10 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-anyllm_translate = { path = "../translator", version = "0.9.2" }
-anyllm_client = { path = "../client", version = "0.9.2" }
-anyllm_batch_engine = { path = "../batch_engine", version = "0.9.2" }
-anyllm_providers = { path = "../providers", version = "0.9.2" }
+anyllm_translate = { path = "../translator", version = "0.9.3" }
+anyllm_client = { path = "../client", version = "0.9.3" }
+anyllm_batch_engine = { path = "../batch_engine", version = "0.9.3" }
+anyllm_providers = { path = "../providers", version = "0.9.3" }
 axum = { version = "0.8", features = ["ws", "multipart"] }
 tokio = { version = "1", features = ["full"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "native-tls", "http2", "multipart"] }

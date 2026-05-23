@@ -292,7 +292,7 @@ jobs:
         run: |
           VERSION="${{ github.ref_name }}"
           VERSION="${VERSION#v}"
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           chmod +x ./macos/arm64/anyllm_proxy ./macos/x86_64/anyllm_proxy
           mkdir -p dist
           # rename binary to anyllm-proxy inside the archive (hyphen, not underscore)
@@ -315,8 +315,8 @@ jobs:
           VERSION="${{ steps.tarballs.outputs.version }}"
           ARM64=$(sha256sum "dist/anyllm-proxy-${VERSION}-macos-arm64.tar.gz"  | cut -d' ' -f1)
           X86=$(sha256sum  "dist/anyllm-proxy-${VERSION}-macos-x86_64.tar.gz" | cut -d' ' -f1)
-          echo "arm64=${ARM64}" >> $GITHUB_OUTPUT
-          echo "x86_64=${X86}"  >> $GITHUB_OUTPUT
+          echo "arm64=${ARM64}" >> "$GITHUB_OUTPUT"
+          echo "x86_64=${X86}"  >> "$GITHUB_OUTPUT"
       - name: Update Homebrew tap
         env:
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
