@@ -3,7 +3,7 @@
 Update assets/model_pricing.json from LiteLLM's canonical pricing file.
 
 Usage:
-  python scripts/update_pricing.py              # write assets/model_pricing.json
+  python scripts/update_pricing.py              # write assets/model_pricing.json and crate copy
   python scripts/update_pricing.py --dry-run    # print diff, no write
   python scripts/update_pricing.py --output /path/to/file.json
 """
@@ -36,6 +36,7 @@ ALLOWED_MODES = {"chat", "embedding", "completion"}
 # Repo root is one level up from this script.
 REPO_ROOT = Path(__file__).parent.parent
 DEFAULT_OUTPUT = REPO_ROOT / "assets" / "model_pricing.json"
+PACKAGE_OUTPUT = REPO_ROOT / "crates" / "proxy" / "assets" / "model_pricing.json"
 
 
 def fetch_litellm_pricing() -> dict:
@@ -177,8 +178,14 @@ def main():
         return
 
     output = json.dumps(new_entries, indent=2) + "\n"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(output)
     print(f"Written: {output_path}", file=sys.stderr)
+
+    if output_path.resolve() == DEFAULT_OUTPUT.resolve():
+        PACKAGE_OUTPUT.parent.mkdir(parents=True, exist_ok=True)
+        PACKAGE_OUTPUT.write_text(output)
+        print(f"Written: {PACKAGE_OUTPUT}", file=sys.stderr)
 
 
 if __name__ == "__main__":

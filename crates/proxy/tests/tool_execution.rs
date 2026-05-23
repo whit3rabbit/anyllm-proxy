@@ -3,6 +3,7 @@
 //! These tests exercise the public API of `crates/proxy/src/tools/` without
 //! a running proxy or live backend.
 
+use std::collections::HashSet;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -74,6 +75,10 @@ fn make_call(id: &str, name: &str, input: serde_json::Value) -> ToolCall {
     }
 }
 
+fn advertised(names: &[&str]) -> HashSet<String> {
+    names.iter().map(|name| (*name).to_string()).collect()
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -85,7 +90,8 @@ fn partition_allows_registered_tools() {
         make_call("1", "upper", serde_json::json!({"text": "hi"})),
         make_call("2", "unknown", serde_json::json!({})),
     ];
-    let (auto, pass, denied) = partition_tool_calls(&calls, &reg, &policy);
+    let advertised_tools = advertised(&["upper", "unknown"]);
+    let (auto, pass, denied) = partition_tool_calls(&calls, &reg, &policy, &advertised_tools);
     assert_eq!(auto.len(), 1);
     assert_eq!(auto[0].name, "upper");
     assert_eq!(pass.len(), 1);
@@ -100,9 +106,25 @@ fn partition_passthrough_policy_sends_all_through() {
     let passthrough_policy = ToolExecutionPolicy::default();
 
     let calls = vec![make_call("1", "upper", serde_json::json!({"text": "hi"}))];
-    let (auto, pass, denied) = partition_tool_calls(&calls, &reg, &passthrough_policy);
+    let advertised_tools = advertised(&["upper"]);
+    let (auto, pass, denied) =
+        partition_tool_calls(&calls, &reg, &passthrough_policy, &advertised_tools);
     assert!(auto.is_empty());
     assert_eq!(pass.len(), 1);
+    assert!(denied.is_empty());
+}
+
+#[test]
+fn partition_does_not_auto_execute_unadvertised_registered_tool() {
+    let (reg, policy) = setup();
+    let calls = vec![make_call("1", "upper", serde_json::json!({"text": "hi"}))];
+    let advertised_tools = advertised(&[]);
+
+    let (auto, pass, denied) = partition_tool_calls(&calls, &reg, &policy, &advertised_tools);
+
+    assert!(auto.is_empty());
+    assert_eq!(pass.len(), 1);
+    assert_eq!(pass[0].name, "upper");
     assert!(denied.is_empty());
 }
 
@@ -122,7 +144,8 @@ fn partition_deny_policy_goes_to_denied_bucket() {
     };
 
     let calls = vec![make_call("1", "upper", serde_json::json!({"text": "hi"}))];
-    let (auto, pass, denied) = partition_tool_calls(&calls, &reg, &deny_policy);
+    let advertised_tools = advertised(&["upper"]);
+    let (auto, pass, denied) = partition_tool_calls(&calls, &reg, &deny_policy, &advertised_tools);
     assert!(auto.is_empty());
     assert!(pass.is_empty());
     assert_eq!(denied.len(), 1);
@@ -429,10 +452,17 @@ async fn maybe_execute_no_tool_calls_returns_original() {
     let engine = make_engine(3);
     let req = simple_request();
     let initial = text_response("just text");
+    let advertised_tools = advertised(&[]);
 
-    let (resp, trace) = maybe_execute_tools(&engine, &req, initial.clone(), |_| async {
-        panic!("backend should not be called when no tool calls");
-    })
+    let (resp, trace) = maybe_execute_tools(
+        &engine,
+        &req,
+        &advertised_tools,
+        initial.clone(),
+        |_| async {
+            panic!("backend should not be called when no tool calls");
+        },
+    )
     .await;
 
     assert_eq!(resp.id, initial.id);
@@ -449,10 +479,17 @@ async fn maybe_execute_unregistered_tool_passes_through() {
     let engine = make_engine(3);
     let req = simple_request();
     let initial = tool_use_response("tu_1", "unknown", serde_json::json!({}));
+    let advertised_tools = advertised(&["unknown"]);
 
-    let (resp, trace) = maybe_execute_tools(&engine, &req, initial.clone(), |_| async {
-        panic!("backend should not be called for pass-through tools");
-    })
+    let (resp, trace) = maybe_execute_tools(
+        &engine,
+        &req,
+        &advertised_tools,
+        initial.clone(),
+        |_| async {
+            panic!("backend should not be called for pass-through tools");
+        },
+    )
     .await;
 
     // Original response returned as-is
@@ -464,15 +501,48 @@ async fn maybe_execute_unregistered_tool_passes_through() {
 }
 
 #[tokio::test]
+async fn maybe_execute_unadvertised_registered_tool_passes_through() {
+    let engine = make_engine(3);
+    let req = simple_request();
+    let initial = tool_use_response("tu_1", "upper", serde_json::json!({"text": "hello"}));
+    let advertised_tools = advertised(&[]);
+
+    let (resp, trace) = maybe_execute_tools(
+        &engine,
+        &req,
+        &advertised_tools,
+        initial.clone(),
+        |_| async {
+            panic!("backend should not be called for unadvertised server tools");
+        },
+    )
+    .await;
+
+    assert_eq!(resp.id, initial.id);
+    assert!(trace.iterations.is_empty());
+    assert_eq!(
+        trace.termination_reason,
+        anyllm_proxy::tools::TerminationReason::NoToolCalls
+    );
+}
+
+#[tokio::test]
 async fn maybe_execute_one_iteration_success() {
     let engine = make_engine(3);
     let req = simple_request();
     let initial = tool_use_response("tu_1", "upper", serde_json::json!({"text": "hello"}));
+    let advertised_tools = advertised(&["upper"]);
 
-    let (resp, trace) = maybe_execute_tools(&engine, &req, initial, |_follow_up| async {
-        // The follow-up response has no tool calls, so the loop stops.
-        Ok(text_response("HELLO"))
-    })
+    let (resp, trace) = maybe_execute_tools(
+        &engine,
+        &req,
+        &advertised_tools,
+        initial,
+        |_follow_up| async {
+            // The follow-up response has no tool calls, so the loop stops.
+            Ok(text_response("HELLO"))
+        },
+    )
     .await;
 
     // Should get the follow-up response
@@ -496,8 +566,9 @@ async fn maybe_execute_duplicate_detection_stops_loop() {
 
     let call_count = Arc::new(AtomicUsize::new(0));
     let call_count_clone = call_count.clone();
+    let advertised_tools = advertised(&["upper"]);
 
-    let (resp, trace) = maybe_execute_tools(&engine, &req, initial, move |_| {
+    let (resp, trace) = maybe_execute_tools(&engine, &req, &advertised_tools, initial, move |_| {
         let cc = call_count_clone.clone();
         async move {
             cc.fetch_add(1, Ordering::SeqCst);
@@ -532,20 +603,22 @@ async fn maybe_execute_max_iterations_honored() {
 
     let call_count = Arc::new(AtomicUsize::new(0));
     let call_count_clone = call_count.clone();
+    let advertised_tools = advertised(&["upper"]);
 
-    let (_resp, trace) = maybe_execute_tools(&engine, &req, initial, move |_| {
-        let cc = call_count_clone.clone();
-        async move {
-            let n = cc.fetch_add(1, Ordering::SeqCst);
-            // Each iteration returns a different tool call to avoid duplicate detection.
-            Ok(tool_use_response(
-                &format!("tu_{}", n + 2),
-                "upper",
-                serde_json::json!({"text": format!("iter_{}", n)}),
-            ))
-        }
-    })
-    .await;
+    let (_resp, trace) =
+        maybe_execute_tools(&engine, &req, &advertised_tools, initial, move |_| {
+            let cc = call_count_clone.clone();
+            async move {
+                let n = cc.fetch_add(1, Ordering::SeqCst);
+                // Each iteration returns a different tool call to avoid duplicate detection.
+                Ok(tool_use_response(
+                    &format!("tu_{}", n + 2),
+                    "upper",
+                    serde_json::json!({"text": format!("iter_{}", n)}),
+                ))
+            }
+        })
+        .await;
 
     assert_eq!(call_count.load(Ordering::SeqCst), 2);
     assert_eq!(trace.iterations.len(), 2);
@@ -560,10 +633,15 @@ async fn maybe_execute_backend_error_returns_last_response() {
     let engine = make_engine(3);
     let req = simple_request();
     let initial = tool_use_response("tu_1", "upper", serde_json::json!({"text": "hello"}));
+    let advertised_tools = advertised(&["upper"]);
 
-    let (resp, trace) = maybe_execute_tools(&engine, &req, initial.clone(), |_| async {
-        Err("backend unavailable".to_string())
-    })
+    let (resp, trace) = maybe_execute_tools(
+        &engine,
+        &req,
+        &advertised_tools,
+        initial.clone(),
+        |_| async { Err("backend unavailable".to_string()) },
+    )
     .await;
 
     // Should return the initial response (last good one before backend error)

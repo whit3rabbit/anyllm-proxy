@@ -149,11 +149,11 @@ impl ModelPricing {
                         error = %e,
                         "failed to read MODEL_PRICING_FILE; falling back to embedded pricing"
                     );
-                    include_str!("../../../../assets/model_pricing.json").to_string()
+                    include_str!("../../assets/model_pricing.json").to_string()
                 }
             }
         } else {
-            include_str!("../../../../assets/model_pricing.json").to_string()
+            include_str!("../../assets/model_pricing.json").to_string()
         };
         let entries: Vec<ModelPricingEntry> =
             serde_json::from_str(&json).expect("invalid model_pricing.json");

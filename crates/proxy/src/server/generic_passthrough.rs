@@ -5,23 +5,38 @@
 
 use crate::backend::BackendClient;
 use crate::server::state::AppState;
+use anyllm_translate::{anthropic, mapping};
 use axum::{
     body::Bytes,
     extract::{OriginalUri, Path, State},
     http::{HeaderMap, Method, StatusCode},
-    response::{IntoResponse, Response},
+    response::{IntoResponse, Json, Response},
 };
 
 /// Catch-all for `ANY /v1/{*path}` paths without an explicit handler.
 /// Registered last in the Translate-mode router so explicit routes take priority.
 pub(crate) async fn v1_generic_passthrough(
     State(state): State<AppState>,
+    vk_ctx: Option<axum::Extension<super::middleware::VirtualKeyContext>>,
     OriginalUri(uri): OriginalUri,
     Path(tail): Path<String>,
     method: Method,
     headers: HeaderMap,
     body: Bytes,
 ) -> Response {
+    state.metrics.record_request();
+
+    // Virtual keys must use explicit handlers that enforce per-key policy and
+    // accounting before forwarding with the proxy's provider credentials.
+    if vk_ctx.is_some() {
+        let err = mapping::errors_map::create_anthropic_error(
+            anthropic::ErrorType::PermissionError,
+            "This endpoint is not available for virtual API keys.".to_string(),
+            None,
+        );
+        return (StatusCode::FORBIDDEN, Json(err)).into_response();
+    }
+
     // This handler is only registered for OpenAI-compatible (Translate) backends.
     let client = match &state.backend {
         BackendClient::OpenAI(c)
@@ -38,8 +53,6 @@ pub(crate) async fn v1_generic_passthrough(
             return (StatusCode::NOT_IMPLEMENTED, axum::Json(err)).into_response();
         }
     };
-
-    state.metrics.record_request();
 
     // Build backend URL: passthrough_url handles per-backend path rewriting (Azure, Vertex, etc.)
     let path = format!("/v1/{tail}");

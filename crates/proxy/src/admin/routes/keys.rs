@@ -265,6 +265,7 @@ pub(super) async fn update_key(
                         meta.period_spend_usd = 0.0;
                     }
                     meta.allowed_models = body.allowed_models.clone();
+                    meta.allowed_routes = body.allowed_routes.clone();
                 });
             }
             super::emit_audit(

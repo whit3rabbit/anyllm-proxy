@@ -33,7 +33,8 @@ pub(super) async fn send_events(
 }
 
 /// Why the SSE stream ended.
-pub(super) enum StreamOutcome {
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum StreamOutcome {
     /// Backend stream completed normally.
     Completed,
     /// Downstream client disconnected before the stream finished.
@@ -44,7 +45,7 @@ pub(super) enum StreamOutcome {
 
 impl StreamOutcome {
     /// Record metrics and return (HTTP status, error message) for logging.
-    fn record(&self, metrics: &Metrics) -> (u16, Option<String>) {
+    pub(crate) fn record(&self, metrics: &Metrics) -> (u16, Option<String>) {
         match self {
             Self::Completed => {
                 metrics.record_success();
@@ -61,6 +62,83 @@ impl StreamOutcome {
             }
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn anthropic_stream_usage_tracks_complete_sse_frames() {
+        let mut usage = AnthropicStreamUsage::default();
+        let mut buffer = BytesMut::from(&b"event: message_start\n\
+data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"model\":\"claude-haiku-4-5\",\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":11,\"output_tokens\":0}}}\n\n\
+event: message_delta\n\
+data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":7}}\n\n"[..]);
+        let mut search_from = 0;
+
+        observe_anthropic_sse_frames(&mut buffer, &mut search_from, &mut usage);
+
+        assert_eq!(usage.tokens(), Some((11, 7)));
+        assert!(buffer.is_empty());
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+pub(crate) struct AnthropicStreamUsage {
+    input_tokens: Option<u64>,
+    output_tokens: Option<u64>,
+}
+
+impl AnthropicStreamUsage {
+    pub(crate) fn observe_data(&mut self, data: &str) {
+        if data == "[DONE]" {
+            return;
+        }
+        let Ok(event) = serde_json::from_str::<anthropic::StreamEvent>(data) else {
+            return;
+        };
+        match event {
+            anthropic::StreamEvent::MessageStart { message } => {
+                self.input_tokens = Some(message.usage.input_tokens as u64);
+            }
+            anthropic::StreamEvent::MessageDelta {
+                usage: Some(usage), ..
+            } => {
+                self.output_tokens = Some(usage.output_tokens as u64);
+            }
+            _ => {}
+        }
+    }
+
+    pub(crate) fn tokens(&self) -> Option<(u64, u64)> {
+        match (self.input_tokens, self.output_tokens) {
+            (Some(input), Some(output)) => Some((input, output)),
+            (Some(input), None) => Some((input, 0)),
+            (None, Some(output)) => Some((0, output)),
+            (None, None) => None,
+        }
+    }
+}
+
+pub(crate) fn observe_anthropic_sse_frames(
+    buffer: &mut BytesMut,
+    search_from: &mut usize,
+    usage: &mut AnthropicStreamUsage,
+) {
+    while let Some((pos, delim_len)) = find_double_newline(buffer, *search_from) {
+        if let Ok(frame_str) = std::str::from_utf8(&buffer[..pos]) {
+            for line in frame_str.lines() {
+                let line = line.trim();
+                if let Some(json_str) = line.strip_prefix("data: ") {
+                    usage.observe_data(json_str);
+                }
+            }
+        }
+        let _ = buffer.split_to(pos + delim_len);
+        *search_from = 0;
+    }
+    *search_from = buffer.len().saturating_sub(3);
 }
 
 /// Read SSE bytes from a response, parse frames, and call `on_data` for each data line.
@@ -264,18 +342,15 @@ pub(crate) async fn messages_stream(
                         }
                         let usage = translator.usage();
                         let tokens = usage.map(|u| (u.input_tokens as u64, u.output_tokens as u64));
-                        // Record cost for virtual key spend tracking.
-                        let cost = if let Some((input_t, output_t)) = tokens {
-                            Some(crate::cost::record_cost(
+                        let cost = tokens.map(|(input_t, output_t)| {
+                            super::routes::record_virtual_key_usage(
                                 &log_shared,
                                 &vk_ctx,
                                 &mapped_model,
                                 input_t,
                                 output_t,
-                            ))
-                        } else {
-                            None
-                        };
+                            )
+                        });
                         let (status, err) = outcome.record(&metrics);
                         log_request(
                             &log_shared,
@@ -373,17 +448,15 @@ pub(crate) async fn messages_stream(
                         }
                         let usage = translator.usage();
                         let tokens = usage.map(|u| (u.input_tokens as u64, u.output_tokens as u64));
-                        let cost = if let Some((input_t, output_t)) = tokens {
-                            Some(crate::cost::record_cost(
+                        let cost = tokens.map(|(input_t, output_t)| {
+                            super::routes::record_virtual_key_usage(
                                 &log_shared,
                                 &vk_ctx,
                                 &mapped_model,
                                 input_t,
                                 output_t,
-                            ))
-                        } else {
-                            None
-                        };
+                            )
+                        });
                         let (status, err) = outcome.record(&metrics);
                         log_request(
                             &log_shared,

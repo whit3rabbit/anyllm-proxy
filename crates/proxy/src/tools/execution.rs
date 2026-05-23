@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -46,19 +47,29 @@ impl Default for LoopConfig {
 
 /// Partition tool calls into three categories.
 ///
-/// - `auto_execute`: in registry AND policy says Allow
-/// - `pass_through`: not in registry, OR policy says PassThrough
-/// - `denied`: policy says Deny (caller must surface error ToolResults to LLM)
+/// A tool call is only eligible for server-side policy evaluation when the
+/// proxy advertised that exact tool name for this request. This prevents
+/// client-supplied tool schemas from reusing privileged server tool names.
+///
+/// - `auto_execute`: proxy-advertised AND in registry AND policy says Allow
+/// - `pass_through`: not proxy-advertised, not in registry, OR policy says PassThrough
+/// - `denied`: proxy-advertised AND policy says Deny
 pub fn partition_tool_calls<'a>(
     tool_calls: &'a [ToolCall],
     registry: &ToolRegistry,
     policy: &ToolExecutionPolicy,
+    server_advertised_tool_names: &HashSet<String>,
 ) -> (Vec<&'a ToolCall>, Vec<&'a ToolCall>, Vec<&'a ToolCall>) {
     let mut auto_execute = Vec::new();
     let mut pass_through = Vec::new();
     let mut denied = Vec::new();
 
     for call in tool_calls {
+        if !server_advertised_tool_names.contains(&call.name) {
+            pass_through.push(call);
+            continue;
+        }
+
         match policy.resolve(&call.name) {
             PolicyAction::Deny => denied.push(call),
             PolicyAction::Allow if registry.contains(&call.name) => auto_execute.push(call),
@@ -285,6 +296,7 @@ pub use crate::server::state::ToolEngineState;
 pub async fn maybe_execute_tools<F, Fut>(
     engine: &ToolEngineState,
     original_req: &anyllm_translate::anthropic::MessageCreateRequest,
+    server_advertised_tool_names: &HashSet<String>,
     initial_response: anyllm_translate::anthropic::MessageResponse,
     backend_call: F,
 ) -> (anyllm_translate::anthropic::MessageResponse, LoopTrace)
@@ -312,8 +324,12 @@ where
         }
 
         let tool_calls = extract_tool_calls(&current_response);
-        let (auto_exec, _pass_through, denied) =
-            partition_tool_calls(&tool_calls, &engine.registry, &engine.policy);
+        let (auto_exec, _pass_through, denied) = partition_tool_calls(
+            &tool_calls,
+            &engine.registry,
+            &engine.policy,
+            server_advertised_tool_names,
+        );
 
         // Generate error results for denied tools so the LLM sees them.
         let denied_results = denied_tool_results(&denied);
@@ -572,6 +588,10 @@ mod tests {
         }
     }
 
+    fn advertised(names: &[&str]) -> HashSet<String> {
+        names.iter().map(|name| (*name).to_string()).collect()
+    }
+
     // 1. passthrough policy -> all tools pass through
     #[test]
     fn partition_no_auto_execute() {
@@ -580,7 +600,9 @@ mod tests {
         let policy = passthrough_policy();
 
         let calls = vec![make_call("id1", "echo", json!({"text": "hi"}))];
-        let (auto, pass, denied) = partition_tool_calls(&calls, &registry, &policy);
+        let advertised_tools = advertised(&["echo"]);
+        let (auto, pass, denied) =
+            partition_tool_calls(&calls, &registry, &policy, &advertised_tools);
 
         assert!(auto.is_empty());
         assert_eq!(pass.len(), 1);
@@ -598,12 +620,31 @@ mod tests {
             make_call("id1", "echo", json!({"text": "hi"})),
             make_call("id2", "unknown_tool", json!({})),
         ];
-        let (auto, pass, denied) = partition_tool_calls(&calls, &registry, &policy);
+        let advertised_tools = advertised(&["echo", "unknown_tool"]);
+        let (auto, pass, denied) =
+            partition_tool_calls(&calls, &registry, &policy, &advertised_tools);
 
         assert_eq!(auto.len(), 1);
         assert_eq!(auto[0].name, "echo");
         assert_eq!(pass.len(), 1);
         assert_eq!(pass[0].name, "unknown_tool");
+        assert!(denied.is_empty());
+    }
+
+    #[test]
+    fn partition_allow_policy_requires_server_advertised_tool() {
+        let mut registry = ToolRegistry::new();
+        registry.register(Box::new(EchoTool));
+        let policy = allow_policy("echo");
+
+        let calls = vec![make_call("id1", "echo", json!({"text": "hi"}))];
+        let advertised_tools = advertised(&[]);
+        let (auto, pass, denied) =
+            partition_tool_calls(&calls, &registry, &policy, &advertised_tools);
+
+        assert!(auto.is_empty());
+        assert_eq!(pass.len(), 1);
+        assert_eq!(pass[0].name, "echo");
         assert!(denied.is_empty());
     }
 
@@ -623,7 +664,9 @@ mod tests {
         };
 
         let calls = vec![make_call("id1", "echo", json!({"text": "hi"}))];
-        let (auto, pass, denied) = partition_tool_calls(&calls, &registry, &policy);
+        let advertised_tools = advertised(&["echo"]);
+        let (auto, pass, denied) =
+            partition_tool_calls(&calls, &registry, &policy, &advertised_tools);
 
         assert!(auto.is_empty());
         assert!(pass.is_empty());

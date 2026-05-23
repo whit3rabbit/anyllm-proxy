@@ -701,6 +701,25 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn list_filters_by_key_id() {
+        let q = test_queue().await;
+        let (mut job1, items1) = make_job("batch_key_1");
+        job1.key_id = Some(1);
+        q.enqueue(&job1, &items1).await.unwrap();
+
+        let (mut job2, items2) = make_job("batch_key_2");
+        job2.key_id = Some(2);
+        q.enqueue(&job2, &items2).await.unwrap();
+
+        let scoped = q.list(Some(1), None, 10).await.unwrap();
+        assert_eq!(scoped.len(), 1);
+        assert_eq!(scoped[0].id.0, "batch_key_1");
+
+        let unscoped = q.list(None, None, 10).await.unwrap();
+        assert_eq!(unscoped.len(), 2);
+    }
+
+    #[tokio::test]
     async fn get_items() {
         let q = test_queue().await;
         let (job, items) = make_job("batch_items");

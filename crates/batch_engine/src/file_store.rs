@@ -13,6 +13,7 @@ use std::sync::Mutex;
 #[derive(Debug, Clone)]
 pub struct BatchFileMeta {
     pub file_id: String,
+    pub key_id: Option<i64>,
     pub byte_size: i64,
     pub line_count: i64,
     pub filename: Option<String>,
@@ -71,16 +72,17 @@ impl FileStore {
         tokio::task::spawn_blocking(move || {
             let conn = db.lock().unwrap();
             let mut stmt = conn.prepare(
-                "SELECT file_id, byte_size, line_count, filename, created_at FROM batch_file WHERE file_id = ?1",
+                "SELECT file_id, key_id, byte_size, line_count, filename, created_at FROM batch_file WHERE file_id = ?1",
             )?;
             let mut rows = stmt.query(params![file_id])?;
             if let Some(row) = rows.next()? {
                 Ok(Some(BatchFileMeta {
                     file_id: row.get(0)?,
-                    byte_size: row.get(1)?,
-                    line_count: row.get(2)?,
-                    filename: row.get(3)?,
-                    created_at: row.get(4)?,
+                    key_id: row.get(1)?,
+                    byte_size: row.get(2)?,
+                    line_count: row.get(3)?,
+                    filename: row.get(4)?,
+                    created_at: row.get(5)?,
                 }))
             } else {
                 Ok(None)
@@ -132,9 +134,22 @@ mod tests {
 
         let meta = store.get_meta("file-abc").await.unwrap().unwrap();
         assert_eq!(meta.file_id, "file-abc");
+        assert_eq!(meta.key_id, None);
         assert_eq!(meta.byte_size, 11);
         assert_eq!(meta.line_count, 2);
         assert_eq!(meta.filename.as_deref(), Some("test.jsonl"));
+    }
+
+    #[tokio::test]
+    async fn get_meta_returns_key_id() {
+        let store = test_store().await;
+        store
+            .insert("file-owned", Some(42), None, b"line1", 1)
+            .await
+            .unwrap();
+
+        let meta = store.get_meta("file-owned").await.unwrap().unwrap();
+        assert_eq!(meta.key_id, Some(42));
     }
 
     #[tokio::test]

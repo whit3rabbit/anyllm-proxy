@@ -347,6 +347,10 @@ fn backend_router(state: AppState, mode: HandlerMode) -> Router<GlobalState> {
     };
 
     api_routes
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            enforce_route_scope,
+        ))
         .layer(axum::middleware::from_fn(super::middleware::validate_auth))
         .layer(axum::middleware::from_fn(
             super::middleware::log_anthropic_headers,
@@ -380,6 +384,37 @@ async fn enforce_concurrency(
         .extensions_mut()
         .insert(ConcurrencyPermit(Arc::new(permit)));
     next.run(request).await
+}
+
+async fn enforce_route_scope(
+    State(state): State<AppState>,
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> Response {
+    let allowed_routes = request
+        .extensions()
+        .get::<super::middleware::VirtualKeyContext>()
+        .and_then(|ctx| ctx.allowed_routes.clone());
+
+    if allowed_routes.is_some() {
+        if let Err(error) =
+            super::policy::enforce_route_scope(&state.backend_name, &state.shared, &allowed_routes)
+                .await
+        {
+            return route_scope_forbidden_response(error);
+        }
+    }
+
+    next.run(request).await
+}
+
+fn route_scope_forbidden_response(error: super::policy::RouteScopeError) -> Response {
+    let err = mapping::errors_map::create_anthropic_error(
+        anthropic::ErrorType::PermissionError,
+        error.message().to_string(),
+        None,
+    );
+    (StatusCode::FORBIDDEN, Json(err)).into_response()
 }
 
 /// Static Claude model entries, merged with model_list models at runtime.
@@ -625,6 +660,17 @@ async fn messages(
             Ok(v) => v,
             Err(resp) => return resp,
         };
+        if let Some(ref ctx) = vk_ctx {
+            if let Err(error) = super::policy::enforce_route_scope(
+                &effective.backend_name,
+                &effective.shared,
+                &ctx.allowed_routes,
+            )
+            .await
+            {
+                return route_scope_forbidden_response(error);
+            }
+        }
         if let Some(ref d) = deployment {
             d.record_start();
         }
@@ -680,6 +726,24 @@ async fn messages(
         None
     };
 
+    // Resolve model routing (may switch to a different backend) before reading
+    // cache so route-scoped keys cannot receive cached disallowed-backend data.
+    let (mapped_model, effective, deployment) = match state.resolve_model_and_state(&body.model) {
+        Ok(v) => v,
+        Err(resp) => return resp,
+    };
+    if let Some(ref ctx) = vk_ctx {
+        if let Err(error) = super::policy::enforce_route_scope(
+            &effective.backend_name,
+            &effective.shared,
+            &ctx.allowed_routes,
+        )
+        .await
+        {
+            return route_scope_forbidden_response(error);
+        }
+    }
+
     // Check cache on non-bypass requests
     if let (Some(ref key), Some(ref c)) = (&cache_key, &state.cache) {
         if let Some(entry) = c.get(key).await {
@@ -697,11 +761,6 @@ async fn messages(
         }
     }
 
-    // Resolve model routing (may switch to a different backend).
-    let (mapped_model, effective, deployment) = match state.resolve_model_and_state(&body.model) {
-        Ok(v) => v,
-        Err(resp) => return resp,
-    };
     if let Some(ref d) = deployment {
         d.record_start();
     }
@@ -759,9 +818,11 @@ async fn messages(
                         let client_for_tools = client.clone();
                         let model_for_tools = mapped_model.clone();
                         let orig_model_for_tools = original_model.clone();
+                        let server_advertised_tool_names = std::collections::HashSet::new();
                         let (resp, trace) = crate::tools::execution::maybe_execute_tools(
                             engine,
                             &body,
+                            &server_advertised_tool_names,
                             anthropic_resp,
                             |follow_up_req| {
                                 let c = client_for_tools.clone();
@@ -803,8 +864,7 @@ async fn messages(
                             "response body"
                         );
                     }
-                    record_vk_tpm(&vk_ctx, anthropic_resp.usage.output_tokens);
-                    let cost = crate::cost::record_cost(
+                    let cost = record_virtual_key_usage(
                         &state.shared,
                         &vk_ctx,
                         &mapped_model,
@@ -892,8 +952,7 @@ async fn messages(
                             "response body"
                         );
                     }
-                    record_vk_tpm(&vk_ctx, anthropic_resp.usage.output_tokens);
-                    let cost = crate::cost::record_cost(
+                    let cost = record_virtual_key_usage(
                         &state.shared,
                         &vk_ctx,
                         &mapped_model,
@@ -1097,6 +1156,23 @@ pub(crate) fn record_vk_tpm(
         ctx.rate_state
             .record_tpm(crate::admin::keys::now_ms(), output_tokens);
     }
+}
+
+/// Record all post-response virtual-key usage controls for known token usage.
+///
+/// The protected invariant is that output tokens from successful generation
+/// requests contribute to the virtual key TPM window before the request is
+/// logged or returned as fully accounted.
+pub(crate) fn record_virtual_key_usage(
+    shared: &Option<SharedState>,
+    vk_ctx: &Option<super::middleware::VirtualKeyContext>,
+    model: &str,
+    input_tokens: u64,
+    output_tokens: u64,
+) -> f64 {
+    let capped_output = output_tokens.min(u32::MAX as u64) as u32;
+    record_vk_tpm(vk_ctx, capped_output);
+    crate::cost::record_cost(shared, vk_ctx, model, input_tokens, output_tokens)
 }
 
 /// Global webhook callback config, set once at startup.

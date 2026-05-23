@@ -276,6 +276,15 @@ impl GeminiStreamingTranslator {
         self.finished
     }
 
+    /// Return accumulated usage if Gemini sent token metadata, None otherwise.
+    pub fn usage(&self) -> Option<&anthropic::Usage> {
+        if self.usage.input_tokens > 0 || self.usage.output_tokens > 0 {
+            Some(&self.usage)
+        } else {
+            None
+        }
+    }
+
     fn make_message_start(&self) -> anthropic::StreamEvent {
         anthropic::StreamEvent::MessageStart {
             message: MessageStartData {
