@@ -14,8 +14,8 @@ jobs:
   frontend:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: '20'
           cache: 'npm'
@@ -33,7 +33,7 @@ jobs:
         working-directory: crates/proxy/admin-ui
         run: npm run build
       - name: Upload dist
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: admin-ui-dist
           path: crates/proxy/admin-ui/dist/
@@ -42,9 +42,9 @@ jobs:
     needs: frontend
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Download dist
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: admin-ui-dist
           path: crates/proxy/admin-ui/dist/
@@ -97,9 +97,9 @@ jobs:
             binary: anyllm_proxy.exe
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Download dist
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: admin-ui-dist
           path: crates/proxy/admin-ui/dist/
@@ -112,7 +112,7 @@ jobs:
       - name: Build
         run: cargo build --release -p anyllm_proxy --target ${{ matrix.target }}
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: anyllm_proxy-${{ matrix.target }}
           path: target/${{ matrix.target }}/release/${{ matrix.binary }}
@@ -123,7 +123,7 @@ jobs:
           cargo deb -p anyllm_proxy --no-build --no-strip --target ${{ matrix.target }}
       - name: Upload deb artifact
         if: matrix.deb_arch != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: anyllm-proxy-deb-${{ matrix.deb_arch }}
           path: target/${{ matrix.target }}/debian/*.deb
@@ -143,7 +143,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Download deb
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: anyllm-proxy-deb-${{ matrix.arch }}
           path: ./deb
@@ -210,12 +210,12 @@ jobs:
       contents: write
     steps:
       - name: Download amd64 deb
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: anyllm-proxy-deb-amd64
           path: ./debs
       - name: Download arm64 deb
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: anyllm-proxy-deb-arm64
           path: ./debs
@@ -232,7 +232,7 @@ jobs:
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       # Publish in dependency order. --no-verify skips re-building from the
@@ -278,12 +278,12 @@ jobs:
       contents: write
     steps:
       - name: Download arm64 macOS binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: anyllm_proxy-aarch64-apple-darwin
           path: ./macos/arm64
       - name: Download x86_64 macOS binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: anyllm_proxy-x86_64-apple-darwin
           path: ./macos/x86_64
