@@ -1,4 +1,5 @@
 use crate::admin::state::SharedState;
+use anyllm_client::http::{build_http_client, HttpClientConfig};
 use anyllm_providers::{
     all_providers, get_provider, list_models,
     model::ModelStatus,
@@ -8,12 +9,11 @@ use axum::{extract::Path, extract::State, http::StatusCode, response::IntoRespon
 use std::sync::LazyLock;
 
 static REFRESH_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
-    reqwest::Client::builder()
-        .connect_timeout(std::time::Duration::from_secs(10))
-        .timeout(std::time::Duration::from_secs(20))
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
-        .expect("failed to build provider refresh HTTP client")
+    build_http_client(&HttpClientConfig {
+        connect_timeout: Some(std::time::Duration::from_secs(10)),
+        request_timeout: Some(std::time::Duration::from_secs(20)),
+        ..HttpClientConfig::new()
+    })
 });
 
 fn protocol_str(p: ProviderProtocol) -> &'static str {
