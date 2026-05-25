@@ -228,6 +228,12 @@
     "provider": "google"
   },
   {
+    "model_pattern": "gemini-3.1-flash-lite",
+    "input_cost_per_token": 2.5e-07,
+    "output_cost_per_token": 1.5e-06,
+    "provider": "google"
+  },
+  {
     "model_pattern": "gemini-3.1-flash-lite-preview",
     "input_cost_per_token": 2.5e-07,
     "output_cost_per_token": 1.5e-06,
@@ -249,6 +255,12 @@
     "model_pattern": "gemini-3.1-pro-preview-customtools",
     "input_cost_per_token": 2e-06,
     "output_cost_per_token": 1.2e-05,
+    "provider": "google"
+  },
+  {
+    "model_pattern": "gemini-3.5-flash",
+    "input_cost_per_token": 1.5e-06,
+    "output_cost_per_token": 9e-06,
     "provider": "google"
   },
   {
@@ -324,6 +336,12 @@
     "provider": "google"
   },
   {
+    "model_pattern": "vertex_ai/gemini-3.1-flash-lite",
+    "input_cost_per_token": 2.5e-07,
+    "output_cost_per_token": 1.5e-06,
+    "provider": "google"
+  },
+  {
     "model_pattern": "vertex_ai/gemini-3.1-flash-lite-preview",
     "input_cost_per_token": 2.5e-07,
     "output_cost_per_token": 1.5e-06,
@@ -339,6 +357,12 @@
     "model_pattern": "vertex_ai/gemini-3.1-pro-preview-customtools",
     "input_cost_per_token": 2e-06,
     "output_cost_per_token": 1.2e-05,
+    "provider": "google"
+  },
+  {
+    "model_pattern": "vertex_ai/gemini-3.5-flash",
+    "input_cost_per_token": 1.5e-06,
+    "output_cost_per_token": 9e-06,
     "provider": "google"
   },
   {
