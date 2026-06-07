@@ -142,6 +142,34 @@ async fn spawn_mock_anthropic_backend(
     format!("http://{addr}")
 }
 
+async fn spawn_mock_anthropic_server_tool_backend() -> String {
+    let app = Router::new().route(
+        "/v1/messages",
+        post(|| async {
+            axum::Json(json!({
+                "id": "msg_server_tool",
+                "type": "message",
+                "role": "assistant",
+                "model": "claude-sonnet-4-6",
+                "content": [{
+                    "type": "server_tool_use",
+                    "id": "srv_1",
+                    "name": "web_search",
+                    "input": {"query": "rust"}
+                }],
+                "stop_reason": "tool_use",
+                "stop_sequence": null,
+                "usage": {"input_tokens": 12, "output_tokens": 6}
+            }))
+        }),
+    );
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    format!("http://{addr}")
+}
+
 async fn spawn_mock_anthropic_stream_backend() -> String {
     let app = Router::new().route(
         "/v1/messages",
@@ -164,6 +192,34 @@ async fn spawn_mock_anthropic_stream_backend() -> String {
                 [("content-type", "text/event-stream")],
                 body.to_string(),
             )
+        }),
+    );
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    format!("http://{addr}")
+}
+
+async fn spawn_mock_anthropic_server_tool_stream_backend() -> String {
+    let app = Router::new().route(
+        "/v1/messages",
+        post(|| async {
+            let body = concat!(
+                "event: message_start\n",
+                "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_stream_tool\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"model\":\"claude-sonnet-4-6\",\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":9,\"output_tokens\":0}}}\n\n",
+                "event: content_block_start\n",
+                "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"server_tool_use\",\"id\":\"srv_1\",\"name\":\"web_search\",\"input\":{}}}\n\n",
+                "event: content_block_delta\n",
+                "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"query\\\":\\\"rust\\\"}\"}}\n\n",
+                "event: content_block_stop\n",
+                "data: {\"type\":\"content_block_stop\",\"index\":0}\n\n",
+                "event: message_delta\n",
+                "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":4}}\n\n",
+                "event: message_stop\n",
+                "data: {\"type\":\"message_stop\"}\n\n",
+            );
+            ([("content-type", "text/event-stream")], body.to_string())
         }),
     );
 
@@ -317,6 +373,38 @@ async fn chat_completions_non_streaming() {
 }
 
 #[tokio::test]
+async fn anthropic_chat_completions_maps_server_tool_use() {
+    let mock = spawn_mock_anthropic_server_tool_backend().await;
+    let proxy = spawn_proxy(anthropic_config_with_base(&mock)).await;
+
+    let client = Client::new();
+    let resp = client
+        .post(format!("{proxy}/v1/chat/completions"))
+        .header("x-api-key", "test")
+        .header("content-type", "application/json")
+        .json(&json!({
+            "model": "claude-sonnet-4-6",
+            "messages": [{"role": "user", "content": "Search"}],
+            "max_tokens": 100
+        }))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), 200);
+    let body: serde_json::Value = resp.json().await.unwrap();
+    assert_eq!(body["choices"][0]["finish_reason"], "tool_calls");
+    assert_eq!(
+        body["choices"][0]["message"]["tool_calls"][0]["function"]["name"],
+        "web_search"
+    );
+    assert_eq!(
+        body["choices"][0]["message"]["tool_calls"][0]["function"]["arguments"],
+        "{\"query\":\"rust\"}"
+    );
+}
+
+#[tokio::test]
 async fn anthropic_chat_completions_defaults_and_extensions() {
     let captured_body = Arc::new(Mutex::new(None));
     let captured_headers = Arc::new(Mutex::new(Vec::new()));
@@ -375,8 +463,10 @@ async fn anthropic_chat_completions_defaults_and_extensions() {
 
     let upstream = captured_body.lock().unwrap().clone().unwrap();
     assert_eq!(upstream["model"], "claude-sonnet-4-6");
-    assert_eq!(upstream["max_tokens"], 4096);
-    assert_eq!(upstream["output_config"]["effort"], "medium");
+    assert_eq!(upstream["max_tokens"], 6144);
+    assert_eq!(upstream["thinking"]["type"], "enabled");
+    assert_eq!(upstream["thinking"]["budget_tokens"], 2048);
+    assert!(upstream["output_config"].get("effort").is_none());
     assert_eq!(
         upstream["output_config"]["format"]["schema"]["properties"]["answer"]["type"],
         "string"
@@ -429,6 +519,35 @@ async fn anthropic_chat_completions_streaming_translates_to_openai_sse() {
     );
     assert!(text.contains("stream hello"), "{text}");
     assert!(text.contains("\"prompt_tokens\":9"), "{text}");
+    assert!(text.contains("data: [DONE]"), "{text}");
+}
+
+#[tokio::test]
+async fn anthropic_chat_completions_streaming_maps_server_tool_use() {
+    let mock = spawn_mock_anthropic_server_tool_stream_backend().await;
+    let proxy = spawn_proxy(anthropic_config_with_base(&mock)).await;
+
+    let client = Client::new();
+    let resp = client
+        .post(format!("{proxy}/v1/chat/completions"))
+        .header("x-api-key", "test")
+        .header("content-type", "application/json")
+        .json(&json!({
+            "model": "claude-sonnet-4-6",
+            "messages": [{"role": "user", "content": "Search"}],
+            "max_tokens": 100,
+            "stream": true
+        }))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), 200);
+    let text = resp.text().await.unwrap();
+    assert!(text.contains("\"tool_calls\""), "{text}");
+    assert!(text.contains("\"name\":\"web_search\""), "{text}");
+    assert!(text.contains("{\\\"query\\\":\\\"rust\\\"}"), "{text}");
+    assert!(text.contains("\"finish_reason\":\"tool_calls\""), "{text}");
     assert!(text.contains("data: [DONE]"), "{text}");
 }
 

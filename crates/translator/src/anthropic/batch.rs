@@ -61,6 +61,7 @@ pub struct MessageBatch {
 /// Result type for a single batch request.
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(tag = "type", rename_all = "snake_case")]
+#[allow(clippy::large_enum_variant)]
 pub enum BatchResultVariant {
     Succeeded { message: MessageResponse },
     Errored { error: ErrorDetail },

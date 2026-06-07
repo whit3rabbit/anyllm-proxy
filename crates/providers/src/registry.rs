@@ -93,6 +93,26 @@ static LEGACY_ONLY_MODELS: &[(&str, &[ModelDef])] = &[
     ("xinference", providers::xinference::MODELS),
 ];
 
+#[cfg(feature = "runtime-catalog")]
+pub(crate) fn advertised_provider_defs() -> &'static [&'static ProviderDef] {
+    ALL_PROVIDERS
+}
+
+#[cfg(feature = "runtime-catalog")]
+pub(crate) fn legacy_only_provider_defs() -> &'static [&'static ProviderDef] {
+    LEGACY_ONLY_PROVIDERS
+}
+
+#[cfg(feature = "runtime-catalog")]
+pub(crate) fn advertised_model_groups() -> &'static [(&'static str, &'static [ModelDef])] {
+    ALL_MODELS
+}
+
+#[cfg(feature = "runtime-catalog")]
+pub(crate) fn legacy_only_model_groups() -> &'static [(&'static str, &'static [ModelDef])] {
+    LEGACY_ONLY_MODELS
+}
+
 /// Return the LiteLLM-canonical provider id for a local legacy provider id.
 pub fn canonical_provider_id(id: &str) -> &str {
     PROVIDER_ALIASES

@@ -19,6 +19,7 @@ pub fn stream_event_to_sse(event: &StreamEvent) -> Result<Event, serde_json::Err
         StreamEvent::MessageStop { .. } => "message_stop",
         StreamEvent::Ping { .. } => "ping",
         StreamEvent::Error { .. } => "error",
+        StreamEvent::Unknown => "unknown",
     };
     let data = serde_json::to_string(event)?;
     Ok(Event::default().event(event_type).data(data))
@@ -113,6 +114,7 @@ mod tests {
             delta: MessageDeltaData {
                 stop_reason: Some(StopReason::EndTurn),
                 stop_sequence: None,
+                ..Default::default()
             },
             usage: Some(DeltaUsage { output_tokens: 42 }),
         };
@@ -178,6 +180,7 @@ mod tests {
                 delta: MessageDeltaData {
                     stop_reason: None,
                     stop_sequence: None,
+                    ..Default::default()
                 },
                 usage: None,
             },

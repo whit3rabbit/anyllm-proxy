@@ -320,6 +320,7 @@ fn extract_tool_calls_finds_tool_use_blocks() {
             output_tokens: 5,
             cache_creation_input_tokens: None,
             cache_read_input_tokens: None,
+            ..Default::default()
         },
         created: None,
     };
@@ -350,6 +351,7 @@ fn extract_tool_calls_empty_when_no_tool_use() {
             output_tokens: 3,
             cache_creation_input_tokens: None,
             cache_read_input_tokens: None,
+            ..Default::default()
         },
         created: None,
     };
@@ -397,6 +399,7 @@ fn text_response(text: &str) -> MessageResponse {
             output_tokens: 3,
             cache_creation_input_tokens: None,
             cache_read_input_tokens: None,
+            ..Default::default()
         },
         created: None,
     }
@@ -420,6 +423,7 @@ fn tool_use_response(tool_id: &str, tool_name: &str, input: serde_json::Value) -
             output_tokens: 5,
             cache_creation_input_tokens: None,
             cache_read_input_tokens: None,
+            ..Default::default()
         },
         created: None,
     }

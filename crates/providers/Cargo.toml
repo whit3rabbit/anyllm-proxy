@@ -6,5 +6,15 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[features]
+default = []
+runtime-catalog = ["dep:serde_json"]
+remote-catalog = ["runtime-catalog", "dep:reqwest"]
+
 [dependencies]
 serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", optional = true }
+reqwest = { version = "0.12", optional = true, default-features = false, features = ["native-tls", "stream"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

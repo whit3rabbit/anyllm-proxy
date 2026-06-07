@@ -307,6 +307,7 @@ fn content_block_to_part(
         anthropic::ContentBlock::Thinking { .. }
         | anthropic::ContentBlock::RedactedThinking { .. }
         | anthropic::ContentBlock::Document { .. } => None,
+        _ => None,
     }
 }
 
@@ -397,6 +398,7 @@ pub fn gemini_to_anthropic_response(
             output_tokens: u.candidates_token_count,
             cache_creation_input_tokens: None,
             cache_read_input_tokens: None,
+            ..Default::default()
         })
         .unwrap_or_default();
 
@@ -652,6 +654,7 @@ pub fn anthropic_to_gemini_response(
         }
         anthropic::StopReason::MaxTokens => gemini_resp::FinishReason::MAX_TOKENS,
         anthropic::StopReason::StopSequence => gemini_resp::FinishReason::STOP,
+        _ => gemini_resp::FinishReason::STOP,
     });
 
     let candidate = gemini_resp::Candidate {

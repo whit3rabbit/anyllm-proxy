@@ -188,6 +188,7 @@ impl StreamingTranslator {
                     delta: anthropic::streaming::MessageDeltaData {
                         stop_reason: Some(stop_reason),
                         stop_sequence: None,
+                        ..Default::default()
                     },
                     usage: Some(anthropic::streaming::DeltaUsage {
                         output_tokens: self.usage.output_tokens,
@@ -830,6 +831,7 @@ mod tests {
                 anthropic::StreamEvent::MessageStop {} => "message_stop",
                 anthropic::StreamEvent::Ping {} => "ping",
                 anthropic::StreamEvent::Error { .. } => "error",
+                _ => "unknown",
             })
             .collect();
 

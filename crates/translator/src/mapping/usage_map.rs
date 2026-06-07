@@ -31,6 +31,7 @@ pub fn openai_to_anthropic_usage(usage: &openai::ChatUsage) -> anthropic::Usage 
         output_tokens: usage.completion_tokens,
         cache_creation_input_tokens: None,
         cache_read_input_tokens,
+        ..Default::default()
     }
 }
 
@@ -77,6 +78,7 @@ mod tests {
             output_tokens: 80,
             cache_creation_input_tokens: Some(10),
             cache_read_input_tokens: Some(5),
+            ..Default::default()
         };
         let oai = anthropic_to_openai_usage(&anth);
         assert_eq!(oai.prompt_tokens, 200);
@@ -112,6 +114,7 @@ mod tests {
             output_tokens: 20,
             cache_creation_input_tokens: None,
             cache_read_input_tokens: None,
+            ..Default::default()
         };
         let oai = anthropic_to_openai_usage(&anth);
         assert_eq!(oai.total_tokens, 50);
@@ -126,6 +129,7 @@ mod tests {
             output_tokens: 5,
             cache_creation_input_tokens: Some(3),
             cache_read_input_tokens: Some(7),
+            ..Default::default()
         };
         let oai = anthropic_to_openai_usage(&anth);
         let back = openai_to_anthropic_usage(&oai);

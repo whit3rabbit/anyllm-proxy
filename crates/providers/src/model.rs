@@ -1,5 +1,5 @@
 /// Features a specific model supports.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ModelCapabilities {
     pub streaming: bool,
     pub tool_use: bool,
@@ -9,7 +9,7 @@ pub struct ModelCapabilities {
 }
 
 /// Availability of a model.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum ModelStatus {
     Available,
     Deprecated,

@@ -9,6 +9,7 @@ use super::messages::{ContentBlock, StopReason, Usage};
 /// See <https://docs.anthropic.com/en/api/messages-streaming>
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(tag = "type")]
+#[allow(clippy::large_enum_variant)]
 pub enum StreamEvent {
     #[serde(rename = "message_start")]
     MessageStart { message: MessageStartData },
@@ -33,6 +34,8 @@ pub enum StreamEvent {
     Ping {},
     #[serde(rename = "error")]
     Error { error: StreamError },
+    #[serde(other)]
+    Unknown,
 }
 
 /// Data payload for the message_start event.
@@ -71,17 +74,23 @@ pub enum Delta {
     /// Used to verify integrity of the thinking block.
     #[serde(rename = "signature_delta")]
     SignatureDelta { signature: String },
+    #[serde(rename = "citations_delta")]
+    CitationsDelta { citation: serde_json::Value },
+    #[serde(other)]
+    Unknown,
 }
 
 /// Top-level message changes (stop_reason, stop_sequence).
 ///
 /// See <https://docs.anthropic.com/en/api/messages-streaming>
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, Default)]
 pub struct MessageDeltaData {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stop_reason: Option<StopReason>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stop_sequence: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context_management: Option<serde_json::Value>,
 }
 
 /// Cumulative output token count in message_delta events.
@@ -240,7 +249,11 @@ mod tests {
     fn deserialize_message_delta() {
         let j = json!({
             "type": "message_delta",
-            "delta": {"stop_reason": "end_turn", "stop_sequence": null},
+            "delta": {
+                "stop_reason": "end_turn",
+                "stop_sequence": null,
+                "context_management": {"edits": []}
+            },
             "usage": {"output_tokens": 15}
         });
         let event: StreamEvent = serde_json::from_value(j).unwrap();
@@ -248,10 +261,49 @@ mod tests {
             StreamEvent::MessageDelta { delta, usage } => {
                 assert_eq!(delta.stop_reason, Some(StopReason::EndTurn));
                 assert!(delta.stop_sequence.is_none());
+                assert!(delta.context_management.is_some());
                 assert_eq!(usage.unwrap().output_tokens, 15);
             }
             other => panic!("expected MessageDelta, got {:?}", other),
         }
+    }
+
+    #[test]
+    fn deserialize_citations_and_unknown_delta() {
+        let j = json!({
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {"type": "citations_delta", "citation": {"type": "web_search_result_location"}}
+        });
+        let event: StreamEvent = serde_json::from_value(j).unwrap();
+        assert!(matches!(
+            event,
+            StreamEvent::ContentBlockDelta {
+                delta: Delta::CitationsDelta { .. },
+                ..
+            }
+        ));
+
+        let j = json!({
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {"type": "future_delta", "value": true}
+        });
+        let event: StreamEvent = serde_json::from_value(j).unwrap();
+        assert!(matches!(
+            event,
+            StreamEvent::ContentBlockDelta {
+                delta: Delta::Unknown,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn deserialize_unknown_event() {
+        let event: StreamEvent =
+            serde_json::from_value(json!({"type": "future_event", "payload": true})).unwrap();
+        assert!(matches!(event, StreamEvent::Unknown));
     }
 
     #[test]

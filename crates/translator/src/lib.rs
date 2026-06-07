@@ -61,11 +61,13 @@ pub use error::TranslateError;
 pub use mapping::gemini_message_map::{
     anthropic_to_gemini_response, compute_gemini_request_warnings, gemini_to_anthropic_request,
 };
+pub use mapping::reverse_message_map::AnthropicTranslationContext;
 pub use mapping::reverse_streaming_map::ReverseStreamingTranslator;
 pub use translate::{
     compute_request_warnings, new_gemini_stream_translator, new_responses_stream_translator,
     new_reverse_stream_translator, new_stream_translator, translate_anthropic_to_openai_response,
-    translate_openai_to_anthropic_request, translate_request, translate_request_gemini,
-    translate_request_responses, translate_response, translate_response_gemini,
-    translate_response_responses, TranslationWarnings,
+    translate_anthropic_to_openai_response_with_context, translate_openai_to_anthropic_request,
+    translate_openai_to_anthropic_request_with_context, translate_request,
+    translate_request_gemini, translate_request_responses, translate_response,
+    translate_response_gemini, translate_response_responses, TranslationWarnings,
 };

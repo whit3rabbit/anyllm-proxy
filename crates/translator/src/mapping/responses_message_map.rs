@@ -181,6 +181,7 @@ fn convert_blocks_to_items(blocks: &[anthropic::ContentBlock], role: &str, items
             | anthropic::ContentBlock::RedactedThinking { .. } => {
                 // Silently dropped, same as Chat Completions path
             }
+            _ => {}
         }
     }
 
@@ -257,6 +258,7 @@ pub fn responses_to_anthropic_response(
                 output_tokens: u.output_tokens,
                 cache_creation_input_tokens: None,
                 cache_read_input_tokens,
+                ..Default::default()
             }
         });
 

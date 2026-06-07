@@ -8,6 +8,96 @@ use crate::error::TranslateError;
 use crate::mapping::{tools_map, usage_map, warnings::TranslationWarnings};
 use crate::openai;
 use crate::util;
+use std::collections::BTreeMap;
+
+/// Request-local metadata needed to round-trip Anthropic-compatible tool names.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct AnthropicTranslationContext {
+    original_to_sanitized_tool_names: BTreeMap<String, String>,
+    sanitized_to_original_tool_names: BTreeMap<String, String>,
+}
+
+impl AnthropicTranslationContext {
+    pub fn from_openai_request(req: &openai::ChatCompletionRequest) -> Self {
+        let mut ctx = Self::default();
+
+        if let Some(tools) = &req.tools {
+            for tool in tools {
+                ctx.register_tool_name(&tool.function.name);
+            }
+        }
+        if let Some(openai::ChatToolChoice::Named(named)) = &req.tool_choice {
+            ctx.register_tool_name(&named.function.name);
+        }
+        for message in &req.messages {
+            if let Some(tool_calls) = &message.tool_calls {
+                for tool_call in tool_calls {
+                    ctx.register_tool_name(&tool_call.function.name);
+                }
+            }
+        }
+
+        ctx
+    }
+
+    pub fn sanitized_tool_name(&self, name: &str) -> String {
+        self.original_to_sanitized_tool_names
+            .get(name)
+            .cloned()
+            .unwrap_or_else(|| name.to_string())
+    }
+
+    pub fn original_tool_name(&self, name: &str) -> String {
+        self.sanitized_to_original_tool_names
+            .get(name)
+            .cloned()
+            .unwrap_or_else(|| name.to_string())
+    }
+
+    fn register_tool_name(&mut self, original: &str) -> String {
+        if let Some(existing) = self.original_to_sanitized_tool_names.get(original) {
+            return existing.clone();
+        }
+
+        let base = basic_sanitize_anthropic_tool_name(original);
+        let mut candidate = base.clone();
+        let mut suffix_index = 2usize;
+        while self
+            .sanitized_to_original_tool_names
+            .contains_key(&candidate)
+        {
+            let suffix = format!("_{suffix_index}");
+            let keep = 128usize.saturating_sub(suffix.len());
+            candidate = format!("{}{}", &base[..base.len().min(keep)], suffix);
+            suffix_index += 1;
+        }
+
+        self.original_to_sanitized_tool_names
+            .insert(original.to_string(), candidate.clone());
+        self.sanitized_to_original_tool_names
+            .insert(candidate.clone(), original.to_string());
+        candidate
+    }
+}
+
+fn basic_sanitize_anthropic_tool_name(original: &str) -> String {
+    let mut sanitized: String = original
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .take(128)
+        .collect();
+
+    if sanitized.is_empty() {
+        sanitized = "tool".to_string();
+    }
+    sanitized
+}
 
 /// Convert an OpenAI ChatCompletionRequest to an Anthropic MessageCreateRequest.
 ///
@@ -16,6 +106,24 @@ use crate::util;
 pub fn openai_to_anthropic_request(
     req: &openai::ChatCompletionRequest,
     warnings: &mut TranslationWarnings,
+) -> Result<anthropic::MessageCreateRequest, TranslateError> {
+    openai_to_anthropic_request_inner(req, warnings, &AnthropicTranslationContext::default())
+}
+
+/// Convert an OpenAI request and return request-local translation context.
+pub fn openai_to_anthropic_request_with_context(
+    req: &openai::ChatCompletionRequest,
+    warnings: &mut TranslationWarnings,
+) -> Result<(anthropic::MessageCreateRequest, AnthropicTranslationContext), TranslateError> {
+    let context = AnthropicTranslationContext::from_openai_request(req);
+    let req = openai_to_anthropic_request_inner(req, warnings, &context)?;
+    Ok((req, context))
+}
+
+fn openai_to_anthropic_request_inner(
+    req: &openai::ChatCompletionRequest,
+    warnings: &mut TranslationWarnings,
+    context: &AnthropicTranslationContext,
 ) -> Result<anthropic::MessageCreateRequest, TranslateError> {
     // max_tokens is required in Anthropic; reject if absent.
     // NOT A BUG: Anthropic has no server-side default for max_tokens — the field
@@ -59,7 +167,7 @@ pub fn openai_to_anthropic_request(
                 });
             }
             openai::ChatRole::Assistant => {
-                let content = convert_assistant_to_anthropic(msg);
+                let content = convert_assistant_to_anthropic(msg, context);
                 messages.push(anthropic::InputMessage {
                     role: anthropic::Role::Assistant,
                     content,
@@ -105,15 +213,21 @@ pub fn openai_to_anthropic_request(
         }
     }
 
-    let tools = req
-        .tools
-        .as_ref()
-        .map(|t| tools_map::openai_tools_to_anthropic(t));
+    let tools = req.tools.as_ref().map(|t| {
+        let mut tools = tools_map::openai_tools_to_anthropic(t);
+        for tool in &mut tools {
+            tool.name = context.sanitized_tool_name(&tool.name);
+        }
+        tools
+    });
 
-    let tool_choice = req
+    let mut tool_choice = req
         .tool_choice
         .as_ref()
         .map(tools_map::openai_tool_choice_to_anthropic);
+    if let Some(anthropic::ToolChoice::Tool { name }) = &mut tool_choice {
+        *name = context.sanitized_tool_name(name);
+    }
 
     let stop_sequences = req.stop.as_ref().map(|s| match s {
         openai::Stop::Single(s) => vec![s.clone()],
@@ -183,6 +297,15 @@ pub fn anthropic_to_openai_response(
     resp: &anthropic::MessageResponse,
     model: &str,
 ) -> openai::ChatCompletionResponse {
+    anthropic_to_openai_response_with_context(resp, model, &AnthropicTranslationContext::default())
+}
+
+/// Convert an Anthropic MessageResponse using request-local translation context.
+pub fn anthropic_to_openai_response_with_context(
+    resp: &anthropic::MessageResponse,
+    model: &str,
+    context: &AnthropicTranslationContext,
+) -> openai::ChatCompletionResponse {
     let mut text_parts = Vec::new();
     let mut tool_calls = Vec::new();
     let mut reasoning_content: Option<String> = None;
@@ -192,12 +315,13 @@ pub fn anthropic_to_openai_response(
             anthropic::ContentBlock::Text { text } => {
                 text_parts.push(text.clone());
             }
-            anthropic::ContentBlock::ToolUse { id, name, input } => {
+            anthropic::ContentBlock::ToolUse { id, name, input }
+            | anthropic::ContentBlock::ServerToolUse { id, name, input } => {
                 tool_calls.push(openai::ToolCall {
                     id: id.clone(),
                     call_type: "function".to_string(),
                     function: openai::FunctionCall {
-                        name: name.clone(),
+                        name: context.original_tool_name(name),
                         arguments: util::json::value_to_json_string(input),
                     },
                 });
@@ -267,6 +391,9 @@ pub fn anthropic_stop_reason_to_openai(
         anthropic::StopReason::MaxTokens => openai::FinishReason::Length,
         anthropic::StopReason::ToolUse => openai::FinishReason::ToolCalls,
         anthropic::StopReason::StopSequence => openai::FinishReason::Stop,
+        anthropic::StopReason::PauseTurn => openai::FinishReason::Stop,
+        anthropic::StopReason::Refusal => openai::FinishReason::ContentFilter,
+        anthropic::StopReason::Unknown => openai::FinishReason::Unknown,
     }
 }
 
@@ -338,7 +465,10 @@ fn convert_openai_content_to_anthropic(
     }
 }
 
-fn convert_assistant_to_anthropic(msg: &openai::ChatMessage) -> anthropic::Content {
+fn convert_assistant_to_anthropic(
+    msg: &openai::ChatMessage,
+    context: &AnthropicTranslationContext,
+) -> anthropic::Content {
     let mut blocks = Vec::new();
 
     // Map reasoning_content to thinking block.
@@ -376,7 +506,7 @@ fn convert_assistant_to_anthropic(msg: &openai::ChatMessage) -> anthropic::Conte
         for tc in tool_calls {
             blocks.push(anthropic::ContentBlock::ToolUse {
                 id: tc.id.clone(),
-                name: tc.function.name.clone(),
+                name: context.sanitized_tool_name(&tc.function.name),
                 input: util::json::parse_tool_arguments(&tc.function.arguments),
             });
         }
@@ -545,6 +675,71 @@ mod tests {
     }
 
     #[test]
+    fn context_translation_sanitizes_tool_names_and_restores_response_names() {
+        let long_name = format!("{}!", "x".repeat(130));
+        let req: openai::ChatCompletionRequest = serde_json::from_value(json!({
+            "model": "claude-sonnet-4-20250514",
+            "messages": [
+                {"role": "user", "content": "Use tools"},
+                {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {"id": "call_1", "type": "function", "function": {"name": "bad.name", "arguments": "{}"}},
+                        {"id": "call_2", "type": "function", "function": {"name": "bad/name", "arguments": "{}"}},
+                        {"id": "call_3", "type": "function", "function": {"name": long_name, "arguments": "{}"}}
+                    ]
+                }
+            ],
+            "tools": [
+                {"type": "function", "function": {"name": "bad.name", "parameters": {"type": "object"}}},
+                {"type": "function", "function": {"name": "bad/name", "parameters": {"type": "string"}}},
+                {"type": "function", "function": {"name": long_name, "parameters": null}}
+            ],
+            "tool_choice": {"type": "function", "function": {"name": "bad.name"}},
+            "max_tokens": 100
+        }))
+        .unwrap();
+
+        let mut w = TranslationWarnings::default();
+        let (anthropic_req, context) =
+            openai_to_anthropic_request_with_context(&req, &mut w).unwrap();
+        let tools = anthropic_req.tools.as_ref().unwrap();
+        assert_eq!(tools[0].name, "bad_name");
+        assert_eq!(tools[1].name, "bad_name_2");
+        assert_eq!(tools[2].name.len(), 128);
+        assert_eq!(tools[1].input_schema["type"], "object");
+        assert_eq!(tools[1].input_schema["properties"], json!({}));
+        assert!(matches!(
+            anthropic_req.tool_choice,
+            Some(anthropic::ToolChoice::Tool { ref name }) if name == "bad_name"
+        ));
+
+        let resp = anthropic::MessageResponse {
+            id: "msg_tools".to_string(),
+            response_type: "message".to_string(),
+            role: anthropic::Role::Assistant,
+            content: vec![anthropic::ContentBlock::ServerToolUse {
+                id: "call_1".to_string(),
+                name: "bad_name".to_string(),
+                input: json!({}),
+            }],
+            model: "claude-sonnet-4-20250514".to_string(),
+            stop_reason: Some(anthropic::StopReason::ToolUse),
+            stop_sequence: None,
+            usage: anthropic::Usage::default(),
+            created: None,
+        };
+        let result =
+            anthropic_to_openai_response_with_context(&resp, "claude-sonnet-4-20250514", &context);
+        assert_eq!(
+            result.choices[0].message.tool_calls.as_ref().unwrap()[0]
+                .function
+                .name,
+            "bad.name"
+        );
+    }
+
+    #[test]
     fn lossy_fields_generate_warnings() {
         let req: openai::ChatCompletionRequest = serde_json::from_value(json!({
             "model": "claude-sonnet-4-20250514",
@@ -601,6 +796,7 @@ mod tests {
                 output_tokens: 5,
                 cache_creation_input_tokens: None,
                 cache_read_input_tokens: None,
+                ..Default::default()
             },
             created: Some(1700000000),
         };
@@ -698,6 +894,14 @@ mod tests {
         assert_eq!(
             anthropic_stop_reason_to_openai(&anthropic::StopReason::StopSequence),
             openai::FinishReason::Stop
+        );
+        assert_eq!(
+            anthropic_stop_reason_to_openai(&anthropic::StopReason::PauseTurn),
+            openai::FinishReason::Stop
+        );
+        assert_eq!(
+            anthropic_stop_reason_to_openai(&anthropic::StopReason::Refusal),
+            openai::FinishReason::ContentFilter
         );
     }
 

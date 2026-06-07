@@ -98,9 +98,48 @@ Other public items (re-exported from the crate root):
 - Single-model lookup: `get_model(provider_id, model_id)`.
 - Migration helper: `canonical_provider_id(provider_id)`.
 
+## Runtime LiteLLM updates
+
+The default crate remains static and does no I/O. If your app needs newer
+LiteLLM provider/model rows without waiting for an `anyllm_providers` release,
+enable the opt-in runtime catalog features:
+
+```toml
+[dependencies]
+anyllm_providers = { version = "0.9", features = ["remote-catalog"] }
+```
+
+`runtime-catalog` adds owned catalog types and a parser for LiteLLM's
+`model_prices_and_context_window.json`. `remote-catalog` also adds explicit
+fetch/cache helpers using a caller-provided `reqwest::Client`:
+
+```rust
+use anyllm_providers::{ProviderCatalog, RemoteCatalogOptions};
+
+let client = reqwest::Client::builder()
+    .redirect(reqwest::redirect::Policy::none())
+    .timeout(std::time::Duration::from_secs(30))
+    .build()?;
+
+let cache_dir = std::env::temp_dir().join("anyllm-provider-catalog");
+let options = RemoteCatalogOptions::default()
+    .with_cache_dir(&cache_dir)
+    .with_stale_on_error(true);
+
+let catalog = ProviderCatalog::fetch_litellm_with_options(&client, &options).await?;
+for p in catalog.all_providers() {
+    println!("{}: {} models", p.id, catalog.list_models(&p.id).len());
+}
+```
+
+Known providers keep the bundled auth, protocol, env-var, and base-url metadata.
+Brand-new LiteLLM providers are exposed with `ProviderStatus::Stub`, a guessed
+API-key env var, and an empty default base URL so callers do not silently route
+to the wrong endpoint.
+
 ## Integrating into a TUI (or any client app)
 
-This crate gives you the catalog. It does **not** ship an HTTP client, an async runtime, or a key store, so a TUI integrates it as a read-only data source and supplies its own transport (typically `reqwest`) and config (typically `std::env` or a config file).
+In its default mode this crate gives you the static catalog. It does **not** ship an HTTP client, an async runtime, or a key store, so a TUI integrates it as a read-only data source and supplies its own transport (typically `reqwest`) and config (typically `std::env` or a config file).
 
 The recommended local integration can use **Ollama** and **LM Studio** as built-in providers. Both are local, OpenAI-compatible, require no API key, and their catalog entries (`auth: AuthKind::None`, `protocol: ProviderProtocol::OpenAICompat`) reflect that. Ollama is part of the LiteLLM snapshot; LM Studio is a legacy-only local provider that still resolves through `get_provider("lm_studio")` but is not returned by `all_providers()`.
 
