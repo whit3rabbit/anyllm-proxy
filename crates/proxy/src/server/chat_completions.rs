@@ -79,6 +79,32 @@ fn safe_anthropic_extra_headers(headers: &axum::http::HeaderMap) -> Vec<(String,
         .collect()
 }
 
+fn cache_key_body_for_chat_completions(
+    body: &openai::ChatCompletionRequest,
+    safe_headers: &[(String, String)],
+) -> serde_json::Value {
+    let mut value = serde_json::to_value(body).unwrap_or_default();
+    let Some(obj) = value.as_object_mut() else {
+        return value;
+    };
+
+    if let Some(v) = body.extra.get("reasoning_effort") {
+        obj.insert("reasoning_effort".to_string(), v.clone());
+    }
+    if let Some(v) = &body.response_format {
+        if let Ok(v) = serde_json::to_value(v) {
+            obj.insert("response_format".to_string(), v);
+        }
+    }
+    for (name, val) in safe_headers {
+        obj.insert(
+            format!("_header_{}", name.to_ascii_lowercase()),
+            val.clone().into(),
+        );
+    }
+    value
+}
+
 fn header_refs(headers: &[(String, String)]) -> Vec<(&str, &str)> {
     headers
         .iter()
@@ -276,7 +302,7 @@ pub(crate) async fn chat_completions(
     }
 
     // Non-streaming path: check cache before calling backend.
-    let body_value = serde_json::to_value(&body).unwrap_or_default();
+    let body_value = cache_key_body_for_chat_completions(&body, &safe_headers);
     let cache_ttl = match cache::parse_cache_ttl(&body_value) {
         Ok(ttl) => ttl,
         Err(msg) => {
