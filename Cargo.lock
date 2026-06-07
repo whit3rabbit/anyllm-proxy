@@ -46,7 +46,7 @@ checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 
 [[package]]
 name = "anyllm_batch_engine"
-version = "0.9.6"
+version = "0.9.7"
 dependencies = [
  "anyllm_translate",
  "async-trait",
@@ -68,7 +68,7 @@ dependencies = [
 
 [[package]]
 name = "anyllm_client"
-version = "0.9.6"
+version = "0.9.7"
 dependencies = [
  "anyllm_translate",
  "bytes",
@@ -87,7 +87,7 @@ dependencies = [
 
 [[package]]
 name = "anyllm_providers"
-version = "0.9.6"
+version = "0.9.7"
 dependencies = [
  "reqwest",
  "serde",
@@ -97,7 +97,7 @@ dependencies = [
 
 [[package]]
 name = "anyllm_proxy"
-version = "0.9.6"
+version = "0.9.7"
 dependencies = [
  "anyllm_batch_engine",
  "anyllm_client",
@@ -150,7 +150,7 @@ dependencies = [
 
 [[package]]
 name = "anyllm_translate"
-version = "0.9.6"
+version = "0.9.7"
 dependencies = [
  "axum 0.8.8",
  "bytes",
