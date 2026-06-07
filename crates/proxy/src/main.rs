@@ -167,12 +167,11 @@ use std::sync::LazyLock;
 
 /// Shared HTTP client for provider model discovery (connect 10s, read 20s, no redirects).
 static PROVIDER_REFRESH_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
-    reqwest::Client::builder()
-        .connect_timeout(std::time::Duration::from_secs(10))
-        .timeout(std::time::Duration::from_secs(20))
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
-        .expect("failed to build provider refresh HTTP client")
+    anyllm_client::http::build_http_client(&anyllm_client::http::HttpClientConfig {
+        connect_timeout: Some(std::time::Duration::from_secs(10)),
+        request_timeout: Some(std::time::Duration::from_secs(20)),
+        ..anyllm_client::http::HttpClientConfig::new()
+    })
 });
 
 fn provider_status_str(s: anyllm_providers::provider::ProviderStatus) -> &'static str {
