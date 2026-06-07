@@ -1,6 +1,6 @@
 /// Wire format / HTTP client strategy used to communicate with a provider.
 /// Maps to proxy's `BackendKind` variants.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum ProviderProtocol {
     /// Standard OpenAI Chat Completions (Groq, Together, Mistral, etc.)
     OpenAICompat,
@@ -21,7 +21,7 @@ pub enum ProviderProtocol {
 }
 
 /// How the provider expects authentication.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum AuthKind {
     /// `Authorization: Bearer <key>`
     Bearer,
@@ -36,7 +36,7 @@ pub enum AuthKind {
 }
 
 /// Implementation maturity of a provider.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum ProviderStatus {
     /// HTTP client exists and has been live-tested.
     Implemented,
@@ -48,7 +48,7 @@ pub enum ProviderStatus {
 }
 
 /// Capabilities advertised for a provider (endpoint-level, not model-level).
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ProviderCapabilities {
     pub chat_completions: bool,
     pub streaming: bool,
