@@ -1,6 +1,6 @@
 // Anthropic Messages API request/response types
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 // --- Request types ---
 
@@ -121,11 +121,33 @@ pub enum ContentBlock {
         name: String,
         input: serde_json::Value,
     },
+    #[serde(rename = "server_tool_use")]
+    ServerToolUse {
+        id: String,
+        name: String,
+        input: serde_json::Value,
+    },
     #[serde(rename = "tool_result")]
     ToolResult {
         tool_use_id: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         content: Option<ToolResultContent>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        is_error: Option<bool>,
+    },
+    #[serde(rename = "web_search_tool_result")]
+    WebSearchToolResult {
+        tool_use_id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        content: Option<serde_json::Value>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        is_error: Option<bool>,
+    },
+    #[serde(rename = "web_fetch_tool_result")]
+    WebFetchToolResult {
+        tool_use_id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        content: Option<serde_json::Value>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         is_error: Option<bool>,
     },
@@ -139,6 +161,8 @@ pub enum ContentBlock {
     /// flag extended thinking. Must be passed back to the API for continuity.
     #[serde(rename = "redacted_thinking")]
     RedactedThinking { data: String },
+    #[serde(other)]
+    Unknown,
 }
 
 /// Tool result content: plain string or array of content blocks.
@@ -231,6 +255,11 @@ pub struct Metadata {
 pub enum ThinkingConfig {
     #[serde(rename = "enabled")]
     Enabled { budget_tokens: u32 },
+    #[serde(rename = "adaptive")]
+    Adaptive {
+        #[serde(flatten)]
+        extra: serde_json::Map<String, serde_json::Value>,
+    },
     #[serde(rename = "disabled")]
     Disabled,
 }
@@ -267,6 +296,10 @@ pub enum StopReason {
     MaxTokens,
     StopSequence,
     ToolUse,
+    PauseTurn,
+    Refusal,
+    #[serde(other)]
+    Unknown,
 }
 
 /// Token usage counts for the request and response.
@@ -274,12 +307,43 @@ pub enum StopReason {
 /// See <https://docs.anthropic.com/en/api/messages>
 #[derive(Deserialize, Serialize, Debug, Clone, Default, PartialEq)]
 pub struct Usage {
+    #[serde(default, deserialize_with = "deserialize_null_u32_as_zero")]
     pub input_tokens: u32,
+    #[serde(default, deserialize_with = "deserialize_null_u32_as_zero")]
     pub output_tokens: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cache_creation_input_tokens: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cache_read_input_tokens: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_creation: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub inference_geo: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub service_tier: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub server_tool_use: Option<ServerToolUsage>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub speed: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, Default, PartialEq)]
+pub struct ServerToolUsage {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub web_search_requests: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub web_fetch_requests: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_search_requests: Option<u32>,
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
+}
+
+fn deserialize_null_u32_as_zero<'de, D>(deserializer: D) -> Result<u32, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Ok(Option::<u32>::deserialize(deserializer)?.unwrap_or(0))
 }
 
 #[cfg(test)]
@@ -491,6 +555,7 @@ mod tests {
                 output_tokens: 5,
                 cache_creation_input_tokens: None,
                 cache_read_input_tokens: None,
+                ..Default::default()
             },
             created: None,
         };
@@ -545,6 +610,67 @@ mod tests {
             serde_json::from_value::<StopReason>(json!("tool_use")).unwrap(),
             StopReason::ToolUse,
         );
+        assert_eq!(
+            serde_json::from_value::<StopReason>(json!("pause_turn")).unwrap(),
+            StopReason::PauseTurn,
+        );
+        assert_eq!(
+            serde_json::from_value::<StopReason>(json!("refusal")).unwrap(),
+            StopReason::Refusal,
+        );
+    }
+
+    #[test]
+    fn modern_content_blocks_deserialize() {
+        let server_tool: ContentBlock = serde_json::from_value(json!({
+            "type": "server_tool_use",
+            "id": "srv_1",
+            "name": "web_search",
+            "input": {"query": "rust"}
+        }))
+        .unwrap();
+        assert!(matches!(
+            server_tool,
+            ContentBlock::ServerToolUse { ref name, .. } if name == "web_search"
+        ));
+
+        let web_search_result: ContentBlock = serde_json::from_value(json!({
+            "type": "web_search_tool_result",
+            "tool_use_id": "srv_1",
+            "content": [{"type": "web_search_result", "title": "Result"}]
+        }))
+        .unwrap();
+        assert!(matches!(
+            web_search_result,
+            ContentBlock::WebSearchToolResult { ref tool_use_id, .. } if tool_use_id == "srv_1"
+        ));
+
+        let unknown: ContentBlock = serde_json::from_value(json!({
+            "type": "future_tool_result",
+            "payload": true
+        }))
+        .unwrap();
+        assert!(matches!(unknown, ContentBlock::Unknown));
+    }
+
+    #[test]
+    fn usage_accepts_nulls_and_new_fields() {
+        let usage: Usage = serde_json::from_value(json!({
+            "input_tokens": null,
+            "output_tokens": null,
+            "cache_creation": {"ephemeral_5m_input_tokens": 10},
+            "inference_geo": "us",
+            "service_tier": "standard",
+            "server_tool_use": {"web_search_requests": 2, "web_fetch_requests": 1},
+            "speed": "fast"
+        }))
+        .unwrap();
+        assert_eq!(usage.input_tokens, 0);
+        assert_eq!(usage.output_tokens, 0);
+        assert_eq!(usage.inference_geo.as_deref(), Some("us"));
+        let server_tool_use = usage.server_tool_use.unwrap();
+        assert_eq!(server_tool_use.web_search_requests, Some(2));
+        assert_eq!(server_tool_use.web_fetch_requests, Some(1));
     }
 
     #[test]
@@ -554,6 +680,7 @@ mod tests {
             output_tokens: 20,
             cache_creation_input_tokens: None,
             cache_read_input_tokens: None,
+            ..Default::default()
         };
         let j = serde_json::to_value(&usage).unwrap();
         assert!(!j

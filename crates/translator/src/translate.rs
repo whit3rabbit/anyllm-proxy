@@ -84,6 +84,20 @@ pub fn translate_openai_to_anthropic_request(
     reverse_message_map::openai_to_anthropic_request(req, warnings)
 }
 
+/// Translate an OpenAI request and return request-local context for response mapping.
+pub fn translate_openai_to_anthropic_request_with_context(
+    req: &ChatCompletionRequest,
+    warnings: &mut TranslationWarnings,
+) -> Result<
+    (
+        MessageCreateRequest,
+        reverse_message_map::AnthropicTranslationContext,
+    ),
+    TranslateError,
+> {
+    reverse_message_map::openai_to_anthropic_request_with_context(req, warnings)
+}
+
 /// Translate an Anthropic response to an OpenAI Chat Completions response.
 ///
 /// `model` is used as the response's `model` field.
@@ -92,6 +106,15 @@ pub fn translate_anthropic_to_openai_response(
     model: &str,
 ) -> ChatCompletionResponse {
     reverse_message_map::anthropic_to_openai_response(resp, model)
+}
+
+/// Translate an Anthropic response using request-local context.
+pub fn translate_anthropic_to_openai_response_with_context(
+    resp: &MessageResponse,
+    model: &str,
+    context: &reverse_message_map::AnthropicTranslationContext,
+) -> ChatCompletionResponse {
+    reverse_message_map::anthropic_to_openai_response_with_context(resp, model, context)
 }
 
 /// Create a new reverse streaming translator (Anthropic SSE -> OpenAI chunks).

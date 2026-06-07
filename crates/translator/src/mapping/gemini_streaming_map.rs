@@ -261,6 +261,7 @@ impl GeminiStreamingTranslator {
             delta: anthropic::streaming::MessageDeltaData {
                 stop_reason: Some(anthropic::StopReason::EndTurn),
                 stop_sequence: None,
+                ..Default::default()
             },
             usage: Some(DeltaUsage {
                 output_tokens: self.usage.output_tokens,
@@ -342,6 +343,7 @@ impl GeminiStreamingTranslator {
             delta: anthropic::streaming::MessageDeltaData {
                 stop_reason: Some(stop_reason),
                 stop_sequence: None,
+                ..Default::default()
             },
             usage: Some(DeltaUsage {
                 output_tokens: self.usage.output_tokens,

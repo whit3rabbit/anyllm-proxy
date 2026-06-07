@@ -114,6 +114,7 @@ pub fn stream_event_to_sse(event: &StreamEvent) -> Result<Event, serde_json::Err
         StreamEvent::MessageStop { .. } => "message_stop",
         StreamEvent::Ping { .. } => "ping",
         StreamEvent::Error { .. } => "error",
+        StreamEvent::Unknown => "unknown",
     };
     let data = serde_json::to_string(event)?;
     Ok(Event::default().event(event_type).data(data))

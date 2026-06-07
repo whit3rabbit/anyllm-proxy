@@ -107,6 +107,7 @@ impl ResponsesStreamingTranslator {
             delta: anthropic::streaming::MessageDeltaData {
                 stop_reason: Some(anthropic::StopReason::EndTurn),
                 stop_sequence: None,
+                ..Default::default()
             },
             usage: Some(anthropic::streaming::DeltaUsage {
                 output_tokens: self.usage.output_tokens,
@@ -316,6 +317,7 @@ impl ResponsesStreamingTranslator {
             delta: anthropic::streaming::MessageDeltaData {
                 stop_reason: Some(stop_reason),
                 stop_sequence: None,
+                ..Default::default()
             },
             usage: Some(anthropic::streaming::DeltaUsage {
                 output_tokens: self.usage.output_tokens,

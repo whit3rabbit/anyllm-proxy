@@ -39,13 +39,32 @@ pub fn openai_tools_to_anthropic(tools: &[openai::ChatTool]) -> Vec<anthropic::T
         .map(|t| anthropic::Tool {
             name: t.function.name.clone(),
             description: t.function.description.clone(),
-            input_schema: t
-                .function
-                .parameters
-                .clone()
-                .unwrap_or_else(|| serde_json::json!({"type": "object"})),
+            input_schema: coerce_anthropic_input_schema(
+                t.function
+                    .parameters
+                    .clone()
+                    .unwrap_or_else(|| serde_json::json!({})),
+            ),
         })
         .collect()
+}
+
+/// Anthropic tool schemas must be object schemas. Preserve existing object
+/// schema detail, but coerce absent or non-object parameters to a no-arg object.
+pub fn coerce_anthropic_input_schema(schema: serde_json::Value) -> serde_json::Value {
+    let serde_json::Value::Object(mut obj) = schema else {
+        return serde_json::json!({"type": "object", "properties": {}});
+    };
+
+    if obj.get("type").and_then(|v| v.as_str()) != Some("object") {
+        obj.insert(
+            "type".to_string(),
+            serde_json::Value::String("object".to_string()),
+        );
+    }
+    obj.entry("properties".to_string())
+        .or_insert_with(|| serde_json::json!({}));
+    serde_json::Value::Object(obj)
 }
 
 /// JSON Schema keys that Gemini's function-calling API rejects.
@@ -361,7 +380,10 @@ mod tests {
             },
         };
         let anthropic = openai_tools_to_anthropic(&[tool]);
-        assert_eq!(anthropic[0].input_schema, json!({"type": "object"}));
+        assert_eq!(
+            anthropic[0].input_schema,
+            json!({"type": "object", "properties": {}})
+        );
     }
 
     #[test]

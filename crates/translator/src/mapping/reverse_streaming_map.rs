@@ -7,7 +7,9 @@
 //! already in OpenAI format and the backend speaks Anthropic (passthrough path).
 
 use crate::anthropic;
-use crate::mapping::reverse_message_map::anthropic_stop_reason_to_openai;
+use crate::mapping::reverse_message_map::{
+    anthropic_stop_reason_to_openai, AnthropicTranslationContext,
+};
 use crate::openai;
 use crate::openai::streaming::{
     ChatCompletionChunk, ChunkChoice, ChunkDelta, ChunkFunctionCall, ChunkToolCall,
@@ -30,6 +32,7 @@ pub struct ReverseStreamingTranslator {
     output_tokens: Option<u32>,
     created: u64,
     done: bool,
+    context: AnthropicTranslationContext,
 }
 
 impl ReverseStreamingTranslator {
@@ -39,6 +42,10 @@ impl ReverseStreamingTranslator {
     /// it is echoed in every emitted chunk so the client can correlate events.
     /// `tool_call_index` starts at -1 and increments on each new tool call block.
     pub fn new(id: String, model: String) -> Self {
+        Self::with_context(id, model, AnthropicTranslationContext::default())
+    }
+
+    pub fn with_context(id: String, model: String, context: AnthropicTranslationContext) -> Self {
         Self {
             message_id: id,
             model,
@@ -50,6 +57,7 @@ impl ReverseStreamingTranslator {
                 .unwrap_or_default()
                 .as_secs(),
             done: false,
+            context,
         }
     }
 
@@ -76,31 +84,32 @@ impl ReverseStreamingTranslator {
                     None,
                 )]
             }
-            anthropic::StreamEvent::ContentBlockStart { content_block, .. } => {
-                match content_block {
-                    anthropic::ContentBlock::ToolUse { id, name, .. } => {
-                        self.tool_call_index += 1;
-                        let tc = ChunkToolCall {
-                            index: self.tool_call_index as u32,
-                            id: Some(id.clone()),
-                            call_type: Some("function".to_string()),
-                            function: Some(ChunkFunctionCall {
-                                name: Some(name.clone()),
-                                arguments: Some(String::new()),
-                            }),
-                        };
-                        vec![self.make_chunk(
-                            ChunkDelta {
-                                tool_calls: Some(vec![tc]),
-                                ..Default::default()
-                            },
-                            None,
-                        )]
-                    }
-                    // Text and Thinking blocks emit their content via deltas
-                    _ => vec![],
-                }
+            anthropic::StreamEvent::ContentBlockStart {
+                content_block:
+                    anthropic::ContentBlock::ToolUse { id, name, .. }
+                    | anthropic::ContentBlock::ServerToolUse { id, name, .. },
+                ..
+            } => {
+                self.tool_call_index += 1;
+                let tc = ChunkToolCall {
+                    index: self.tool_call_index as u32,
+                    id: Some(id.clone()),
+                    call_type: Some("function".to_string()),
+                    function: Some(ChunkFunctionCall {
+                        name: Some(self.context.original_tool_name(name)),
+                        arguments: Some(String::new()),
+                    }),
+                };
+                vec![self.make_chunk(
+                    ChunkDelta {
+                        tool_calls: Some(vec![tc]),
+                        ..Default::default()
+                    },
+                    None,
+                )]
             }
+            // Text and Thinking blocks emit their content via deltas
+            anthropic::StreamEvent::ContentBlockStart { .. } => vec![],
             anthropic::StreamEvent::ContentBlockDelta { delta, .. } => match delta {
                 anthropic::streaming::Delta::TextDelta { text } => {
                     vec![self.make_chunk(
@@ -142,6 +151,7 @@ impl ReverseStreamingTranslator {
                     )]
                 }
                 anthropic::streaming::Delta::SignatureDelta { .. } => vec![],
+                _ => vec![],
             },
             anthropic::StreamEvent::ContentBlockStop { .. } => vec![],
             anthropic::StreamEvent::MessageDelta { delta, usage } => {
@@ -185,6 +195,7 @@ impl ReverseStreamingTranslator {
                 self.done = true;
                 vec![]
             }
+            _ => vec![],
         }
     }
 
@@ -237,6 +248,7 @@ mod tests {
                     output_tokens: 0,
                     cache_creation_input_tokens: None,
                     cache_read_input_tokens: None,
+                    ..Default::default()
                 },
                 created: Some(1700000000),
             },
@@ -304,6 +316,41 @@ mod tests {
     }
 
     #[test]
+    fn server_tool_use_streaming_restores_original_name() {
+        let req: openai::ChatCompletionRequest = serde_json::from_value(serde_json::json!({
+            "model": "claude",
+            "messages": [{"role": "user", "content": "hi"}],
+            "tools": [{"type": "function", "function": {"name": "bad.name", "parameters": {"type": "object"}}}],
+            "max_tokens": 100
+        }))
+        .unwrap();
+        let context =
+            crate::mapping::reverse_message_map::AnthropicTranslationContext::from_openai_request(
+                &req,
+            );
+        let mut t = ReverseStreamingTranslator::with_context(
+            "chatcmpl-test".to_string(),
+            "gpt-4o".to_string(),
+            context,
+        );
+        let event = StreamEvent::ContentBlockStart {
+            index: 0,
+            content_block: ContentBlock::ServerToolUse {
+                id: "srv_1".to_string(),
+                name: "bad_name".to_string(),
+                input: serde_json::json!({}),
+            },
+        };
+        let chunks = t.process_event(&event);
+        let tc = &chunks[0].choices[0].delta.tool_calls.as_ref().unwrap()[0];
+        assert_eq!(tc.id.as_deref(), Some("srv_1"));
+        assert_eq!(
+            tc.function.as_ref().unwrap().name.as_deref(),
+            Some("bad.name")
+        );
+    }
+
+    #[test]
     fn thinking_delta_emits_reasoning_content() {
         let mut t = make_translator();
         let event = StreamEvent::ContentBlockDelta {
@@ -338,6 +385,7 @@ mod tests {
                     output_tokens: 0,
                     cache_creation_input_tokens: None,
                     cache_read_input_tokens: None,
+                    ..Default::default()
                 },
                 created: None,
             },
@@ -348,6 +396,7 @@ mod tests {
             delta: MessageDeltaData {
                 stop_reason: Some(StopReason::EndTurn),
                 stop_sequence: None,
+                ..Default::default()
             },
             usage: Some(DeltaUsage { output_tokens: 5 }),
         };
