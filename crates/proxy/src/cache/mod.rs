@@ -83,10 +83,15 @@ pub fn cache_key_for_request(
     // Fields that affect the backend response. Order does not matter because
     // BTreeMap sorts keys alphabetically before serialization.
     const CACHE_FIELDS: &[&str] = &[
+        "_header_anthropic-beta",
+        "_header_x-claude-code-session-id",
         "cache_ttl_secs",
+        "max_completion_tokens",
         "max_tokens",
         "messages",
         "model",
+        "reasoning_effort",
+        "response_format",
         "system",
         "stop",
         "temperature",

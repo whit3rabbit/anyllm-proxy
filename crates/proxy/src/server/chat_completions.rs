@@ -31,8 +31,9 @@ use extensions::{
     serialize_anthropic_upstream_request, AnthropicChatExtensions,
 };
 use helpers::{
-    backend_error_to_openai_response, header_refs, is_anthropic_backend, mapped_model_for_backend,
-    openai_error_response, safe_anthropic_extra_headers,
+    backend_error_to_openai_response, cache_key_body_for_chat_completions, header_refs,
+    is_anthropic_backend, mapped_model_for_backend, openai_error_response,
+    safe_anthropic_extra_headers,
 };
 use stream::{chat_completions_stream, ChatCompletionsStreamMeta};
 
@@ -195,7 +196,7 @@ pub(crate) async fn chat_completions(
     }
 
     // Non-streaming path: check cache before calling backend.
-    let body_value = serde_json::to_value(&body).unwrap_or_default();
+    let body_value = cache_key_body_for_chat_completions(&body, &safe_headers);
     let cache_ttl = match cache::parse_cache_ttl(&body_value) {
         Ok(ttl) => ttl,
         Err(msg) => {
