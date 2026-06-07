@@ -4,6 +4,7 @@
 use crate::admin::state::{RuntimeConfig, SharedState};
 use crate::backend::BackendClient;
 use crate::metrics::Metrics;
+use anyllm_providers::ProviderCatalog;
 use anyllm_translate::{anthropic, mapping};
 use axum::{
     extract::{rejection::JsonRejection, FromRequest},
@@ -99,6 +100,8 @@ pub struct AppState {
     /// Model-level router for LiteLLM model_list configs. None for TOML/env configs.
     /// Wrapped in RwLock for dynamic model management via admin API.
     pub model_router: Option<Arc<RwLock<crate::config::model_router::ModelRouter>>>,
+    /// Immutable provider/model catalog used for runtime model metadata.
+    pub provider_catalog: Arc<ProviderCatalog>,
     /// All backend states, for cross-backend model routing. None unless model_router is set.
     pub all_backends: Option<Arc<HashMap<String, AppState>>>,
     /// Tool execution engine state. None when tool execution is not configured.

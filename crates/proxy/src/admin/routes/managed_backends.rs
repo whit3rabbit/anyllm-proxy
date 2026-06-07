@@ -127,7 +127,7 @@ pub(super) async fn create(
     }
 
     // 2. Validate provider.
-    let provider = match anyllm_providers::get_provider(&body.provider_id) {
+    let provider = match shared.provider_catalog.get_provider(&body.provider_id) {
         Some(p) => p,
         None => {
             return (
@@ -161,11 +161,11 @@ pub(super) async fn create(
 
     // 4. Build BackendConfig and BackendClient (validates protocol is supported).
     let backend_config = match row_to_backend_config(&row, provider) {
-        Some(bc) => bc,
-        None => {
+        Ok(bc) => bc,
+        Err(e) => {
             return (
                 StatusCode::BAD_REQUEST,
-                Json(serde_json::json!({"error": "Provider uses unsupported protocol (Custom)"})),
+                Json(serde_json::json!({"error": e.message()})),
             )
                 .into_response()
         }
@@ -299,7 +299,10 @@ pub(super) async fn update(
     // The db function independently generates the new timestamp.
 
     // 3. Build BackendConfig/Client from updated row.
-    let provider = match anyllm_providers::get_provider(&updated_row.provider_id) {
+    let provider = match shared
+        .provider_catalog
+        .get_provider(&updated_row.provider_id)
+    {
         Some(p) => p,
         None => {
             return (
@@ -311,11 +314,11 @@ pub(super) async fn update(
     };
 
     let backend_config = match row_to_backend_config(&updated_row, provider) {
-        Some(bc) => bc,
-        None => {
+        Ok(bc) => bc,
+        Err(e) => {
             return (
                 StatusCode::BAD_REQUEST,
-                Json(serde_json::json!({"error": "Provider uses unsupported protocol (Custom)"})),
+                Json(serde_json::json!({"error": e.message()})),
             )
                 .into_response()
         }
@@ -441,16 +444,37 @@ pub(super) async fn delete(
 use crate::config::{
     BackendAuth, BackendConfig, BackendKind, ModelMapping, OpenAIApiFormat, TlsConfig,
 };
-use anyllm_providers::provider::{AuthKind, ProviderDef, ProviderProtocol};
+use anyllm_providers::{
+    provider::{AuthKind, ProviderProtocol},
+    OwnedProviderDef,
+};
 
-/// Convert a `ManagedBackendRow` + `ProviderDef` into a `BackendConfig` ready
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ManagedBackendConfigError {
+    UnsupportedProtocol,
+    MissingApiBase,
+}
+
+impl ManagedBackendConfigError {
+    pub fn message(self) -> &'static str {
+        match self {
+            Self::UnsupportedProtocol => "Provider uses unsupported protocol (Custom)",
+            Self::MissingApiBase => {
+                "Provider requires api_base because it has no default API base URL"
+            }
+        }
+    }
+}
+
+/// Convert a `ManagedBackendRow` + provider metadata into a `BackendConfig` ready
 /// to hand to `BackendClient::from_backend_config`.
 ///
-/// Returns `None` for `ProviderProtocol::Custom` (not implemented).
+/// Returns an error for `ProviderProtocol::Custom` or providers that require an
+/// explicit `api_base`.
 pub fn row_to_backend_config(
     row: &ManagedBackendRow,
-    provider: &ProviderDef,
-) -> Option<BackendConfig> {
+    provider: &OwnedProviderDef,
+) -> Result<BackendConfig, ManagedBackendConfigError> {
     let kind = match provider.protocol {
         ProviderProtocol::OpenAICompat => BackendKind::OpenAI,
         // GeminiOpenAI routes through the OpenAI client with a /openai path suffix.
@@ -461,7 +485,7 @@ pub fn row_to_backend_config(
         ProviderProtocol::AnthropicNative => BackendKind::Anthropic,
         ProviderProtocol::BedrockNative => BackendKind::Bedrock,
         // Custom is explicitly unsupported; caller should log and skip.
-        ProviderProtocol::Custom => return None,
+        ProviderProtocol::Custom => return Err(ManagedBackendConfigError::UnsupportedProtocol),
     };
 
     // Bedrock: base_url is passed as the region string to BedrockClient::new, not a URL.
@@ -474,20 +498,23 @@ pub fn row_to_backend_config(
         ProviderProtocol::VertexAI => {
             // api_base must be the full Vertex endpoint URL if provided.
             // Otherwise construct from project+region; if neither is set the caller
-            // will get an error at request time.
+            // will get an error when the provider has no safe default base URL.
             //
             // Security: region and project are user-supplied but the constructed
             // hostname always ends with "-aiplatform.googleapis.com", so an attacker
             // cannot reach an arbitrary host via these two fields. The api_base
             // override (handled in the _ arm) is the only path to an arbitrary URL.
-            row.api_base.clone().unwrap_or_else(|| {
-                match (&row.project, &row.region) {
-                    (Some(proj), Some(reg)) => format!(
-                        "https://{reg}-aiplatform.googleapis.com/v1/projects/{proj}/locations/{reg}/endpoints/openapi"
-                    ),
-                    _ => provider.default_base_url.to_string(),
-                }
-            })
+            if let Some(api_base) = row.api_base.clone() {
+                api_base
+            } else if let (Some(proj), Some(reg)) = (&row.project, &row.region) {
+                format!(
+                    "https://{reg}-aiplatform.googleapis.com/v1/projects/{proj}/locations/{reg}/endpoints/openapi"
+                )
+            } else if !provider.default_base_url.is_empty() {
+                provider.default_base_url.clone()
+            } else {
+                return Err(ManagedBackendConfigError::MissingApiBase);
+            }
         }
         // Security: api_base is user-supplied (full host + protocol). SSRF is
         // mitigated at the HTTP client layer: the ssrf-protection Cargo feature
@@ -497,7 +524,10 @@ pub fn row_to_backend_config(
         _ => row
             .api_base
             .clone()
-            .unwrap_or_else(|| provider.default_base_url.to_string()),
+            .or_else(|| {
+                (!provider.default_base_url.is_empty()).then(|| provider.default_base_url.clone())
+            })
+            .ok_or(ManagedBackendConfigError::MissingApiBase)?,
     };
 
     let api_key_str = row.api_key.clone().unwrap_or_default();
@@ -529,7 +559,7 @@ pub fn row_to_backend_config(
         _ => api_key_str,
     };
 
-    Some(BackendConfig {
+    Ok(BackendConfig {
         kind,
         api_key,
         base_url,
@@ -554,16 +584,16 @@ mod tests {
     use super::*;
     use anyllm_providers::provider::{ProviderCapabilities, ProviderStatus};
 
-    fn make_provider(protocol: ProviderProtocol, auth: AuthKind) -> ProviderDef {
-        ProviderDef {
-            id: "test",
-            display_name: "Test",
-            default_base_url: "https://api.test.com/v1",
+    fn make_provider(protocol: ProviderProtocol, auth: AuthKind) -> OwnedProviderDef {
+        OwnedProviderDef {
+            id: "test".to_string(),
+            display_name: "Test".to_string(),
+            default_base_url: "https://api.test.com/v1".to_string(),
             protocol,
             auth,
             status: ProviderStatus::Stub,
-            env_vars: &[],
-            litellm_prefix: "test/",
+            env_vars: Vec::new(),
+            litellm_prefix: "test/".to_string(),
             capabilities: ProviderCapabilities::default(),
         }
     }
@@ -683,7 +713,26 @@ mod tests {
     fn custom_protocol_returns_none() {
         let provider = make_provider(ProviderProtocol::Custom, AuthKind::None);
         let row = make_row();
-        assert!(row_to_backend_config(&row, &provider).is_none());
+        assert!(matches!(
+            row_to_backend_config(&row, &provider),
+            Err(ManagedBackendConfigError::UnsupportedProtocol)
+        ));
+    }
+
+    #[test]
+    fn missing_default_base_requires_api_base() {
+        let mut provider = make_provider(ProviderProtocol::OpenAICompat, AuthKind::Bearer);
+        provider.default_base_url.clear();
+        let row = make_row();
+        assert!(matches!(
+            row_to_backend_config(&row, &provider),
+            Err(ManagedBackendConfigError::MissingApiBase)
+        ));
+
+        let mut row = make_row();
+        row.api_base = Some("https://runtime.example.com/v1".to_string());
+        let bc = row_to_backend_config(&row, &provider).unwrap();
+        assert_eq!(bc.base_url, "https://runtime.example.com/v1");
     }
 
     #[test]

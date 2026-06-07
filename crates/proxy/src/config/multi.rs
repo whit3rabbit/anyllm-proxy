@@ -1,0 +1,995 @@
+use indexmap::IndexMap;
+use serde::Deserialize;
+use std::sync::Arc;
+
+use super::helpers::{resolve_env_value, sanitize_api_key};
+use super::single::{bedrock_credentials_from_env, validate_gcp_identifier, Config};
+use super::tls::TlsConfig;
+use super::types::{BackendAuth, BackendKind, ModelMapping, OpenAIApiFormat, GEMINI_OPENAI_PATH};
+use super::url_validation::validate_base_url;
+
+/// Per-backend configuration. Each entry in `[backends.*]` deserializes into this.
+#[derive(Debug, Clone)]
+pub struct BackendConfig {
+    /// Which provider type this backend uses (OpenAI, Vertex, Gemini, Anthropic).
+    pub kind: BackendKind,
+    /// API key for authentication. Resolved from env vars via `env:VAR_NAME` syntax.
+    pub api_key: String,
+    /// Base URL of the backend API (e.g., `https://api.openai.com`).
+    pub base_url: String,
+    /// Which OpenAI API format to use (Chat Completions or Responses).
+    pub api_format: OpenAIApiFormat,
+    /// Anthropic-to-backend model name mapping.
+    pub model_mapping: ModelMapping,
+    /// Optional mTLS and custom CA configuration.
+    pub tls: TlsConfig,
+    /// How to authenticate to this backend (Bearer token or Google API key).
+    pub backend_auth: BackendAuth,
+    /// Whether to log request/response bodies at debug level.
+    pub log_bodies: bool,
+    /// Strip `stream_options` from streaming requests. Needed for local LLMs
+    /// (older Ollama, text-generation-webui, LM Studio) that reject unknown
+    /// fields with HTTP 400.
+    pub omit_stream_options: bool,
+    /// Wall-clock cap for streaming responses in seconds. 0 = disabled.
+    pub stream_timeout_secs: u64,
+    /// AWS credentials for Bedrock backend. None for all other backends.
+    pub bedrock_credentials: Option<aws_credential_types::Credentials>,
+}
+
+/// Top-level multi-backend configuration loaded from TOML.
+/// Enables routing requests to different backends by route prefix.
+#[derive(Debug, Clone)]
+pub struct MultiConfig {
+    /// Port the proxy listens on (default: 3000).
+    pub listen_port: u16,
+    /// Whether to log request/response bodies at debug level (global default).
+    pub log_bodies: bool,
+    /// Backend name used when no route prefix matches.
+    pub default_backend: String,
+    /// Ordered map: key = route prefix (e.g. "openai"), value = backend config.
+    pub backends: IndexMap<String, BackendConfig>,
+    /// See Config::expose_degradation_warnings.
+    pub expose_degradation_warnings: bool,
+}
+
+// -- TOML deserialization structs (separate from runtime types) --
+
+#[derive(Deserialize)]
+struct TomlConfig {
+    listen_port: Option<u16>,
+    log_bodies: Option<bool>,
+    default_backend: Option<String>,
+    #[serde(default)]
+    expose_degradation_warnings: bool,
+    #[serde(default)]
+    backends: IndexMap<String, TomlBackendConfig>,
+}
+
+#[derive(Deserialize)]
+struct TomlBackendConfig {
+    kind: String,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    api_format: Option<String>,
+    big_model: Option<String>,
+    small_model: Option<String>,
+    // Vertex-specific
+    project: Option<String>,
+    region: Option<String>,
+    // Azure-specific
+    endpoint: Option<String>,
+    deployment: Option<String>,
+    api_version: Option<String>,
+    // Optional env var name for Google access token (Vertex)
+    access_token: Option<String>,
+    // Strip stream_options from streaming requests (local LLM compat)
+    omit_stream_options: Option<bool>,
+    // Wall-clock cap for streaming responses in seconds (0 = disabled)
+    stream_timeout_secs: Option<u64>,
+    // Bedrock-specific: AWS credentials (support env: prefix for env var resolution)
+    aws_access_key_id: Option<String>,
+    aws_secret_access_key: Option<String>,
+    aws_session_token: Option<String>,
+}
+
+/// Result of `MultiConfig::load()`.
+pub struct LoadResult {
+    pub multi_config: MultiConfig,
+    pub model_router: Option<Arc<std::sync::RwLock<super::model_router::ModelRouter>>>,
+    /// Resolved master_key from LiteLLM general_settings, if present.
+    /// Caller should apply as PROXY_API_KEYS if that var is not already set.
+    pub litellm_master_key: Option<String>,
+    /// Tool-related config from a simple YAML config file. None when the config
+    /// was loaded from env vars, TOML, or LiteLLM format (which has no tool sections).
+    pub tool_config: Option<super::simple::ToolStartupConfig>,
+}
+
+impl MultiConfig {
+    /// Load configuration.
+    ///
+    /// Detection order:
+    /// 1. `PROXY_CONFIG` with `.yaml`/`.yml` extension:
+    ///    - If root `models:` key is present: simple native format (`simple::parse_simple_yaml`)
+    ///    - Otherwise (`model_list:` key): LiteLLM-compatible format (`litellm::parse_litellm_yaml`)
+    /// 2. `PROXY_CONFIG` with any other extension: parse as TOML
+    /// 3. No `PROXY_CONFIG`: env-var-based single-backend config
+    ///
+    /// The model router is set for both YAML config formats (simple and LiteLLM).
+    /// `litellm_master_key` is returned (not applied) so the caller can
+    /// consolidate all `set_var` calls into a single pre-runtime block.
+    pub fn load() -> LoadResult {
+        if let Ok(path) = std::env::var("PROXY_CONFIG") {
+            if path.ends_with(".yaml") || path.ends_with(".yml") {
+                let yaml = std::fs::read_to_string(&path)
+                    .unwrap_or_else(|e| panic!("failed to read config '{path}': {e}"));
+
+                // Detect format: "models:" key = simple native format, "model_list:" = LiteLLM.
+                let probe: serde_yaml::Value = serde_yaml::from_str(&yaml)
+                    .unwrap_or_else(|e| panic!("invalid YAML in '{path}': {e}"));
+
+                if probe.get("models").is_some() {
+                    // Simple native format.
+                    let parsed = super::simple::parse_simple_yaml(&yaml);
+                    return LoadResult {
+                        multi_config: parsed.multi_config,
+                        model_router: Some(Arc::new(std::sync::RwLock::new(parsed.router))),
+                        litellm_master_key: None,
+                        tool_config: Some(parsed.tool_config),
+                    };
+                }
+
+                // LiteLLM format requires model_list: key.
+                if probe.get("model_list").is_none() {
+                    panic!(
+                        "config file '{path}' must contain either a top-level 'models:' key \
+                         (simple format) or 'model_list:' key (LiteLLM format)"
+                    );
+                }
+
+                // LiteLLM format (model_list: + litellm_params:).
+                let parsed = super::litellm::parse_litellm_yaml(&yaml);
+
+                // Wire up webhook callbacks and named integrations from litellm_settings.callbacks.
+                let mut named = vec![];
+                if parsed.langfuse_requested {
+                    match crate::integrations::LangfuseClient::from_env() {
+                        Some(lf) => {
+                            tracing::info!("langfuse integration enabled");
+                            named.push(crate::integrations::NamedIntegration::Langfuse(lf));
+                        }
+                        None => tracing::warn!(
+                            "langfuse in litellm_settings.callbacks but LANGFUSE_PUBLIC_KEY/SECRET not set"
+                        ),
+                    }
+                }
+                if let Some(cb) =
+                    crate::callbacks::CallbackConfig::with_named(parsed.callback_urls, named)
+                {
+                    crate::server::routes::set_callbacks(cb);
+                    tracing::info!("callbacks configured from litellm_settings");
+                }
+
+                let mut mc = parsed.multi_config;
+                // PROXY_CONFIG is set (we're in this branch): auto-enable warnings.
+                mc.expose_degradation_warnings = true;
+                return LoadResult {
+                    multi_config: mc,
+                    model_router: Some(Arc::new(std::sync::RwLock::new(parsed.router))),
+                    litellm_master_key: parsed.master_key,
+                    tool_config: None, // LiteLLM format has no tool sections
+                };
+            }
+            LoadResult {
+                multi_config: Self::from_toml_file(&path),
+                model_router: None,
+                litellm_master_key: None,
+                tool_config: None,
+            }
+        } else {
+            LoadResult {
+                multi_config: Self::from_legacy_env(),
+                model_router: None,
+                litellm_master_key: None,
+                tool_config: None,
+            }
+        }
+    }
+
+    /// Wrap a single-backend Config into a MultiConfig.
+    /// Used by the legacy `app(config)` path and by `from_legacy_env`.
+    pub fn from_single_config(config: &Config) -> Self {
+        Self::wrap_config(config)
+    }
+
+    /// Wrap the existing single-backend Config into a MultiConfig.
+    fn from_legacy_env() -> Self {
+        let config = Config::from_env();
+        Self::wrap_config(&config)
+    }
+
+    fn wrap_config(config: &Config) -> Self {
+        let name = match config.backend {
+            BackendKind::OpenAI => "openai",
+            BackendKind::AzureOpenAI => "azure",
+            BackendKind::Vertex => "vertex",
+            BackendKind::Gemini => "gemini",
+            BackendKind::Anthropic => "anthropic",
+            BackendKind::Bedrock => "bedrock",
+        };
+
+        let omit_stream_options = std::env::var("OMIT_STREAM_OPTIONS")
+            .map(|v| v == "true" || v == "1")
+            .unwrap_or(false);
+        let stream_timeout_secs = std::env::var("REQUEST_TIMEOUT_SECS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(900u64);
+
+        // For Bedrock, read AWS credentials from env vars.
+        let bedrock_credentials = if config.backend == BackendKind::Bedrock {
+            Some(bedrock_credentials_from_env())
+        } else {
+            None
+        };
+
+        let bc = BackendConfig {
+            kind: config.backend.clone(),
+            api_key: config.openai_api_key.clone(),
+            base_url: config.openai_base_url.clone(),
+            api_format: config.openai_api_format.clone(),
+            model_mapping: config.model_mapping.clone(),
+            tls: config.tls.clone(),
+            backend_auth: config.backend_auth.clone(),
+            log_bodies: config.log_bodies,
+            omit_stream_options,
+            stream_timeout_secs,
+            bedrock_credentials,
+        };
+
+        let mut backends = IndexMap::new();
+        backends.insert(name.to_string(), bc);
+
+        Self {
+            listen_port: config.listen_port,
+            log_bodies: config.log_bodies,
+            default_backend: name.to_string(),
+            backends,
+            expose_degradation_warnings: config.expose_degradation_warnings,
+        }
+    }
+
+    /// Parse a TOML config file into MultiConfig.
+    fn from_toml_file(path: &str) -> Self {
+        let contents = std::fs::read_to_string(path)
+            .unwrap_or_else(|e| panic!("failed to read config file '{path}': {e}"));
+        Self::from_toml_str(&contents)
+    }
+
+    /// Parse TOML string into MultiConfig. Separated from file I/O for testing.
+    pub fn from_toml_str(toml_str: &str) -> Self {
+        let raw: TomlConfig =
+            toml::from_str(toml_str).unwrap_or_else(|e| panic!("invalid TOML config: {e}"));
+
+        if raw.backends.is_empty() {
+            panic!("config must define at least one backend in [backends.*]");
+        }
+
+        let listen_port = raw.listen_port.unwrap_or(3000);
+        let log_bodies = raw.log_bodies.unwrap_or(false);
+        let default_backend = raw
+            .default_backend
+            .unwrap_or_else(|| raw.backends.keys().next().unwrap().clone());
+
+        if !raw.backends.contains_key(&default_backend) {
+            panic!(
+                "default_backend '{default_backend}' not found in configured backends: {:?}",
+                raw.backends.keys().collect::<Vec<_>>()
+            );
+        }
+
+        let tls = TlsConfig::from_env();
+        let mut backends = IndexMap::new();
+
+        for (name, tb) in &raw.backends {
+            let bc = Self::build_backend_config(name, tb, &tls, log_bodies);
+            backends.insert(name.clone(), bc);
+        }
+
+        // OR-in: TOML field || env var || PROXY_CONFIG presence (auto-enable).
+        let expose_degradation_warnings = raw.expose_degradation_warnings
+            || std::env::var("ANYLLM_DEGRADATION_WARNINGS")
+                .map(|v| v == "true" || v == "1")
+                .unwrap_or(false)
+            || std::env::var("PROXY_CONFIG").is_ok();
+
+        Self {
+            listen_port,
+            log_bodies,
+            default_backend,
+            backends,
+            expose_degradation_warnings,
+        }
+    }
+
+    fn build_backend_config(
+        name: &str,
+        tb: &TomlBackendConfig,
+        tls: &TlsConfig,
+        log_bodies: bool,
+    ) -> BackendConfig {
+        let kind = match tb.kind.to_ascii_lowercase().as_str() {
+            "openai" => BackendKind::OpenAI,
+            "azure" => BackendKind::AzureOpenAI,
+            "vertex" => BackendKind::Vertex,
+            "gemini" => BackendKind::Gemini,
+            "anthropic" => BackendKind::Anthropic,
+            "bedrock" => BackendKind::Bedrock,
+            other => panic!("unknown backend kind '{other}' for backend '{name}'"),
+        };
+
+        let api_key = sanitize_api_key(
+            &tb.api_key
+                .as_deref()
+                .map(|v| resolve_env_value(v).unwrap_or_else(|e| panic!("backend '{name}': {e}")))
+                .unwrap_or_default(),
+        );
+
+        let (base_url, backend_auth, model_mapping, api_format) = match &kind {
+            BackendKind::OpenAI => {
+                let base_url = tb
+                    .base_url
+                    .clone()
+                    .unwrap_or_else(|| "https://api.openai.com".to_string());
+                if let Err(e) = validate_base_url(&base_url) {
+                    panic!("backend '{name}' base_url rejected: {e}");
+                }
+                let auth = BackendAuth::BearerToken(api_key.clone());
+                let fmt = match tb
+                    .api_format
+                    .as_deref()
+                    .unwrap_or("chat")
+                    .to_ascii_lowercase()
+                    .as_str()
+                {
+                    "chat" => OpenAIApiFormat::Chat,
+                    "responses" => OpenAIApiFormat::Responses,
+                    other => panic!("unknown api_format '{other}' for backend '{name}'"),
+                };
+                let mm = ModelMapping {
+                    big_model: tb.big_model.clone().unwrap_or_else(|| "gpt-4o".to_string()),
+                    small_model: tb
+                        .small_model
+                        .clone()
+                        .unwrap_or_else(|| "gpt-4o-mini".to_string()),
+                };
+                (base_url, auth, mm, fmt)
+            }
+            BackendKind::AzureOpenAI => {
+                if api_key.is_empty() {
+                    panic!("backend '{name}': api_key is required for azure");
+                }
+                let endpoint = tb.endpoint.as_deref().unwrap_or_else(|| {
+                    panic!("backend '{name}': 'endpoint' is required for azure")
+                });
+                let deployment = tb.deployment.as_deref().unwrap_or_else(|| {
+                    panic!("backend '{name}': 'deployment' is required for azure")
+                });
+                let api_version = tb.api_version.as_deref().unwrap_or("2024-10-21");
+
+                if let Err(e) = validate_base_url(endpoint.trim_end_matches('/')) {
+                    panic!("backend '{name}' endpoint rejected: {e}");
+                }
+
+                let base_url = format!(
+                    "{}/openai/deployments/{}/chat/completions?api-version={}",
+                    endpoint.trim_end_matches('/'),
+                    deployment,
+                    api_version
+                );
+                let auth = BackendAuth::AzureApiKey(api_key.clone());
+                let mm = ModelMapping {
+                    big_model: tb.big_model.clone().unwrap_or_else(|| "gpt-4o".to_string()),
+                    small_model: tb
+                        .small_model
+                        .clone()
+                        .unwrap_or_else(|| "gpt-4o-mini".to_string()),
+                };
+                (base_url, auth, mm, OpenAIApiFormat::Chat)
+            }
+            BackendKind::Vertex => {
+                let project = tb.project.as_deref().unwrap_or_else(|| {
+                    panic!("backend '{name}': 'project' is required for vertex")
+                });
+                let region = tb
+                    .region
+                    .as_deref()
+                    .unwrap_or_else(|| panic!("backend '{name}': 'region' is required for vertex"));
+                validate_gcp_identifier("project", project);
+                validate_gcp_identifier("region", region);
+
+                let base_url = tb.base_url.clone().unwrap_or_else(|| {
+                    format!(
+                        "https://{region}-aiplatform.googleapis.com/v1/projects/{project}/locations/{region}/endpoints/openapi"
+                    )
+                });
+                if let Err(e) = validate_base_url(&base_url) {
+                    panic!("backend '{name}' base_url rejected: {e}");
+                }
+
+                let auth = if !api_key.is_empty() {
+                    BackendAuth::GoogleApiKey(api_key.clone())
+                } else if let Some(token_ref) = &tb.access_token {
+                    let token = sanitize_api_key(
+                        &resolve_env_value(token_ref)
+                            .unwrap_or_else(|e| panic!("backend '{name}': {e}")),
+                    );
+                    BackendAuth::BearerToken(token)
+                } else {
+                    panic!("backend '{name}': api_key or access_token is required for vertex");
+                };
+
+                let mm = ModelMapping {
+                    big_model: tb
+                        .big_model
+                        .clone()
+                        .unwrap_or_else(|| "gemini-2.5-pro".to_string()),
+                    small_model: tb
+                        .small_model
+                        .clone()
+                        .unwrap_or_else(|| "gemini-2.5-flash".to_string()),
+                };
+                (base_url, auth, mm, OpenAIApiFormat::Chat)
+            }
+            BackendKind::Gemini => {
+                if api_key.is_empty() {
+                    panic!("backend '{name}': api_key is required for gemini");
+                }
+                let base_url = tb.base_url.clone().unwrap_or_else(|| {
+                    "https://generativelanguage.googleapis.com/v1beta".to_string()
+                });
+                if let Err(e) = validate_base_url(&base_url) {
+                    panic!("backend '{name}' base_url rejected: {e}");
+                }
+                let auth = BackendAuth::GoogleApiKey(api_key.clone());
+                let mm = ModelMapping {
+                    big_model: tb
+                        .big_model
+                        .clone()
+                        .unwrap_or_else(|| "gemini-2.5-pro".to_string()),
+                    small_model: tb
+                        .small_model
+                        .clone()
+                        .unwrap_or_else(|| "gemini-2.5-flash".to_string()),
+                };
+
+                (
+                    format!("{base_url}{GEMINI_OPENAI_PATH}"),
+                    auth,
+                    mm,
+                    OpenAIApiFormat::Chat,
+                )
+            }
+            BackendKind::Anthropic => {
+                if api_key.is_empty() {
+                    panic!("backend '{name}': api_key is required for anthropic");
+                }
+                let base_url = tb
+                    .base_url
+                    .clone()
+                    .unwrap_or_else(|| "https://api.anthropic.com".to_string());
+                if let Err(e) = validate_base_url(&base_url) {
+                    panic!("backend '{name}' base_url rejected: {e}");
+                }
+                // Anthropic uses x-api-key header, stored as BearerToken for simplicity
+                // (the AnthropicClient will apply it correctly)
+                let auth = BackendAuth::BearerToken(api_key.clone());
+                // No model mapping needed for passthrough
+                let mm = ModelMapping {
+                    big_model: String::new(),
+                    small_model: String::new(),
+                };
+                (base_url, auth, mm, OpenAIApiFormat::Chat)
+            }
+            BackendKind::Bedrock => {
+                let region = tb.region.as_deref().unwrap_or_else(|| {
+                    panic!("backend '{name}': 'region' is required for bedrock")
+                });
+                validate_gcp_identifier("region", region);
+
+                // For Bedrock, base_url stores the region (used by BedrockClient to build URLs)
+                let auth = BackendAuth::BearerToken(String::new());
+                let mm =
+                    ModelMapping {
+                        big_model: tb.big_model.clone().unwrap_or_else(|| {
+                            "anthropic.claude-sonnet-4-20250514-v1:0".to_string()
+                        }),
+                        small_model: tb.small_model.clone().unwrap_or_else(|| {
+                            "anthropic.claude-haiku-4-5-20251001-v1:0".to_string()
+                        }),
+                    };
+                (region.to_string(), auth, mm, OpenAIApiFormat::Chat)
+            }
+        };
+
+        // Build AWS credentials for Bedrock from TOML fields or env vars.
+        let bedrock_credentials = if kind == BackendKind::Bedrock {
+            let access_key_id = tb
+                .aws_access_key_id
+                .as_deref()
+                .map(|v| resolve_env_value(v).unwrap_or_else(|e| panic!("backend '{name}': {e}")))
+                .unwrap_or_else(|| {
+                    std::env::var("AWS_ACCESS_KEY_ID").unwrap_or_else(|_| {
+                        panic!("backend '{name}': aws_access_key_id or AWS_ACCESS_KEY_ID required")
+                    })
+                });
+            let secret_access_key = tb
+                .aws_secret_access_key
+                .as_deref()
+                .map(|v| resolve_env_value(v).unwrap_or_else(|e| panic!("backend '{name}': {e}")))
+                .unwrap_or_else(|| {
+                    std::env::var("AWS_SECRET_ACCESS_KEY").unwrap_or_else(|_| {
+                        panic!(
+                            "backend '{name}': aws_secret_access_key or AWS_SECRET_ACCESS_KEY required"
+                        )
+                    })
+                });
+            let session_token = tb
+                .aws_session_token
+                .as_deref()
+                .map(|v| resolve_env_value(v).unwrap_or_else(|e| panic!("backend '{name}': {e}")))
+                .or_else(|| std::env::var("AWS_SESSION_TOKEN").ok());
+            Some(aws_credential_types::Credentials::new(
+                access_key_id,
+                secret_access_key,
+                session_token,
+                None,
+                "toml-config",
+            ))
+        } else {
+            None
+        };
+
+        BackendConfig {
+            kind,
+            api_key,
+            base_url,
+            api_format,
+            model_mapping,
+            tls: tls.clone(),
+            backend_auth,
+            log_bodies,
+            omit_stream_options: tb.omit_stream_options.unwrap_or(false),
+            stream_timeout_secs: tb.stream_timeout_secs.unwrap_or_else(|| {
+                std::env::var("REQUEST_TIMEOUT_SECS")
+                    .ok()
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(900u64)
+            }),
+            bedrock_credentials,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn model_mapping_haiku() {
+        let m = ModelMapping {
+            big_model: "gpt-4o".into(),
+            small_model: "gpt-4o-mini".into(),
+        };
+        assert_eq!(m.map_model("claude-3-haiku-20240307"), "gpt-4o-mini");
+        assert_eq!(m.map_model("claude-haiku-4-5-20251001"), "gpt-4o-mini");
+    }
+
+    #[test]
+    fn model_mapping_sonnet() {
+        let m = ModelMapping {
+            big_model: "gpt-4o".into(),
+            small_model: "gpt-4o-mini".into(),
+        };
+        assert_eq!(m.map_model("claude-sonnet-4-6"), "gpt-4o");
+        assert_eq!(m.map_model("claude-3-5-sonnet-20241022"), "gpt-4o");
+    }
+
+    #[test]
+    fn model_mapping_opus() {
+        let m = ModelMapping {
+            big_model: "gpt-4o".into(),
+            small_model: "gpt-4o-mini".into(),
+        };
+        assert_eq!(m.map_model("claude-opus-4-6"), "gpt-4o");
+    }
+
+    #[test]
+    fn model_mapping_passthrough() {
+        let m = ModelMapping {
+            big_model: "gpt-4o".into(),
+            small_model: "gpt-4o-mini".into(),
+        };
+        // Unrecognized models pass through unchanged
+        assert_eq!(m.map_model("gpt-4o"), "gpt-4o");
+        assert_eq!(m.map_model("custom-model"), "custom-model");
+    }
+
+    #[test]
+    fn model_mapping_case_insensitive() {
+        let m = ModelMapping {
+            big_model: "gpt-4o".into(),
+            small_model: "gpt-4o-mini".into(),
+        };
+        assert_eq!(m.map_model("Claude-Sonnet-4-6"), "gpt-4o");
+        assert_eq!(m.map_model("CLAUDE-HAIKU-4-5"), "gpt-4o-mini");
+    }
+
+    #[test]
+    fn model_mapping_custom_values() {
+        let m = ModelMapping {
+            big_model: "o1-preview".into(),
+            small_model: "o1-mini".into(),
+        };
+        assert_eq!(m.map_model("claude-sonnet-4-6"), "o1-preview");
+        assert_eq!(m.map_model("claude-haiku-4-5-20251001"), "o1-mini");
+    }
+
+    // --- Vertex / BackendKind tests ---
+
+    #[test]
+    fn vertex_url_construction() {
+        let url = format!(
+            "https://{}-aiplatform.googleapis.com/v1/projects/{}/locations/{}/endpoints/openapi",
+            "us-central1", "my-project", "us-central1"
+        );
+        assert_eq!(
+            url,
+            "https://us-central1-aiplatform.googleapis.com/v1/projects/my-project/locations/us-central1/endpoints/openapi"
+        );
+    }
+
+    #[test]
+    fn vertex_base_url_passes_ssrf() {
+        let url = "https://us-central1-aiplatform.googleapis.com/v1/projects/my-project/locations/us-central1/endpoints/openapi";
+        assert!(validate_base_url(url).is_ok());
+    }
+
+    #[test]
+    fn vertex_model_defaults() {
+        let m = ModelMapping::from_env_with_defaults("gemini-2.5-pro", "gemini-2.5-flash");
+        // When BIG_MODEL/SMALL_MODEL env vars are not set, uses Vertex defaults
+        // (This test works because env vars are unlikely to be set in test environment)
+        assert_eq!(m.map_model("claude-sonnet-4-6"), "gemini-2.5-pro");
+        assert_eq!(m.map_model("claude-haiku-4-5"), "gemini-2.5-flash");
+    }
+
+    #[test]
+    fn backend_auth_debug_redacts() {
+        let bearer = BackendAuth::BearerToken("secret-token".into());
+        let debug = format!("{:?}", bearer);
+        assert!(debug.contains("REDACTED"));
+        assert!(!debug.contains("secret-token"));
+
+        let api_key = BackendAuth::GoogleApiKey("secret-key".into());
+        let debug = format!("{:?}", api_key);
+        assert!(debug.contains("REDACTED"));
+        assert!(!debug.contains("secret-key"));
+
+        let azure_key = BackendAuth::AzureApiKey("azure-secret".into());
+        let debug = format!("{:?}", azure_key);
+        assert!(debug.contains("REDACTED"));
+        assert!(!debug.contains("azure-secret"));
+    }
+
+    // --- MultiConfig TOML parsing tests ---
+
+    #[test]
+    fn multi_config_parses_openai_backend() {
+        let toml = r#"
+            listen_port = 4000
+            default_backend = "openai"
+
+            [backends.openai]
+            kind = "openai"
+            api_key = "sk-test"
+            big_model = "gpt-4o"
+            small_model = "gpt-4o-mini"
+        "#;
+        let mc = MultiConfig::from_toml_str(toml);
+        assert_eq!(mc.listen_port, 4000);
+        assert_eq!(mc.default_backend, "openai");
+        assert_eq!(mc.backends.len(), 1);
+        let bc = &mc.backends["openai"];
+        assert_eq!(bc.kind, BackendKind::OpenAI);
+        assert_eq!(bc.api_key, "sk-test");
+        assert_eq!(bc.model_mapping.big_model, "gpt-4o");
+        assert_eq!(bc.model_mapping.small_model, "gpt-4o-mini");
+    }
+
+    #[test]
+    fn multi_config_parses_multiple_backends() {
+        let toml = r#"
+            default_backend = "openai"
+
+            [backends.openai]
+            kind = "openai"
+            api_key = "sk-test"
+
+            [backends.gemini]
+            kind = "gemini"
+            api_key = "AIzaSy"
+
+            [backends.claude]
+            kind = "anthropic"
+            api_key = "sk-ant-test"
+        "#;
+        let mc = MultiConfig::from_toml_str(toml);
+        assert_eq!(mc.backends.len(), 3);
+        assert_eq!(mc.backends["openai"].kind, BackendKind::OpenAI);
+        assert_eq!(mc.backends["gemini"].kind, BackendKind::Gemini);
+        assert_eq!(mc.backends["claude"].kind, BackendKind::Anthropic);
+    }
+
+    #[test]
+    fn multi_config_defaults_first_backend_as_default() {
+        let toml = r#"
+            [backends.gemini]
+            kind = "gemini"
+            api_key = "AIzaSy"
+        "#;
+        let mc = MultiConfig::from_toml_str(toml);
+        assert_eq!(mc.default_backend, "gemini");
+    }
+
+    #[test]
+    fn multi_config_defaults_listen_port() {
+        let toml = r#"
+            [backends.openai]
+            kind = "openai"
+            api_key = "sk-test"
+        "#;
+        let mc = MultiConfig::from_toml_str(toml);
+        assert_eq!(mc.listen_port, 3000);
+    }
+
+    #[test]
+    fn multi_config_openai_defaults_base_url() {
+        let toml = r#"
+            [backends.openai]
+            kind = "openai"
+            api_key = "sk-test"
+        "#;
+        let mc = MultiConfig::from_toml_str(toml);
+        assert_eq!(mc.backends["openai"].base_url, "https://api.openai.com");
+    }
+
+    #[test]
+    fn multi_config_anthropic_defaults_base_url() {
+        let toml = r#"
+            [backends.claude]
+            kind = "anthropic"
+            api_key = "sk-ant-test"
+        "#;
+        let mc = MultiConfig::from_toml_str(toml);
+        assert_eq!(mc.backends["claude"].base_url, "https://api.anthropic.com");
+    }
+
+    #[test]
+    fn multi_config_custom_base_url() {
+        let toml = r#"
+            [backends.openai]
+            kind = "openai"
+            api_key = "sk-test"
+            base_url = "https://custom.openai.example.com"
+        "#;
+        let mc = MultiConfig::from_toml_str(toml);
+        assert_eq!(
+            mc.backends["openai"].base_url,
+            "https://custom.openai.example.com"
+        );
+    }
+
+    #[test]
+    fn multi_config_api_format_responses() {
+        let toml = r#"
+            [backends.openai]
+            kind = "openai"
+            api_key = "sk-test"
+            api_format = "responses"
+        "#;
+        let mc = MultiConfig::from_toml_str(toml);
+        assert_eq!(mc.backends["openai"].api_format, OpenAIApiFormat::Responses);
+    }
+
+    #[test]
+    #[should_panic(expected = "must define at least one backend")]
+    fn multi_config_panics_no_backends() {
+        let toml = r#"
+            listen_port = 3000
+        "#;
+        MultiConfig::from_toml_str(toml);
+    }
+
+    #[test]
+    #[should_panic(expected = "not found in configured backends")]
+    fn multi_config_panics_invalid_default() {
+        let toml = r#"
+            default_backend = "nonexistent"
+
+            [backends.openai]
+            kind = "openai"
+            api_key = "sk-test"
+        "#;
+        MultiConfig::from_toml_str(toml);
+    }
+
+    #[test]
+    #[should_panic(expected = "unknown backend kind")]
+    fn multi_config_panics_unknown_kind() {
+        let toml = r#"
+            [backends.foo]
+            kind = "unknown_provider"
+            api_key = "test"
+        "#;
+        MultiConfig::from_toml_str(toml);
+    }
+
+    #[test]
+    #[should_panic(expected = "api_key is required for gemini")]
+    fn multi_config_panics_gemini_no_key() {
+        let toml = r#"
+            [backends.gemini]
+            kind = "gemini"
+        "#;
+        MultiConfig::from_toml_str(toml);
+    }
+
+    #[test]
+    #[should_panic(expected = "api_key is required for anthropic")]
+    fn multi_config_panics_anthropic_no_key() {
+        let toml = r#"
+            [backends.claude]
+            kind = "anthropic"
+        "#;
+        MultiConfig::from_toml_str(toml);
+    }
+
+    #[test]
+    fn resolve_env_value_inline() {
+        assert_eq!(resolve_env_value("my-key").unwrap(), "my-key");
+    }
+
+    #[test]
+    fn resolve_env_value_from_env() {
+        std::env::set_var("TEST_RESOLVE_KEY_12345", "resolved-value");
+        assert_eq!(
+            resolve_env_value("env:TEST_RESOLVE_KEY_12345").unwrap(),
+            "resolved-value"
+        );
+        std::env::remove_var("TEST_RESOLVE_KEY_12345");
+    }
+
+    #[test]
+    fn resolve_env_value_missing_env() {
+        let err = resolve_env_value("env:NONEXISTENT_VAR_99999").unwrap_err();
+        assert!(err.contains("not set"));
+    }
+
+    #[test]
+    fn multi_config_env_prefix_resolves() {
+        std::env::set_var("TEST_OPENAI_KEY_TOML", "sk-from-env");
+        let toml = r#"
+            [backends.openai]
+            kind = "openai"
+            api_key = "env:TEST_OPENAI_KEY_TOML"
+        "#;
+        let mc = MultiConfig::from_toml_str(toml);
+        assert_eq!(mc.backends["openai"].api_key, "sk-from-env");
+        std::env::remove_var("TEST_OPENAI_KEY_TOML");
+    }
+
+    #[test]
+    fn multi_config_log_bodies() {
+        let toml = r#"
+            log_bodies = true
+
+            [backends.openai]
+            kind = "openai"
+            api_key = "sk-test"
+        "#;
+        let mc = MultiConfig::from_toml_str(toml);
+        assert!(mc.log_bodies);
+        assert!(mc.backends["openai"].log_bodies);
+    }
+
+    #[test]
+    fn multi_config_gemini_defaults() {
+        let toml = r#"
+            [backends.gemini]
+            kind = "gemini"
+            api_key = "AIzaSy"
+        "#;
+        let mc = MultiConfig::from_toml_str(toml);
+        let bc = &mc.backends["gemini"];
+        assert_eq!(bc.model_mapping.big_model, "gemini-2.5-pro");
+        assert_eq!(bc.model_mapping.small_model, "gemini-2.5-flash");
+        // /openai is appended to route through Gemini's OpenAI-compatible endpoint
+        assert_eq!(
+            bc.base_url,
+            "https://generativelanguage.googleapis.com/v1beta/openai"
+        );
+    }
+
+    // --- Azure OpenAI tests ---
+
+    #[test]
+    fn multi_config_parses_azure_backend() {
+        let toml = r#"
+            [backends.azure]
+            kind = "azure"
+            api_key = "az-test-key"
+            endpoint = "https://my-resource.openai.azure.com"
+            deployment = "gpt-4o-deploy"
+        "#;
+        let mc = MultiConfig::from_toml_str(toml);
+        let bc = &mc.backends["azure"];
+        assert_eq!(bc.kind, BackendKind::AzureOpenAI);
+        assert_eq!(
+            bc.base_url,
+            "https://my-resource.openai.azure.com/openai/deployments/gpt-4o-deploy/chat/completions?api-version=2024-10-21"
+        );
+        assert!(matches!(bc.backend_auth, BackendAuth::AzureApiKey(_)));
+    }
+
+    #[test]
+    fn multi_config_azure_custom_api_version() {
+        let toml = r#"
+            [backends.azure]
+            kind = "azure"
+            api_key = "az-test-key"
+            endpoint = "https://my-resource.openai.azure.com"
+            deployment = "gpt-4o-deploy"
+            api_version = "2025-01-01"
+        "#;
+        let mc = MultiConfig::from_toml_str(toml);
+        let bc = &mc.backends["azure"];
+        assert!(bc.base_url.contains("api-version=2025-01-01"));
+    }
+
+    #[test]
+    #[should_panic(expected = "api_key is required for azure")]
+    fn multi_config_panics_azure_no_key() {
+        let toml = r#"
+            [backends.azure]
+            kind = "azure"
+            endpoint = "https://my-resource.openai.azure.com"
+            deployment = "gpt-4o-deploy"
+        "#;
+        MultiConfig::from_toml_str(toml);
+    }
+
+    #[test]
+    #[should_panic(expected = "endpoint' is required for azure")]
+    fn multi_config_panics_azure_no_endpoint() {
+        let toml = r#"
+            [backends.azure]
+            kind = "azure"
+            api_key = "az-test-key"
+            deployment = "gpt-4o-deploy"
+        "#;
+        MultiConfig::from_toml_str(toml);
+    }
+
+    #[test]
+    #[should_panic(expected = "deployment' is required for azure")]
+    fn multi_config_panics_azure_no_deployment() {
+        let toml = r#"
+            [backends.azure]
+            kind = "azure"
+            api_key = "az-test-key"
+            endpoint = "https://my-resource.openai.azure.com"
+        "#;
+        MultiConfig::from_toml_str(toml);
+    }
+}

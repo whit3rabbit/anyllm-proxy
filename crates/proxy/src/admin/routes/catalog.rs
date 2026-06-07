@@ -1,6 +1,5 @@
 use crate::admin::state::SharedState;
 use anyllm_providers::{
-    all_providers, get_provider, list_models,
     model::ModelStatus,
     provider::{AuthKind, ProviderProtocol, ProviderStatus},
 };
@@ -57,7 +56,7 @@ fn model_status_str(s: ModelStatus) -> &'static str {
 
 /// GET /admin/api/catalog/providers
 ///
-/// Returns all registered providers with metadata from the compile-time registry,
+/// Returns all registered providers with metadata from the shared provider catalog,
 /// enriched with cached model count and last_refreshed timestamp from SQLite.
 pub(super) async fn list_providers(State(shared): State<SharedState>) -> impl IntoResponse {
     // One query for all provider cache stats instead of two queries per provider.
@@ -67,22 +66,24 @@ pub(super) async fn list_providers(State(shared): State<SharedState>) -> impl In
         Default::default()
     };
 
-    let providers: Vec<serde_json::Value> = all_providers()
+    let catalog = shared.provider_catalog.clone();
+    let providers: Vec<serde_json::Value> = catalog
+        .all_providers()
         .map(|p| {
-            let model_count = list_models(p.id).len();
+            let model_count = catalog.list_models(&p.id).len();
             let (cached_count, last_refreshed) = cache_stats
-                .get(p.id)
+                .get(p.id.as_str())
                 .map(|(c, r)| (*c, *r))
                 .unwrap_or((0, None));
             serde_json::json!({
-                "id":                p.id,
-                "display_name":      p.display_name,
+                "id":                p.id.as_str(),
+                "display_name":      p.display_name.as_str(),
                 "protocol":          protocol_str(p.protocol),
                 "auth":              auth_str(p.auth),
                 "status":            provider_status_str(p.status),
-                "default_base_url":  p.default_base_url,
-                "env_vars":          p.env_vars,
-                "litellm_prefix":    p.litellm_prefix,
+                "default_base_url":  p.default_base_url.as_str(),
+                "env_vars":          &p.env_vars,
+                "litellm_prefix":    p.litellm_prefix.as_str(),
                 "capabilities": {
                     "chat_completions": p.capabilities.chat_completions,
                     "streaming":        p.capabilities.streaming,
@@ -118,7 +119,7 @@ pub(super) async fn list_provider_models(
             .into_response();
     }
 
-    if get_provider(&provider_id).is_none() {
+    if shared.provider_catalog.get_provider(&provider_id).is_none() {
         return (
             StatusCode::NOT_FOUND,
             Json(serde_json::json!({ "error": "provider not found" })),
@@ -126,17 +127,19 @@ pub(super) async fn list_provider_models(
             .into_response();
     }
 
-    let models: Vec<serde_json::Value> = list_models(&provider_id)
+    let models: Vec<serde_json::Value> = shared
+        .provider_catalog
+        .list_models(&provider_id)
         .iter()
         .map(|m| {
-            let pricing = crate::cost::price_per_million_for_model(m.id).map(|(inp, out)| {
+            let pricing = crate::cost::price_per_million_for_model(&m.id).map(|(inp, out)| {
                 serde_json::json!({
                     "input_per_million_tokens":  inp,
                     "output_per_million_tokens": out,
                 })
             });
             serde_json::json!({
-                "id":                m.id,
+                "id":                m.id.as_str(),
                 "context_window":    m.context_window,
                 "max_output_tokens": m.max_output_tokens,
                 "status":            model_status_str(m.status),
@@ -184,8 +187,8 @@ pub(super) async fn refresh_provider_models(
             .into_response();
     }
 
-    let provider = match get_provider(&provider_id) {
-        Some(p) => p,
+    let provider = match shared.provider_catalog.get_provider(&provider_id) {
+        Some(p) => p.clone(),
         None => {
             return (
                 StatusCode::NOT_FOUND,
@@ -205,9 +208,21 @@ pub(super) async fn refresh_provider_models(
         )
             .into_response();
     }
+    if provider.default_base_url.is_empty() {
+        return (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(serde_json::json!({
+                "error": "provider does not have a default API base URL"
+            })),
+        )
+            .into_response();
+    }
 
     // Resolve the API key from the first env var that is set.
-    let api_key = provider.env_vars.iter().find_map(|v| std::env::var(v).ok());
+    let api_key = provider
+        .env_vars
+        .iter()
+        .find_map(|v| std::env::var(v.as_str()).ok());
 
     let url = format!(
         "{}/v1/models",
@@ -303,4 +318,76 @@ pub(super) async fn refresh_provider_models(
         })),
     )
         .into_response()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use anyllm_providers::ProviderCatalog;
+    use std::sync::Arc;
+
+    fn shared_with_runtime_catalog() -> SharedState {
+        let mut shared = SharedState::new_for_test();
+        let catalog = ProviderCatalog::from_litellm_json(
+            r#"{
+                "catalog_runtime/chat-model": {
+                    "litellm_provider": "catalog_runtime",
+                    "mode": "chat",
+                    "max_input_tokens": 1234,
+                    "max_output_tokens": 567,
+                    "supports_function_calling": true,
+                    "supports_vision": true
+                }
+            }"#,
+        )
+        .expect("runtime catalog");
+        shared.provider_catalog = Arc::new(catalog);
+        shared
+    }
+
+    async fn response_json(response: axum::response::Response) -> serde_json::Value {
+        let body = axum::body::to_bytes(response.into_body(), 1 << 20)
+            .await
+            .expect("body bytes");
+        serde_json::from_slice(&body).expect("json body")
+    }
+
+    #[tokio::test]
+    async fn list_providers_reads_shared_catalog() {
+        let response = list_providers(State(shared_with_runtime_catalog()))
+            .await
+            .into_response();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = response_json(response).await;
+        let providers = body["providers"].as_array().expect("providers array");
+        let runtime = providers
+            .iter()
+            .find(|p| p["id"] == "catalog_runtime")
+            .expect("runtime-only provider");
+
+        assert_eq!(runtime["display_name"], "Catalog Runtime");
+        assert_eq!(runtime["default_base_url"], "");
+        assert_eq!(runtime["model_count"], 1);
+    }
+
+    #[tokio::test]
+    async fn list_provider_models_reads_shared_catalog() {
+        let response = list_provider_models(
+            State(shared_with_runtime_catalog()),
+            Path("catalog_runtime".to_string()),
+        )
+        .await
+        .into_response();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = response_json(response).await;
+        assert_eq!(body["provider_id"], "catalog_runtime");
+        assert_eq!(body["has_models"], true);
+        assert_eq!(body["models"][0]["id"], "chat-model");
+        assert_eq!(body["models"][0]["context_window"], 1234);
+        assert_eq!(body["models"][0]["max_output_tokens"], 567);
+        assert_eq!(body["models"][0]["capabilities"]["tool_use"], true);
+        assert_eq!(body["models"][0]["capabilities"]["vision"], true);
+    }
 }

@@ -1,3 +1,5 @@
+mod main_helpers;
+
 use anyllm_proxy::{
     admin, config,
     server::{routes, state},
@@ -18,7 +20,7 @@ fn main() {
     let is_run_child = std::env::var("_ANYLLM_RUN_CHILD").is_ok();
 
     // Resolve the data directory early so all path defaults can use it.
-    let data_dir = resolve_data_dir();
+    let data_dir = main_helpers::bootstrap::resolve_data_dir();
     if !is_run_child {
         eprintln!("anyllm_proxy: data directory: {}", data_dir.display());
         let data_dir_env = data_dir.join(".anyllm.env");
@@ -37,7 +39,7 @@ fn main() {
             });
         let env_file_vars = env_file_path
             .as_deref()
-            .map(parse_env_file)
+            .map(main_helpers::bootstrap::parse_env_file)
             .unwrap_or_default();
 
         // SAFETY: genuinely single-threaded here (no tokio runtime yet).
@@ -66,8 +68,8 @@ fn main() {
     // Runs after .anyllm.env so the file still takes precedence over DB imports,
     // and before the async runtime to keep set_var single-threaded safe.
     if !is_run_child {
-        let db_path = resolve_db_path(&data_dir);
-        let db_vars = load_env_from_sqlite(&db_path);
+        let db_path = main_helpers::bootstrap::resolve_db_path(&data_dir);
+        let db_vars = main_helpers::bootstrap::load_env_from_sqlite(&db_path);
         if !db_vars.is_empty() {
             unsafe {
                 for (key, val) in &db_vars {
@@ -144,7 +146,7 @@ Configure via UI:  anyllm-proxy --webui\n"
         }
         // Proxy args: everything between the binary name and "run".
         let proxy_args: Vec<String> = args[1..run_idx].to_vec();
-        std::process::exit(run_subcommand(proxy_args, tool_argv));
+        std::process::exit(main_helpers::run_cmd::run_subcommand(proxy_args, tool_argv));
     }
 
     // Detect "providers" subcommand: anyllm-proxy providers list [--json]
@@ -152,7 +154,10 @@ Configure via UI:  anyllm-proxy --webui\n"
     //                                anyllm-proxy providers refresh --all
     if let Some(pos) = args.iter().position(|a| a == "providers") {
         let subcmd_args: Vec<String> = args[pos + 1..].to_vec();
-        std::process::exit(providers_subcommand(subcmd_args, &data_dir));
+        std::process::exit(main_helpers::providers_cmd::providers_subcommand(
+            subcmd_args,
+            &data_dir,
+        ));
     }
 
     // Now start the tokio runtime and enter the async main.
@@ -163,166 +168,7 @@ Configure via UI:  anyllm-proxy --webui\n"
         .block_on(async_main(args, data_dir));
 }
 
-use std::sync::LazyLock;
-
-/// Shared HTTP client for provider model discovery (connect 10s, read 20s, no redirects).
-static PROVIDER_REFRESH_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
-    reqwest::Client::builder()
-        .connect_timeout(std::time::Duration::from_secs(10))
-        .timeout(std::time::Duration::from_secs(20))
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
-        .expect("failed to build provider refresh HTTP client")
-});
-
-fn provider_status_str(s: anyllm_providers::provider::ProviderStatus) -> &'static str {
-    match s {
-        anyllm_providers::provider::ProviderStatus::Implemented => "implemented",
-        anyllm_providers::provider::ProviderStatus::Wired => "wired",
-        anyllm_providers::provider::ProviderStatus::Stub => "stub",
-    }
-}
-
-fn provider_protocol_str(p: anyllm_providers::provider::ProviderProtocol) -> &'static str {
-    match p {
-        anyllm_providers::provider::ProviderProtocol::OpenAICompat => "openai_compat",
-        anyllm_providers::provider::ProviderProtocol::AzureOpenAI => "azure_openai",
-        anyllm_providers::provider::ProviderProtocol::VertexAI => "vertex_ai",
-        anyllm_providers::provider::ProviderProtocol::GeminiOpenAI => "gemini_openai",
-        anyllm_providers::provider::ProviderProtocol::GeminiNative => "gemini_native",
-        anyllm_providers::provider::ProviderProtocol::AnthropicNative => "anthropic_native",
-        anyllm_providers::provider::ProviderProtocol::BedrockNative => "bedrock_native",
-        anyllm_providers::provider::ProviderProtocol::Custom => "custom",
-    }
-}
-
-/// CLI handler for `anyllm-proxy providers …`.
-/// Runs synchronously (blocking HTTP calls via a throw-away tokio runtime).
-/// Does not write to SQLite — the HTTP fetch is informational only.
-fn providers_subcommand(args: Vec<String>, _data_dir: &std::path::Path) -> i32 {
-    match args.first().map(String::as_str) {
-        Some("list") => {
-            let json_mode = args.iter().any(|a| a == "--json");
-            let providers: Vec<_> = anyllm_providers::all_providers().collect();
-            if json_mode {
-                let out: Vec<serde_json::Value> = providers
-                    .iter()
-                    .map(|p| {
-                        serde_json::json!({
-                            "id":               p.id,
-                            "display_name":     p.display_name,
-                            "status":           provider_status_str(p.status),
-                            "protocol":         provider_protocol_str(p.protocol),
-                            "chat_completions": p.capabilities.chat_completions,
-                            "model_count":      anyllm_providers::list_models(p.id).len(),
-                        })
-                    })
-                    .collect();
-                println!("{}", serde_json::to_string_pretty(&out).unwrap());
-            } else {
-                println!(
-                    "{:<20} {:<15} {:<12} {:>8}",
-                    "ID", "STATUS", "PROTOCOL", "MODELS"
-                );
-                println!("{}", "-".repeat(60));
-                for p in &providers {
-                    println!(
-                        "{:<20} {:<15} {:<12} {:>8}",
-                        p.id,
-                        provider_status_str(p.status),
-                        provider_protocol_str(p.protocol),
-                        anyllm_providers::list_models(p.id).len()
-                    );
-                }
-            }
-            0
-        }
-        Some("refresh") => {
-            let target = args.get(1).map(String::as_str);
-            let refresh_all = target == Some("--all");
-
-            // Collect providers to refresh before entering async context.
-            let providers_to_refresh: Vec<anyllm_providers::provider::ProviderDef> = if refresh_all
-            {
-                anyllm_providers::all_providers()
-                    .filter(|p| p.capabilities.chat_completions)
-                    .filter(|p| p.env_vars.iter().any(|v| std::env::var(v).is_ok()))
-                    .cloned()
-                    .collect()
-            } else if let Some(id) = target {
-                match anyllm_providers::get_provider(id) {
-                    Some(p) => vec![p.clone()],
-                    None => {
-                        eprintln!("error: unknown provider '{id}'");
-                        return 1;
-                    }
-                }
-            } else {
-                eprintln!("usage: anyllm-proxy providers refresh <provider-id>|--all");
-                return 1;
-            };
-
-            let rt = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .expect("failed to build runtime");
-
-            let client = PROVIDER_REFRESH_CLIENT.clone();
-
-            let mut exit = 0;
-            for provider in &providers_to_refresh {
-                let api_key = provider.env_vars.iter().find_map(|v| std::env::var(v).ok());
-                let url = format!(
-                    "{}/v1/models",
-                    provider.default_base_url.trim_end_matches('/')
-                );
-                let result = rt.block_on(async {
-                    let mut req = client.get(&url);
-                    if let Some(ref key) = api_key {
-                        req = req.header("Authorization", format!("Bearer {key}"));
-                    }
-                    req.send().await
-                });
-                match result {
-                    Err(e) => {
-                        eprintln!("{}: error: {e}", provider.id);
-                        exit = 1;
-                    }
-                    Ok(resp) if !resp.status().is_success() => {
-                        eprintln!("{}: upstream returned {}", provider.id, resp.status());
-                        exit = 1;
-                    }
-                    Ok(resp) => match rt.block_on(resp.json::<serde_json::Value>()) {
-                        Err(e) => {
-                            eprintln!("{}: invalid JSON: {e}", provider.id);
-                            exit = 1;
-                        }
-                        Ok(json) => {
-                            let models: Vec<&str> = json
-                                .get("data")
-                                .and_then(|d| d.as_array())
-                                .map(|arr| {
-                                    arr.iter().filter_map(|m| m.get("id")?.as_str()).collect()
-                                })
-                                .unwrap_or_default();
-                            println!("{}: {} models", provider.id, models.len());
-                            for m in &models {
-                                println!("  - {m}");
-                            }
-                        }
-                    },
-                }
-            }
-            exit
-        }
-        _ => {
-            eprintln!("usage: anyllm-proxy providers list [--json]");
-            eprintln!("       anyllm-proxy providers refresh <provider-id>");
-            eprintln!("       anyllm-proxy providers refresh --all");
-            1
-        }
-    }
-}
+// Subcommand and utility helpers moved to main_helpers modules.
 
 async fn async_main(args: Vec<String>, data_dir: PathBuf) {
     // ---- Phase 3: Init tracing (needs RUST_LOG from env file) ----
@@ -361,7 +207,7 @@ async fn async_main(args: Vec<String>, data_dir: PathBuf) {
             ))
         });
         // Load persisted deployments from the DB (best-effort, non-fatal).
-        let db_path = resolve_db_path(&data_dir);
+        let db_path = main_helpers::bootstrap::resolve_db_path(&data_dir);
         if let Ok(conn) = rusqlite::Connection::open(&db_path) {
             if let Ok(rows) = admin::db::list_model_deployments(&conn) {
                 if !rows.is_empty() {
@@ -597,6 +443,7 @@ async fn async_main(args: Vec<String>, data_dir: PathBuf) {
         Ok("1") | Ok("true") | Ok("yes")
     );
     let enable_admin = flag_set && !force_disabled;
+    let provider_catalog = Arc::new(anyllm_providers::ProviderCatalog::bundled());
 
     // --- Admin setup (enabled only when --webui or --admin flag is passed) ---
     // Returns Some((SharedState, admin Router, admin TcpListener)) when enabled.
@@ -648,7 +495,7 @@ async fn async_main(args: Vec<String>, data_dir: PathBuf) {
 
         admin_redirect_port = Some(admin_port);
 
-        let db_path = resolve_db_path(&data_dir);
+        let db_path = main_helpers::bootstrap::resolve_db_path(&data_dir);
         let conn =
             rusqlite::Connection::open(&db_path).expect("failed to open SQLite database for admin");
         admin::db::init_db(&conn).expect("failed to initialize admin database schema");
@@ -804,7 +651,7 @@ async fn async_main(args: Vec<String>, data_dir: PathBuf) {
             let conn_guard = db.lock().unwrap_or_else(|e| e.into_inner());
             if let Ok(rows) = admin::db::list_managed_backends(&conn_guard) {
                 for row in rows {
-                    match anyllm_providers::get_provider(&row.provider_id) {
+                    match provider_catalog.get_provider(&row.provider_id) {
                         None => {
                             tracing::warn!(
                                 provider_id = %row.provider_id,
@@ -814,14 +661,15 @@ async fn async_main(args: Vec<String>, data_dir: PathBuf) {
                         }
                         Some(provider) => {
                             match anyllm_proxy::admin::routes::managed_backends::row_to_backend_config(&row, provider) {
-                                None => {
+                                Err(e) => {
                                     tracing::warn!(
                                         provider_id = %row.provider_id,
                                         backend_id = %row.id,
-                                        "managed backend uses unsupported protocol (Custom); skipping"
+                                        error = %e.message(),
+                                        "managed backend configuration is invalid; skipping"
                                     );
                                 }
-                                Some(bc) => {
+                                Ok(bc) => {
                                     let client = anyllm_proxy::backend::BackendClient::from_backend_config(&bc);
                                     map.insert(row.name.clone(), (row, client));
                                 }
@@ -845,6 +693,7 @@ async fn async_main(args: Vec<String>, data_dir: PathBuf) {
             virtual_keys,
             hmac_secret,
             model_router: model_router.clone(),
+            provider_catalog: provider_catalog.clone(),
             mcp_manager: tool_engine_state
                 .as_ref()
                 .and_then(|s| s.mcp_manager.clone()),
@@ -872,17 +721,28 @@ async fn async_main(args: Vec<String>, data_dir: PathBuf) {
 
         if auto_refresh {
             let shared_for_refresh = shared.clone();
-            let client = PROVIDER_REFRESH_CLIENT.clone();
+            let client = main_helpers::providers_cmd::PROVIDER_REFRESH_CLIENT.clone();
             tokio::spawn(async move {
                 let interval = std::time::Duration::from_secs(refresh_interval_hours * 3600);
                 // Delay first run by 30s so startup is not slowed down.
                 tokio::time::sleep(std::time::Duration::from_secs(30)).await;
                 loop {
-                    for provider in anyllm_providers::all_providers() {
+                    let providers: Vec<_> = shared_for_refresh
+                        .provider_catalog
+                        .all_providers()
+                        .cloned()
+                        .collect();
+                    for provider in providers {
                         if !provider.capabilities.chat_completions {
                             continue;
                         }
-                        let api_key = provider.env_vars.iter().find_map(|v| std::env::var(v).ok());
+                        if provider.default_base_url.is_empty() {
+                            continue;
+                        }
+                        let api_key = provider
+                            .env_vars
+                            .iter()
+                            .find_map(|v| std::env::var(v.as_str()).ok());
                         if api_key.is_none() {
                             continue; // skip unconfigured providers
                         }
@@ -891,24 +751,25 @@ async fn async_main(args: Vec<String>, data_dir: PathBuf) {
                             "{}/v1/models",
                             provider.default_base_url.trim_end_matches('/')
                         );
+                        let provider_id = provider.id.clone();
                         let mut req = client.get(&url);
                         if let Some(ref key) = api_key {
                             req = req.header("Authorization", format!("Bearer {key}"));
                         }
                         match req.send().await {
                             Err(e) => tracing::warn!(
-                                provider = %provider.id,
+                                provider = %provider_id,
                                 error = %e,
                                 "provider auto-refresh failed"
                             ),
                             Ok(resp) if !resp.status().is_success() => tracing::warn!(
-                                provider = %provider.id,
+                                provider = %provider_id,
                                 status = %resp.status(),
                                 "provider auto-refresh upstream error"
                             ),
                             Ok(resp) => match resp.json::<serde_json::Value>().await {
                                 Err(e) => tracing::warn!(
-                                    provider = %provider.id,
+                                    provider = %provider_id,
                                     error = %e,
                                     "provider auto-refresh: invalid JSON response"
                                 ),
@@ -926,7 +787,7 @@ async fn async_main(args: Vec<String>, data_dir: PathBuf) {
                                         .unwrap_or_default();
                                     let count = model_ids.len();
                                     let db = shared_for_refresh.db.clone();
-                                    let pid = provider.id.to_string();
+                                    let pid = provider_id.clone();
                                     let _ = tokio::task::spawn_blocking(move || {
                                         let mut conn = db.lock().unwrap_or_else(|e| e.into_inner());
                                         if let Err(e) = admin::db::upsert_provider_models_cache(
@@ -975,11 +836,11 @@ async fn async_main(args: Vec<String>, data_dir: PathBuf) {
                 let mut buf = [0u8; 32];
                 getrandom::fill(&mut buf).expect("getrandom failed");
                 let token = hex::encode(buf);
-                let token_path = resolve_admin_token_path(&data_dir);
+                let token_path = main_helpers::bootstrap::resolve_admin_token_path(&data_dir);
                 let token_path = token_path.to_string_lossy().to_string();
                 // Write token to file with restrictive permissions instead of stderr,
                 // because stderr is captured by container log drivers in production.
-                if let Err(e) = write_token_file(&token_path, &token) {
+                if let Err(e) = main_helpers::bootstrap::write_token_file(&token_path, &token) {
                     // Do not print the token to stderr: container log drivers capture
                     // stderr and persist it in centralized logging systems.
                     panic!(
@@ -1122,7 +983,7 @@ async fn async_main(args: Vec<String>, data_dir: PathBuf) {
             >,
         >,
     > = if enable_admin {
-        let db_path = resolve_db_path(&data_dir);
+        let db_path = main_helpers::bootstrap::resolve_db_path(&data_dir);
         let batch_conn = rusqlite::Connection::open(&db_path)
             .expect("failed to open second SQLite connection for batch engine");
         anyllm_batch_engine::db::migrate_old_tables(&batch_conn)
@@ -1267,183 +1128,6 @@ fn format_startup_banner(proxy_addr: &str, admin_url: &str) -> String {
     format!("{border}\n  Proxy API  http://{proxy_display}\n  Admin UI   {admin_url}\n{border}")
 }
 
-/// Parse a `.env`-format file and return `(key, value)` pairs to set.
-///
-/// Delegates parsing to `anyllm_proxy::env_parser::parse_env_content` (pure, no side effects).
-///
-/// Hard errors are printed to stderr and result in an empty list; warnings are printed as-is.
-/// Already-set environment variables are skipped so the real environment always wins.
-/// Compatible with Docker `--env-file` and standard dotenv tooling.
-fn parse_env_file(path: &str) -> Vec<(String, String)> {
-    let content = match std::fs::read_to_string(path) {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("anyllm_proxy: could not read env file '{path}': {e}");
-            return Vec::new();
-        }
-    };
-
-    let result = anyllm_proxy::env_parser::parse_env_content(&content);
-
-    for err in &result.hard_errors {
-        eprintln!("anyllm_proxy: {path}: {err}");
-    }
-    if !result.hard_errors.is_empty() {
-        return Vec::new();
-    }
-
-    for warn in &result.warnings {
-        let loc = warn.line.map(|l| format!(":{l}")).unwrap_or_default();
-        eprintln!("anyllm_proxy: {path}{loc}: {}", warn.message);
-    }
-
-    result
-        .pairs
-        .into_iter()
-        .filter(|p| std::env::var(&p.key).is_err())
-        .map(|p| (p.key, p.value))
-        .collect()
-}
-
-/// Load env vars previously imported via the admin UI from the SQLite `env_import` table.
-///
-/// Opens the database synchronously (rusqlite is sync) before the tokio runtime starts,
-/// so `set_var` remains single-threaded safe. Skips keys already present in the environment
-/// (real env and .anyllm.env take precedence). Silently succeeds if the DB or table does
-/// not yet exist (first run before any import).
-fn load_env_from_sqlite(db_path: &str) -> Vec<(String, String)> {
-    let conn = match rusqlite::Connection::open(db_path) {
-        Ok(c) => c,
-        Err(e) => {
-            // Benign when the DB file doesn't exist yet (first run).
-            // Log for any other open failure (permissions, corruption, etc.).
-            if std::path::Path::new(db_path).exists() {
-                eprintln!("anyllm_proxy: could not open DB '{db_path}' for env import: {e}");
-            }
-            return Vec::new();
-        }
-    };
-
-    // The env_import table is created by init_db() during normal startup.
-    // If the proxy has never run with a DB, the table won't exist yet.
-    let rows: Vec<(String, String)> =
-        match conn.prepare("SELECT key, value FROM env_import ORDER BY key") {
-            Ok(mut stmt) => stmt
-                .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))
-                .and_then(|mapped| mapped.collect())
-                .unwrap_or_default(),
-            Err(_) => return Vec::new(), // Table doesn't exist yet
-        };
-
-    rows.into_iter()
-        .filter(|(key, _)| std::env::var(key).is_err())
-        .collect()
-}
-
-/// Resolve the data directory where config, DB, and token files live.
-/// Priority: ANYLLM_HOME env var > ~/.anyllm/ > CWD (fallback if HOME unresolvable).
-/// Creates the directory on first use (mode 0700 on Unix).
-fn resolve_data_dir() -> PathBuf {
-    let dir = if let Ok(home) = std::env::var("ANYLLM_HOME") {
-        PathBuf::from(home)
-    } else if let Some(home) = home_dir() {
-        home.join(".anyllm")
-    } else {
-        // No home directory (unusual). Fall back to CWD.
-        PathBuf::from(".")
-    };
-
-    if !dir.exists() {
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::DirBuilderExt;
-            let mut builder = std::fs::DirBuilder::new();
-            builder.recursive(true).mode(0o700);
-            if let Err(e) = builder.create(&dir) {
-                eprintln!(
-                    "anyllm_proxy: could not create data directory '{}': {e}",
-                    dir.display()
-                );
-            }
-        }
-        #[cfg(not(unix))]
-        {
-            if let Err(e) = std::fs::create_dir_all(&dir) {
-                eprintln!(
-                    "anyllm_proxy: could not create data directory '{}': {e}",
-                    dir.display()
-                );
-            }
-        }
-    }
-    dir
-}
-
-/// Cross-platform home directory lookup.
-fn home_dir() -> Option<PathBuf> {
-    std::env::var("HOME")
-        .or_else(|_| std::env::var("USERPROFILE"))
-        .ok()
-        .map(PathBuf::from)
-}
-
-/// Resolve SQLite DB path: ADMIN_DB_PATH env var > data_dir/admin.db.
-fn resolve_db_path(data_dir: &std::path::Path) -> String {
-    std::env::var("ADMIN_DB_PATH")
-        .unwrap_or_else(|_| data_dir.join("admin.db").to_string_lossy().into_owned())
-}
-
-/// Resolve admin token file path from `ADMIN_TOKEN_PATH` env var,
-/// falling back to `~/.anyllm/.admin_token`.
-fn resolve_admin_token_path(data_dir: &std::path::Path) -> PathBuf {
-    match std::env::var("ADMIN_TOKEN_PATH") {
-        Ok(p) => {
-            let path = PathBuf::from(&p);
-            // Reject paths containing traversal sequences to prevent writing
-            // the admin token to unexpected locations via misconfigured env vars.
-            if p.contains("..") {
-                panic!("ADMIN_TOKEN_PATH must not contain '..' path traversal: {p}");
-            }
-            path
-        }
-        Err(_) => data_dir.join(".admin_token"),
-    }
-}
-
-/// Write the admin token to a file with mode 0600 (owner-only read/write).
-/// On Unix, sets permissions atomically at creation to avoid a TOCTOU race
-/// where the file is briefly world-readable before chmod.
-fn write_token_file(path: &str, token: &str) -> std::io::Result<()> {
-    use std::io::Write;
-
-    #[cfg(unix)]
-    let mut file = {
-        use std::os::unix::fs::OpenOptionsExt;
-        std::fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .mode(0o600)
-            .open(path)?
-    };
-
-    #[cfg(not(unix))]
-    let mut file: std::fs::File = {
-        // On non-Unix platforms, file permissions cannot be set to owner-only
-        // at creation time. Returning an error forces the caller to panic,
-        // requiring the operator to set ADMIN_TOKEN explicitly.
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::Unsupported,
-            "auto-generating the admin token file is not supported on non-Unix platforms; \
-             set the ADMIN_TOKEN environment variable explicitly",
-        ));
-    };
-
-    file.write_all(token.as_bytes())?;
-    file.write_all(b"\n")?;
-    Ok(())
-}
-
 async fn shutdown_signal() {
     let ctrl_c = tokio::signal::ctrl_c();
     #[cfg(unix)]
@@ -1464,189 +1148,8 @@ async fn shutdown_signal() {
 }
 
 // ---------------------------------------------------------------------------
-// "run" subcommand helpers
+// "run" subcommand helpers moved to main_helpers::run_cmd
 // ---------------------------------------------------------------------------
-
-/// Derives the auth token for the spawned tool from PROXY_API_KEYS (first
-/// comma-separated entry), falling back to "proxy-user" if unset.
-fn derive_auth_token() -> String {
-    std::env::var("PROXY_API_KEYS")
-        .ok()
-        .and_then(|keys| {
-            keys.split(',')
-                .next()
-                .map(|k| k.trim().to_string())
-                .filter(|k| !k.is_empty())
-        })
-        .unwrap_or_else(|| "proxy-user".to_string())
-}
-
-/// Returns the env vars to inject into the spawned tool.
-///
-/// Supported tools and their configurations:
-/// - `claude`    — Claude Code: Bearer auth via ANTHROPIC_AUTH_TOKEN, clears ANTHROPIC_API_KEY
-/// - `aider`     — Aider: both Anthropic and OpenAI vars (user picks mode via --model)
-/// - `codex`     — OpenAI Codex CLI: OpenAI-format vars
-/// - `goose`     — Block Goose: GOOSE_PROVIDER__ namespace (requires GOOSE_PROVIDER__TYPE in env)
-/// - `opencode`  — OpenCode: inline JSON config via OPENCODE_CONFIG_CONTENT
-/// - `gemini`    — Gemini CLI: GEMINI_BASE_URL + GEMINI_API_KEY (sent as x-goog-api-key)
-/// - default     — Any Anthropic-compatible CLI (cursor, windsurf, cline, etc.): standard vars
-fn tool_env_vars(tool: &str, proxy_url: &str, auth_token: &str) -> Vec<(&'static str, String)> {
-    // OpenAI client libs expect the base URL to include /v1; they append /chat/completions.
-    let openai_base = format!("{proxy_url}/v1");
-
-    let tool_name = std::path::Path::new(tool)
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or(tool);
-
-    match tool_name {
-        "claude" => vec![
-            ("ANTHROPIC_BASE_URL", proxy_url.to_string()),
-            ("ANTHROPIC_AUTH_TOKEN", auth_token.to_string()),
-            // Must be cleared; otherwise Claude Code falls back to direct Anthropic API.
-            ("ANTHROPIC_API_KEY", String::new()),
-            ("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "1".to_string()),
-        ],
-        "aider" => vec![
-            ("ANTHROPIC_BASE_URL", proxy_url.to_string()),
-            ("ANTHROPIC_API_KEY", auth_token.to_string()),
-            // OpenAI backend: select with `aider --model openai/<model>`
-            ("AIDER_OPENAI_API_BASE", openai_base),
-            ("OPENAI_API_KEY", auth_token.to_string()),
-        ],
-        "codex" => vec![
-            ("OPENAI_BASE_URL", openai_base),
-            ("OPENAI_API_KEY", auth_token.to_string()),
-        ],
-        "goose" => vec![
-            // GOOSE_PROVIDER__TYPE must already be set (e.g., GOOSE_PROVIDER__TYPE=anthropic).
-            ("GOOSE_PROVIDER__HOST", proxy_url.to_string()),
-            ("GOOSE_PROVIDER__API_KEY", auth_token.to_string()),
-        ],
-        "opencode" => {
-            // OPENCODE_CONFIG_CONTENT is highest priority; avoids needing a config file on disk.
-            // Uses @ai-sdk/openai-compatible (bundled with opencode) against the proxy's /v1 endpoint.
-            let config_json = serde_json::json!({
-                "provider": {
-                    "anyllm": {
-                        "npm": "@ai-sdk/openai-compatible",
-                        "options": {
-                            "baseURL": format!("{proxy_url}/v1"),
-                            "apiKey": auth_token
-                        },
-                        "models": {
-                            "claude-sonnet-4-6":  {"name": "Claude Sonnet 4.6"},
-                            "claude-haiku-4-5":   {"name": "Claude Haiku 4.5"},
-                            "gpt-4o":             {"name": "GPT-4o"},
-                            "gpt-4o-mini":        {"name": "GPT-4o Mini"}
-                        }
-                    }
-                },
-                "model": "anyllm/claude-sonnet-4-6"
-            });
-            vec![("OPENCODE_CONFIG_CONTENT", config_json.to_string())]
-        }
-        "gemini" => vec![
-            ("GEMINI_BASE_URL", proxy_url.to_string()),
-            // Sent as x-goog-api-key; the proxy auth middleware accepts that header.
-            ("GEMINI_API_KEY", auth_token.to_string()),
-        ],
-        _ => vec![
-            // Default: standard Anthropic vars (cursor, windsurf, cline, etc.)
-            ("ANTHROPIC_BASE_URL", proxy_url.to_string()),
-            ("ANTHROPIC_API_KEY", auth_token.to_string()),
-        ],
-    }
-}
-
-/// Polls TCP port `port` on 127.0.0.1 until it accepts a connection or
-/// `max_wait_ms` elapses. Returns true if the port became reachable.
-fn wait_for_port(port: u16, max_wait_ms: u64) -> bool {
-    use std::net::{SocketAddr, TcpStream};
-    use std::time::{Duration, Instant};
-    let addr: SocketAddr = format!("127.0.0.1:{port}").parse().expect("valid addr");
-    let deadline = Instant::now() + Duration::from_millis(max_wait_ms);
-    loop {
-        if TcpStream::connect_timeout(&addr, Duration::from_millis(100)).is_ok() {
-            return true;
-        }
-        if Instant::now() >= deadline {
-            return false;
-        }
-        std::thread::sleep(Duration::from_millis(100));
-    }
-}
-
-/// Implements `anyllm_proxy run <tool> [args...]`:
-///
-/// 1. Spawns the proxy as a background child process (re-executes self).
-/// 2. Waits for the proxy to accept connections on its configured port.
-/// 3. Spawns the requested tool with ANTHROPIC_* env vars pointing at the proxy.
-/// 4. Waits for the tool to exit, kills the proxy, and returns the tool's exit code.
-fn run_subcommand(proxy_args: Vec<String>, tool_argv: Vec<String>) -> i32 {
-    let listen_port: u16 = std::env::var("LISTEN_PORT")
-        .ok()
-        .and_then(|p| p.parse().ok())
-        .unwrap_or(3000);
-    let auth_token = derive_auth_token();
-    let proxy_url = format!("http://localhost:{listen_port}");
-
-    // Re-execute this binary as the proxy server in the background.
-    let proxy_exe = match std::env::current_exe() {
-        Ok(p) => p,
-        Err(e) => {
-            eprintln!("anyllm_proxy: cannot locate own executable: {e}");
-            return 1;
-        }
-    };
-
-    let mut proxy_child = match std::process::Command::new(&proxy_exe)
-        .args(&proxy_args)
-        // Signal child to skip env file loading (vars are already inherited).
-        .env("_ANYLLM_RUN_CHILD", "1")
-        .stderr(std::process::Stdio::inherit())
-        .stdout(std::process::Stdio::inherit())
-        .spawn()
-    {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("anyllm_proxy: failed to start proxy: {e}");
-            return 1;
-        }
-    };
-
-    // Wait up to 10 seconds for the proxy to start accepting connections.
-    eprintln!("anyllm_proxy: waiting for proxy on port {listen_port}...");
-    if !wait_for_port(listen_port, 10_000) {
-        eprintln!("anyllm_proxy: proxy did not start within 10 seconds on port {listen_port}");
-        let _ = proxy_child.kill();
-        let _ = proxy_child.wait();
-        return 1;
-    }
-
-    let env_vars = tool_env_vars(&tool_argv[0], &proxy_url, &auth_token);
-
-    // Spawn the tool, inheriting all env vars from the parent and overlaying the
-    // proxy-specific ones. stdin/stdout/stderr pass through unchanged.
-    let exit_code = match std::process::Command::new(&tool_argv[0])
-        .args(&tool_argv[1..])
-        .envs(env_vars)
-        .status()
-    {
-        Ok(s) => s.code().unwrap_or(1),
-        Err(e) => {
-            eprintln!("anyllm_proxy: failed to run '{}': {e}", tool_argv[0]);
-            1
-        }
-    };
-
-    // Shut down the proxy child.
-    let _ = proxy_child.kill();
-    let _ = proxy_child.wait();
-
-    exit_code
-}
 
 #[cfg(test)]
 mod tests {
@@ -1662,69 +1165,5 @@ mod tests {
         assert!(!banner.contains(token));
         assert!(!banner.contains("Admin token:"));
         assert!(!banner.contains("Token      "));
-    }
-
-    #[test]
-    fn parse_env_file_double_quoted_newline_escape() {
-        use std::io::Write;
-        let dir = std::env::temp_dir();
-        let path = dir.join("test_parse_env_escape_n.env");
-        let mut f = std::fs::File::create(&path).unwrap();
-        writeln!(f, r#"KEY="hello\nworld""#).unwrap();
-        drop(f);
-        let vars = parse_env_file(path.to_str().unwrap());
-        std::fs::remove_file(&path).ok();
-        let val = vars
-            .iter()
-            .find(|(k, _)| k == "KEY")
-            .map(|(_, v)| v.as_str());
-        assert_eq!(
-            val,
-            Some("hello\nworld"),
-            "\\n inside double quotes must become a newline"
-        );
-    }
-
-    #[test]
-    fn parse_env_file_double_quoted_tab_escape() {
-        use std::io::Write;
-        let dir = std::env::temp_dir();
-        let path = dir.join("test_parse_env_escape_t.env");
-        let mut f = std::fs::File::create(&path).unwrap();
-        writeln!(f, r#"KEY="col1\tcol2""#).unwrap();
-        drop(f);
-        let vars = parse_env_file(path.to_str().unwrap());
-        std::fs::remove_file(&path).ok();
-        let val = vars
-            .iter()
-            .find(|(k, _)| k == "KEY")
-            .map(|(_, v)| v.as_str());
-        assert_eq!(
-            val,
-            Some("col1\tcol2"),
-            "\\t inside double quotes must become a tab"
-        );
-    }
-
-    #[test]
-    fn parse_env_file_single_quoted_no_escape() {
-        use std::io::Write;
-        let dir = std::env::temp_dir();
-        let path = dir.join("test_parse_env_single.env");
-        let mut f = std::fs::File::create(&path).unwrap();
-        writeln!(f, r#"KEY='hello\nworld'"#).unwrap();
-        drop(f);
-        let vars = parse_env_file(path.to_str().unwrap());
-        std::fs::remove_file(&path).ok();
-        let val = vars
-            .iter()
-            .find(|(k, _)| k == "KEY")
-            .map(|(_, v)| v.as_str());
-        // Single quotes: backslash is literal, no escape processing.
-        assert_eq!(
-            val,
-            Some(r"hello\nworld"),
-            "single quotes must not process escapes"
-        );
     }
 }

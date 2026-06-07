@@ -6,6 +6,7 @@ use crate::metrics::Metrics;
 use crate::server::state::{
     AnthropicJson, AppState, ConcurrencyPermit, GlobalState, ToolEngineState,
 };
+use anyllm_providers::ProviderCatalog;
 use anyllm_translate::{anthropic, compute_request_warnings, mapping, openai};
 use axum::{
     extract::{DefaultBodyLimit, State},
@@ -73,6 +74,10 @@ pub fn app_multi_with_shared(
     // Build a shared cache instance for all backends.
     let cache_config = crate::cache::CacheConfig::from_env();
     let response_cache = Arc::new(crate::cache::memory::MemoryCache::new(&cache_config));
+    let provider_catalog = shared
+        .as_ref()
+        .map(|s| s.provider_catalog.clone())
+        .unwrap_or_else(|| Arc::new(ProviderCatalog::bundled()));
 
     // Build per-backend sub-routers. Keep a map of AppState so the default
     // backend can reuse the same state (same semaphore, same reqwest client).
@@ -101,6 +106,7 @@ pub fn app_multi_with_shared(
             expose_degradation_warnings: config.expose_degradation_warnings,
             cache: Some(response_cache.clone()),
             model_router: model_router.clone(),
+            provider_catalog: provider_catalog.clone(),
             // all_backends is set after the loop (needs all states built first).
             all_backends: None,
             tool_engine: tool_engine.clone(),
@@ -422,16 +428,17 @@ fn route_scope_forbidden_response(error: super::policy::RouteScopeError) -> Resp
     (StatusCode::FORBIDDEN, Json(err)).into_response()
 }
 
-fn anthropic_catalog_model_rows() -> Vec<serde_json::Value> {
-    anyllm_providers::list_models("anthropic")
+fn anthropic_catalog_model_rows(catalog: &ProviderCatalog) -> Vec<serde_json::Value> {
+    catalog
+        .list_models("anthropic")
         .iter()
         .map(|model| {
             serde_json::json!({
-                "id": model.id,
+                "id": model.id.as_str(),
                 "object": "model",
                 "created": 0,
                 "owned_by": "anthropic",
-                "display_name": claude_display_name(model.id),
+                "display_name": claude_display_name(&model.id),
             })
         })
         .collect()
@@ -460,7 +467,7 @@ fn claude_display_name(model_id: &str) -> String {
 
 /// GET /v1/models -- returns catalog Claude models merged with model_list entries.
 async fn models(State(state): State<AppState>) -> Json<serde_json::Value> {
-    let mut data = anthropic_catalog_model_rows();
+    let mut data = anthropic_catalog_model_rows(&state.provider_catalog);
 
     // Merge models from the model router (LiteLLM model_list config).
     if let Some(ref router_lock) = state.model_router {
@@ -1329,12 +1336,32 @@ mod tests {
 
     #[test]
     fn catalog_model_list_excludes_deprecated_sonnet() {
-        let rows = anthropic_catalog_model_rows();
+        let catalog = ProviderCatalog::bundled();
+        let rows = anthropic_catalog_model_rows(&catalog);
         let ids: Vec<&str> = rows.iter().filter_map(|m| m["id"].as_str()).collect();
         assert!(
             !ids.contains(&"claude-3-sonnet-20240229"),
             "claude-3-sonnet-20240229 is deprecated and must not appear in the model list"
         );
+    }
+
+    #[test]
+    fn catalog_model_list_reads_provided_catalog() {
+        let catalog = ProviderCatalog::from_litellm_json(
+            r#"{
+                "anthropic/claude-fresh-20260607": {
+                    "litellm_provider": "anthropic",
+                    "mode": "chat",
+                    "max_input_tokens": 200000,
+                    "max_output_tokens": 8192
+                }
+            }"#,
+        )
+        .expect("runtime catalog");
+
+        let rows = anthropic_catalog_model_rows(&catalog);
+        let ids: Vec<&str> = rows.iter().filter_map(|m| m["id"].as_str()).collect();
+        assert_eq!(ids, vec!["claude-fresh-20260607"]);
     }
 
     #[test]

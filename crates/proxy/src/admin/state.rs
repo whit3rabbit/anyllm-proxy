@@ -9,6 +9,7 @@ use crate::admin::keys::VirtualKeyMeta;
 use crate::backend::BackendClient;
 use crate::config::ModelMapping;
 use crate::metrics::Metrics;
+use anyllm_providers::ProviderCatalog;
 use dashmap::DashMap;
 use indexmap::IndexMap;
 use std::collections::HashMap;
@@ -53,6 +54,8 @@ pub struct SharedState {
     pub hmac_secret: Arc<Vec<u8>>,
     /// Model router for dynamic model management. None unless LiteLLM config is active.
     pub model_router: Option<Arc<RwLock<crate::config::model_router::ModelRouter>>>,
+    /// Immutable provider/model catalog used by the admin UI and proxy runtime.
+    pub provider_catalog: Arc<ProviderCatalog>,
     /// MCP server manager for tool discovery and execution. None when tool execution is disabled.
     pub mcp_manager: Option<Arc<crate::tools::McpServerManager>>,
     /// In-memory set of CSRF tokens issued by GET /admin/csrf-token.
@@ -178,6 +181,7 @@ impl SharedState {
             virtual_keys: Arc::new(DashMap::new()),
             hmac_secret: Arc::new(hmac_secret),
             model_router: None,
+            provider_catalog: Arc::new(ProviderCatalog::bundled()),
             mcp_manager: None,
             issued_csrf_tokens: Arc::new(
                 moka::sync::Cache::builder()

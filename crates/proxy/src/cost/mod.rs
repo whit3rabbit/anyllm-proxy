@@ -447,6 +447,7 @@ mod tests {
             virtual_keys: Arc::new(dashmap::DashMap::new()),
             hmac_secret: Arc::new(b"test-secret".to_vec()),
             model_router: None,
+            provider_catalog: Arc::new(anyllm_providers::ProviderCatalog::bundled()),
             mcp_manager: None,
             issued_csrf_tokens: Arc::new(
                 moka::sync::Cache::builder()

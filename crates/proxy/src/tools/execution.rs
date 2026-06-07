@@ -784,6 +784,7 @@ mod tests {
                 output_tokens: 20,
                 cache_creation_input_tokens: None,
                 cache_read_input_tokens: None,
+                ..Default::default()
             },
             created: None,
         };
@@ -816,6 +817,7 @@ mod tests {
                 output_tokens: 10,
                 cache_creation_input_tokens: None,
                 cache_read_input_tokens: None,
+                ..Default::default()
             },
             created: None,
         };
