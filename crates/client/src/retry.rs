@@ -131,10 +131,7 @@ pub async fn send_with_retry_policy<E: RetryableError>(
                 // Only retry on connect errors — the server never received the
                 // request, so re-sending is safe. Read/response timeouts are
                 // NOT retried: the server may have already processed the POST.
-                if policy.retry_transport_errors
-                    && attempt < max_retries
-                    && e.is_connect()
-                {
+                if policy.retry_transport_errors && attempt < max_retries && e.is_connect() {
                     let delay = backoff_delay(attempt, None);
                     tracing::warn!(
                         attempt = attempt + 1,

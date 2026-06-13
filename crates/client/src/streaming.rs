@@ -110,15 +110,11 @@ impl SseTranslatingStream {
                                 events.extend(translator.finish().into_iter().map(Ok));
                             } else {
                                 match serde_json::from_str::<ChatCompletionChunk>(json_str) {
-                                    Ok(chunk) => {
-                                        events.extend(
-                                            translator.process_chunk(&chunk).into_iter().map(Ok),
-                                        )
-                                    }
+                                    Ok(chunk) => events.extend(
+                                        translator.process_chunk(&chunk).into_iter().map(Ok),
+                                    ),
                                     Err(e) => {
-                                        tracing::debug!(
-                                            "failed to parse streaming chunk: {e}"
-                                        );
+                                        tracing::debug!("failed to parse streaming chunk: {e}");
                                     }
                                 }
                             }
@@ -184,9 +180,7 @@ impl SsePassthroughStream {
                                     // Log and skip unparseable events rather than
                                     // terminating the stream. Unknown event types
                                     // land in StreamEvent::Unknown by design.
-                                    tracing::debug!(
-                                        "failed to parse Anthropic SSE event: {e}"
-                                    );
+                                    tracing::debug!("failed to parse Anthropic SSE event: {e}");
                                 }
                             }
                         }

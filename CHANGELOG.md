@@ -4,7 +4,7 @@ All notable changes to this project will be documented here.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follow [Semantic Versioning](https://semver.org/).
 
-**Before cutting a release:** update this file under the `[Unreleased]` header. Move those entries to the new version section when running `scripts/release.sh`.
+**Before cutting a release:** update this file under the `[Unreleased]` header. Move those entries into a new `## [X.Y.Z] - YYYY-MM-DD` section, then push a `vX.Y.Z` tag. CI handles the rest (crates.io publish + GitHub Release).
 
 ---
 

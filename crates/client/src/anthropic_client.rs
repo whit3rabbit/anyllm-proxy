@@ -276,8 +276,8 @@ impl AnthropicMessagesClient {
     > {
         // Serialize once to Value and patch stream:true — avoids a deep clone
         // of all messages, tool schemas, and serde_json::Map extra fields.
-        let mut body = serde_json::to_value(req)
-            .map_err(|e| ClientError::Deserialization(e.to_string()))?;
+        let mut body =
+            serde_json::to_value(req).map_err(|e| ClientError::Deserialization(e.to_string()))?;
         if let Some(obj) = body.as_object_mut() {
             obj.insert("stream".to_string(), serde_json::Value::Bool(true));
         }
