@@ -92,7 +92,7 @@ jobs:
             target: x86_64-apple-darwin
             binary: anyllm_proxy
           # Windows x86_64
-          - os: windows-latest
+          - os: windows-2025
             target: x86_64-pc-windows-msvc
             binary: anyllm_proxy.exe
     runs-on: ${{ matrix.os }}

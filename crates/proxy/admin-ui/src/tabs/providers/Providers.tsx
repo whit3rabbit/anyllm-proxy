@@ -307,7 +307,7 @@ export default function Providers() {
   const [search, setSearch] = useState('')
   const [pendingDelete, setPendingDelete] = useState<ManagedBackend | null>(null)
 
-  const catalog = catalogQuery.data ?? []
+  const catalog = useMemo(() => catalogQuery.data ?? [], [catalogQuery.data])
   const managed = useMemo(() => managedQuery.data?.backends ?? [], [managedQuery.data])
 
   // Backend count per provider_id
