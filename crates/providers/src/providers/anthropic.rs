@@ -27,6 +27,19 @@ pub const PROVIDER: ProviderDef = ProviderDef {
 // both dated and family names for Anthropic routing.
 pub const MODELS: &[ModelDef] = &[
     ModelDef {
+        id: "claude-fable-5",
+        provider_id: "anthropic",
+        context_window: 1_000_000,
+        max_output_tokens: 128_000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
         id: "claude-opus-4-6",
         provider_id: "anthropic",
         context_window: 1_000_000,

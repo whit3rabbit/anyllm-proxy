@@ -92,6 +92,51 @@ pub struct ChatMessage {
     pub reasoning_content: Option<String>,
 }
 
+impl ChatMessage {
+    /// Coalesce text from `content` and `reasoning_content`.
+    ///
+    /// Returns the first non-empty text found, in priority order:
+    ///
+    /// 1. Text from `content`: if it is `Text(s)`, returns `s`; if it is
+    ///    `Parts`, joins all [`ChatContentPart::Text`] parts with `"\n"`
+    ///    (non-text parts such as images are skipped). Whitespace-only strings
+    ///    are returned as-is — this method does not trim.
+    /// 2. `reasoning_content` as a fallback, if non-empty. Reasoning is metadata
+    ///    output, not user-visible content, so it is never concatenated with (1).
+    /// 3. `None` if both are absent or empty.
+    pub fn effective_text(&self) -> Option<String> {
+        let content_text = match &self.content {
+            Some(ChatContent::Text(s)) if !s.is_empty() => Some(s.clone()),
+            Some(ChatContent::Parts(parts)) => {
+                let texts: Vec<&str> = parts
+                    .iter()
+                    .filter_map(|p| {
+                        if let ChatContentPart::Text { text } = p {
+                            Some(text.as_str())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                let joined = texts.join("\n");
+                if !joined.is_empty() {
+                    Some(joined)
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        };
+
+        content_text.or_else(|| {
+            self.reasoning_content
+                .as_ref()
+                .filter(|s| !s.is_empty())
+                .cloned()
+        })
+    }
+}
+
 /// Message role: system, developer, user, assistant, or tool.
 ///
 /// See <https://platform.openai.com/docs/api-reference/chat/create>
@@ -260,10 +305,17 @@ pub struct ResponseFormat {
 /// OpenAI Chat Completions API response body.
 ///
 /// See <https://platform.openai.com/docs/api-reference/chat/object>
+///
+/// `id`, `object`, and `model` default to an empty string when absent so that
+/// lax local OpenAI-compatible servers (llama.cpp, Ollama, etc.) that omit
+/// these fields do not cause a deserialization failure.
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct ChatCompletionResponse {
+    #[serde(default)]
     pub id: String,
+    #[serde(default)]
     pub object: String, // "chat.completion"
+    #[serde(default)]
     pub model: String,
     pub choices: Vec<Choice>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -313,10 +365,16 @@ pub enum FinishReason {
 /// Token usage: prompt, completion, and total.
 ///
 /// See <https://platform.openai.com/docs/api-reference/chat/object>
+///
+/// Token counters default to 0 when absent so that lax local servers that
+/// omit usage do not cause a deserialization failure.
 #[derive(Deserialize, Serialize, Debug, Clone, Default)]
 pub struct ChatUsage {
+    #[serde(default)]
     pub prompt_tokens: u32,
+    #[serde(default)]
     pub completion_tokens: u32,
+    #[serde(default)]
     pub total_tokens: u32,
     /// Compat spec response: "Always empty". OpenAI returns reasoning_tokens, etc.
     /// See: https://docs.anthropic.com/en/api/openai-sdk#response-fields
@@ -701,5 +759,143 @@ mod tests {
         });
         let msg: ChatMessage = serde_json::from_value(raw).unwrap();
         assert!(msg.reasoning_content.is_none());
+    }
+
+    // --- effective_text tests ---
+
+    #[test]
+    fn effective_text_plain_string() {
+        let msg = ChatMessage {
+            role: ChatRole::Assistant,
+            content: Some(ChatContent::Text("hello".into())),
+            name: None,
+            tool_calls: None,
+            tool_call_id: None,
+            refusal: None,
+            reasoning_content: None,
+        };
+        assert_eq!(msg.effective_text(), Some("hello".into()));
+    }
+
+    #[test]
+    fn effective_text_parts_concatenated() {
+        let msg = ChatMessage {
+            role: ChatRole::User,
+            content: Some(ChatContent::Parts(vec![
+                ChatContentPart::Text { text: "foo".into() },
+                ChatContentPart::ImageUrl {
+                    image_url: ImageUrl {
+                        url: "https://example.com/img.png".into(),
+                        detail: None,
+                    },
+                },
+                ChatContentPart::Text { text: "bar".into() },
+            ])),
+            name: None,
+            tool_calls: None,
+            tool_call_id: None,
+            refusal: None,
+            reasoning_content: None,
+        };
+        // Image part is skipped; text parts joined with "\n".
+        assert_eq!(msg.effective_text(), Some("foo\nbar".into()));
+    }
+
+    #[test]
+    fn effective_text_content_empty_falls_back_to_reasoning() {
+        let msg = ChatMessage {
+            role: ChatRole::Assistant,
+            content: Some(ChatContent::Text(String::new())),
+            name: None,
+            tool_calls: None,
+            tool_call_id: None,
+            refusal: None,
+            reasoning_content: Some("I thought about it".into()),
+        };
+        assert_eq!(msg.effective_text(), Some("I thought about it".into()));
+    }
+
+    #[test]
+    fn effective_text_content_none_returns_reasoning() {
+        let msg = ChatMessage {
+            role: ChatRole::Assistant,
+            content: None,
+            name: None,
+            tool_calls: None,
+            tool_call_id: None,
+            refusal: None,
+            reasoning_content: Some("reasoning here".into()),
+        };
+        assert_eq!(msg.effective_text(), Some("reasoning here".into()));
+    }
+
+    #[test]
+    fn effective_text_all_empty_returns_none() {
+        let msg = ChatMessage {
+            role: ChatRole::Assistant,
+            content: Some(ChatContent::Text(String::new())),
+            name: None,
+            tool_calls: None,
+            tool_call_id: None,
+            refusal: None,
+            reasoning_content: Some(String::new()),
+        };
+        assert_eq!(msg.effective_text(), None);
+    }
+
+    #[test]
+    fn effective_text_all_absent_returns_none() {
+        let msg = ChatMessage {
+            role: ChatRole::Assistant,
+            content: None,
+            name: None,
+            tool_calls: None,
+            tool_call_id: None,
+            refusal: None,
+            reasoning_content: None,
+        };
+        assert_eq!(msg.effective_text(), None);
+    }
+
+    #[test]
+    fn effective_text_whitespace_only_not_trimmed() {
+        // Whitespace counts as non-empty — no trimming.
+        let msg = ChatMessage {
+            role: ChatRole::Assistant,
+            content: Some(ChatContent::Text("   ".into())),
+            name: None,
+            tool_calls: None,
+            tool_call_id: None,
+            refusal: None,
+            reasoning_content: Some("reasoning".into()),
+        };
+        // "   " is non-empty so content wins.
+        assert_eq!(msg.effective_text(), Some("   ".into()));
+    }
+
+    // --- lax deserialization tests (item 6) ---
+
+    #[test]
+    fn response_missing_id_object_model_deserializes() {
+        let raw = json!({
+            "choices": [{
+                "index": 0,
+                "message": {"role": "assistant", "content": "hi"}
+            }]
+        });
+        let resp: ChatCompletionResponse = serde_json::from_value(raw).unwrap();
+        assert_eq!(resp.id, "");
+        assert_eq!(resp.object, "");
+        assert_eq!(resp.model, "");
+        assert_eq!(resp.choices.len(), 1);
+    }
+
+    #[test]
+    fn usage_missing_counters_defaults_to_zero() {
+        let raw = json!({});
+        let usage: ChatUsage = serde_json::from_value(raw).unwrap();
+        assert_eq!(usage.prompt_tokens, 0);
+        assert_eq!(usage.completion_tokens, 0);
+        assert_eq!(usage.total_tokens, 0);
     }
 }

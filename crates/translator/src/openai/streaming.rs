@@ -7,11 +7,19 @@ use super::chat_completions::{ChatRole, ChatUsage, FinishReason};
 /// A single chunk in a streamed Chat Completions response.
 ///
 /// See <https://platform.openai.com/docs/api-reference/chat/streaming>
+///
+/// `id`, `object`, `model`, and `choices` default when absent. Some backends
+/// emit usage-only final chunks with no `choices` array; defaulting to an
+/// empty vec lets those pass without error.
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct ChatCompletionChunk {
+    #[serde(default)]
     pub id: String,
+    #[serde(default)]
     pub object: String, // "chat.completion.chunk"
+    #[serde(default)]
     pub model: String,
+    #[serde(default)]
     pub choices: Vec<ChunkChoice>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub usage: Option<ChatUsage>,
@@ -235,6 +243,19 @@ mod tests {
         let roundtrip: ChatCompletionChunk = serde_json::from_str(&json_str).unwrap();
         assert_eq!(roundtrip.choices[0].delta.content.as_deref(), Some("world"));
         assert_eq!(roundtrip.created, Some(1700000000));
+    }
+
+    #[test]
+    fn chunk_missing_id_object_model_deserializes() {
+        // Usage-only final chunks emitted by some gateways omit id/object/model/choices.
+        let raw = json!({
+            "usage": {"prompt_tokens": 5, "completion_tokens": 3, "total_tokens": 8}
+        });
+        let chunk: ChatCompletionChunk = serde_json::from_value(raw).unwrap();
+        assert_eq!(chunk.id, "");
+        assert_eq!(chunk.choices.len(), 0);
+        let usage = chunk.usage.unwrap();
+        assert_eq!(usage.prompt_tokens, 5);
     }
 
     #[test]

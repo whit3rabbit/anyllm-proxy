@@ -108,6 +108,26 @@ Five-crate Cargo workspace: `providers` (metadata catalog), `client` (Anthropic 
 - **Admin rate limiter resets on restart.** 10 RPM per source IP, in-memory sliding window. `set_admin_rpm()` overrides for tests.
 - **Docker admin needs `ADMIN_BIND=0.0.0.0`.** Default binds to 127.0.0.1 which is unreachable from outside the container.
 - **PLAN.md references in source comments are stale.** Some files reference line ranges in a removed PLAN.md.
+- **`reqwest::Error::is_timeout()` fires on read timeouts too.** A read timeout means the server already processed the POST. Only `is_connect()` is safe to retry on POST endpoints. The `retry_transport_errors` flag in `RetryPolicy` gates on `is_connect()` only by design — do not add `is_timeout()` back.
+- **`extra_headers` Vec + `HeaderMap::insert` → last writer wins.** Push builder-level headers to the END of `extra_headers` Vec so they overwrite any caller-supplied duplicate when `build_http_client` iterates. Inserting at index 0 loses priority — the caller's later entry wins.
+- **`Ipv4Addr::is_broadcast()` matches only `255.255.255.255`**, not directed subnet broadcasts like `10.0.0.255`. Directed broadcasts slip through SSRF filters when `allow_private=true`.
+- **`2u64.pow(attempt)` overflows at attempt ≥ 64.** `backoff_delay` caps with `attempt.min(62)`. Any new backoff formula needs the same guard — `RetryPolicy::max_retries` has no upper bound.
+- **SSE streaming: use `run_sse_task` in `crates/client/src/streaming.rs`.** New stream types must use this shared helper (BytesMut + `find_double_newline` loop + channel send). Implement as `FnMut(SseEvent<'_>) -> Vec<...>`. Do not duplicate the frame-reading loop.
+- **Avoid `.clone()` before serialization when only one field changes.** Use `serde_json::to_value(req)` + field patch instead. `MessageCreateRequest` holds `Vec<Message>` + `serde_json::Map` — clone is O(content size).
+
+## Release Process
+
+Publishing is fully automated via CI. There is no separate release script.
+
+**To cut a release:**
+1. Update `CHANGELOG.md`: move bullet points from `[Unreleased]` into a new `## [X.Y.Z] - YYYY-MM-DD` section.
+2. Bump the version: `Cargo.toml` (workspace), `crates/client/Cargo.toml` (pinned directly), and inter-crate `version = "X.Y.Z"` refs in `crates/batch_engine/Cargo.toml` and `crates/proxy/Cargo.toml`.
+3. Commit and push to main.
+4. Push a tag: `git tag vX.Y.Z && git push origin vX.Y.Z`
+
+CI does the rest on tag push: builds binaries (Linux/macOS/Windows), packages debs, runs deb install tests, creates the GitHub Release using the CHANGELOG section for that version as the release body, uploads release assets, publishes all crates to crates.io in dependency order, and updates the Homebrew tap.
+
+**Changelog discipline:** Every PR that changes user-visible behavior should add a bullet to `[Unreleased]` before merging. The release step is then just moving those bullets to the version section.
 
 ## Conventions
 
@@ -131,7 +151,7 @@ Five-crate Cargo workspace: `providers` (metadata catalog), `client` (Anthropic 
 - **Heredocs in `run:` blocks:** Content must be indented to match the block level. Unindented
   heredoc content (col 0) breaks YAML parsing. Use `printf '%s\n' ...` or `{ echo ...; } > file`.
 - **`gh release upload` requires the release to exist.** Add a `create-release` job before upload
-  jobs: `gh release create "$TAG" --generate-notes || echo "already exists"`.
+  jobs: `gh release create "$TAG" --notes-file release_notes.txt || echo "already exists"`.
 - **cargo publish exit 101** = version already exists on crates.io (not an error for re-runs).
   Pattern: `cargo publish -p FOO || { ec=$?; [ "$ec" -eq 101 ] && echo "already published" || exit "$ec"; }`
 

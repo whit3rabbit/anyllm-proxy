@@ -191,13 +191,25 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v6
+      - name: Extract changelog section
+        id: changelog
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          # Extract lines between the matching version header and the next version header.
+          NOTES=$(awk "/^## \[${VERSION}\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md)
+          if [ -z "$NOTES" ]; then
+            NOTES="See CHANGELOG.md for details."
+          fi
+          printf '%s' "$NOTES" > release_notes.txt
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "${{ github.ref_name }}" \
             --repo "${{ github.repository }}" \
-            --generate-notes \
+            --notes-file release_notes.txt \
             --title "anyllm-proxy ${{ github.ref_name }}" \
             || echo "Release already exists, continuing"
 

@@ -11,6 +11,13 @@ pub fn openai_to_anthropic_response(
     resp: &openai::ChatCompletionResponse,
     model: &str,
 ) -> anthropic::MessageResponse {
+    if resp.choices.is_empty() {
+        tracing::warn!(
+            "openai_to_anthropic_response: response has no choices; \
+             the translated MessageResponse will have empty content. \
+             This may indicate a misconfigured backend or wrong API format."
+        );
+    }
     let choice = resp.choices.first();
 
     let mut content = Vec::new();

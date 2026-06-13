@@ -12,7 +12,7 @@ use futures::Stream;
 use crate::error::ClientError;
 use crate::http::{build_http_client, HttpClientConfig};
 use crate::rate_limit::RateLimitHeaders;
-use crate::retry::{self, RetryableError};
+use crate::retry::{self, RetryPolicy, RetryableError};
 use crate::streaming::SseTranslatingStream;
 
 /// Authentication for the backend API.
@@ -97,10 +97,23 @@ impl ClientConfigBuilder {
 }
 
 /// Internal error type implementing [`RetryableError`] for the generic retry loop.
-#[derive(Debug)]
-enum InternalError {
+pub(crate) enum InternalError {
     Request(reqwest::Error),
     ApiError { status: u16, body: String },
+}
+
+impl std::fmt::Debug for InternalError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Request(e) => write!(f, "InternalError::Request({e})"),
+            Self::ApiError { status, body } => {
+                write!(
+                    f,
+                    "InternalError::ApiError {{ status: {status}, body: {body:?} }}"
+                )
+            }
+        }
+    }
 }
 
 impl RetryableError for InternalError {
@@ -153,6 +166,8 @@ pub struct ClientBuilder {
     request_timeout: Option<std::time::Duration>,
     read_timeout: Option<std::time::Duration>,
     max_retries: Option<u32>,
+    retry_transport_errors: bool,
+    extra_headers: Vec<(String, String)>,
 }
 
 impl ClientBuilder {
@@ -165,6 +180,8 @@ impl ClientBuilder {
             request_timeout: None,
             read_timeout: None,
             max_retries: None,
+            retry_transport_errors: false,
+            extra_headers: Vec::new(),
         }
     }
 
@@ -206,6 +223,23 @@ impl ClientBuilder {
         self
     }
 
+    /// Opt in to retrying connect/timeout transport errors (default: off).
+    ///
+    /// See [`RetryPolicy::retry_transport_errors`].
+    pub fn retry_transport_errors(mut self, enabled: bool) -> Self {
+        self.retry_transport_errors = enabled;
+        self
+    }
+
+    /// Add a static header sent on every request (e.g. `HTTP-Referer` for OpenRouter).
+    ///
+    /// May be called multiple times; headers are applied in order.
+    /// Invalid header names or values are skipped with a warning.
+    pub fn extra_header(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
+        self.extra_headers.push((name.into(), value.into()));
+        self
+    }
+
     /// Build the [`Client`], returning an error if `base_url` is missing or `api_key` is empty.
     pub fn build(self) -> Result<Client, ClientError> {
         let base_url = self.base_url.ok_or_else(|| ClientError::ApiError {
@@ -228,10 +262,12 @@ impl ClientBuilder {
             connect_timeout: self.connect_timeout,
             request_timeout: self.request_timeout,
             read_timeout: self.read_timeout,
+            extra_headers: self.extra_headers,
             ..HttpClientConfig::new()
         };
 
-        let max_retries = self.max_retries.unwrap_or(retry::MAX_RETRIES);
+        let policy = RetryPolicy::new(self.max_retries.unwrap_or(retry::MAX_RETRIES))
+            .with_transport_retries(self.retry_transport_errors);
 
         let config = ClientConfig {
             chat_completions_url: base_url,
@@ -241,7 +277,7 @@ impl ClientBuilder {
         };
 
         let mut client = Client::new(config);
-        client.max_retries = max_retries;
+        client.retry = policy;
         Ok(client)
     }
 }
@@ -272,7 +308,7 @@ impl Default for ClientBuilder {
 pub struct Client {
     http: reqwest::Client,
     config: ClientConfig,
-    max_retries: u32,
+    retry: RetryPolicy,
 }
 
 impl Client {
@@ -282,7 +318,7 @@ impl Client {
         Self {
             http,
             config,
-            max_retries: retry::MAX_RETRIES,
+            retry: RetryPolicy::default(),
         }
     }
 
@@ -307,12 +343,33 @@ impl Client {
 
     /// Create from an existing reqwest client and configuration.
     /// Useful when you want to share an HTTP client across multiple instances.
+    ///
+    /// The retry policy defaults to [`RetryPolicy::default`] (3 retries, no transport retry).
+    /// Call [`with_max_retries`](Self::with_max_retries) or
+    /// [`with_transport_retries`](Self::with_transport_retries) after construction to override.
     pub fn with_http_client(http: reqwest::Client, config: ClientConfig) -> Self {
         Self {
             http,
             config,
-            max_retries: retry::MAX_RETRIES,
+            retry: RetryPolicy::default(),
         }
+    }
+
+    /// Override the maximum number of retries on 429/5xx. Chainable.
+    pub fn with_max_retries(mut self, n: u32) -> Self {
+        self.retry.max_retries = n;
+        self
+    }
+
+    /// Opt in to retrying connect/timeout transport errors. Chainable.
+    pub fn with_transport_retries(mut self, enabled: bool) -> Self {
+        self.retry.retry_transport_errors = enabled;
+        self
+    }
+
+    /// Return the current retry policy.
+    pub fn retry_policy(&self) -> RetryPolicy {
+        self.retry
     }
 
     fn auth(&self) -> retry::RequestAuth<'_> {
@@ -367,13 +424,14 @@ impl Client {
         &self,
         req: &ChatCompletionRequest,
     ) -> Result<(ChatCompletionResponse, u16, RateLimitHeaders), ClientError> {
-        let response: reqwest::Response = retry::send_with_retry::<InternalError>(
+        let response: reqwest::Response = retry::send_with_retry_policy::<InternalError>(
             &self.http,
             &self.config.chat_completions_url,
             &self.auth(),
+            &[],
             req,
             "backend",
-            self.max_retries,
+            &self.retry,
         )
         .await
         .map_err(ClientError::from)?;
@@ -392,13 +450,14 @@ impl Client {
         &self,
         req: &ChatCompletionRequest,
     ) -> Result<(reqwest::Response, RateLimitHeaders), ClientError> {
-        let response: reqwest::Response = retry::send_with_retry::<InternalError>(
+        let response: reqwest::Response = retry::send_with_retry_policy::<InternalError>(
             &self.http,
             &self.config.chat_completions_url,
             &self.auth(),
+            &[],
             req,
             "backend",
-            self.max_retries,
+            &self.retry,
         )
         .await
         .map_err(ClientError::from)?;
@@ -485,7 +544,7 @@ mod tests {
             .max_retries(7)
             .build()
             .unwrap();
-        assert_eq!(client.max_retries, 7);
+        assert_eq!(client.retry_policy().max_retries, 7);
     }
 
     #[test]
@@ -511,5 +570,52 @@ mod tests {
     fn client_builder_default_trait() {
         let builder = ClientBuilder::default();
         assert!(builder.base_url.is_none());
+    }
+
+    #[test]
+    fn with_http_client_max_retries_override() {
+        let config = ClientConfig::builder()
+            .backend_url("https://example.com")
+            .auth(Auth::Bearer("sk-test".into()))
+            .http(HttpClientConfig {
+                ssrf_protection: false,
+                ..Default::default()
+            })
+            .build();
+        let http = build_http_client(&config.http);
+        let client = Client::with_http_client(http, config).with_max_retries(7);
+        assert_eq!(client.retry_policy().max_retries, 7);
+    }
+
+    #[test]
+    fn with_transport_retries_chaining() {
+        let client = Client::builder()
+            .base_url("https://example.com")
+            .build()
+            .unwrap()
+            .with_transport_retries(true);
+        assert!(client.retry_policy().retry_transport_errors);
+    }
+
+    #[test]
+    fn client_builder_transport_retries_flag() {
+        let client = ClientBuilder::new()
+            .base_url("https://example.com")
+            .retry_transport_errors(true)
+            .build()
+            .unwrap();
+        assert!(client.retry_policy().retry_transport_errors);
+    }
+
+    #[test]
+    fn client_builder_extra_header() {
+        // Just verify it builds; header arrival on wire is tested in integration tests.
+        let client = ClientBuilder::new()
+            .base_url("https://example.com")
+            .extra_header("HTTP-Referer", "https://myapp.com")
+            .extra_header("X-Title", "My App")
+            .build()
+            .unwrap();
+        assert_eq!(client.config.http.extra_headers.len(), 2);
     }
 }

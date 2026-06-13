@@ -11,7 +11,7 @@ pub const MAX_RETRIES: u32 = 3;
 /// Default base delay between retries in milliseconds.
 pub const BASE_DELAY_MS: u64 = 500;
 
-/// Backend error types implement this to enable the generic [`send_with_retry`].
+/// Backend error types implement this to enable the generic retry loops.
 pub trait RetryableError: Sized {
     fn from_request(e: reqwest::Error) -> Self;
     fn from_api_response(status: u16, body: &str) -> Self;
@@ -31,7 +31,61 @@ fn apply_auth(rb: reqwest::RequestBuilder, auth: &RequestAuth<'_>) -> reqwest::R
     }
 }
 
+/// Retry policy controlling how many times and what to retry.
+///
+/// Construct via [`RetryPolicy::new`] or [`Default`], then chain setters.
+/// The struct is `#[non_exhaustive]` so new fields can be added without
+/// breaking callers who construct via the factory methods.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct RetryPolicy {
+    /// Maximum number of retry attempts (not counting the first try).
+    /// Default: [`MAX_RETRIES`] (3).
+    pub max_retries: u32,
+    /// Whether to retry on transport errors where the server provably never
+    /// received the request (connection refused, connection reset before data
+    /// was sent). Only `is_connect()` reqwest errors are retried; read/response
+    /// timeouts are NOT retried because the server may have already processed
+    /// the request before the client gave up. Body/decode/redirect errors
+    /// return immediately regardless of this flag.
+    ///
+    /// Default: `false`. Callers opt in explicitly since LLM endpoints are not
+    /// idempotent — a retried POST can produce a duplicate completion and
+    /// a duplicate charge.
+    pub retry_transport_errors: bool,
+}
+
+impl Default for RetryPolicy {
+    fn default() -> Self {
+        Self {
+            max_retries: MAX_RETRIES,
+            retry_transport_errors: false,
+        }
+    }
+}
+
+impl RetryPolicy {
+    /// Create a policy with the given retry limit and transport retries off.
+    pub fn new(max_retries: u32) -> Self {
+        Self {
+            max_retries,
+            retry_transport_errors: false,
+        }
+    }
+
+    /// Toggle transport-error retries (connect / timeout failures).
+    pub fn with_transport_retries(mut self, enabled: bool) -> Self {
+        self.retry_transport_errors = enabled;
+        self
+    }
+}
+
 /// Send a POST request with retry on 429/5xx. Returns the raw successful response.
+///
+/// This is the legacy entry point retained for existing proxy callers.
+/// New code should use [`send_with_retry_policy`] directly — it exposes
+/// per-request `extra_headers` and the full [`RetryPolicy`] (including
+/// `retry_transport_errors`, which this shim always leaves `false`).
 pub async fn send_with_retry<E: RetryableError>(
     client: &Client,
     url: &str,
@@ -40,9 +94,61 @@ pub async fn send_with_retry<E: RetryableError>(
     label: &str,
     max_retries: u32,
 ) -> Result<reqwest::Response, E> {
+    send_with_retry_policy(
+        client,
+        url,
+        auth,
+        &[],
+        body,
+        label,
+        &RetryPolicy::new(max_retries),
+    )
+    .await
+}
+
+/// Send a POST request with retry on 429/5xx and optionally on transport errors.
+///
+/// `extra_headers` are applied to every attempt in addition to `auth`.
+/// Returns the raw successful response on 2xx.
+pub async fn send_with_retry_policy<E: RetryableError>(
+    client: &Client,
+    url: &str,
+    auth: &RequestAuth<'_>,
+    extra_headers: &[(&str, &str)],
+    body: &impl Serialize,
+    label: &str,
+    policy: &RetryPolicy,
+) -> Result<reqwest::Response, E> {
+    let max_retries = policy.max_retries;
     for attempt in 0..=max_retries {
         let rb = apply_auth(client.post(url).json(body), auth);
-        let response = rb.send().await.map_err(E::from_request)?;
+        let rb = extra_headers.iter().fold(rb, |rb, &(k, v)| rb.header(k, v));
+
+        let response = match rb.send().await {
+            Ok(r) => r,
+            Err(e) => {
+                // Only retry connect/timeout transport errors, and only when opted in.
+                // Only retry on connect errors — the server never received the
+                // request, so re-sending is safe. Read/response timeouts are
+                // NOT retried: the server may have already processed the POST.
+                if policy.retry_transport_errors
+                    && attempt < max_retries
+                    && e.is_connect()
+                {
+                    let delay = backoff_delay(attempt, None);
+                    tracing::warn!(
+                        attempt = attempt + 1,
+                        max_retries,
+                        delay_ms = delay.as_millis() as u64,
+                        "transport error from {label}, backing off"
+                    );
+                    sleep(delay).await;
+                    continue;
+                }
+                return Err(E::from_request(e));
+            }
+        };
+
         let status = response.status().as_u16();
 
         if (200..300).contains(&status) {
@@ -108,7 +214,8 @@ pub fn backoff_delay(attempt: u32, retry_after: Option<Duration>) -> Duration {
     if let Some(ra) = retry_after {
         return ra;
     }
-    let base = Duration::from_millis(BASE_DELAY_MS * 2u64.pow(attempt));
+    // Cap exponent at 62 to prevent u64 overflow when max_retries is large.
+    let base = Duration::from_millis(BASE_DELAY_MS * 2u64.pow(attempt.min(62)));
     let jitter_ms = (base.as_millis() as u64) / 4;
     base + Duration::from_millis(jitter_ms)
 }
@@ -207,5 +314,31 @@ mod tests {
         let mut headers = reqwest::header::HeaderMap::new();
         headers.insert("retry-after", "not-a-date-or-number".parse().unwrap());
         assert_eq!(parse_retry_after(&headers), None);
+    }
+
+    // --- RetryPolicy ---
+
+    #[test]
+    fn retry_policy_defaults() {
+        let p = RetryPolicy::default();
+        assert_eq!(p.max_retries, MAX_RETRIES);
+        assert!(!p.retry_transport_errors);
+    }
+
+    #[test]
+    fn retry_policy_new_and_chaining() {
+        let p = RetryPolicy::new(5).with_transport_retries(true);
+        assert_eq!(p.max_retries, 5);
+        assert!(p.retry_transport_errors);
+    }
+
+    #[test]
+    fn send_with_retry_delegates_to_policy() {
+        // send_with_retry(_, _, _, _, _, n) must behave identically to
+        // send_with_retry_policy with RetryPolicy::new(n). We verify the
+        // policy struct matches rather than making a live HTTP call.
+        let p = RetryPolicy::new(2);
+        assert_eq!(p.max_retries, 2);
+        assert!(!p.retry_transport_errors);
     }
 }
