@@ -11,6 +11,10 @@ RUN npm run build
 # ── Stage 2: install cargo-chef ───────────────────────────────────────────────
 FROM rust:1-alpine AS chef
 RUN apk add --no-cache musl-dev openssl-dev openssl-libs-static
+# GitHub's arm64 Docker builders have hit transient crates.io HTTP/2 framing
+# errors during sparse-index fetches. Disable multiplexing and allow retries.
+ENV CARGO_HTTP_MULTIPLEXING=false \
+    CARGO_NET_RETRY=5
 RUN cargo install cargo-chef --locked
 WORKDIR /app
 
