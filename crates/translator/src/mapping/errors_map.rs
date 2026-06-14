@@ -17,14 +17,16 @@ pub fn openai_status_to_anthropic_error_type(status: u16) -> anthropic::ErrorTyp
         402 => anthropic::ErrorType::BillingError,
         403 => anthropic::ErrorType::PermissionError,
         404 => anthropic::ErrorType::NotFoundError,
-        // 408 has no direct Anthropic equivalent; OverloadedError tells
-        // clients to retry with backoff, which is correct for timeouts.
-        408 => anthropic::ErrorType::OverloadedError,
+        // Anthropic documents 504 as timeout_error. 408 (request timeout) has
+        // no Anthropic code but is the same class, so it maps here too. Both are
+        // transient and signal the client to retry with backoff.
+        // <https://platform.claude.com/docs/en/api/errors>
+        408 | 504 => anthropic::ErrorType::TimeoutError,
         413 => anthropic::ErrorType::RequestTooLarge,
         429 => anthropic::ErrorType::RateLimitError,
         500..=502 => anthropic::ErrorType::ApiError,
-        // 529 (Cloudflare overloaded) and 503 both indicate transient
-        // capacity issues; OverloadedError triggers client-side backoff.
+        // 529 (Anthropic overloaded) and 503 (generic/Cloudflare transient
+        // capacity) both map to OverloadedError to trigger client-side backoff.
         529 | 503 => anthropic::ErrorType::OverloadedError,
         _ => anthropic::ErrorType::ApiError,
     }
@@ -43,6 +45,7 @@ pub fn anthropic_error_type_to_status(error_type: &anthropic::ErrorType) -> u16 
         anthropic::ErrorType::RequestTooLarge => 413,
         anthropic::ErrorType::RateLimitError => 429,
         anthropic::ErrorType::ApiError => 500,
+        anthropic::ErrorType::TimeoutError => 504,
         anthropic::ErrorType::OverloadedError => 529,
     }
 }
@@ -61,6 +64,58 @@ pub fn status_to_anthropic_error(
             message: message.to_string(),
         },
         request_id,
+    }
+}
+
+/// Classify a streaming chunk's `error.code` into an Anthropic error type.
+///
+/// `code` can arrive in three shapes:
+/// - a numeric HTTP-like status (OpenRouter's pre-stream encoding) -> mapped via
+///   [`openai_status_to_anthropic_error_type`];
+/// - a string that is itself an Anthropic error-type wire string (this happens when
+///   our own reverse translator round-trips an Anthropic error through the OpenAI
+///   chunk shape, see `reverse_streaming_map`) -> recovered to the original type so
+///   the classification is not lost on a re-translation;
+/// - any other string (e.g. OpenRouter's `"server_error"`) -> `api_error`.
+pub fn classify_chunk_error_code(code: Option<&serde_json::Value>) -> anthropic::ErrorType {
+    let Some(code) = code else {
+        return anthropic::ErrorType::ApiError;
+    };
+    if let Some(n) = code.as_u64() {
+        if (400..=599).contains(&n) {
+            return openai_status_to_anthropic_error_type(n as u16);
+        }
+    }
+    if let Some(s) = code.as_str() {
+        // Recover an Anthropic error type encoded as its wire string.
+        if let Ok(et) =
+            serde_json::from_value::<anthropic::ErrorType>(serde_json::Value::String(s.to_string()))
+        {
+            return et;
+        }
+    }
+    anthropic::ErrorType::ApiError
+}
+
+/// Convert an OpenRouter-style mid-stream chunk error into an Anthropic stream error.
+///
+/// Mid-stream failures arrive as a chunk carrying a top-level `error` object once a
+/// 200 SSE response has already started. The `code` is classified by
+/// [`classify_chunk_error_code`].
+///
+/// OpenRouter: <https://openrouter.ai/docs/api/reference/errors-and-debugging>
+/// Anthropic streaming errors: <https://docs.anthropic.com/en/api/messages-streaming>
+pub fn openai_stream_error_to_anthropic(
+    err: &openai::streaming::ChunkError,
+) -> anthropic::streaming::StreamError {
+    let error_type = classify_chunk_error_code(err.code.as_ref());
+    let message = err
+        .message
+        .clone()
+        .unwrap_or_else(|| "upstream returned an error mid-stream".to_string());
+    anthropic::streaming::StreamError {
+        error_type: error_type.as_wire_str().to_string(),
+        message,
     }
 }
 
@@ -104,13 +159,14 @@ mod tests {
             (402, anthropic::ErrorType::BillingError),
             (403, anthropic::ErrorType::PermissionError),
             (404, anthropic::ErrorType::NotFoundError),
-            (408, anthropic::ErrorType::OverloadedError),
+            (408, anthropic::ErrorType::TimeoutError),
             (413, anthropic::ErrorType::RequestTooLarge),
             (429, anthropic::ErrorType::RateLimitError),
             (500, anthropic::ErrorType::ApiError),
             (501, anthropic::ErrorType::ApiError),
             (502, anthropic::ErrorType::ApiError),
             (503, anthropic::ErrorType::OverloadedError),
+            (504, anthropic::ErrorType::TimeoutError),
             (529, anthropic::ErrorType::OverloadedError),
         ];
         for (status, expected) in cases {
@@ -125,7 +181,7 @@ mod tests {
 
     #[test]
     fn unknown_status_maps_to_api_error() {
-        for status in [0, 204, 418, 504] {
+        for status in [0, 204, 418, 405] {
             assert_eq!(
                 openai_status_to_anthropic_error_type(status),
                 anthropic::ErrorType::ApiError,
@@ -146,6 +202,7 @@ mod tests {
             (anthropic::ErrorType::RequestTooLarge, 413),
             (anthropic::ErrorType::RateLimitError, 429),
             (anthropic::ErrorType::ApiError, 500),
+            (anthropic::ErrorType::TimeoutError, 504),
             (anthropic::ErrorType::OverloadedError, 529),
         ];
         for (error_type, expected_status) in cases {
@@ -167,6 +224,7 @@ mod tests {
             anthropic::ErrorType::RequestTooLarge,
             anthropic::ErrorType::RateLimitError,
             anthropic::ErrorType::ApiError,
+            anthropic::ErrorType::TimeoutError,
             anthropic::ErrorType::OverloadedError,
         ];
         for error_type in &all_types {
@@ -308,6 +366,57 @@ mod tests {
             anthropic_err.error.error_type,
             anthropic::ErrorType::RateLimitError
         );
+    }
+
+    #[test]
+    fn stream_error_numeric_code_maps_to_typed_error() {
+        let err = openai::streaming::ChunkError {
+            code: Some(serde_json::Value::Number(429.into())),
+            message: Some("slow down".into()),
+            metadata: None,
+        };
+        let result = openai_stream_error_to_anthropic(&err);
+        assert_eq!(result.error_type, "rate_limit_error");
+        assert_eq!(result.message, "slow down");
+    }
+
+    #[test]
+    fn stream_error_recovers_anthropic_wire_string_code() {
+        // The reverse translator encodes an Anthropic error_type as a string `code`;
+        // re-translating it forward must recover the original typed classification
+        // rather than degrading to api_error.
+        let err = openai::streaming::ChunkError {
+            code: Some(serde_json::Value::String("overloaded_error".into())),
+            message: Some("Overloaded".into()),
+            metadata: None,
+        };
+        let result = openai_stream_error_to_anthropic(&err);
+        assert_eq!(result.error_type, "overloaded_error");
+        assert_eq!(result.message, "Overloaded");
+    }
+
+    #[test]
+    fn stream_error_string_code_falls_back_to_api_error() {
+        let err = openai::streaming::ChunkError {
+            code: Some(serde_json::Value::String("server_error".into())),
+            message: Some("Provider disconnected".into()),
+            metadata: None,
+        };
+        let result = openai_stream_error_to_anthropic(&err);
+        assert_eq!(result.error_type, "api_error");
+        assert_eq!(result.message, "Provider disconnected");
+    }
+
+    #[test]
+    fn stream_error_missing_message_uses_fallback() {
+        let err = openai::streaming::ChunkError {
+            code: None,
+            message: None,
+            metadata: None,
+        };
+        let result = openai_stream_error_to_anthropic(&err);
+        assert_eq!(result.error_type, "api_error");
+        assert!(!result.message.is_empty());
     }
 
     #[test]

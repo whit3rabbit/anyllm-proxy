@@ -12,6 +12,28 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ---
 
+## [0.9.9] - 2026-06-14
+
+### Added
+- `anthropic::ErrorType::TimeoutError` (`timeout_error`), matching Anthropic's documented `504` error type ([docs](https://platform.claude.com/docs/en/api/errors)).
+
+### Fixed
+- Gemini native backend (`BACKEND=gemini`, generateContent/streamGenerateContent) now retries `429`/`5xx` with backoff and honors `Retry-After`, matching every other backend. Previously it sent requests directly with no retry, so upstream rate limits failed immediately.
+- `BackendError::api_error_status()` now includes the Anthropic passthrough variant. Without it, `status_code()` reported `500` and `error_kind()` reported `"unknown"` for Anthropic upstream errors (e.g. a real `429` was mis-tagged in logs/metrics).
+- Fallback chain (`should_fallback`) now delegates to the shared `is_retryable` policy, so it covers `408` and all `5xx` (incl. `504`) instead of only `429/500/502/503`. The fallback and in-client retry layers can no longer disagree about what is retryable.
+- HTTP `408`/`504` (timeouts) now map to Anthropic `timeout_error`, matching Anthropic's documented error codes (previously `504` was a generic `api_error`).
+- `429` responses carrying OpenAI's `insufficient_quota` error code are no longer retried. Hard quota/credit exhaustion does not clear by waiting, so the error is surfaced immediately instead of wasting backoff cycles. Transient rate-limit `429`s still retry.
+- Errors returned inside an HTTP `200` body by OpenAI-compatible gateways (notably OpenRouter, which puts the status in `error.code`) are now surfaced as a proper `ApiError` (with the upstream status, or `502` if absent) instead of a confusing deserialization failure. ([OpenRouter docs](https://openrouter.ai/docs/api/reference/errors-and-debugging))
+- Gemini native streaming errors now surface the classified Anthropic error type derived from the upstream status (e.g. `rate_limit_error`, `permission_error`) instead of a hardcoded `api_error`.
+- Mid-stream errors from OpenAI-compatible gateways (notably OpenRouter, which emits a chunk with a top-level `error` object and `finish_reason: "error"` once a `200` SSE stream has started) are now surfaced to the client instead of a silently truncated, apparently-successful response: Anthropic clients receive an `event: error` SSE frame and OpenAI-compatible clients receive an error chunk (`finish_reason: "error"` + `error` object). ([OpenRouter docs](https://openrouter.ai/docs/api/reference/errors-and-debugging), [Anthropic streaming docs](https://docs.anthropic.com/en/api/messages-streaming))
+- Non-streaming responses where a `200` body carries a per-choice `finish_reason: "error"` (no top-level `error` envelope) are now surfaced as a `502` error instead of being returned as a truncated, apparently-successful completion. The streaming path already handled this; the non-streaming path now matches.
+- `insufficient_quota` detection is now scoped to the structured `error.type`/`error.code` JSON fields instead of a raw substring scan, so a transient `429` whose message merely mentions the phrase (or echoes a prompt containing it) is no longer turned into a hard, non-retryable failure.
+- The Anthropic passthrough and Bedrock retry loops now also fast-fail on `429` quota/credit exhaustion, consistent with the shared client retry loop (previously only the shared loop honored it).
+- A re-translated mid-stream error type now round-trips: an Anthropic error event mapped to an OpenAI chunk and back (e.g. `overloaded_error`, `rate_limit_error`) recovers its classification instead of degrading to `api_error`.
+- Numeric `error.code` values inside a `200` body that fall outside the `400..=599` HTTP-status range are now preserved on the surfaced error instead of being dropped.
+
+---
+
 ## [0.9.8] - 2026-06-12
 
 ### Added

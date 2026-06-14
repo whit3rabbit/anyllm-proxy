@@ -166,11 +166,31 @@ impl OpenAIClient {
         let response = self.send_with_retry(req).await?;
         let status = response.status().as_u16();
         let rate_limits = RateLimitHeaders::from_openai_headers(response.headers());
-        let body = response
-            .json::<openai::ChatCompletionResponse>()
-            .await
-            .map_err(OpenAIClientError::Deserialization)?;
-        Ok((body, status, rate_limits))
+        let bytes = response.bytes().await.map_err(OpenAIClientError::Request)?;
+        match serde_json::from_slice::<openai::ChatCompletionResponse>(&bytes) {
+            Ok(body) => match error_in_finished_choices(&body) {
+                // A well-formed 200 body can still carry a per-choice
+                // finish_reason "error" with no top-level error envelope (some
+                // OpenAI-compatible gateways signal a mid-generation failure this
+                // way). Surface it instead of returning a truncated, apparently
+                // successful completion (the streaming path does the same).
+                Some(err) => Err(err),
+                None => Ok((body, status, rate_limits)),
+            },
+            Err(parse_err) => {
+                // OpenAI-compatible gateways (e.g. OpenRouter) can return an error
+                // inside a 2xx body when the upstream model fails mid-request. A
+                // valid completion requires `choices`, so an error envelope always
+                // lands here. Surface it as an ApiError instead of a confusing
+                // deserialization failure; otherwise report the parse error.
+                // <https://openrouter.ai/docs/api/reference/errors-and-debugging>
+                if let Some(err) = error_in_success_body(&bytes) {
+                    Err(err)
+                } else {
+                    Err(OpenAIClientError::Deserialization(parse_err.to_string()))
+                }
+            }
+        }
     }
 
     /// Send a streaming chat completion request with retry on 429/5xx.
@@ -208,7 +228,7 @@ impl OpenAIClient {
         let body = response
             .json::<openai::responses::ResponsesResponse>()
             .await
-            .map_err(OpenAIClientError::Deserialization)?;
+            .map_err(|e| OpenAIClientError::Deserialization(e.to_string()))?;
         Ok((body, status, rate_limits))
     }
 
@@ -344,13 +364,96 @@ impl OpenAIClient {
     }
 }
 
+/// Detect a per-choice `finish_reason: "error"` in an otherwise well-formed 200
+/// completion.
+///
+/// Some OpenAI-compatible gateways signal a mid-generation failure with a valid
+/// response shape whose choice carries `finish_reason: "error"` (and no top-level
+/// `error` envelope, so [`error_in_success_body`] never fires). Without this the
+/// response would map to a normal `stop`/`end_turn` and the failure would be
+/// silently swallowed. Returns a 502 `ApiError` so callers surface it like any
+/// other upstream failure.
+fn error_in_finished_choices(body: &openai::ChatCompletionResponse) -> Option<OpenAIClientError> {
+    let has_error = body
+        .choices
+        .iter()
+        .any(|c| c.finish_reason == Some(openai::FinishReason::Error));
+    if !has_error {
+        return None;
+    }
+    Some(OpenAIClientError::ApiError {
+        status: 502,
+        error: openai::errors::ErrorResponse {
+            error: openai::errors::ErrorDetail {
+                message: "upstream returned finish_reason \"error\"".to_string(),
+                error_type: "api_error".to_string(),
+                param: None,
+                code: None,
+            },
+        },
+    })
+}
+
+/// Detect an error returned inside a 2xx response body.
+///
+/// Some OpenAI-compatible gateways (notably OpenRouter) return errors in a 200
+/// response — a top-level `error` object — rather than via the HTTP status when
+/// the upstream model fails after the request was accepted. OpenRouter puts an
+/// HTTP-like status in `error.code` (a number); OpenAI-shaped envelopes use a
+/// string `code`. Returns `None` for a normal completion (no `error` key) or a
+/// body that is not JSON.
+fn error_in_success_body(bytes: &[u8]) -> Option<OpenAIClientError> {
+    let value: serde_json::Value = serde_json::from_slice(bytes).ok()?;
+    let err = value.get("error").filter(|e| !e.is_null())?;
+    let code_field = err.get("code");
+    let numeric_code = code_field.and_then(serde_json::Value::as_u64);
+    // OpenRouter encodes the upstream HTTP status in error.code as a number; use
+    // it only when it is a plausible HTTP status (400..=599). A numeric code
+    // outside that range is a provider-specific code, not a status, so fall back
+    // to 502 (the upstream model failed inside an otherwise-200 reply) and keep
+    // the code below rather than discarding it.
+    let in_range = |c: &u64| (400..=599).contains(c);
+    let status = numeric_code
+        .filter(in_range)
+        .map(|c| c as u16)
+        .unwrap_or(502);
+    let message = err
+        .get("message")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("upstream returned an error in a 2xx response")
+        .to_string();
+    let error_type = err
+        .get("type")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("api_error")
+        .to_string();
+    // Preserve the original code: a string code as-is, or a numeric code that was
+    // NOT consumed as the HTTP status (out of range), so it is not lost downstream.
+    let code = code_field
+        .and_then(serde_json::Value::as_str)
+        .map(String::from)
+        .or_else(|| numeric_code.filter(|c| !in_range(c)).map(|c| c.to_string()));
+    Some(OpenAIClientError::ApiError {
+        status,
+        error: openai::errors::ErrorResponse {
+            error: openai::errors::ErrorDetail {
+                message,
+                error_type,
+                param: None,
+                code,
+            },
+        },
+    })
+}
+
 /// Errors from the OpenAI HTTP client.
 #[derive(Debug)]
 pub enum OpenAIClientError {
     /// Transport-level failure (DNS, TLS, connection refused, timeout).
     Request(reqwest::Error),
-    /// Backend returned 2xx but the body was not valid ChatCompletionResponse JSON.
-    Deserialization(reqwest::Error),
+    /// Backend returned 2xx but the body was not valid ChatCompletionResponse JSON
+    /// (and was not a recognizable error envelope). Carries the parse error text.
+    Deserialization(String),
     /// Backend returned a non-2xx status with a parseable OpenAI error body.
     ApiError {
         status: u16,
@@ -403,6 +506,83 @@ mod tests {
     #[test]
     fn is_retryable_429() {
         assert!(crate::backend::is_retryable(429));
+    }
+
+    #[test]
+    fn error_in_success_body_openrouter_numeric_code() {
+        // OpenRouter returns errors inside a 200 with a numeric error.code.
+        let body = br#"{"error":{"message":"Provider returned error","code":429}}"#;
+        let err = error_in_success_body(body).expect("should detect error envelope");
+        match err {
+            OpenAIClientError::ApiError { status, error } => {
+                assert_eq!(status, 429);
+                assert_eq!(error.error.message, "Provider returned error");
+            }
+            other => panic!("expected ApiError, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn error_in_success_body_openai_string_code_defaults_to_502() {
+        // OpenAI-shaped envelope with a string code and no numeric status:
+        // default to 502 (upstream failed inside a 2xx) and keep the code.
+        let body =
+            br#"{"error":{"message":"flagged","type":"moderation","code":"content_filter"}}"#;
+        let err = error_in_success_body(body).expect("should detect error envelope");
+        match err {
+            OpenAIClientError::ApiError { status, error } => {
+                assert_eq!(status, 502);
+                assert_eq!(error.error.error_type, "moderation");
+                assert_eq!(error.error.code.as_deref(), Some("content_filter"));
+            }
+            other => panic!("expected ApiError, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn error_in_success_body_ignores_normal_completion_and_garbage() {
+        // A real completion has no top-level error key.
+        let ok =
+            br#"{"id":"x","choices":[{"index":0,"message":{"role":"assistant","content":"hi"}}]}"#;
+        assert!(error_in_success_body(ok).is_none());
+        // Explicit null error is not an error.
+        assert!(error_in_success_body(br#"{"error":null,"choices":[]}"#).is_none());
+        // Non-JSON / truncated bodies are not error envelopes.
+        assert!(error_in_success_body(b"not json").is_none());
+    }
+
+    #[test]
+    fn finished_choice_error_is_surfaced() {
+        // A valid 200 body whose choice carries finish_reason "error" (no top-level
+        // error envelope) must surface as an ApiError, not a truncated success.
+        let body: openai::ChatCompletionResponse = serde_json::from_value(serde_json::json!({
+            "id": "x", "object": "chat.completion", "created": 0, "model": "gpt-4o",
+            "choices": [{
+                "index": 0,
+                "message": {"role": "assistant", "content": ""},
+                "finish_reason": "error"
+            }]
+        }))
+        .expect("valid ChatCompletionResponse");
+        match error_in_finished_choices(&body) {
+            Some(OpenAIClientError::ApiError { status, .. }) => assert_eq!(status, 502),
+            other => panic!("expected ApiError, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn finished_choice_stop_is_ok() {
+        // A normal completion (finish_reason "stop") is not an error.
+        let body: openai::ChatCompletionResponse = serde_json::from_value(serde_json::json!({
+            "id": "x", "object": "chat.completion", "created": 0, "model": "gpt-4o",
+            "choices": [{
+                "index": 0,
+                "message": {"role": "assistant", "content": "hi"},
+                "finish_reason": "stop"
+            }]
+        }))
+        .expect("valid ChatCompletionResponse");
+        assert!(error_in_finished_choices(&body).is_none());
     }
 
     #[test]

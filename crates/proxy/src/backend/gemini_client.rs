@@ -1,8 +1,8 @@
 // Gemini native HTTP client for generateContent / streamGenerateContent endpoints.
 // No OpenAI translation: sends and receives Gemini-native JSON directly.
 
-use super::build_http_client;
-use crate::config::TlsConfig;
+use super::{build_http_client, RetryableError};
+use crate::config::{BackendAuth, TlsConfig};
 use anyllm_translate::gemini::{GenerateContentRequest, GenerateContentResponse};
 use reqwest::Client;
 
@@ -11,7 +11,9 @@ use reqwest::Client;
 pub struct GeminiNativeClient {
     client: Client,
     base_url: String,
-    api_key: String,
+    // Built once from the API key so per-request sends borrow it instead of
+    // cloning the key on every call.
+    auth: BackendAuth,
     big_model: String,
     small_model: String,
 }
@@ -41,6 +43,19 @@ impl std::fmt::Display for GeminiClientError {
 
 impl std::error::Error for GeminiClientError {}
 
+impl RetryableError for GeminiClientError {
+    fn from_request(e: reqwest::Error) -> Self {
+        Self::Transport(e.to_string())
+    }
+
+    fn from_api_response(status: u16, body: &str) -> Self {
+        Self::ApiError {
+            status,
+            body: body.to_string(),
+        }
+    }
+}
+
 impl GeminiNativeClient {
     /// Create a new Gemini native client.
     ///
@@ -57,7 +72,7 @@ impl GeminiNativeClient {
         Self {
             client,
             base_url,
-            api_key,
+            auth: BackendAuth::GoogleApiKey(api_key),
             big_model,
             small_model,
         }
@@ -108,24 +123,17 @@ impl GeminiNativeClient {
         model: &str,
     ) -> Result<GenerateContentResponse, GeminiClientError> {
         let url = self.generate_url(model);
-        let resp = self
-            .client
-            .post(&url)
-            .header("x-goog-api-key", &self.api_key)
-            .header("Content-Type", "application/json")
-            .json(body)
-            .send()
-            .await
-            .map_err(|e| GeminiClientError::Transport(e.to_string()))?;
-
-        let status = resp.status();
-        if !status.is_success() {
-            let body_text = resp.text().await.unwrap_or_default();
-            return Err(GeminiClientError::ApiError {
-                status: status.as_u16(),
-                body: body_text,
-            });
-        }
+        // Shared retry helper: retries 429/5xx with backoff and honors Retry-After,
+        // matching every other backend. GoogleApiKey auth sets the x-goog-api-key
+        // header; .json(body) sets Content-Type. Non-2xx becomes ApiError.
+        let resp = super::send_with_retry::<GeminiClientError>(
+            &self.client,
+            &url,
+            &self.auth,
+            body,
+            "Gemini",
+        )
+        .await?;
 
         resp.json::<GenerateContentResponse>()
             .await
@@ -139,26 +147,16 @@ impl GeminiNativeClient {
         model: &str,
     ) -> Result<reqwest::Response, GeminiClientError> {
         let url = self.stream_url(model);
-        let resp = self
-            .client
-            .post(&url)
-            .header("x-goog-api-key", &self.api_key)
-            .header("Content-Type", "application/json")
-            .json(body)
-            .send()
-            .await
-            .map_err(|e| GeminiClientError::Transport(e.to_string()))?;
-
-        let status = resp.status();
-        if !status.is_success() {
-            let body_text = resp.text().await.unwrap_or_default();
-            return Err(GeminiClientError::ApiError {
-                status: status.as_u16(),
-                body: body_text,
-            });
-        }
-
-        Ok(resp)
+        // Retry on 429/5xx before SSE starts (same policy as the non-streaming
+        // path). Once a 2xx response is returned, streaming proceeds as before.
+        super::send_with_retry::<GeminiClientError>(
+            &self.client,
+            &url,
+            &self.auth,
+            body,
+            "Gemini stream",
+        )
+        .await
     }
 }
 
@@ -256,5 +254,46 @@ mod tests {
         let c = test_client("https://example.com");
         assert_eq!(c.big_model(), "gemini-2.5-pro");
         assert_eq!(c.small_model(), "gemini-2.5-flash");
+    }
+
+    #[test]
+    fn retryable_error_from_api_response_preserves_status_and_body() {
+        // The shared retry helper turns a non-2xx upstream response into this
+        // variant; status and body must round-trip so backoff/classification work.
+        let e = GeminiClientError::from_api_response(429, "{\"error\":\"quota\"}");
+        match e {
+            GeminiClientError::ApiError { status, body } => {
+                assert_eq!(status, 429);
+                assert_eq!(body, "{\"error\":\"quota\"}");
+            }
+            other => panic!("expected ApiError, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn api_error_classifies_via_backend_error() {
+        // Through the unified BackendError, a Gemini 429/403/5xx must classify
+        // and surface its status the same way other backends do.
+        use crate::backend::BackendError;
+        let cases: &[(u16, &str)] = &[
+            (401, "client_error"),
+            (403, "client_error"),
+            (404, "client_error"),
+            (429, "rate_limit"),
+            (500, "backend_error"),
+            (503, "backend_error"),
+            (504, "timeout"),
+        ];
+        for (status, kind) in cases {
+            let be = BackendError::from(GeminiClientError::ApiError {
+                status: *status,
+                body: "upstream error".to_string(),
+            });
+            assert_eq!(be.status_code(), *status, "status {status}");
+            assert_eq!(be.error_kind(), *kind, "kind for status {status}");
+            let (msg, s) = be.api_error_details().expect("api error details");
+            assert_eq!(s, *status);
+            assert_eq!(msg, "upstream error");
+        }
     }
 }

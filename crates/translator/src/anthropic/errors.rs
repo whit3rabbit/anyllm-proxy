@@ -46,8 +46,34 @@ pub enum ErrorType {
     RateLimitError,
     /// 500: Unexpected internal error.
     ApiError,
+    /// 504: The request timed out while processing.
+    TimeoutError,
     /// 529: API is temporarily overloaded.
     OverloadedError,
+}
+
+impl ErrorType {
+    /// The snake_case wire string used in Anthropic error events and responses.
+    ///
+    /// Matches the serde `rename_all = "snake_case"` representation exactly. This
+    /// is the canonical stringifier: callers that need the wire string must use it
+    /// instead of round-tripping through `serde_json::to_value(..).as_str()`, which
+    /// silently falls back to a hardcoded default if the serde shape ever changes.
+    /// Being a `match`, adding a variant fails to compile until handled here.
+    pub fn as_wire_str(&self) -> &'static str {
+        match self {
+            Self::InvalidRequestError => "invalid_request_error",
+            Self::AuthenticationError => "authentication_error",
+            Self::BillingError => "billing_error",
+            Self::PermissionError => "permission_error",
+            Self::NotFoundError => "not_found_error",
+            Self::RequestTooLarge => "request_too_large",
+            Self::RateLimitError => "rate_limit_error",
+            Self::ApiError => "api_error",
+            Self::TimeoutError => "timeout_error",
+            Self::OverloadedError => "overloaded_error",
+        }
+    }
 }
 
 #[cfg(test)]
@@ -115,6 +141,7 @@ mod tests {
             ("request_too_large", ErrorType::RequestTooLarge),
             ("rate_limit_error", ErrorType::RateLimitError),
             ("api_error", ErrorType::ApiError),
+            ("timeout_error", ErrorType::TimeoutError),
             ("overloaded_error", ErrorType::OverloadedError),
         ];
         for (s, expected) in cases {
@@ -125,6 +152,9 @@ mod tests {
             // Round-trip: serialize back and compare
             let re_serialized = serde_json::to_value(&parsed).unwrap();
             assert_eq!(re_serialized.as_str().unwrap(), s);
+
+            // as_wire_str must match the serde representation exactly.
+            assert_eq!(parsed.as_wire_str(), s, "as_wire_str mismatch for {s}");
         }
     }
 

@@ -356,6 +356,11 @@ pub enum FinishReason {
     ToolCalls,
     ContentFilter,
     FunctionCall,
+    /// Mid-stream failure signalled by OpenAI-compatible gateways (notably
+    /// OpenRouter) when a generation fails after a 200 SSE response has begun.
+    /// Serializes as "error". Must precede the `#[serde(other)]` catch-all so
+    /// the literal "error" binds here rather than falling through to `Unknown`.
+    Error,
     /// Catch-all for provider-specific finish reasons (e.g. DeepSeek's
     /// "insufficient_system_resource"). Serializes as "unknown".
     #[serde(other)]

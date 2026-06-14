@@ -82,8 +82,8 @@ pub use error::ClientError;
 pub use http::{build_http_client, HttpClientConfig};
 pub use rate_limit::RateLimitHeaders;
 pub use retry::{
-    backoff_delay, is_retryable, parse_retry_after, send_with_retry, send_with_retry_policy,
-    RetryPolicy, RetryableError,
+    backoff_delay, is_quota_exhausted, is_retryable, parse_retry_after, send_with_retry,
+    send_with_retry_policy, RetryPolicy, RetryableError,
 };
 pub use sse::{find_double_newline, SseError};
 pub use tools::{ToolBuilder, ToolChoiceBuilder};

@@ -155,6 +155,27 @@ pub async fn send_with_retry_policy<E: RetryableError>(
         if attempt < max_retries && is_retryable(status) {
             let retry_after = parse_retry_after(response.headers());
             let delay = backoff_delay(attempt, retry_after);
+
+            // A 429 can mean a transient rate limit (retryable) or hard quota /
+            // credit exhaustion (NOT retryable — waiting won't clear it). OpenAI
+            // and OpenAI-compatible gateways signal the latter with the stable
+            // error code `insufficient_quota`. Read the body to tell them apart
+            // (reading it also returns the connection to the pool).
+            if status == 429 {
+                let text = response.text().await.unwrap_or_default();
+                if is_quota_exhausted(&text) {
+                    tracing::warn!(
+                        status,
+                        "{label} returned quota/credit exhaustion; not retrying"
+                    );
+                    return Err(E::from_api_response(status, &text));
+                }
+            } else {
+                // Drain the response body before retrying so the HTTP connection
+                // returns to the pool. Leaving it unread causes connection leaks.
+                drop(response.bytes().await);
+            }
+
             tracing::warn!(
                 status,
                 attempt = attempt + 1,
@@ -162,9 +183,6 @@ pub async fn send_with_retry_policy<E: RetryableError>(
                 delay_ms = delay.as_millis() as u64,
                 "retryable error from {label}, backing off"
             );
-            // Drain the response body before retrying so the HTTP connection
-            // returns to the pool. Leaving it unread causes connection leaks.
-            drop(response.bytes().await);
             sleep(delay).await;
             continue;
         }
@@ -182,6 +200,30 @@ pub async fn send_with_retry_policy<E: RetryableError>(
 /// Check if a status code is retryable (408, 429, or 5xx).
 pub fn is_retryable(status: u16) -> bool {
     status == 408 || status == 429 || (500..=599).contains(&status)
+}
+
+/// Whether a 429 response body indicates hard quota / credit exhaustion rather
+/// than a transient rate limit. These do not clear by waiting, so the retry loop
+/// surfaces them immediately instead of backing off.
+///
+/// OpenAI uses the stable error code `insufficient_quota`
+/// (<https://platform.openai.com/docs/guides/error-codes>); OpenAI-compatible
+/// gateways that mirror OpenAI's error shape echo the same code.
+///
+/// The match is scoped to the structured `error.type` / `error.code` fields. A
+/// raw substring scan would false-positive on any body that merely mentions the
+/// phrase (an echoed prompt, or a message that says it is NOT a quota issue),
+/// turning a recoverable rate limit into a hard, immediate failure.
+pub fn is_quota_exhausted(body: &str) -> bool {
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(body) else {
+        return false;
+    };
+    let Some(err) = value.get("error") else {
+        return false;
+    };
+    ["code", "type"].iter().any(|field| {
+        err.get(field).and_then(serde_json::Value::as_str) == Some("insufficient_quota")
+    })
 }
 
 /// Parse retry-after header as integer seconds or HTTP date (RFC 7231).
@@ -245,6 +287,34 @@ mod tests {
         assert!(!is_retryable(401));
         assert!(!is_retryable(404));
         assert!(!is_retryable(409));
+    }
+
+    #[test]
+    fn quota_exhausted_detects_insufficient_quota() {
+        // OpenAI's hard quota 429 carries the stable `insufficient_quota` code.
+        let body = r#"{"error":{"message":"You exceeded your current quota","type":"insufficient_quota","code":"insufficient_quota"}}"#;
+        assert!(is_quota_exhausted(body));
+    }
+
+    #[test]
+    fn quota_exhausted_ignores_transient_rate_limit() {
+        // A normal rate-limit 429 must remain retryable.
+        let body =
+            r#"{"error":{"message":"Rate limit reached for requests","type":"rate_limit_error"}}"#;
+        assert!(!is_quota_exhausted(body));
+        assert!(!is_quota_exhausted(""));
+    }
+
+    #[test]
+    fn quota_exhausted_does_not_match_phrase_in_message() {
+        // The phrase appearing only in free-text (or an echoed prompt) must NOT
+        // be treated as hard quota — that would make a retryable 429 fail hard.
+        let body = r#"{"error":{"type":"rate_limit_error","message":"this is not an insufficient_quota issue, please retry"}}"#;
+        assert!(!is_quota_exhausted(body));
+        // Non-JSON bodies that merely contain the phrase are likewise ignored.
+        assert!(!is_quota_exhausted(
+            "upstream said insufficient_quota somewhere"
+        ));
     }
 
     #[test]

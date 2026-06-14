@@ -275,6 +275,27 @@ impl BedrockClient {
             if attempt < super::MAX_RETRIES && super::is_retryable(status) {
                 let retry_after = super::parse_retry_after(response.headers());
                 let delay = super::backoff_delay(attempt, retry_after);
+                // A 429 carrying hard quota/credit exhaustion never clears by
+                // waiting; surface it immediately, consistent with the shared
+                // client retry loop. Reading the body also returns the connection
+                // to the pool.
+                if status == 429 {
+                    let resp_body = response.bytes().await.unwrap_or_default();
+                    if anyllm_client::retry::is_quota_exhausted(&String::from_utf8_lossy(
+                        &resp_body,
+                    )) {
+                        tracing::warn!(
+                            status,
+                            "Bedrock returned quota/credit exhaustion; not retrying"
+                        );
+                        return Err(BedrockClientError::ApiError {
+                            status,
+                            body: resp_body,
+                        });
+                    }
+                } else {
+                    drop(response.bytes().await);
+                }
                 tracing::warn!(
                     status,
                     attempt = attempt + 1,
@@ -282,7 +303,6 @@ impl BedrockClient {
                     delay_ms = delay.as_millis() as u64,
                     "retryable error from Bedrock, backing off"
                 );
-                drop(response.bytes().await);
                 sleep(delay).await;
                 continue;
             }

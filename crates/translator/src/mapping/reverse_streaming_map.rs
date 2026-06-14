@@ -182,6 +182,7 @@ impl ReverseStreamingTranslator {
                         }),
                         created: Some(self.created),
                         system_fingerprint: None,
+                        error: None,
                     });
                 }
                 chunks
@@ -191,9 +192,20 @@ impl ReverseStreamingTranslator {
                 vec![]
             }
             anthropic::StreamEvent::Ping {} => vec![],
-            anthropic::StreamEvent::Error { .. } => {
+            anthropic::StreamEvent::Error { error } => {
                 self.done = true;
-                vec![]
+                // Relay the upstream failure to OpenAI-compat clients in OpenRouter's
+                // documented mid-stream shape (top-level `error` object + a choice with
+                // finish_reason "error") instead of silently truncating the stream.
+                // See <https://openrouter.ai/docs/api/reference/errors-and-debugging>.
+                let mut chunk =
+                    self.make_chunk(ChunkDelta::default(), Some(openai::FinishReason::Error));
+                chunk.error = Some(openai::streaming::ChunkError {
+                    code: Some(serde_json::Value::String(error.error_type.clone())),
+                    message: Some(error.message.clone()),
+                    metadata: None,
+                });
+                vec![chunk]
             }
             _ => vec![],
         }
@@ -217,6 +229,7 @@ impl ReverseStreamingTranslator {
             usage: None,
             created: Some(self.created),
             system_fingerprint: None,
+            error: None,
         }
     }
 }
@@ -410,6 +423,30 @@ mod tests {
         assert_eq!(usage.prompt_tokens, 10);
         assert_eq!(usage.completion_tokens, 5);
         assert_eq!(usage.total_tokens, 15);
+    }
+
+    #[test]
+    fn error_event_relays_openrouter_style_chunk() {
+        let mut t = make_translator();
+        let event = StreamEvent::Error {
+            error: StreamError {
+                error_type: "overloaded_error".to_string(),
+                message: "Overloaded".to_string(),
+            },
+        };
+        let chunks = t.process_event(&event);
+        assert_eq!(chunks.len(), 1);
+        assert_eq!(
+            chunks[0].choices[0].finish_reason,
+            Some(openai::FinishReason::Error)
+        );
+        let err = chunks[0].error.as_ref().expect("error envelope");
+        assert_eq!(
+            err.code.as_ref().unwrap().as_str(),
+            Some("overloaded_error")
+        );
+        assert_eq!(err.message.as_deref(), Some("Overloaded"));
+        assert!(t.is_done());
     }
 
     #[test]

@@ -69,6 +69,24 @@ impl StreamingTranslator {
     ) -> Vec<anthropic::StreamEvent> {
         let mut events = Vec::new();
 
+        // Once a terminal error or finish has been emitted the stream is over;
+        // drop any trailing chunks the backend may still send.
+        if self.finished {
+            return events;
+        }
+
+        // OpenAI-compatible gateways (notably OpenRouter) cannot change the HTTP
+        // status once a 200 SSE stream has started, so a mid-generation failure
+        // arrives as a chunk carrying a top-level `error` object. Surface it as an
+        // Anthropic error event instead of silently mapping to end_turn.
+        if let Some(err) = &chunk.error {
+            self.finished = true;
+            events.push(anthropic::StreamEvent::Error {
+                error: crate::mapping::errors_map::openai_stream_error_to_anthropic(err),
+            });
+            return events;
+        }
+
         // Emit message_start on first chunk
         if !self.started {
             self.started = true;
@@ -161,6 +179,20 @@ impl StreamingTranslator {
 
             // Handle finish_reason
             if let Some(ref finish_reason) = choice.finish_reason {
+                // A provider may signal a mid-stream failure via finish_reason
+                // "error" without a top-level error object (that object case is
+                // handled before any choices are processed). Surface it as an
+                // Anthropic error event and stop.
+                if matches!(finish_reason, openai::FinishReason::Error) {
+                    self.finished = true;
+                    events.push(anthropic::StreamEvent::Error {
+                        error: anthropic::streaming::StreamError {
+                            error_type: "api_error".to_string(),
+                            message: "upstream returned finish_reason \"error\"".to_string(),
+                        },
+                    });
+                    return events;
+                }
                 // Close any open thinking block
                 if self.thinking_block_open {
                     events.push(anthropic::StreamEvent::ContentBlockStop {
@@ -379,6 +411,13 @@ pub fn map_finish_reason(reason: &openai::FinishReason) -> anthropic::StopReason
         // the refusal handling path above.
         openai::FinishReason::ContentFilter => anthropic::StopReason::EndTurn,
         openai::FinishReason::FunctionCall => anthropic::StopReason::ToolUse,
+        // Mid-stream errors are surfaced as a StreamEvent::Error before this
+        // mapping is reached on the streaming path (see `process_chunk`). The
+        // non-streaming path catches a finish_reason "error" at the HTTP client
+        // boundary (`error_in_finished_choices` in the proxy) and returns an
+        // error before this mapping runs, so this arm is a defensive fallback
+        // only; EndTurn is the safe default.
+        openai::FinishReason::Error => anthropic::StopReason::EndTurn,
         // Provider-specific reasons (e.g. DeepSeek "insufficient_system_resource").
         // Log so the unknown value is visible without breaking callers.
         openai::FinishReason::Unknown => {
@@ -414,6 +453,7 @@ mod tests {
             usage: None,
             created: None,
             system_fingerprint: None,
+            error: None,
         }
     }
 
@@ -438,6 +478,7 @@ mod tests {
             usage: None,
             created: None,
             system_fingerprint: None,
+            error: None,
         }
     }
 
@@ -460,6 +501,7 @@ mod tests {
             usage: None,
             created: None,
             system_fingerprint: None,
+            error: None,
         }
     }
 
@@ -479,6 +521,7 @@ mod tests {
             }),
             created: None,
             system_fingerprint: None,
+            error: None,
         }
     }
 
@@ -518,6 +561,7 @@ mod tests {
             usage: None,
             created: None,
             system_fingerprint: None,
+            error: None,
         }
     }
 
@@ -770,6 +814,7 @@ mod tests {
             usage: None,
             created: None,
             system_fingerprint: None,
+            error: None,
         };
         let events = translator.process_chunk(&chunk);
         // Only message_start on first call
@@ -1064,6 +1109,7 @@ mod tests {
             usage: None,
             created: None,
             system_fingerprint: None,
+            error: None,
         };
         let events = translator.process_chunk(&chunk);
         // message_start + content_block_start + content_block_delta
@@ -1109,6 +1155,7 @@ mod tests {
             usage: None,
             created: None,
             system_fingerprint: None,
+            error: None,
         }
     }
 
@@ -1226,6 +1273,7 @@ mod tests {
             }),
             created: None,
             system_fingerprint: None,
+            error: None,
         };
         translator.process_chunk(&chunk);
         let usage = translator.usage().expect("usage should be present");
@@ -1307,5 +1355,80 @@ mod tests {
             !has_tool_event,
             "expected no tool events for index > {MAX_TOOL_CALL_INDEX}, got {events:?}"
         );
+    }
+
+    // --- Mid-stream error handling ---
+
+    #[test]
+    fn midstream_error_object_emits_error_event() {
+        let mut translator = StreamingTranslator::new("gpt-4o".into());
+        translator.process_chunk(&text_chunk("c1", "gpt-4o", "partial"));
+
+        // OpenRouter-style mid-stream error chunk: top-level error + finish_reason "error".
+        let chunk = ChatCompletionChunk {
+            id: "c1".into(),
+            object: "chat.completion.chunk".into(),
+            model: "gpt-4o".into(),
+            choices: vec![ChunkChoice {
+                index: 0,
+                delta: ChunkDelta::default(),
+                finish_reason: Some(crate::openai::FinishReason::Error),
+                logprobs: None,
+            }],
+            usage: None,
+            created: None,
+            system_fingerprint: None,
+            error: Some(crate::openai::streaming::ChunkError {
+                code: Some(serde_json::Value::Number(429.into())),
+                message: Some("rate limited".into()),
+                metadata: None,
+            }),
+        };
+        let events = translator.process_chunk(&chunk);
+        assert_eq!(
+            events.len(),
+            1,
+            "expected exactly one error event: {events:?}"
+        );
+        match &events[0] {
+            anthropic::StreamEvent::Error { error } => {
+                // Numeric code 429 maps to the rate_limit_error wire string.
+                assert_eq!(error.error_type, "rate_limit_error");
+                assert_eq!(error.message, "rate limited");
+            }
+            other => panic!("expected StreamEvent::Error, got {other:?}"),
+        }
+
+        // finish() must not emit a trailing message_stop after a terminal error.
+        assert!(translator.finish().is_empty());
+
+        // Any further chunks are dropped once finished.
+        let after = translator.process_chunk(&text_chunk("c1", "gpt-4o", "more"));
+        assert!(
+            after.is_empty(),
+            "post-error chunk should be dropped: {after:?}"
+        );
+    }
+
+    #[test]
+    fn finish_reason_error_without_object_emits_error_event() {
+        let mut translator = StreamingTranslator::new("gpt-4o".into());
+        translator.process_chunk(&text_chunk("c1", "gpt-4o", "partial"));
+
+        // Provider sends finish_reason "error" with no top-level error object.
+        let events = translator.process_chunk(&finish_chunk(
+            "c1",
+            "gpt-4o",
+            crate::openai::FinishReason::Error,
+        ));
+        assert_eq!(events.len(), 1, "expected one error event: {events:?}");
+        match &events[0] {
+            anthropic::StreamEvent::Error { error } => {
+                assert_eq!(error.error_type, "api_error");
+                assert!(error.message.contains("finish_reason"));
+            }
+            other => panic!("expected StreamEvent::Error, got {other:?}"),
+        }
+        assert!(translator.finish().is_empty());
     }
 }

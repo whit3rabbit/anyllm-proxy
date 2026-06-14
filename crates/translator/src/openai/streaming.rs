@@ -29,6 +29,30 @@ pub struct ChatCompletionChunk {
     /// See: https://docs.anthropic.com/en/api/openai-sdk#response-fields
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub system_fingerprint: Option<String>,
+    /// Mid-stream error envelope. OpenAI-compatible gateways (notably OpenRouter)
+    /// cannot change the HTTP status once a 200 SSE stream has started, so a failure
+    /// during generation arrives as a chunk carrying a top-level `error` object
+    /// alongside a choice with `finish_reason: "error"`.
+    /// See: <https://openrouter.ai/docs/api/reference/errors-and-debugging>
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<ChunkError>,
+}
+
+/// Error payload embedded in a streaming chunk by gateways that signal mid-stream
+/// failures over an already-200 SSE response.
+///
+/// `code` is untyped because OpenRouter sends a string code (`"server_error"`)
+/// mid-stream but a numeric HTTP status (`400`) for pre-stream errors.
+///
+/// See <https://openrouter.ai/docs/api/reference/errors-and-debugging>
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub struct ChunkError {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub code: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<serde_json::Value>,
 }
 
 /// A choice within a streaming chunk.
@@ -238,6 +262,7 @@ mod tests {
             usage: None,
             created: Some(1700000000),
             system_fingerprint: None,
+            error: None,
         };
         let json_str = serde_json::to_string(&chunk).unwrap();
         let roundtrip: ChatCompletionChunk = serde_json::from_str(&json_str).unwrap();
@@ -256,6 +281,47 @@ mod tests {
         assert_eq!(chunk.choices.len(), 0);
         let usage = chunk.usage.unwrap();
         assert_eq!(usage.prompt_tokens, 5);
+    }
+
+    #[test]
+    fn deserialize_openrouter_midstream_error_chunk() {
+        // OpenRouter signals a mid-generation failure (after a 200 SSE response has
+        // begun) as a chunk with a top-level `error` object and finish_reason "error".
+        let raw = json!({
+            "id": "cmpl-abc123",
+            "object": "chat.completion.chunk",
+            "created": 1234567890,
+            "model": "openai/gpt-4o",
+            "provider": "openai",
+            "error": {"code": "server_error", "message": "Provider disconnected"},
+            "choices": [{"index": 0, "delta": {"content": ""}, "finish_reason": "error"}]
+        });
+        let chunk: ChatCompletionChunk = serde_json::from_value(raw).unwrap();
+        let err = chunk.error.expect("error envelope should deserialize");
+        assert_eq!(err.code.as_ref().unwrap().as_str(), Some("server_error"));
+        assert_eq!(err.message.as_deref(), Some("Provider disconnected"));
+        assert_eq!(
+            chunk.choices[0].finish_reason,
+            Some(FinishReason::Error),
+            "finish_reason \"error\" should bind to FinishReason::Error, not Unknown"
+        );
+    }
+
+    #[test]
+    fn normal_chunk_omits_error_field_on_serialize() {
+        // The new `error` field must not appear in serialized output when absent.
+        let chunk = ChatCompletionChunk {
+            id: "c1".into(),
+            object: "chat.completion.chunk".into(),
+            model: "gpt-4o".into(),
+            choices: vec![],
+            usage: None,
+            created: None,
+            system_fingerprint: None,
+            error: None,
+        };
+        let s = serde_json::to_string(&chunk).unwrap();
+        assert!(!s.contains("\"error\""), "unexpected error field: {s}");
     }
 
     #[test]

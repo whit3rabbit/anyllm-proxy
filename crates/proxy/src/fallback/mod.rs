@@ -38,14 +38,16 @@ impl FallbackChain {
 
     /// Determine whether a failure should trigger fallback to the next backend.
     ///
-    /// Retryable: 429 (rate limit), 500, 502, 503, connection errors, timeouts.
-    /// Non-retryable: 400, 401, 403, 404, and other 4xx (client errors that won't
-    /// resolve by switching backends).
+    /// Delegates to the shared client retry policy (`is_retryable`: 408, 429, and
+    /// all 5xx) plus connection errors, so the fallback chain and the in-client
+    /// retry loop never disagree about what counts as retryable. Non-retryable:
+    /// 400, 401, 403, 404, and other 4xx (client errors that won't resolve by
+    /// switching backends).
     pub fn should_fallback(status: u16, is_connection_error: bool) -> bool {
         if is_connection_error {
             return true;
         }
-        matches!(status, 429 | 500 | 502 | 503)
+        crate::backend::is_retryable(status)
     }
 
     /// Execute a fallback chain. Calls `try_backend` for each backend in order,
@@ -177,6 +179,21 @@ mod tests {
         assert!(FallbackChain::should_fallback(502, false));
         assert!(FallbackChain::should_fallback(503, false));
         assert!(FallbackChain::should_fallback(429, false));
+    }
+
+    #[test]
+    fn should_fallback_matches_client_retry_policy() {
+        // Fallback must cover the same statuses the in-client retry loop does:
+        // 408, 429, and all of 5xx (incl. 504 gateway timeout, 599).
+        assert!(FallbackChain::should_fallback(408, false));
+        assert!(FallbackChain::should_fallback(504, false));
+        assert!(FallbackChain::should_fallback(599, false));
+        for status in 500..=599u16 {
+            assert!(
+                FallbackChain::should_fallback(status, false),
+                "5xx status {status} should trigger fallback"
+            );
+        }
     }
 
     #[test]

@@ -93,16 +93,18 @@ pub(crate) async fn gemini_native_handler(
                 Err(e) => {
                     metrics.record_error();
                     let be = BackendError::from(e);
+                    // Classify the upstream status so a mid-stream 429/403/5xx
+                    // surfaces with the right Anthropic error type instead of a
+                    // generic api_error.
+                    let error_type =
+                        anyllm_translate::mapping::errors_map::openai_status_to_anthropic_error_type(
+                            be.status_code(),
+                        );
                     // Send a synthetic error event so the client knows the stream failed.
-                    let err = anyllm_translate::mapping::errors_map::create_anthropic_error(
-                        anthropic::ErrorType::ApiError,
-                        be.to_string(),
-                        None,
-                    );
                     let event = anthropic::StreamEvent::Error {
                         error: anthropic::streaming::StreamError {
-                            error_type: "api_error".to_string(),
-                            message: err.error.message.clone(),
+                            error_type: error_type.as_wire_str().to_string(),
+                            message: be.to_string(),
                         },
                     };
                     let _ = send_events(&tx, &[event]).await;

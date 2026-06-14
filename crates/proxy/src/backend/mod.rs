@@ -97,9 +97,15 @@ pub enum BackendError {
 
 impl BackendError {
     /// HTTP status code for API errors, None for transport/deserialization errors.
+    ///
+    /// Must list every `ApiError` variant. Omitting one (the Anthropic variant
+    /// was previously missing) makes `status_code()` report 500 and
+    /// `error_kind()` report "unknown" for that backend's upstream errors,
+    /// silently mis-tagging e.g. a 429 from the Anthropic passthrough.
     pub fn api_error_status(&self) -> Option<u16> {
         match self {
             Self::OpenAI(OpenAIClientError::ApiError { status, .. }) => Some(*status),
+            Self::Anthropic(AnthropicClientError::ApiError { status, .. }) => Some(*status),
             Self::Bedrock(BedrockClientError::ApiError { status, .. }) => Some(*status),
             Self::Gemini(GeminiClientError::ApiError { status, .. }) => Some(*status),
             _ => None,
@@ -475,5 +481,49 @@ mod tests {
 
         let signing = BackendError::Bedrock(BedrockClientError::Signing("bad sig".into()));
         assert_eq!(signing.error_kind(), "signing");
+    }
+
+    #[test]
+    fn backend_error_kind_covers_auth_forbidden_and_gateway_timeout() {
+        // The "big" status codes must classify consistently regardless of which
+        // backend produced them: 401/403/404 are client errors, 429 rate_limit,
+        // 504 (gateway timeout) a timeout, 5xx a backend_error.
+        let cases: &[(u16, &str)] = &[
+            (401, "client_error"),
+            (403, "client_error"),
+            (404, "client_error"),
+            (429, "rate_limit"),
+            (500, "backend_error"),
+            (503, "backend_error"),
+            (504, "timeout"),
+        ];
+        for (status, kind) in cases {
+            // OpenAI variant
+            let openai = BackendError::OpenAI(OpenAIClientError::ApiError {
+                status: *status,
+                error: anyllm_translate::openai::errors::ErrorResponse {
+                    error: anyllm_translate::openai::errors::ErrorDetail {
+                        message: "err".to_string(),
+                        error_type: "test".to_string(),
+                        param: None,
+                        code: None,
+                    },
+                },
+            });
+            assert_eq!(openai.error_kind(), *kind, "openai status {status}");
+            assert_eq!(openai.status_code(), *status, "openai status {status}");
+
+            // Anthropic passthrough variant (raw bytes body)
+            let anthropic = BackendError::Anthropic(AnthropicClientError::ApiError {
+                status: *status,
+                body: bytes::Bytes::from_static(b"err"),
+            });
+            assert_eq!(anthropic.error_kind(), *kind, "anthropic status {status}");
+            assert_eq!(
+                anthropic.status_code(),
+                *status,
+                "anthropic status {status}"
+            );
+        }
     }
 }
