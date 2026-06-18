@@ -76,7 +76,7 @@ pub struct ToolEngineState {
 pub struct AppState {
     pub backend: BackendClient,
     pub metrics: Metrics,
-    /// Runtime config (model mappings, log_bodies) read on every request.
+    /// Runtime config (model mappings, body logging, redaction) read on every request.
     /// Shared with admin server so config changes take effect immediately.
     pub runtime_config: Arc<RwLock<RuntimeConfig>>,
     /// Shared admin state for request logging and live updates. None in tests.
@@ -224,6 +224,14 @@ impl AppState {
             .read()
             .unwrap_or_else(|e| e.into_inner())
             .log_bodies
+    }
+
+    /// Whether upstream JSON/text request payloads should be redacted.
+    pub(crate) fn redact_secrets(&self) -> bool {
+        self.runtime_config
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .redact_secrets
     }
 }
 

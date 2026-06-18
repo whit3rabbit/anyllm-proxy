@@ -109,13 +109,15 @@ Five-crate Cargo workspace: `providers` (metadata catalog), `client` (Anthropic 
 - **Docker admin needs `ADMIN_BIND=0.0.0.0`.** Default binds to 127.0.0.1 which is unreachable from outside the container.
 - **PLAN.md references in source comments are stale.** Some files reference line ranges in a removed PLAN.md.
 - **`reqwest::Error::is_timeout()` fires on read timeouts too.** A read timeout means the server already processed the POST. Only `is_connect()` is safe to retry on POST endpoints. The `retry_transport_errors` flag in `RetryPolicy` gates on `is_connect()` only by design — do not add `is_timeout()` back.
-- **Three retry loops exist; keep them in sync.** The shared `anyllm_client::retry::send_with_retry_policy` (client crate) is canonical; the proxy's `backend/mod.rs::send_with_retry` delegates to it (OpenAI/Gemini/Azure/Vertex). But `anthropic_client.rs` and `bedrock_client.rs` have their own hand-rolled `for attempt in 0..=MAX_RETRIES` loops. A retry-policy change (backoff, quota fast-fail, status classification) must be applied to all three or they diverge silently.
+- **Two retry loops exist; keep them in sync.** The shared `anyllm_client::retry::send_with_retry_policy` (client crate) is canonical; the proxy's `backend/mod.rs::send_with_retry` and `client/anthropic_client.rs` both delegate to it (OpenAI/Gemini/Azure/Vertex/Anthropic). But `bedrock_client.rs` still has its own hand-rolled `for attempt in 0..=MAX_RETRIES` loop. A retry-policy change (backoff, quota fast-fail, status classification) must be applied to both or they diverge silently.
 - **`anthropic::ErrorType::as_wire_str()` is the canonical snake_case stringifier.** Use it for error-event wire strings; do NOT round-trip through `serde_json::to_value(&et).as_str()...unwrap_or("api_error")` (silent fallback masks bugs). Adding a variant fails to compile until handled in the `match`.
 - **`extra_headers` Vec + `HeaderMap::insert` → last writer wins.** Push builder-level headers to the END of `extra_headers` Vec so they overwrite any caller-supplied duplicate when `build_http_client` iterates. Inserting at index 0 loses priority — the caller's later entry wins.
 - **`Ipv4Addr::is_broadcast()` matches only `255.255.255.255`**, not directed subnet broadcasts like `10.0.0.255`. Directed broadcasts slip through SSRF filters when `allow_private=true`.
 - **`2u64.pow(attempt)` overflows at attempt ≥ 64.** `backoff_delay` caps with `attempt.min(62)`. Any new backoff formula needs the same guard — `RetryPolicy::max_retries` has no upper bound.
 - **SSE streaming: use `run_sse_task` in `crates/client/src/streaming.rs`.** New stream types must use this shared helper (BytesMut + `find_double_newline` loop + channel send). Implement as `FnMut(SseEvent<'_>) -> Vec<...>`. Do not duplicate the frame-reading loop.
 - **Avoid `.clone()` before serialization when only one field changes.** Use `serde_json::to_value(req)` + field patch instead. `MessageCreateRequest` holds `Vec<Message>` + `serde_json::Map` — clone is O(content size).
+- **Env-var tests must share `crate::config::ENV_TEST_LOCK`.** Tests that read/mutate process env (`ANTHROPIC_BASE_URL`, `OPENAI_API_KEY`, `*_API_KEY`, etc.) serialize on the crate-wide lock in `config/mod.rs` (poison-safe via `unwrap_or_else(|e| e.into_inner())`). A per-module `static Mutex<()>` does NOT serialize across modules within one `--lib` test binary, so cross-module env tests race and flake. Acquire the lock at the top of each such test.
+- **Adding a `RuntimeConfig` field touches 6 sites; 2 are not compiler-caught.** Struct + `RuntimeConfigDefaults` (`admin/state.rs`) and 3 constructors (`SharedState::new_for_test`, `cost/mod.rs` test, `main.rs`) fail to compile if missed — but the SQLite override-apply `match` (`main.rs`) and the `delete_config_override` reset (`admin/routes/config.rs`) do NOT, so a new field silently won't persist or reset across restart unless added there too.
 
 ## Release Process
 
@@ -173,6 +175,10 @@ anyllm_translate → anyllm_providers → anyllm_client → anyllm_batch_engine 
   the workspace version, also update it there and all inter-crate `version = "X.Y.Z"` path deps.
   Quick check: `grep -r 'version.*0\.' crates/*/Cargo.toml Cargo.toml | grep -v "workspace"`
 - Deb package version = Cargo workspace version, NOT the release tag. Keep them in sync.
+
+## Code Intelligence
+
+A **synrepo** MCP server is configured (`.mcp.json`) for structured codebase context. Start with `synrepo_orient`, use `synrepo_ask` for a cited context packet, `synrepo_find`/`synrepo_search` to locate code, `synrepo_impact` before edits, `synrepo_tests` before claiming done. Read raw source after synrepo narrows the target.
 
 ## References
 

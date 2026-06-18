@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useObservability } from '../../api/queries'
 import LineChart from '../../components/shared/LineChart'
 import EmptyState from '../../components/shared/EmptyState'
+import { AdminSurface, AnimatedMetric } from '../../components/shared/Performative'
 
 export default function ObservabilityPanel() {
   const [windowHours, setWindowHours] = useState(6)
@@ -44,22 +45,22 @@ export default function ObservabilityPanel() {
 
       {data && (
         <div className="stats-row">
-          <div className="stat">
+          <AdminSurface className="stat">
             <div className="stat-label">Input Tokens</div>
-            <div className="stat-value">{data.total_input_tokens.toLocaleString()}</div>
-          </div>
-          <div className="stat">
+            <div className="stat-value"><AnimatedMetric value={data.total_input_tokens} /></div>
+          </AdminSurface>
+          <AdminSurface className="stat">
             <div className="stat-label">Output Tokens</div>
-            <div className="stat-value">{data.total_output_tokens.toLocaleString()}</div>
-          </div>
-          <div className="stat">
+            <div className="stat-value"><AnimatedMetric value={data.total_output_tokens} /></div>
+          </AdminSurface>
+          <AdminSurface className="stat">
             <div className="stat-label">Window Failures</div>
-            <div className="stat-value">{data.total_errors}</div>
-          </div>
-          <div className="stat">
+            <div className="stat-value"><AnimatedMetric value={data.total_errors} /></div>
+          </AdminSurface>
+          <AdminSurface className="stat">
             <div className="stat-label">Window Cost</div>
-            <div className="stat-value">${data.total_cost_usd.toFixed(2)}</div>
-          </div>
+            <div className="stat-value"><AnimatedMetric value={data.total_cost_usd} precision={2} format={(n) => `$${n.toFixed(2)}`} /></div>
+          </AdminSurface>
         </div>
       )}
 
@@ -67,7 +68,7 @@ export default function ObservabilityPanel() {
 
       {data && (
         <div className="operator-grid">
-          <div className="chart-card">
+          <AdminSurface className="chart-card">
             <div className="chart-header">
               <div>
                 <div className="chart-title">Request Volume</div>
@@ -76,8 +77,8 @@ export default function ObservabilityPanel() {
               <div className="chart-value">{data.total_requests}</div>
             </div>
             <LineChart series={reqSeries} />
-          </div>
-          <div className="chart-card">
+          </AdminSurface>
+          <AdminSurface className="chart-card">
             <div className="chart-header">
               <div>
                 <div className="chart-title">Tokens</div>
@@ -86,8 +87,8 @@ export default function ObservabilityPanel() {
               <div className="chart-value">{(data.total_input_tokens + data.total_output_tokens).toLocaleString()}</div>
             </div>
             <LineChart series={tokenSeries} />
-          </div>
-          <div className="chart-card">
+          </AdminSurface>
+          <AdminSurface className="chart-card">
             <div className="chart-header">
               <div>
                 <div className="chart-title">Estimated Cost</div>
@@ -96,7 +97,7 @@ export default function ObservabilityPanel() {
               <div className="chart-value">${data.total_cost_usd.toFixed(4)}</div>
             </div>
             <LineChart series={costSeries} />
-          </div>
+          </AdminSurface>
         </div>
       )}
     </div>

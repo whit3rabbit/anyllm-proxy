@@ -4,6 +4,14 @@ import { viteSingleFile } from 'vite-plugin-singlefile'
 import { readFileSync, writeFileSync } from 'fs'
 import { resolve } from 'path'
 
+const adminPort = process.env.ADMIN_PORT ?? '3001'
+const adminProxyTarget = process.env.ANYLLM_ADMIN_PROXY_TARGET ?? `http://127.0.0.1:${adminPort}`
+const adminProxy = {
+  target: adminProxyTarget,
+  changeOrigin: true,
+  secure: false,
+}
+
 function injectCspNonce() {
   return {
     name: 'inject-csp-nonce',
@@ -27,6 +35,13 @@ function injectCspNonce() {
 
 export default defineConfig({
   plugins: [react(), viteSingleFile(), injectCspNonce()],
+  server: {
+    proxy: {
+      '/admin/api': adminProxy,
+      '/admin/csrf-token': adminProxy,
+      '/admin/ws': { ...adminProxy, ws: true },
+    },
+  },
   build: {
     outDir: 'dist',
     target: 'es2020',

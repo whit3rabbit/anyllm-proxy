@@ -145,6 +145,31 @@ pub(crate) async fn gemini_input_handler(
                 .into_response();
         }
     }
+    anthropic_req =
+        match super::secret_redaction::redact_json_value(effective.redact_secrets(), anthropic_req)
+            .await
+        {
+            Ok(req) => req,
+            Err(err) => {
+                let status = err.status_code();
+                let status_str = if status.is_client_error() {
+                    "INVALID_ARGUMENT"
+                } else {
+                    "INTERNAL"
+                };
+                return (
+                    status,
+                    Json(serde_json::json!({
+                        "error": {
+                            "code": status.as_u16(),
+                            "message": err.safe_message(),
+                            "status": status_str
+                        }
+                    })),
+                )
+                    .into_response();
+            }
+        };
     let ctx = RequestCtx {
         request_id: headers
             .get("x-request-id")

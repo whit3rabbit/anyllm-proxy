@@ -1,3 +1,5 @@
+import { AdminButton } from './Performative'
+
 interface PaginationProps {
   page: number
   hasMore: boolean
@@ -8,13 +10,13 @@ interface PaginationProps {
 export default function Pagination({ page, hasMore, onPrev, onNext }: PaginationProps) {
   return (
     <div className="pagination">
-      <button className="btn btn-secondary btn-sm" onClick={onPrev} disabled={page <= 1}>
+      <AdminButton size="sm" onClick={onPrev} disabled={page <= 1}>
         Prev
-      </button>
+      </AdminButton>
       <span>Page {page}</span>
-      <button className="btn btn-secondary btn-sm" onClick={onNext} disabled={!hasMore}>
+      <AdminButton size="sm" onClick={onNext} disabled={!hasMore}>
         Next
-      </button>
+      </AdminButton>
     </div>
   )
 }

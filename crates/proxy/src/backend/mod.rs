@@ -354,6 +354,7 @@ impl BackendClient {
             tls: bc.tls.clone(),
             backend_auth: bc.backend_auth.clone(),
             log_bodies: bc.log_bodies,
+            redact_secrets: false,
             expose_degradation_warnings: false, // not used by BackendClient constructors
             openai_api_format: bc.api_format.clone(),
             provider_id: None, // multi-backend configs don't carry a stub provider ID

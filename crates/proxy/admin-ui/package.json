@@ -9,8 +9,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@lobehub/fluent-emoji": "^4.1.0",
     "@lobehub/icons": "^5.4.0",
+    "@lobehub/ui": "^5.15.17",
     "@tanstack/react-query": "^5.0.0",
+    "antd": "^6.4.4",
+    "motion": "^12.40.0",
+    "performative-ui": "^0.6.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^6.30.4",

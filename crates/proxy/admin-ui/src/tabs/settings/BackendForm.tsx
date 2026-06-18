@@ -7,6 +7,7 @@ import {
 import type { ManagedBackend, CatalogProvider } from '../../api/types'
 import { getProviderFields } from '../../utils/providerFields'
 import ProviderIcon from '../../components/shared/ProviderIcon'
+import { AdminButton } from '../../components/shared/Performative'
 
 interface BackendFormProps {
   initial?: ManagedBackend | null
@@ -204,12 +205,12 @@ export function BackendForm({ initial, onSuccess, onCancel }: BackendFormProps) 
 
       {/* Actions */}
       <div style={{ display: 'flex', gap: 8 }}>
-        <button type="submit" className="btn btn-primary btn-sm" disabled={isPending}>
-          {isPending ? 'Saving…' : isEdit ? 'Save changes' : 'Create backend'}
-        </button>
-        <button type="button" className="btn btn-secondary btn-sm" onClick={onCancel} disabled={isPending}>
+        <AdminButton type="submit" tone="primary" size="sm" loading={isPending}>
+          {isEdit ? 'Save changes' : 'Create backend'}
+        </AdminButton>
+        <AdminButton type="button" size="sm" onClick={onCancel} disabled={isPending}>
           Cancel
-        </button>
+        </AdminButton>
       </div>
     </form>
   )

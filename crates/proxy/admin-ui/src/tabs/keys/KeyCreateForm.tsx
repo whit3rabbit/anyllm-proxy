@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useCreateKey } from '../../api/queries'
+import { AdminButton } from '../../components/shared/Performative'
 
 export default function KeyCreateForm({ onCreated }: { onCreated: (key: string) => void }) {
   const create = useCreateKey()
@@ -28,9 +29,9 @@ export default function KeyCreateForm({ onCreated }: { onCreated: (key: string) 
           <input name="description" placeholder="Description" value={desc} onChange={(e) => setDesc(e.target.value)} />
           <input name="spend_limit" placeholder="Spend limit USD" type="number" value={spendLimit} onChange={(e) => setSpendLimit(e.target.value)} style={{ width: 120 }} />
           <input name="rpm_limit" placeholder="RPM limit" type="number" value={rpmLimit} onChange={(e) => setRpmLimit(e.target.value)} style={{ width: 100 }} />
-          <button type="submit" className="btn btn-primary" disabled={create.isPending}>
-            {create.isPending ? 'Creating…' : 'Create'}
-          </button>
+          <AdminButton type="submit" tone="primary" loading={create.isPending}>
+            Create
+          </AdminButton>
         </div>
       </form>
     </div>

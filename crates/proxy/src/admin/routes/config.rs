@@ -33,6 +33,7 @@ pub(super) async fn get_env() -> Json<serde_json::Value> {
         "SMALL_MODEL":        plain("SMALL_MODEL"),
         "RUST_LOG":           plain("RUST_LOG"),
         "LOG_BODIES":         plain("LOG_BODIES"),
+        "REDACT_SECRETS":     plain("REDACT_SECRETS"),
         "PROXY_CONFIG":       plain("PROXY_CONFIG"),
         // OpenAI / compatible
         "OPENAI_BASE_URL":    plain("OPENAI_BASE_URL"),
@@ -79,7 +80,7 @@ pub(super) async fn get_env() -> Json<serde_json::Value> {
 pub(super) async fn get_config(State(shared): State<SharedState>) -> Json<serde_json::Value> {
     // Clone config snapshot and drop the read guard before any .await points.
     // std::sync::RwLockReadGuard is !Send, cannot be held across awaits.
-    let (log_level, log_bodies, backends) = {
+    let (log_level, log_bodies, redact_secrets, backends) = {
         let config = shared
             .runtime_config
             .read()
@@ -94,7 +95,12 @@ pub(super) async fn get_config(State(shared): State<SharedState>) -> Json<serde_
                 }),
             );
         }
-        (config.log_level.clone(), config.log_bodies, backends)
+        (
+            config.log_level.clone(),
+            config.log_bodies,
+            config.redact_secrets,
+            backends,
+        )
     };
 
     // Get overrides to mark which fields are overridden.
@@ -108,6 +114,7 @@ pub(super) async fn get_config(State(shared): State<SharedState>) -> Json<serde_
     Json(serde_json::json!({
         "log_level": log_level,
         "log_bodies": log_bodies,
+        "redact_secrets": redact_secrets,
         "backends": backends,
         "overridden_keys": override_keys,
     }))
@@ -153,6 +160,22 @@ pub(super) async fn put_config(
             );
         }
         db_writes.push(("log_bodies".to_string(), val.to_string()));
+    }
+    if let Some(val) = body.get("redact_secrets").and_then(|v| v.as_bool()) {
+        if let Err(message) = crate::server::secret_redaction::ensure_available(val) {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({ "error": message })),
+            )
+                .into_response();
+        }
+        if val {
+            tracing::warn!(
+                "admin API: redact_secrets enabled -- upstream JSON/text request payloads will \
+                 be scanned and detected secrets replaced before forwarding"
+            );
+        }
+        db_writes.push(("redact_secrets".to_string(), val.to_string()));
     }
     if let Some(backends) = body.get("backends").and_then(|v| v.as_object()) {
         // Read current config to validate backend names exist
@@ -220,6 +243,7 @@ pub(super) async fn put_config(
             let old_value = match key.as_str() {
                 "log_level" => config.log_level.clone(),
                 "log_bodies" => config.log_bodies.to_string(),
+                "redact_secrets" => config.redact_secrets.to_string(),
                 other => {
                     if let Some((backend, field)) = other.split_once('.') {
                         config
@@ -256,6 +280,9 @@ pub(super) async fn put_config(
                 }
                 "log_bodies" => {
                     config.log_bodies = value == "true";
+                }
+                "redact_secrets" => {
+                    config.redact_secrets = value == "true";
                 }
                 _ => {
                     if let Some((backend, field)) = key.split_once('.') {
@@ -343,6 +370,33 @@ pub(super) async fn delete_config_override(
     .await
     {
         Some(Ok(true)) => {
+            // Restore the runtime value to its pre-override default. Without this,
+            // deleting an override leaves the overridden value live until restart.
+            let restored = match key.as_str() {
+                "redact_secrets" => {
+                    let env_default = shared.runtime_defaults.redact_secrets;
+                    if let Ok(mut config) = shared.runtime_config.write() {
+                        config.redact_secrets = env_default;
+                    }
+                    Some(env_default)
+                }
+                "log_bodies" => {
+                    let env_default = shared.runtime_defaults.log_bodies;
+                    if let Ok(mut config) = shared.runtime_config.write() {
+                        config.log_bodies = env_default;
+                    }
+                    Some(env_default)
+                }
+                _ => None,
+            };
+            if let Some(value) = restored {
+                let _ = shared
+                    .events_tx
+                    .send(crate::admin::state::AdminEvent::ConfigChanged {
+                        key: key.clone(),
+                        value: value.to_string(),
+                    });
+            }
             super::emit_audit(
                 &shared,
                 crate::admin::db::AuditEntry {

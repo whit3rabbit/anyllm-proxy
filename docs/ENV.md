@@ -49,6 +49,7 @@ These are the variables most users need.
 | `SMALL_MODEL` | (per backend) | Model used when the request specifies a haiku model. Defaults: `gpt-4o-mini` (openai/azure), `gemini-2.5-flash` (vertex/gemini), Bedrock model ID (bedrock). |
 | `RUST_LOG` | `info` | Tracing filter. Examples: `debug`, `anyllm_proxy=trace`. |
 | `LOG_BODIES` | `false` | Log request/response bodies at debug level. Set to `true` or `1`. **Warning:** may expose sensitive data (prompts, API keys, PII). |
+| `REDACT_SECRETS` | `false` | Scan upstream JSON/text request payloads and replace detected secrets before forwarding. Set to `true` or `1`. Also available as `--redact-secrets` and in the admin UI. |
 | `ANYLLM_DEGRADATION_WARNINGS` | `false` | Expose `x-anyllm-degradation` response header when features are silently dropped during translation. Set to `true` or `1`. Automatically enabled when `PROXY_CONFIG` is set. |
 | `DISABLE_ADMIN` | (unset) | Set to `1`, `true`, or `yes` to force-disable the admin web interface even when `--webui` is passed. Useful in automated/container environments. |
 

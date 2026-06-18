@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useWsStore } from '../../store/ws'
 import type { RequestLogEntry } from '../../api/types'
+import { AdminButton } from '../shared/Performative'
 import FeedRow from './FeedRow'
 
 const MAX_FEED = 200
@@ -22,12 +23,13 @@ export default function LiveFeed({ initial }: { initial?: RequestLogEntry[] }) {
     <div>
       <div className="section-header">
         <span className="section-label">Live Feed</span>
-        <button
-          className={`btn btn-sm ${paused ? 'btn-primary' : 'btn-secondary'}`}
+        <AdminButton
+          size="sm"
+          tone={paused ? 'primary' : 'secondary'}
           onClick={() => setPaused((v) => !v)}
         >
           {paused ? 'Resume' : 'Pause'}
-        </button>
+        </AdminButton>
       </div>
       <div className="feed">
         <div className="feed-header">

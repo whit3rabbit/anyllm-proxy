@@ -120,7 +120,7 @@ export function useRevokeKey() {
 export function useBackends() {
   return useQuery<Backend[]>({
     queryKey: ['backends'],
-    queryFn: () => apiFetch('/admin/api/backends'),
+    queryFn: () => apiFetch<{ backends: Backend[] }>('/admin/api/backends').then(r => r.backends),
     staleTime: Infinity,
   })
 }
@@ -130,12 +130,15 @@ export function useBackends() {
 export function useConfig() {
   return useQuery<ConfigResponse>({
     queryKey: ['config'],
-    // /admin/api/config returns effective state (log_level, log_bodies, …) but
-    // not the { entries, env } shape Settings expects.  The overrides endpoint
-    // returns the DB-set overrides with the right key/value/updated_at shape.
     queryFn: () =>
-      apiFetch<{ overrides: ConfigEntry[] }>('/admin/api/config/overrides')
-        .then(r => ({ entries: r.overrides ?? [], env: {} })),
+      Promise.all([
+        apiFetch<Omit<ConfigResponse, 'entries' | 'env'>>('/admin/api/config'),
+        apiFetch<{ overrides: ConfigEntry[] }>('/admin/api/config/overrides'),
+      ]).then(([effective, overrides]) => ({
+        ...effective,
+        entries: overrides.overrides ?? [],
+        env: {},
+      })),
     staleTime: Infinity,
   })
 }
@@ -143,7 +146,7 @@ export function useConfig() {
 export function useSaveConfig() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (body: Record<string, string>) =>
+    mutationFn: (body: Record<string, unknown>) =>
       mutatingFetch<void>('PUT', '/admin/api/config', body),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['config'] }) },
   })
@@ -179,7 +182,7 @@ export function useModels() {
 export function useAddModel() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (body: Record<string, unknown>) =>
+    mutationFn: (body: { model_name: string; actual_model: string; backend_name: string }) =>
       mutatingFetch<void>('POST', '/admin/api/models', body),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['models'] }) },
   })

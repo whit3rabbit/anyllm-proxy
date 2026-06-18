@@ -3,6 +3,7 @@ import { useTraffic } from '../../api/queries'
 import RouteTable from './RouteTable'
 import LineChart from '../../components/shared/LineChart'
 import EmptyState from '../../components/shared/EmptyState'
+import { AdminSurface } from '../../components/shared/Performative'
 
 // Amber palette for requests/min chart
 const AMBER_COLORS = ['#e8a030', '#d4922b', '#c07820', '#a86015', '#8c500a']
@@ -40,7 +41,7 @@ export default function TrafficView() {
           <RouteTable routes={data.routes} />
 
           <div className="operator-grid" style={{ marginTop: 16 }}>
-            <div className="chart-card">
+            <AdminSurface className="chart-card">
               <div className="chart-header">
                 <div>
                   <div className="chart-title">Requests / min by route</div>
@@ -48,8 +49,8 @@ export default function TrafficView() {
                 </div>
               </div>
               <LineChart series={series} />
-            </div>
-            <div className="chart-card">
+            </AdminSurface>
+            <AdminSurface className="chart-card">
               <div className="chart-header">
                 <div>
                   <div className="chart-title">Avg latency per route</div>
@@ -77,7 +78,7 @@ export default function TrafficView() {
                   })}
                 </div>
               )}
-            </div>
+            </AdminSurface>
           </div>
         </>
       )}

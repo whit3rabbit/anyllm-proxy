@@ -3,24 +3,21 @@
 //! This module exposes model routing and backend dispatch without taking
 //! ownership of HTTP routing, auth, admin UI, caching, or tool execution.
 
-use crate::backend::{BackendClient, BackendError, RateLimitHeaders, MAX_SSE_BUFFER_SIZE};
+use crate::backend::{BackendClient, BackendError, RateLimitHeaders};
 use crate::config::{BackendKind, Config, ModelMapping, MultiConfig, OpenAIApiFormat};
 use anyllm_translate::{
-    anthropic, mapping, openai, translate_anthropic_to_openai_response,
-    translate_openai_to_anthropic_request, ReverseStreamingTranslator, TranslationWarnings,
+    mapping, openai, translate_anthropic_to_openai_response, translate_openai_to_anthropic_request,
+    TranslationWarnings,
 };
-use bytes::BytesMut;
 use futures::{
     future::{BoxFuture, FutureExt},
-    Stream, StreamExt,
+    Stream,
 };
 use std::collections::HashMap;
 use std::fmt;
 use std::pin::Pin;
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
-use tokio::sync::mpsc;
-use tokio_stream::wrappers::ReceiverStream;
 
 /// Stream returned by [`ChatCompletionRuntime::complete_stream`].
 pub type ChatCompletionChunkStream =
@@ -423,19 +420,19 @@ impl ChatCompletionRuntime {
 
                 let start = record_start(&resolved.deployment);
                 match client.chat_completion_stream(&openai_req).await {
-                    Ok((response, rate_limits)) => {
-                        record_finish(&resolved.deployment, start);
-                        Ok(ChatCompletionStreamResult {
-                            chunks: openai_chunk_stream(
-                                response,
-                                resolved.state.stream_timeout_secs,
+                    Ok((response, rate_limits)) => Ok(ChatCompletionStreamResult {
+                        chunks: openai_chunk_stream(
+                            response,
+                            resolved.state.stream_timeout_secs,
+                            DeploymentLatencyGuard::from_started(
                                 resolved.deployment.clone(),
+                                start,
                             ),
-                            rate_limits,
-                            metadata,
-                            warnings,
-                        })
-                    }
+                        ),
+                        rate_limits,
+                        metadata,
+                        warnings,
+                    }),
                     Err(e) => {
                         record_finish(&resolved.deployment, start);
                         Err(ChatCompletionError::Backend(BackendError::from(e)))
@@ -451,20 +448,20 @@ impl ChatCompletionRuntime {
 
                 let start = record_start(&resolved.deployment);
                 match client.responses_stream(&responses_req).await {
-                    Ok((response, rate_limits)) => {
-                        record_finish(&resolved.deployment, start);
-                        Ok(ChatCompletionStreamResult {
-                            chunks: responses_chunk_stream(
-                                response,
-                                requested_model,
-                                resolved.state.stream_timeout_secs,
+                    Ok((response, rate_limits)) => Ok(ChatCompletionStreamResult {
+                        chunks: responses_chunk_stream(
+                            response,
+                            requested_model,
+                            resolved.state.stream_timeout_secs,
+                            DeploymentLatencyGuard::from_started(
                                 resolved.deployment.clone(),
+                                start,
                             ),
-                            rate_limits,
-                            metadata,
-                            warnings,
-                        })
-                    }
+                        ),
+                        rate_limits,
+                        metadata,
+                        warnings,
+                    }),
                     Err(e) => {
                         record_finish(&resolved.deployment, start);
                         Err(ChatCompletionError::Backend(BackendError::from(e)))
@@ -512,6 +509,9 @@ fn record_finish(
         d.record_finish(start.elapsed().as_millis() as u64);
     }
 }
+
+pub mod stream;
+use stream::{openai_chunk_stream, responses_chunk_stream, DeploymentLatencyGuard};
 
 fn prepare_openai_request(
     req: &mut openai::ChatCompletionRequest,
@@ -563,231 +563,4 @@ fn sanitize_tools_for_gemini(req: &mut openai::ChatCompletionRequest) {
                 .collect(),
         );
     }
-}
-
-fn openai_chunk_stream(
-    response: reqwest::Response,
-    stream_timeout_secs: u64,
-    deployment: Option<Arc<crate::config::model_router::Deployment>>,
-) -> ChatCompletionChunkStream {
-    let (tx, rx) = mpsc::channel(32);
-    tokio::spawn(async move {
-        let fut = async {
-            let mut byte_stream = response.bytes_stream();
-            let mut buffer = BytesMut::new();
-            let mut search_from: usize = 0;
-
-            while let Some(chunk_result) = byte_stream.next().await {
-                let bytes = match chunk_result {
-                    Ok(bytes) => bytes,
-                    Err(e) => {
-                        send_stream_error(&tx, ChatCompletionError::StreamRead(e.to_string()))
-                            .await;
-                        return;
-                    }
-                };
-
-                if buffer.len() + bytes.len() > MAX_SSE_BUFFER_SIZE {
-                    send_stream_error(&tx, ChatCompletionError::StreamBufferOverflow).await;
-                    return;
-                }
-                buffer.extend_from_slice(&bytes);
-
-                while let Some((pos, delim_len)) =
-                    anyllm_client::find_double_newline(&buffer, search_from)
-                {
-                    let frame = match std::str::from_utf8(&buffer[..pos]) {
-                        Ok(frame) => frame,
-                        Err(e) => {
-                            send_stream_error(&tx, ChatCompletionError::StreamParse(e.to_string()))
-                                .await;
-                            return;
-                        }
-                    };
-
-                    for line in frame.lines() {
-                        let line = line.trim();
-                        let Some(json_str) = line.strip_prefix("data: ") else {
-                            continue;
-                        };
-                        if json_str == "[DONE]" {
-                            continue;
-                        }
-                        let parsed = serde_json::from_str::<openai::ChatCompletionChunk>(json_str);
-                        match parsed {
-                            Ok(chunk) => {
-                                if let (Some(ref deployment), Some(ref usage)) =
-                                    (&deployment, &chunk.usage)
-                                {
-                                    deployment.record_tokens(usage.total_tokens as u64);
-                                }
-                                if tx.send(Ok(chunk)).await.is_err() {
-                                    return;
-                                }
-                            }
-                            Err(e) => {
-                                send_stream_error(
-                                    &tx,
-                                    ChatCompletionError::StreamParse(e.to_string()),
-                                )
-                                .await;
-                                return;
-                            }
-                        }
-                    }
-
-                    let _ = buffer.split_to(pos + delim_len);
-                    search_from = 0;
-                }
-                search_from = buffer.len().saturating_sub(3);
-            }
-        };
-
-        if stream_timeout_secs > 0 {
-            if tokio::time::timeout(std::time::Duration::from_secs(stream_timeout_secs), fut)
-                .await
-                .is_err()
-            {
-                send_stream_error(&tx, ChatCompletionError::StreamTimeout).await;
-            }
-        } else {
-            fut.await;
-        }
-    });
-
-    Box::pin(ReceiverStream::new(rx))
-}
-
-fn responses_chunk_stream(
-    response: reqwest::Response,
-    model: String,
-    stream_timeout_secs: u64,
-    deployment: Option<Arc<crate::config::model_router::Deployment>>,
-) -> ChatCompletionChunkStream {
-    let (tx, rx) = mpsc::channel(32);
-    tokio::spawn(async move {
-        let fut = async {
-            let mut responses_translator =
-                mapping::responses_streaming_map::ResponsesStreamingTranslator::new(model.clone());
-            let mut reverse_translator = ReverseStreamingTranslator::new(
-                format!("chatcmpl-{}", uuid::Uuid::new_v4().as_simple()),
-                model,
-            );
-            let mut byte_stream = response.bytes_stream();
-            let mut buffer = BytesMut::new();
-            let mut search_from: usize = 0;
-
-            while let Some(chunk_result) = byte_stream.next().await {
-                let bytes = match chunk_result {
-                    Ok(bytes) => bytes,
-                    Err(e) => {
-                        send_stream_error(&tx, ChatCompletionError::StreamRead(e.to_string()))
-                            .await;
-                        return;
-                    }
-                };
-
-                if buffer.len() + bytes.len() > MAX_SSE_BUFFER_SIZE {
-                    send_stream_error(&tx, ChatCompletionError::StreamBufferOverflow).await;
-                    return;
-                }
-                buffer.extend_from_slice(&bytes);
-
-                while let Some((pos, delim_len)) =
-                    anyllm_client::find_double_newline(&buffer, search_from)
-                {
-                    let frame = match std::str::from_utf8(&buffer[..pos]) {
-                        Ok(frame) => frame,
-                        Err(e) => {
-                            send_stream_error(&tx, ChatCompletionError::StreamParse(e.to_string()))
-                                .await;
-                            return;
-                        }
-                    };
-
-                    for line in frame.lines() {
-                        let line = line.trim();
-                        let Some(json_str) = line.strip_prefix("data: ") else {
-                            continue;
-                        };
-                        let parsed = serde_json::from_str::<
-                            mapping::responses_streaming_map::ResponsesStreamEvent,
-                        >(json_str);
-                        match parsed {
-                            Ok(event) => {
-                                let anthropic_events = responses_translator.process_event(&event);
-                                if !send_translated_chunks(
-                                    &tx,
-                                    &mut reverse_translator,
-                                    &anthropic_events,
-                                    &deployment,
-                                )
-                                .await
-                                {
-                                    return;
-                                }
-                            }
-                            Err(e) => {
-                                send_stream_error(
-                                    &tx,
-                                    ChatCompletionError::StreamParse(e.to_string()),
-                                )
-                                .await;
-                                return;
-                            }
-                        }
-                    }
-
-                    let _ = buffer.split_to(pos + delim_len);
-                    search_from = 0;
-                }
-                search_from = buffer.len().saturating_sub(3);
-            }
-
-            let final_events = responses_translator.finish();
-            let _ =
-                send_translated_chunks(&tx, &mut reverse_translator, &final_events, &deployment)
-                    .await;
-        };
-
-        if stream_timeout_secs > 0 {
-            if tokio::time::timeout(std::time::Duration::from_secs(stream_timeout_secs), fut)
-                .await
-                .is_err()
-            {
-                send_stream_error(&tx, ChatCompletionError::StreamTimeout).await;
-            }
-        } else {
-            fut.await;
-        }
-    });
-
-    Box::pin(ReceiverStream::new(rx))
-}
-
-async fn send_translated_chunks(
-    tx: &mpsc::Sender<Result<openai::ChatCompletionChunk, ChatCompletionError>>,
-    reverse_translator: &mut ReverseStreamingTranslator,
-    anthropic_events: &[anthropic::StreamEvent],
-    deployment: &Option<Arc<crate::config::model_router::Deployment>>,
-) -> bool {
-    for event in anthropic_events {
-        let chunks = reverse_translator.process_event(event);
-        for chunk in chunks {
-            if let (Some(deployment), Some(usage)) = (deployment, &chunk.usage) {
-                deployment.record_tokens(usage.total_tokens as u64);
-            }
-            if tx.send(Ok(chunk)).await.is_err() {
-                return false;
-            }
-        }
-    }
-    true
-}
-
-async fn send_stream_error(
-    tx: &mpsc::Sender<Result<openai::ChatCompletionChunk, ChatCompletionError>>,
-    error: ChatCompletionError,
-) {
-    let _ = tx.send(Err(error)).await;
 }

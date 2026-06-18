@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import Modal from './Modal'
+import { AdminButton } from './Performative'
 
 export type ConfirmVariant = 'danger' | 'primary'
 
@@ -55,22 +56,22 @@ export default function ConfirmDialog({
       dismissable={!submitting}
       footer={
         <>
-          <button
+          <AdminButton
             type="button"
-            className="btn btn-secondary"
             onClick={handleClose}
             disabled={submitting}
           >
             {cancelLabel}
-          </button>
-          <button
+          </AdminButton>
+          <AdminButton
             type="button"
-            className={`btn ${variant === 'danger' ? 'btn-danger' : 'btn-primary'}`}
+            tone={variant === 'danger' ? 'danger' : 'primary'}
             onClick={handleConfirm}
             disabled={submitting}
+            loading={submitting}
           >
-            {submitting ? 'Working…' : confirmLabel}
-          </button>
+            {confirmLabel}
+          </AdminButton>
         </>
       }
     >

@@ -74,6 +74,12 @@ pub(crate) async fn gemini_native_handler(
         }
     }
 
+    let body = match super::secret_redaction::redact_json_value(state.redact_secrets(), body).await
+    {
+        Ok(body) => body,
+        Err(err) => return super::secret_redaction::error_response(err),
+    };
+
     let model = client.map_model(&body.model);
     let gemini_req = anthropic_to_gemini_request(&body);
     let original_model = body.model.clone();

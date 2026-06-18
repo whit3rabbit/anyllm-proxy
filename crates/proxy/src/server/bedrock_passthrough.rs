@@ -141,6 +141,16 @@ pub(crate) async fn bedrock_passthrough(
             return (StatusCode::INTERNAL_SERVER_ERROR, Json(err)).into_response();
         }
     };
+    let bedrock_body = match super::secret_redaction::redact_body_with_content_type(
+        state.redact_secrets(),
+        Some("application/json"),
+        bedrock_body,
+    )
+    .await
+    {
+        Ok(body) => body,
+        Err(err) => return super::secret_redaction::error_response(err),
+    };
 
     if is_stream {
         bedrock_stream(

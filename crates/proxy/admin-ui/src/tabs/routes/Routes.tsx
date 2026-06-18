@@ -14,6 +14,7 @@ import type { Route } from '../../api/types'
 import AsyncBoundary from '../../components/shared/AsyncBoundary'
 import Modal from '../../components/shared/Modal'
 import ConfirmDialog from '../../components/shared/ConfirmDialog'
+import { AdminButton, AdminLoading, AdminSurface } from '../../components/shared/Performative'
 
 // ── Route Detail (expanded inline) ────────────────────────────────────────────
 
@@ -61,15 +62,15 @@ function RouteDetail({ route, onClose }: { route: Route; onClose: () => void }) 
         <div className="route-detail-meta">
           <span className="dim">strategy: {route.strategy}</span>
           {route.rpm && <span className="dim mono">RPM {route.rpm}</span>}
-          <button className="btn btn-secondary btn-sm" onClick={onClose}>Close</button>
+          <AdminButton size="sm" onClick={onClose}>Close</AdminButton>
         </div>
       </div>
 
       <div className="route-detail-subhead">
         <span className="section-label route-detail-subhead-label">Providers (priority order)</span>
-        <button className="btn btn-primary btn-sm" onClick={() => setShowAdd(!showAdd)}>
+        <AdminButton tone="primary" size="sm" onClick={() => setShowAdd(!showAdd)}>
           {showAdd ? 'Cancel' : '+ Add Provider'}
-        </button>
+        </AdminButton>
       </div>
 
       {showAdd && (
@@ -88,17 +89,19 @@ function RouteDetail({ route, onClose }: { route: Route; onClose: () => void }) 
             onChange={(e) => setModelInput(e.target.value)}
             className="route-detail-add-models"
           />
-          <button
-            className="btn btn-primary btn-sm"
+          <AdminButton
+            tone="primary"
+            size="sm"
             onClick={handleAdd}
             disabled={!selectedBackend || addProvider.isPending}
+            loading={addProvider.isPending}
           >
-            {addProvider.isPending ? '...' : 'Add'}
-          </button>
+            Add
+          </AdminButton>
         </div>
       )}
 
-      {isLoading && <div className="dim">Loading providers...</div>}
+      {isLoading && <div className="dim"><AdminLoading label="Loading providers" /></div>}
 
       {!isLoading && providers.length === 0 && (
         <div className="dim route-detail-empty">No providers assigned. Click "+ Add Provider" above.</div>
@@ -113,31 +116,39 @@ function RouteDetail({ route, onClose }: { route: Route; onClose: () => void }) 
           </span>
           <span className="mono dim route-provider-models">[{p.models.join(', ')}]</span>
           <span className="route-provider-reorder">
-            <button
-              className="btn btn-secondary btn-sm btn-icon"
+            <AdminButton
+              tone="icon"
+              size="sm"
+              className="btn-icon"
               onClick={() => move(idx, -1)}
               disabled={idx === 0 || reorder.isPending}
               aria-label="Move up"
-            >&uarr;</button>
-            <button
-              className="btn btn-secondary btn-sm btn-icon"
+            >&uarr;</AdminButton>
+            <AdminButton
+              tone="icon"
+              size="sm"
+              className="btn-icon"
               onClick={() => move(idx, 1)}
               disabled={idx >= providers.length - 1 || reorder.isPending}
               aria-label="Move down"
-            >&darr;</button>
+            >&darr;</AdminButton>
           </span>
-          <button
-            className={`btn btn-sm ${p.enabled ? 'btn-primary' : 'btn-secondary'} route-provider-toggle`}
+          <AdminButton
+            size="sm"
+            tone={p.enabled ? 'primary' : 'secondary'}
+            className="route-provider-toggle"
             onClick={() => updateProvider.mutate({ routeId: route.id, providerId: p.id, data: { enabled: !p.enabled } })}
           >
             {p.enabled ? 'enabled' : 'disabled'}
-          </button>
-          <button
-            className="btn btn-danger btn-sm route-provider-remove"
+          </AdminButton>
+          <AdminButton
+            tone="danger"
+            size="sm"
+            className="route-provider-remove"
             onClick={() => removeProvider.mutate({ routeId: route.id, providerId: p.id })}
           >
             Remove
-          </button>
+          </AdminButton>
         </div>
       ))}
     </div>
@@ -164,10 +175,10 @@ function CreateRouteModal({ onClose }: { onClose: () => void }) {
       dismissable={!create.isPending}
       footer={
         <>
-          <button className="btn btn-secondary" onClick={onClose} disabled={create.isPending}>Cancel</button>
-          <button className="btn btn-primary" onClick={submit} disabled={!name.trim() || create.isPending}>
-            {create.isPending ? 'Creating…' : 'Create'}
-          </button>
+          <AdminButton onClick={onClose} disabled={create.isPending}>Cancel</AdminButton>
+          <AdminButton tone="primary" onClick={submit} disabled={!name.trim() || create.isPending} loading={create.isPending}>
+            Create
+          </AdminButton>
         </>
       }
     >
@@ -218,7 +229,7 @@ export default function Routes() {
     <div>
       <div className="section-header">
         <h2>Routes</h2>
-        <button className="btn btn-primary" onClick={() => setShowCreate(true)}>+ New Route</button>
+        <AdminButton tone="primary" onClick={() => setShowCreate(true)}>+ New Route</AdminButton>
       </div>
 
       <AsyncBoundary
@@ -227,13 +238,13 @@ export default function Routes() {
         empty={{
           when: (d) => (d.routes?.length ?? 0) === 0,
           render: () => (
-            <div className="empty-cta">
+            <AdminSurface className="empty-cta">
               <div className="empty-cta-title">No routes yet</div>
               <div className="empty-cta-body">
                 Create a route to fan requests out across multiple backends with priority-based failover.
               </div>
-              <button className="btn btn-primary" onClick={() => setShowCreate(true)}>+ New Route</button>
-            </div>
+              <AdminButton tone="primary" onClick={() => setShowCreate(true)}>+ New Route</AdminButton>
+            </AdminSurface>
           ),
         }}
       >
@@ -304,12 +315,13 @@ function RouteRow({
         <td>{route.provider_count}</td>
         <td className="mono dim">{limits}</td>
         <td className="route-row-actions">
-          <button
-            className="btn btn-danger btn-sm"
+          <AdminButton
+            tone="danger"
+            size="sm"
             onClick={(e) => { e.stopPropagation(); onDelete() }}
           >
             Delete
-          </button>
+          </AdminButton>
         </td>
       </tr>
       {expanded && (

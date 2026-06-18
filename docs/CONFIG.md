@@ -47,6 +47,11 @@ The `PROXY_CONFIG` variable (or auto-detected `~/.anyllm/config.yaml`) supports 
 
 **No config file**: falls back to env-var-based single-backend configuration.
 
+Top-level runtime booleans:
+- TOML: `redact_secrets = true`
+- Simple YAML: `redact_secrets: true`
+- `log_bodies` remains separate and still logs full bodies when enabled.
+
 ## Model Persistence
 
 Models added via the admin API (`POST /admin/api/models`) are stored in
@@ -66,6 +71,7 @@ To reset to YAML-only models, remove the admin-added entries via
 | Flag | Description |
 |------|-------------|
 | `--env-file <path>` | Explicit env file path (highest priority for env loading). |
+| `--redact-secrets` | Enable upstream JSON/text request secret redaction for this process. Equivalent to `REDACT_SECRETS=true`. |
 | `--webui` / `--admin` | Enable the admin web UI on a separate port. |
 | `run <command> [args...]` | Start the proxy in the background, pre-configure `ANTHROPIC_*` env vars for the child process, launch `<command>`, and exit when it exits. Useful for wrapping tools like `claude` or `aider`. |
 
@@ -118,6 +124,9 @@ anyllm-proxy --webui
 
 # Both
 anyllm-proxy --webui --env-file /path/to/my.env
+
+# Redact detected secrets before forwarding JSON/text requests upstream
+anyllm-proxy --redact-secrets
 
 # Wrap a tool (starts proxy, sets ANTHROPIC_* env vars, runs command)
 anyllm-proxy run claude

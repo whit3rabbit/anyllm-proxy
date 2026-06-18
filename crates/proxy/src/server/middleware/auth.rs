@@ -1,5 +1,3 @@
-// Auth, logging, and request size limit middleware
-
 use crate::admin::keys::{
     check_and_reset_period, now_ms, period_reset_at, KeyRole, RateLimitState, VirtualKeyMeta,
 };
@@ -23,6 +21,23 @@ static HMAC_SECRET: OnceLock<Arc<Vec<u8>>> = OnceLock::new();
 /// Initialize the global HMAC secret. Called once from main.
 pub fn set_hmac_secret(secret: Arc<Vec<u8>>) {
     let _ = HMAC_SECRET.set(secret);
+}
+
+/// Global reference to the virtual keys DashMap, set once during startup.
+/// Checked during auth after the static ALLOWED_KEY_HASHES check.
+static VIRTUAL_KEYS: OnceLock<Arc<DashMap<[u8; 32], VirtualKeyMeta>>> = OnceLock::new();
+
+/// Initialize the global virtual keys reference. Called once from main.
+pub fn set_virtual_keys(keys: Arc<DashMap<[u8; 32], VirtualKeyMeta>>) {
+    let _ = VIRTUAL_KEYS.set(keys);
+}
+
+/// Global OIDC config, set once during startup when OIDC_ISSUER_URL is configured.
+static OIDC_CONFIG: OnceLock<Arc<super::super::oidc::OidcConfig>> = OnceLock::new();
+
+/// Initialize the global OIDC config. Called once from main when OIDC is enabled.
+pub fn set_oidc_config(config: Arc<super::super::oidc::OidcConfig>) {
+    let _ = OIDC_CONFIG.set(config);
 }
 
 /// Build a 429 rate-limit error response with retry-after header.
@@ -105,23 +120,6 @@ static AUTH_MODE: LazyLock<AuthMode> = LazyLock::new(|| {
     tracing::info!(?mode, "auth mode configured");
     mode
 });
-
-/// Global reference to the virtual keys DashMap, set once during startup.
-/// Checked during auth after the static ALLOWED_KEY_HASHES check.
-static VIRTUAL_KEYS: OnceLock<Arc<DashMap<[u8; 32], VirtualKeyMeta>>> = OnceLock::new();
-
-/// Global OIDC config, set once during startup when OIDC_ISSUER_URL is configured.
-static OIDC_CONFIG: OnceLock<Arc<super::oidc::OidcConfig>> = OnceLock::new();
-
-/// Initialize the global OIDC config. Called once from main when OIDC is enabled.
-pub fn set_oidc_config(config: Arc<super::oidc::OidcConfig>) {
-    let _ = OIDC_CONFIG.set(config);
-}
-
-/// Initialize the global virtual keys reference. Called once from main.
-pub fn set_virtual_keys(keys: Arc<DashMap<[u8; 32], VirtualKeyMeta>>) {
-    let _ = VIRTUAL_KEYS.set(keys);
-}
 
 /// Pre-hashed allowed API keys for constant-time comparison without
 /// leaking key length via timing. Each key is SHA-256 hashed at startup.
@@ -212,7 +210,7 @@ pub async fn validate_auth(
     let auth_mode = *AUTH_MODE;
     if auth_mode.allows_oidc() {
         if let Some(oidc) = OIDC_CONFIG.get() {
-            if super::oidc::looks_like_jwt(&credential) {
+            if super::super::oidc::looks_like_jwt(&credential) {
                 match oidc.validate_token(&credential) {
                     Ok(claims) => {
                         tracing::debug!(sub = ?claims.sub, auth_path = "jwt", "authentication successful");
@@ -451,228 +449,6 @@ pub async fn validate_auth(
     Err((StatusCode::UNAUTHORIZED, Json(err)).into_response())
 }
 
-/// Attach a request ID to the request and echo it on the response.
-/// Uses the incoming x-request-id if present, otherwise generates a UUID v4.
-///
-/// Anthropic: <https://docs.anthropic.com/en/api/errors>
-pub async fn add_request_id(mut request: Request<Body>, next: Next) -> Response {
-    let request_id = request
-        .headers()
-        .get("x-request-id")
-        .and_then(|v| v.to_str().ok())
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-
-    // Replace invalid request IDs with UUIDs to prevent header injection.
-    // Client-provided IDs may contain characters illegal in HTTP headers.
-    let header_value: axum::http::HeaderValue = request_id.parse().unwrap_or_else(|_| {
-        uuid::Uuid::new_v4()
-            .to_string()
-            .parse()
-            .expect("UUID is always a valid header value")
-    });
-    request
-        .headers_mut()
-        .insert("x-request-id", header_value.clone());
-
-    let mut response = next.run(request).await;
-    response.headers_mut().insert("x-request-id", header_value);
-    response
-}
-
-/// Log Anthropic-specific headers without rejecting requests that lack them.
-/// Claude Code CLI and other Anthropic SDK clients send these headers.
-pub async fn log_anthropic_headers(request: Request<Body>, next: Next) -> Response {
-    if let Some(v) = request
-        .headers()
-        .get("anthropic-version")
-        .and_then(|v| v.to_str().ok())
-    {
-        tracing::debug!(anthropic_version = %v, "anthropic-version header present");
-    }
-    if let Some(b) = request
-        .headers()
-        .get("anthropic-beta")
-        .and_then(|v| v.to_str().ok())
-    {
-        tracing::debug!(anthropic_beta = %b, "anthropic-beta header present");
-    }
-    // Claude Code v2.1.86+ sends this for proxy-side session routing/aggregation.
-    if let Some(s) = request
-        .headers()
-        .get("x-claude-code-session-id")
-        .and_then(|v| v.to_str().ok())
-    {
-        tracing::debug!(session_id = %s, "x-claude-code-session-id header present");
-    }
-    next.run(request).await
-}
-
-/// Maximum request body size (32 MB, matching Anthropic's Messages endpoint limit).
-pub const MAX_BODY_SIZE: usize = 32 * 1024 * 1024;
-
-/// Maximum concurrent requests to prevent self-DOS under 429 incidents.
-pub const MAX_CONCURRENT_REQUESTS: usize = 100;
-
-// ---- IP allowlisting ----
-
-/// Parsed CIDR allowlist from IP_ALLOWLIST env var. None means allow all.
-static IP_ALLOWLIST: LazyLock<Option<Vec<ipnetwork::IpNetwork>>> = LazyLock::new(|| {
-    std::env::var("IP_ALLOWLIST").ok().map(|v| {
-        v.split(',')
-            .map(|s| s.trim())
-            .filter(|s| !s.is_empty())
-            .map(|s| {
-                // Accept bare IPs (e.g., "127.0.0.1") by appending /32 or /128.
-                if !s.contains('/') {
-                    let ip: std::net::IpAddr = s
-                        .parse()
-                        .unwrap_or_else(|e| panic!("invalid IP_ALLOWLIST entry '{s}': {e}"));
-                    return ipnetwork::IpNetwork::from(ip);
-                }
-                s.parse::<ipnetwork::IpNetwork>()
-                    .unwrap_or_else(|e| panic!("invalid IP_ALLOWLIST CIDR '{s}': {e}"))
-            })
-            .collect()
-    })
-});
-
-/// Whether to trust X-Forwarded-For for IP allowlisting (production behind reverse proxy).
-static TRUST_PROXY_HEADERS: LazyLock<bool> = LazyLock::new(|| {
-    std::env::var("TRUST_PROXY_HEADERS")
-        .map(|v| v == "true" || v == "1")
-        .unwrap_or(false)
-});
-
-/// Number of trusted proxy hops. The client IP is extracted as the Nth-from-right
-/// entry in X-Forwarded-For. Defaults to 1 (single reverse proxy).
-/// Set TRUSTED_PROXY_DEPTH=2 for chains like CDN -> LB -> proxy.
-static TRUSTED_PROXY_DEPTH: LazyLock<usize> = LazyLock::new(|| {
-    std::env::var("TRUSTED_PROXY_DEPTH")
-        .ok()
-        .and_then(|v| v.parse::<usize>().ok())
-        .unwrap_or(1)
-        .max(1) // minimum 1
-});
-
-/// Check if an IP address is allowed by the configured allowlist.
-/// Returns true if no allowlist is set (open access).
-pub fn is_ip_allowed(ip: std::net::IpAddr) -> bool {
-    match IP_ALLOWLIST.as_ref() {
-        None => true,
-        Some(networks) => networks.iter().any(|net| net.contains(ip)),
-    }
-}
-
-/// Returns true if the IP allowlist is configured (IP_ALLOWLIST env var is set).
-pub fn ip_allowlist_active() -> bool {
-    IP_ALLOWLIST.is_some()
-}
-
-/// Middleware that rejects requests from IPs not in the allowlist.
-/// Applied before auth so blocked IPs never reach authentication.
-pub async fn check_ip_allowlist(request: Request<Body>, next: Next) -> Result<Response, Response> {
-    // Extract client IP from X-Forwarded-For (if trusted) or connection info.
-    //
-    // XFF spoofing: attacker-controlled headers appear at the *left* of the list.
-    // Each hop's proxy appends the IP it received from, so the rightmost entry is
-    // added by our immediate (trusted) upstream. We iterate right-to-left with
-    // rsplit and skip (depth-1) entries to skip past our own trusted proxies.
-    // TRUSTED_PROXY_DEPTH=1 (default) selects the rightmost entry; depth=2
-    // selects the second-from-right for a two-hop CDN -> LB topology, etc.
-    // Using .last() would ignore depth; using .first() would trust the attacker.
-    //
-    // NOT A BUG: X-Forwarded-For is only read when TRUST_PROXY_HEADERS=true.
-    // Without it this block is skipped entirely and ConnectInfo is used instead,
-    // so there is no XFF spoofing risk in the default (no reverse proxy) setup.
-    let client_ip = if *TRUST_PROXY_HEADERS {
-        let depth = *TRUSTED_PROXY_DEPTH;
-        request
-            .headers()
-            .get("x-forwarded-for")
-            .and_then(|v| v.to_str().ok())
-            .and_then(|s| {
-                s.rsplit(',')
-                    .map(|p| p.trim())
-                    .filter(|p| !p.is_empty())
-                    .nth(depth - 1)
-            })
-            .and_then(|s| s.parse::<std::net::IpAddr>().ok())
-    } else {
-        None
-    };
-
-    // Fall back to ConnectInfo if available.
-    let client_ip = client_ip.or_else(|| {
-        request
-            .extensions()
-            .get::<axum::extract::ConnectInfo<std::net::SocketAddr>>()
-            .map(|ci| ci.0.ip())
-    });
-
-    // If we have no IP at all (unlikely), deny by default when allowlist is active.
-    let Some(ip) = client_ip else {
-        tracing::warn!("could not determine client IP for allowlist check");
-        let err = create_anthropic_error(
-            anthropic::ErrorType::PermissionError,
-            "IP address could not be determined".to_string(),
-            None,
-        );
-        return Err((StatusCode::FORBIDDEN, Json(err)).into_response());
-    };
-
-    if !is_ip_allowed(ip) {
-        tracing::debug!(ip = %ip, "request rejected by IP allowlist");
-        let err = create_anthropic_error(
-            anthropic::ErrorType::PermissionError,
-            "IP address not in allowlist".to_string(),
-            None,
-        );
-        return Err((StatusCode::FORBIDDEN, Json(err)).into_response());
-    }
-
-    Ok(next.run(request).await)
-}
-
-#[cfg(test)]
-mod ip_tests {
-    use super::*;
-
-    #[test]
-    fn is_ip_allowed_no_allowlist() {
-        // When IP_ALLOWLIST is not set, all IPs are allowed.
-        // We cannot test this directly since LazyLock is static, but the function
-        // logic is: None => true. Smoke-call to ensure it does not panic.
-        let _ = is_ip_allowed("127.0.0.1".parse().unwrap());
-    }
-
-    #[test]
-    fn xff_rightmost_prevents_spoofing() {
-        // Attacker sends X-Forwarded-For: 127.0.0.1; trusted proxy appends real IP.
-        // Must resolve to rightmost value (203.0.113.5), not the attacker-controlled leftmost.
-        let header = "127.0.0.1, 203.0.113.5";
-        let resolved: std::net::IpAddr = header
-            .split(',')
-            .map(|s| s.trim())
-            .rfind(|s| !s.is_empty())
-            .and_then(|s| s.parse().ok())
-            .unwrap();
-        assert_eq!(resolved, "203.0.113.5".parse::<std::net::IpAddr>().unwrap());
-    }
-
-    #[test]
-    fn xff_single_ip_resolves() {
-        let header = "10.0.1.5";
-        let resolved: std::net::IpAddr = header
-            .split(',')
-            .map(|s| s.trim())
-            .rfind(|s| !s.is_empty())
-            .and_then(|s| s.parse().ok())
-            .unwrap();
-        assert_eq!(resolved, "10.0.1.5".parse::<std::net::IpAddr>().unwrap());
-    }
-}
-
 #[cfg(test)]
 mod auth_mode_tests {
     use super::*;
@@ -721,10 +497,6 @@ mod auth_mode_tests {
 
     #[test]
     fn auth_mode_from_env_defaults_to_both() {
-        // When AUTH_MODE is not set (or set to something unrecognized),
-        // from_env() returns Both for backward compatibility.
-        // Note: cannot safely manipulate env vars in parallel tests,
-        // so we test via from_env_str which from_env delegates to.
         let mode = AuthMode::from_env_str("unrecognized_value");
         assert_eq!(mode, AuthMode::Both);
     }

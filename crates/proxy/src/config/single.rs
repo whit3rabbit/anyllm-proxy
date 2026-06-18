@@ -15,6 +15,8 @@ pub struct Config {
     pub backend_auth: BackendAuth,
     /// Enable request/response body logging at debug level.
     pub log_bodies: bool,
+    /// Redact detected secrets from upstream JSON/text request payloads.
+    pub redact_secrets: bool,
     /// Expose `x-anyllm-degradation` response header when features are silently dropped.
     /// Defaults to false (simple mode). Enable with ANYLLM_DEGRADATION_WARNINGS=true
     /// or automatically when PROXY_CONFIG is set.
@@ -99,6 +101,9 @@ impl Config {
         let log_bodies = std::env::var("LOG_BODIES")
             .map(|v| v == "true" || v == "1")
             .unwrap_or(false);
+        let redact_secrets = std::env::var("REDACT_SECRETS")
+            .map(|v| v == "true" || v == "1")
+            .unwrap_or(false);
         let expose_degradation_warnings = std::env::var("ANYLLM_DEGRADATION_WARNINGS")
             .map(|v| v == "true" || v == "1")
             .unwrap_or(false);
@@ -154,6 +159,7 @@ impl Config {
                     tls,
                     backend_auth,
                     log_bodies,
+                    redact_secrets,
                     expose_degradation_warnings,
                     openai_api_format,
                     provider_id: stub_provider.map(|p| p.id),
@@ -194,6 +200,7 @@ impl Config {
                     tls,
                     backend_auth: BackendAuth::AzureApiKey(api_key),
                     log_bodies,
+                    redact_secrets,
                     expose_degradation_warnings,
                     openai_api_format: OpenAIApiFormat::Chat,
                     provider_id: None,
@@ -234,6 +241,7 @@ impl Config {
                     tls,
                     backend_auth,
                     log_bodies,
+                    redact_secrets,
                     expose_degradation_warnings,
                     openai_api_format: OpenAIApiFormat::Chat,
                     provider_id: None,
@@ -266,6 +274,7 @@ impl Config {
                     tls,
                     backend_auth,
                     log_bodies,
+                    redact_secrets,
                     expose_degradation_warnings,
                     openai_api_format: OpenAIApiFormat::Chat,
                     provider_id: None,
@@ -295,6 +304,7 @@ impl Config {
                     tls,
                     backend_auth: BackendAuth::BearerToken(api_key),
                     log_bodies,
+                    redact_secrets,
                     expose_degradation_warnings,
                     openai_api_format: OpenAIApiFormat::Chat,
                     provider_id: None,
@@ -329,6 +339,7 @@ impl Config {
                     tls,
                     backend_auth: BackendAuth::BearerToken(String::new()),
                     log_bodies,
+                    redact_secrets,
                     expose_degradation_warnings,
                     openai_api_format: OpenAIApiFormat::Chat,
                     provider_id: None,

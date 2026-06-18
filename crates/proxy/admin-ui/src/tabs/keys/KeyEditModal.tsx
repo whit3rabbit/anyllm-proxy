@@ -3,6 +3,7 @@ import type { VirtualKey } from '../../api/types'
 import { useUpdateKey, useRevokeKey, useRoutes } from '../../api/queries'
 import Modal from '../../components/shared/Modal'
 import ConfirmDialog from '../../components/shared/ConfirmDialog'
+import { AdminButton } from '../../components/shared/Performative'
 
 interface KeyEditModalProps {
   vk: VirtualKey
@@ -46,18 +47,18 @@ export default function KeyEditModal({ vk, onClose }: KeyEditModalProps) {
         dismissable={!update.isPending}
         footer={
           <>
-            <button
-              className="btn btn-danger"
+            <AdminButton
+              tone="danger"
               onClick={() => setConfirmRevoke(true)}
               disabled={update.isPending}
               style={{ marginRight: 'auto' }}
             >
               Revoke
-            </button>
-            <button className="btn btn-secondary" onClick={onClose} disabled={update.isPending}>Cancel</button>
-            <button className="btn btn-primary" onClick={handleSave} disabled={update.isPending}>
-              {update.isPending ? 'Saving…' : 'Save'}
-            </button>
+            </AdminButton>
+            <AdminButton onClick={onClose} disabled={update.isPending}>Cancel</AdminButton>
+            <AdminButton tone="primary" onClick={handleSave} loading={update.isPending}>
+              Save
+            </AdminButton>
           </>
         }
       >

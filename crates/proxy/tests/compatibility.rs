@@ -18,6 +18,7 @@ fn test_config() -> Config {
         tls: config::TlsConfig::default(),
         backend_auth: config::BackendAuth::BearerToken("test-key".into()),
         log_bodies: false,
+        redact_secrets: false,
         expose_degradation_warnings: false,
         openai_api_format: config::OpenAIApiFormat::Chat,
         provider_id: None,

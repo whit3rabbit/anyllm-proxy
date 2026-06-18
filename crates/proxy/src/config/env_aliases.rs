@@ -41,7 +41,6 @@ pub fn compute_env_aliases() -> Vec<(&'static str, String)> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Mutex;
 
     /// Test-only wrapper: apply computed aliases to the environment.
     fn apply_env_aliases() {
@@ -50,12 +49,14 @@ mod tests {
         }
     }
 
-    // Serial test lock: env var mutations are process-global.
-    static ENV_LOCK: Mutex<()> = Mutex::new(());
+    // Crate-shared serial lock: env vars are process-global, so this must be the
+    // same lock used by other config test modules (litellm, single) to avoid
+    // cross-module races on vars like ANTHROPIC_BASE_URL.
+    use crate::config::ENV_TEST_LOCK as ENV_LOCK;
 
     #[test]
     fn compute_returns_overrides_when_target_unset() {
-        let _lock = ENV_LOCK.lock().unwrap();
+        let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         unsafe {
             std::env::remove_var("PROXY_API_KEYS");
             std::env::set_var("LITELLM_MASTER_KEY", "sk-test-master");
@@ -81,7 +82,7 @@ mod tests {
 
     #[test]
     fn compute_skips_when_target_already_set() {
-        let _lock = ENV_LOCK.lock().unwrap();
+        let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         unsafe {
             std::env::set_var("PROXY_API_KEYS", "existing-key");
             std::env::set_var("LITELLM_MASTER_KEY", "sk-litellm");
@@ -102,7 +103,7 @@ mod tests {
 
     #[test]
     fn compute_maps_anthropic_api_base() {
-        let _lock = ENV_LOCK.lock().unwrap();
+        let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         unsafe {
             std::env::remove_var("ANTHROPIC_BASE_URL");
             std::env::set_var("ANTHROPIC_API_BASE", "https://anthropic-proxy.example");
@@ -122,7 +123,7 @@ mod tests {
 
     #[test]
     fn apply_env_aliases_sets_vars() {
-        let _lock = ENV_LOCK.lock().unwrap();
+        let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         unsafe {
             std::env::remove_var("PROXY_API_KEYS");
             std::env::set_var("LITELLM_MASTER_KEY", "sk-test-master");

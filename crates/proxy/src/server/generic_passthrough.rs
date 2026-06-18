@@ -70,6 +70,12 @@ pub(crate) async fn v1_generic_passthrough(
         .and_then(|v| v.to_str().ok())
         .map(str::to_string);
 
+    let body =
+        match super::secret_redaction::redact_body(state.redact_secrets(), &headers, body).await {
+            Ok(body) => body,
+            Err(err) => return super::secret_redaction::error_response(err),
+        };
+
     let body_opt = if body.is_empty() { None } else { Some(body) };
 
     match client

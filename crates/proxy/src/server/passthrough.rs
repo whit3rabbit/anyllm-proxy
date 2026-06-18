@@ -110,6 +110,17 @@ pub(crate) async fn anthropic_passthrough(
         }
     }
 
+    let body = match super::secret_redaction::redact_body_with_content_type(
+        state.redact_secrets(),
+        Some("application/json"),
+        body,
+    )
+    .await
+    {
+        Ok(body) => body,
+        Err(err) => return super::secret_redaction::error_response(err),
+    };
+
     if is_stream {
         match client.forward_stream(body, &extra_headers).await {
             Ok((response, rate_limits)) => {
@@ -358,6 +369,12 @@ pub(crate) async fn anthropic_generic_passthrough(
     if let Some(ref v) = beta {
         extra.push(("anthropic-beta", v));
     }
+
+    let body =
+        match super::secret_redaction::redact_body(state.redact_secrets(), &headers, body).await {
+            Ok(body) => body,
+            Err(err) => return super::secret_redaction::error_response(err),
+        };
 
     match client
         .forward_generic(method, &full_path, body, &extra)

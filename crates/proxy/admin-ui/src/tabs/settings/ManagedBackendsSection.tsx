@@ -8,6 +8,7 @@ import type { ManagedBackend } from '../../api/types'
 import EmptyState from '../../components/shared/EmptyState'
 import ConfirmDialog from '../../components/shared/ConfirmDialog'
 import ProviderIcon from '../../components/shared/ProviderIcon'
+import { AdminButton } from '../../components/shared/Performative'
 import { BackendForm } from './BackendForm'
 
 type PanelState =
@@ -41,12 +42,13 @@ export function ManagedBackendsSection() {
     <div style={{ marginBottom: 24 }}>
       <div className="section-header">
         <div className="section-label" style={{ margin: 0 }}>Managed Backends</div>
-        <button
-          className="btn btn-primary btn-sm"
+        <AdminButton
+          tone="primary"
+          size="sm"
           onClick={() => setPanel({ mode: 'create' })}
         >
           Add Backend
-        </button>
+        </AdminButton>
       </div>
       <div style={{ fontSize: 12, color: 'var(--text-2)', marginBottom: 10 }}>
         Configure provider credentials and backend settings at runtime.
@@ -108,8 +110,8 @@ export function ManagedBackendsSection() {
                 <td className="dim mono" style={{ fontSize: 11 }}>{b.api_base ?? '—'}</td>
                 <td>
                   <div style={{ display: 'flex', gap: 6 }}>
-                    <button
-                      className="btn btn-secondary btn-sm"
+                    <AdminButton
+                      size="sm"
                       onClick={() => {
                         if (panel.mode === 'edit' && panel.backend.id === b.id) {
                           setPanel({ mode: 'none' })
@@ -119,14 +121,15 @@ export function ManagedBackendsSection() {
                       }}
                     >
                       Edit
-                    </button>
-                    <button
-                      className="btn btn-danger btn-sm"
+                    </AdminButton>
+                    <AdminButton
+                      tone="danger"
+                      size="sm"
                       onClick={() => setPendingDelete(b)}
                       disabled={del.isPending && del.variables === b.name}
                     >
                       Delete
-                    </button>
+                    </AdminButton>
                   </div>
                 </td>
               </tr>

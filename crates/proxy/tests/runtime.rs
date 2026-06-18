@@ -3,12 +3,15 @@ use anyllm_proxy::config::{
 };
 use anyllm_proxy::runtime::{ChatCompletionError, ChatCompletionRuntime, ChatCompletionService};
 use axum::{body::Body, extract::State, response::IntoResponse, routing::post, Json, Router};
+use bytes::Bytes;
 use futures::StreamExt;
 use indexmap::IndexMap;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
 use tokio::net::TcpListener;
+use tokio::sync::{mpsc, Notify};
+use tokio_stream::wrappers::ReceiverStream;
 
 #[derive(Clone)]
 struct JsonBackendState {
@@ -56,6 +59,47 @@ async fn spawn_stream_backend(body: &'static str) -> String {
     spawn_app(app).await
 }
 
+async fn spawn_hanging_stream_backend(release: Arc<Notify>) -> String {
+    async fn handler(
+        State(release): State<Arc<Notify>>,
+        Json(_): Json<Value>,
+    ) -> impl IntoResponse {
+        let (tx, rx) = mpsc::channel::<Result<Bytes, std::convert::Infallible>>(4);
+        tokio::spawn(async move {
+            let first = concat!(
+                "data: {\"id\":\"chatcmpl-stream\",\"object\":\"chat.completion.chunk\",",
+                "\"created\":1700000000,\"model\":\"gpt-4o\",",
+                "\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"hi\"},",
+                "\"finish_reason\":null}]}\n\n"
+            );
+            let _ = tx.send(Ok(Bytes::from_static(first.as_bytes()))).await;
+            release.notified().await;
+            let final_events = concat!(
+                "data: {\"id\":\"chatcmpl-stream\",\"object\":\"chat.completion.chunk\",",
+                "\"created\":1700000000,\"model\":\"gpt-4o\",",
+                "\"choices\":[],\"usage\":{\"prompt_tokens\":3,\"completion_tokens\":2,",
+                "\"total_tokens\":5}}\n\n",
+                "data: [DONE]\n\n"
+            );
+            let _ = tx
+                .send(Ok(Bytes::from_static(final_events.as_bytes())))
+                .await;
+        });
+
+        axum::response::Response::builder()
+            .status(200)
+            .header("content-type", "text/event-stream")
+            .header("x-ratelimit-limit-requests", "100")
+            .body(Body::from_stream(ReceiverStream::new(rx)))
+            .unwrap()
+    }
+
+    let app = Router::new()
+        .route("/v1/chat/completions", post(handler))
+        .with_state(release);
+    spawn_app(app).await
+}
+
 async fn spawn_app(app: Router) -> String {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -86,6 +130,7 @@ fn multi_config(backends: IndexMap<String, BackendConfig>, default_backend: &str
     MultiConfig {
         listen_port: 0,
         log_bodies: false,
+        redact_secrets: false,
         default_backend: default_backend.to_string(),
         backends,
         expose_degradation_warnings: false,
@@ -303,4 +348,61 @@ async fn runtime_streaming_emits_chunks_and_usage() {
     assert_eq!(chunks.len(), 2);
     assert_eq!(chunks[0].choices[0].delta.content.as_deref(), Some("hi"));
     assert_eq!(chunks[1].usage.as_ref().unwrap().total_tokens, 5);
+}
+
+#[tokio::test]
+async fn runtime_streaming_keeps_deployment_in_flight_until_body_finishes() {
+    let release = Arc::new(Notify::new());
+    let base_url = spawn_hanging_stream_backend(release.clone()).await;
+
+    let mut backends = IndexMap::new();
+    backends.insert(
+        "openai".to_string(),
+        backend_config(BackendKind::OpenAI, base_url),
+    );
+    let deployment = Arc::new(anyllm_proxy::config::model_router::Deployment::new(
+        "openai".to_string(),
+        "gpt-4o".to_string(),
+        None,
+        None,
+    ));
+    let mut routes = HashMap::new();
+    routes.insert("virtual-stream".to_string(), vec![deployment.clone()]);
+    let router = Arc::new(RwLock::new(
+        anyllm_proxy::config::model_router::ModelRouter::new(routes),
+    ));
+    let runtime = ChatCompletionRuntime::from_multi_config_with_model_router(
+        multi_config(backends, "openai"),
+        Some(router),
+    );
+    let req = serde_json::from_value(json!({
+        "model": "virtual-stream",
+        "messages": [{"role": "user", "content": "hello"}],
+        "max_tokens": 32,
+        "stream": true
+    }))
+    .unwrap();
+
+    let result = runtime.complete_stream(req).await.unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+
+    assert_eq!(
+        deployment.in_flight_count(),
+        1,
+        "deployment should remain in-flight while the streaming body is open"
+    );
+
+    release.notify_waiters();
+    let chunks: Vec<_> = result
+        .chunks
+        .collect::<Vec<_>>()
+        .await
+        .into_iter()
+        .map(Result::unwrap)
+        .collect();
+
+    assert_eq!(chunks.len(), 2);
+    assert_eq!(chunks[1].usage.as_ref().unwrap().total_tokens, 5);
+    assert_eq!(deployment.in_flight_count(), 0);
+    assert!(deployment.latency_ms() > 0);
 }

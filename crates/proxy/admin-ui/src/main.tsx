@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import App from './App'
 import { RateLimitError } from './api/client'
+import 'performative-ui/styles.css'
 import './styles/globals.css'
 
 // Default staleTime of 30s so tab switches within that window don't refetch

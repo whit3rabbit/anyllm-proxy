@@ -46,8 +46,11 @@ ipnetwork = "0.20"
 zeroize = "1"
 crc32fast = "1"
 chrono = { version = "0.4", features = ["serde"] }
+secrets_scanner = { version = "0.2.2", optional = true, default-features = false }
 
 [features]
+default = ["secrets-scanner"]
+secrets-scanner = ["dep:secrets_scanner"]
 ## Enables BashTool and ReadFileTool in the builtin tool registry.
 ## These tools execute arbitrary shell commands and read arbitrary files as the
 ## proxy process user. Do NOT enable in production without sandboxing.

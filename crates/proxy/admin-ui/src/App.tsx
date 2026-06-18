@@ -17,6 +17,7 @@ import Audit from './tabs/audit/Audit'
 import TrafficView from './tabs/traffic/TrafficView'
 import UptimeView from './tabs/uptime/UptimeView'
 import Providers from './tabs/providers/Providers'
+import Backends from './tabs/backends/Backends'
 import RoutesTab from './tabs/routes/Routes'
 
 export default function App() {
@@ -92,6 +93,7 @@ export default function App() {
             <Route path="/providers" element={<Providers />} />
             <Route path="/routes" element={<RoutesTab />} />
             <Route path="/models" element={<Models />} />
+            <Route path="/backends" element={<Backends />} />
             <Route path="/keys" element={<Keys />} />
             <Route path="/audit" element={<Audit />} />
             <Route path="/settings" element={<Settings configured={configured} />} />

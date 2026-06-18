@@ -5,6 +5,7 @@ import {
 } from '../../api/queries'
 import EmptyState from '../../components/shared/EmptyState'
 import ConfirmDialog from '../../components/shared/ConfirmDialog'
+import { AdminButton, AdminSurface } from '../../components/shared/Performative'
 import type { EnvImportResponse, EnvImportError } from '../../api/types'
 import { ManagedBackendsSection } from './ManagedBackendsSection'
 
@@ -37,6 +38,10 @@ export default function Settings({ configured = true }: { configured?: boolean }
 
   function handleSave(key: string, currentValue: string) {
     save.mutate({ [key]: form[key] ?? currentValue })
+  }
+
+  function handleBooleanSave(key: string, value: boolean) {
+    save.mutate({ [key]: value })
   }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -127,10 +132,10 @@ PROXY_API_KEYS=my-key`}
 
       {/* Restart-required banner — shown after a successful import */}
       {showRestartBanner && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, padding: '8px 12px', background: 'var(--warn-dim)', borderLeft: '3px solid var(--warn)', borderRadius: 'var(--r)', fontSize: 13 }}>
+        <AdminSurface className="settings-restart-banner">
           <span>Restart the proxy for imported env vars to take effect.</span>
-          <button className="btn btn-secondary btn-sm" onClick={dismissRestartBanner}>Dismiss</button>
-        </div>
+          <AdminButton size="sm" onClick={dismissRestartBanner}>Dismiss</AdminButton>
+        </AdminSurface>
       )}
 
       {/* Env file import / export */}
@@ -144,16 +149,17 @@ PROXY_API_KEYS=my-key`}
             style={{ display: 'none' }}
             onChange={handleFileChange}
           />
-          <button
-            className="btn btn-secondary btn-sm"
+          <AdminButton
+            size="sm"
             onClick={() => fileRef.current?.click()}
             disabled={importEnv.isPending}
+            loading={importEnv.isPending}
           >
-            {importEnv.isPending ? 'Importing…' : 'Import .anyllm.env'}
-          </button>
-          <button className="btn btn-secondary btn-sm" onClick={handleExport}>
+            Import .anyllm.env
+          </AdminButton>
+          <AdminButton size="sm" onClick={handleExport}>
             Export .anyllm.env
-          </button>
+          </AdminButton>
         </div>
 
         {/* Import success */}
@@ -210,7 +216,28 @@ PROXY_API_KEYS=my-key`}
       <EmptyState loading={isLoading} error={error?.message} />
       {cfg && (
         <div>
-          {cfg.entries.map((entry) => {
+          <div className="section-label" style={{ marginBottom: 8 }}>Runtime</div>
+          <div className="form-group">
+            <label className="form-label" htmlFor="cfg-redact-secrets" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input
+                id="cfg-redact-secrets"
+                type="checkbox"
+                checked={cfg.redact_secrets}
+                disabled={save.isPending}
+                onChange={(e) => handleBooleanSave('redact_secrets', e.target.checked)}
+              />
+              Redact secrets
+            </label>
+            {cfg.overridden_keys.includes('redact_secrets') && (
+              <div className="form-row">
+                <AdminButton size="sm" onClick={() => setPendingReset('redact_secrets')}>
+                  Reset
+                </AdminButton>
+              </div>
+            )}
+          </div>
+
+          {cfg.entries.filter((entry) => entry.key !== 'redact_secrets').map((entry) => {
             const inputId = `cfg-${entry.key}`
             return (
               <div className="form-group" key={entry.key}>
@@ -222,8 +249,8 @@ PROXY_API_KEYS=my-key`}
                     value={form[entry.key] ?? entry.value}
                     onChange={(e) => setForm((f) => ({ ...f, [entry.key]: e.target.value }))}
                   />
-                  <button className="btn btn-primary btn-sm" onClick={() => handleSave(entry.key, entry.value)}>Save</button>
-                  <button className="btn btn-secondary btn-sm" onClick={() => setPendingReset(entry.key)}>Reset</button>
+                  <AdminButton tone="primary" size="sm" onClick={() => handleSave(entry.key, entry.value)}>Save</AdminButton>
+                  <AdminButton size="sm" onClick={() => setPendingReset(entry.key)}>Reset</AdminButton>
                 </div>
               </div>
             )

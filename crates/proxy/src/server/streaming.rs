@@ -6,11 +6,47 @@ use anyllm_translate::{anthropic, mapping, openai};
 use axum::response::sse::{Event, KeepAlive, Sse};
 use bytes::BytesMut;
 use futures::stream::Stream;
+use std::sync::Arc;
+use std::time::Instant;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
 use super::routes::{log_request, set_backend_error_kind, RequestCtx};
 use super::state::AppState;
+
+pub(crate) struct StreamDeploymentAccounting {
+    deployment: Option<Arc<crate::config::model_router::Deployment>>,
+    start: Option<Instant>,
+}
+
+impl StreamDeploymentAccounting {
+    pub(crate) fn start(deployment: Option<Arc<crate::config::model_router::Deployment>>) -> Self {
+        if let Some(deployment) = &deployment {
+            deployment.record_start();
+            Self {
+                deployment: Some(deployment.clone()),
+                start: Some(Instant::now()),
+            }
+        } else {
+            Self {
+                deployment: None,
+                start: None,
+            }
+        }
+    }
+
+    pub(crate) fn finish(&mut self) {
+        if let (Some(deployment), Some(start)) = (&self.deployment, self.start.take()) {
+            deployment.record_finish(start.elapsed().as_millis() as u64);
+        }
+    }
+}
+
+impl Drop for StreamDeploymentAccounting {
+    fn drop(&mut self) {
+        self.finish();
+    }
+}
 
 /// Send translated stream events over the SSE channel. Returns false if client disconnected.
 pub(super) async fn send_events(
@@ -235,6 +271,7 @@ pub(crate) async fn messages_stream(
     mapped_model: String,
     concurrency_permit: Option<super::state::ConcurrencyPermit>,
     vk_ctx: Option<crate::server::middleware::VirtualKeyContext>,
+    deployment_accounting: StreamDeploymentAccounting,
 ) -> Result<
     (
         RateLimitHeaders,
@@ -288,6 +325,7 @@ pub(crate) async fn messages_stream(
             openai_req.model = mapped_model.clone();
             let model = body.model.clone();
             let permit = concurrency_permit.clone();
+            let mut deployment_accounting = deployment_accounting;
 
             tokio::spawn(async move {
                 // Hold concurrency permit until the stream completes, not just
@@ -365,6 +403,7 @@ pub(crate) async fn messages_stream(
                                 cost,
                             ),
                         );
+                        deployment_accounting.finish();
                     }
                     Err(e) => {
                         let backend_error = crate::backend::BackendError::from(e);
@@ -384,6 +423,7 @@ pub(crate) async fn messages_stream(
                         // Send the error through the oneshot so the caller can
                         // return a proper HTTP error response instead of 200 OK.
                         let _ = rl_tx.send(Err(backend_error));
+                        deployment_accounting.finish();
                     }
                 }
             });
@@ -396,6 +436,7 @@ pub(crate) async fn messages_stream(
             responses_req.stream = Some(true);
             let model = body.model.clone();
             let permit = concurrency_permit;
+            let mut deployment_accounting = deployment_accounting;
 
             tokio::spawn(async move {
                 let _permit = permit;
@@ -471,6 +512,7 @@ pub(crate) async fn messages_stream(
                                 cost,
                             ),
                         );
+                        deployment_accounting.finish();
                     }
                     Err(e) => {
                         let backend_error = crate::backend::BackendError::from(e);
@@ -488,6 +530,7 @@ pub(crate) async fn messages_stream(
                         set_backend_error_kind(&mut entry, &backend_error);
                         log_request(&log_shared, entry);
                         let _ = rl_tx.send(Err(backend_error));
+                        deployment_accounting.finish();
                     }
                 }
             });

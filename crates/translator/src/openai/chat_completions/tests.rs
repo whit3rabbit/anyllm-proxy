@@ -1,0 +1,510 @@
+use super::*;
+use serde_json::json;
+
+#[test]
+fn deserialize_basic_request() {
+    let raw = json!({
+        "model": "gpt-4o",
+        "messages": [
+            {"role": "user", "content": "Hello"}
+        ]
+    });
+    let req: ChatCompletionRequest = serde_json::from_value(raw).unwrap();
+    assert_eq!(req.model, "gpt-4o");
+    assert_eq!(req.messages.len(), 1);
+    assert_eq!(req.messages[0].role, ChatRole::User);
+    assert!(matches!(&req.messages[0].content, Some(ChatContent::Text(t)) if t == "Hello"));
+    assert!(req.max_tokens.is_none());
+    assert!(req.tools.is_none());
+}
+
+#[test]
+fn deserialize_request_with_tools() {
+    let raw = json!({
+        "model": "gpt-4o",
+        "messages": [{"role": "user", "content": "What is the weather?"}],
+        "tools": [
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_weather",
+                    "description": "Get weather for a location",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "location": {"type": "string"}
+                        },
+                        "required": ["location"]
+                    }
+                }
+            }
+        ],
+        "tool_choice": "auto"
+    });
+    let req: ChatCompletionRequest = serde_json::from_value(raw).unwrap();
+    let tools = req.tools.unwrap();
+    assert_eq!(tools.len(), 1);
+    assert_eq!(tools[0].function.name, "get_weather");
+    assert!(tools[0].function.description.is_some());
+    assert!(matches!(&req.tool_choice, Some(ChatToolChoice::Simple(s)) if s == "auto"));
+}
+
+#[test]
+fn deserialize_content_string_vs_parts() {
+    // String content
+    let msg_str: ChatMessage = serde_json::from_value(json!({
+        "role": "user",
+        "content": "plain text"
+    }))
+    .unwrap();
+    assert!(matches!(&msg_str.content, Some(ChatContent::Text(t)) if t == "plain text"));
+
+    // Array content with text + image
+    let msg_parts: ChatMessage = serde_json::from_value(json!({
+        "role": "user",
+        "content": [
+            {"type": "text", "text": "Describe this image"},
+            {"type": "image_url", "image_url": {"url": "https://example.com/img.png"}}
+        ]
+    }))
+    .unwrap();
+    match &msg_parts.content {
+        Some(ChatContent::Parts(parts)) => {
+            assert_eq!(parts.len(), 2);
+            assert!(
+                matches!(&parts[0], ChatContentPart::Text { text } if text == "Describe this image")
+            );
+            assert!(
+                matches!(&parts[1], ChatContentPart::ImageUrl { image_url } if image_url.url == "https://example.com/img.png")
+            );
+        }
+        other => panic!("expected Parts, got {:?}", other),
+    }
+}
+
+#[test]
+fn deserialize_response_with_choices() {
+    let raw = json!({
+        "id": "chatcmpl-abc123",
+        "object": "chat.completion",
+        "model": "gpt-4o",
+        "choices": [
+            {
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": "Hello! How can I help?"
+                },
+                "finish_reason": "stop"
+            }
+        ],
+        "usage": {
+            "prompt_tokens": 10,
+            "completion_tokens": 8,
+            "total_tokens": 18
+        },
+        "created": 1700000000
+    });
+    let resp: ChatCompletionResponse = serde_json::from_value(raw).unwrap();
+    assert_eq!(resp.id, "chatcmpl-abc123");
+    assert_eq!(resp.choices.len(), 1);
+    assert_eq!(resp.choices[0].finish_reason, Some(FinishReason::Stop));
+    let usage = resp.usage.unwrap();
+    assert_eq!(usage.prompt_tokens, 10);
+    assert_eq!(usage.total_tokens, 18);
+}
+
+#[test]
+fn deserialize_response_with_tool_calls() {
+    let raw = json!({
+        "id": "chatcmpl-xyz",
+        "object": "chat.completion",
+        "model": "gpt-4o",
+        "choices": [
+            {
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {
+                            "id": "call_abc",
+                            "type": "function",
+                            "function": {
+                                "name": "get_weather",
+                                "arguments": "{\"location\":\"NYC\"}"
+                            }
+                        }
+                    ]
+                },
+                "finish_reason": "tool_calls"
+            }
+        ]
+    });
+    let resp: ChatCompletionResponse = serde_json::from_value(raw).unwrap();
+    let tc = resp.choices[0].message.tool_calls.as_ref().unwrap();
+    assert_eq!(tc.len(), 1);
+    assert_eq!(tc[0].id, "call_abc");
+    assert_eq!(tc[0].function.name, "get_weather");
+    assert_eq!(tc[0].function.arguments, "{\"location\":\"NYC\"}");
+    assert_eq!(resp.choices[0].finish_reason, Some(FinishReason::ToolCalls));
+}
+
+#[test]
+fn serialize_deserialize_roundtrip() {
+    let req = ChatCompletionRequest {
+        model: "gpt-4o".into(),
+        messages: vec![ChatMessage {
+            role: ChatRole::User,
+            content: Some(ChatContent::Text("Hi".into())),
+            name: None,
+            tool_calls: None,
+            tool_call_id: None,
+            refusal: None,
+            reasoning_content: None,
+        }],
+        max_tokens: Some(100),
+        max_completion_tokens: None,
+        temperature: Some(0.7),
+        top_p: None,
+        stop: None,
+        tools: None,
+        tool_choice: None,
+        stream: Some(true),
+        stream_options: Some(StreamOptions {
+            include_usage: true,
+        }),
+        presence_penalty: None,
+        frequency_penalty: None,
+        response_format: None,
+        user: None,
+        parallel_tool_calls: None,
+        extra: serde_json::Map::new(),
+    };
+    let json_str = serde_json::to_string(&req).unwrap();
+    let roundtrip: ChatCompletionRequest = serde_json::from_str(&json_str).unwrap();
+    assert_eq!(roundtrip.model, "gpt-4o");
+    assert_eq!(roundtrip.max_tokens, Some(100));
+    assert_eq!(roundtrip.stream, Some(true));
+    assert!(roundtrip.stream_options.unwrap().include_usage);
+}
+
+#[test]
+fn stop_single_vs_array() {
+    let single: Stop = serde_json::from_value(json!("END")).unwrap();
+    assert!(matches!(single, Stop::Single(s) if s == "END"));
+
+    let multi: Stop = serde_json::from_value(json!(["END", "STOP"])).unwrap();
+    match multi {
+        Stop::Multiple(v) => assert_eq!(v, vec!["END", "STOP"]),
+        _ => panic!("expected Multiple"),
+    }
+}
+
+#[test]
+fn tool_choice_simple_vs_named() {
+    let simple: ChatToolChoice = serde_json::from_value(json!("auto")).unwrap();
+    assert!(matches!(simple, ChatToolChoice::Simple(s) if s == "auto"));
+
+    let named: ChatToolChoice = serde_json::from_value(json!({
+        "type": "function",
+        "function": {"name": "my_tool"}
+    }))
+    .unwrap();
+    match named {
+        ChatToolChoice::Named(n) => {
+            assert_eq!(n.choice_type, "function");
+            assert_eq!(n.function.name, "my_tool");
+        }
+        _ => panic!("expected Named"),
+    }
+}
+
+#[test]
+fn extra_fields_captured_via_flatten() {
+    let raw = json!({
+        "model": "gpt-4o",
+        "messages": [{"role": "user", "content": "hi"}],
+        "logprobs": true,
+        "seed": 42
+    });
+    let req: ChatCompletionRequest = serde_json::from_value(raw).unwrap();
+    assert_eq!(req.extra.get("logprobs"), Some(&json!(true)));
+    assert_eq!(req.extra.get("seed"), Some(&json!(42)));
+}
+
+#[test]
+fn reject_malformed_missing_model() {
+    let raw = json!({
+        "messages": [{"role": "user", "content": "hi"}]
+    });
+    let result = serde_json::from_value::<ChatCompletionRequest>(raw);
+    assert!(result.is_err());
+}
+
+#[test]
+fn deserialize_realistic_openai_response() {
+    // Real gpt-4o response with all fields OpenAI returns
+    let raw = json!({
+        "id": "chatcmpl-AKj3MbOpNGPq",
+        "object": "chat.completion",
+        "created": 1729800000,
+        "model": "gpt-4o-2024-08-06",
+        "choices": [{
+            "index": 0,
+            "message": {
+                "role": "assistant",
+                "content": "Hello!",
+                "refusal": null
+            },
+            "logprobs": null,
+            "finish_reason": "stop"
+        }],
+        "usage": {
+            "prompt_tokens": 12,
+            "completion_tokens": 5,
+            "total_tokens": 17,
+            "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "audio_tokens": 0
+            },
+            "completion_tokens_details": {
+                "reasoning_tokens": 0,
+                "audio_tokens": 0,
+                "accepted_prediction_tokens": 0,
+                "rejected_prediction_tokens": 0
+            }
+        },
+        "service_tier": "default",
+        "system_fingerprint": "fp_a7d06e42a7"
+    });
+    let resp: ChatCompletionResponse = serde_json::from_value(raw).unwrap();
+    assert_eq!(resp.id, "chatcmpl-AKj3MbOpNGPq");
+    assert_eq!(resp.service_tier.as_deref(), Some("default"));
+    assert_eq!(resp.system_fingerprint.as_deref(), Some("fp_a7d06e42a7"));
+    assert!(resp.choices[0].logprobs.is_none());
+    assert!(resp.choices[0].message.refusal.is_none());
+    let usage = resp.usage.unwrap();
+    assert_eq!(usage.prompt_tokens, 12);
+    assert!(usage.completion_tokens_details.is_some());
+    assert!(usage.prompt_tokens_details.is_some());
+}
+
+#[test]
+fn deserialize_function_role_message() {
+    let raw = json!({
+        "role": "function",
+        "content": "result"
+    });
+    let msg: ChatMessage = serde_json::from_value(raw).unwrap();
+    assert_eq!(msg.role, ChatRole::Function);
+}
+
+#[test]
+fn temperature_clamping_captured_in_request() {
+    // Verify user and parallel_tool_calls fields serialize correctly
+    let raw = json!({
+        "model": "gpt-4o",
+        "messages": [{"role": "user", "content": "hi"}],
+        "user": "user-123",
+        "parallel_tool_calls": true
+    });
+    let req: ChatCompletionRequest = serde_json::from_value(raw).unwrap();
+    assert_eq!(req.user.as_deref(), Some("user-123"));
+    assert_eq!(req.parallel_tool_calls, Some(true));
+}
+
+#[test]
+fn strict_field_on_function_def() {
+    let raw = json!({
+        "type": "function",
+        "function": {
+            "name": "test",
+            "parameters": {"type": "object"},
+            "strict": true
+        }
+    });
+    let tool: ChatTool = serde_json::from_value(raw).unwrap();
+    assert_eq!(tool.function.strict, Some(true));
+}
+
+#[test]
+fn finish_reason_unknown_variant_deserializes() {
+    // DeepSeek returns "insufficient_system_resource" as a finish_reason
+    let raw = json!("insufficient_system_resource");
+    let reason: FinishReason = serde_json::from_value(raw).unwrap();
+    assert_eq!(reason, FinishReason::Unknown);
+}
+
+#[test]
+fn finish_reason_known_variants_unaffected() {
+    assert_eq!(
+        serde_json::from_value::<FinishReason>(json!("stop")).unwrap(),
+        FinishReason::Stop
+    );
+    assert_eq!(
+        serde_json::from_value::<FinishReason>(json!("tool_calls")).unwrap(),
+        FinishReason::ToolCalls
+    );
+}
+
+#[test]
+fn reasoning_content_deserialized_from_response() {
+    let raw = json!({
+        "role": "assistant",
+        "content": "The answer is 4.",
+        "reasoning_content": "Let me think... 2+2=4"
+    });
+    let msg: ChatMessage = serde_json::from_value(raw).unwrap();
+    assert_eq!(
+        msg.reasoning_content.as_deref(),
+        Some("Let me think... 2+2=4")
+    );
+}
+
+#[test]
+fn reasoning_content_absent_is_none() {
+    let raw = json!({
+        "role": "assistant",
+        "content": "Hello"
+    });
+    let msg: ChatMessage = serde_json::from_value(raw).unwrap();
+    assert!(msg.reasoning_content.is_none());
+}
+
+// --- effective_text tests ---
+
+#[test]
+fn effective_text_plain_string() {
+    let msg = ChatMessage {
+        role: ChatRole::Assistant,
+        content: Some(ChatContent::Text("hello".into())),
+        name: None,
+        tool_calls: None,
+        tool_call_id: None,
+        refusal: None,
+        reasoning_content: None,
+    };
+    assert_eq!(msg.effective_text(), Some("hello".into()));
+}
+
+#[test]
+fn effective_text_parts_concatenated() {
+    let msg = ChatMessage {
+        role: ChatRole::User,
+        content: Some(ChatContent::Parts(vec![
+            ChatContentPart::Text { text: "foo".into() },
+            ChatContentPart::ImageUrl {
+                image_url: ImageUrl {
+                    url: "https://example.com/img.png".into(),
+                    detail: None,
+                },
+            },
+            ChatContentPart::Text { text: "bar".into() },
+        ])),
+        name: None,
+        tool_calls: None,
+        tool_call_id: None,
+        refusal: None,
+        reasoning_content: None,
+    };
+    // Image part is skipped; text parts joined with "\n".
+    assert_eq!(msg.effective_text(), Some("foo\nbar".into()));
+}
+
+#[test]
+fn effective_text_content_empty_falls_back_to_reasoning() {
+    let msg = ChatMessage {
+        role: ChatRole::Assistant,
+        content: Some(ChatContent::Text(String::new())),
+        name: None,
+        tool_calls: None,
+        tool_call_id: None,
+        refusal: None,
+        reasoning_content: Some("I thought about it".into()),
+    };
+    assert_eq!(msg.effective_text(), Some("I thought about it".into()));
+}
+
+#[test]
+fn effective_text_content_none_returns_reasoning() {
+    let msg = ChatMessage {
+        role: ChatRole::Assistant,
+        content: None,
+        name: None,
+        tool_calls: None,
+        tool_call_id: None,
+        refusal: None,
+        reasoning_content: Some("reasoning here".into()),
+    };
+    assert_eq!(msg.effective_text(), Some("reasoning here".into()));
+}
+
+#[test]
+fn effective_text_all_empty_returns_none() {
+    let msg = ChatMessage {
+        role: ChatRole::Assistant,
+        content: Some(ChatContent::Text(String::new())),
+        name: None,
+        tool_calls: None,
+        tool_call_id: None,
+        refusal: None,
+        reasoning_content: Some(String::new()),
+    };
+    assert_eq!(msg.effective_text(), None);
+}
+
+#[test]
+fn effective_text_all_absent_returns_none() {
+    let msg = ChatMessage {
+        role: ChatRole::Assistant,
+        content: None,
+        name: None,
+        tool_calls: None,
+        tool_call_id: None,
+        refusal: None,
+        reasoning_content: None,
+    };
+    assert_eq!(msg.effective_text(), None);
+}
+
+#[test]
+fn effective_text_whitespace_only_not_trimmed() {
+    // Whitespace counts as non-empty — no trimming.
+    let msg = ChatMessage {
+        role: ChatRole::Assistant,
+        content: Some(ChatContent::Text("   ".into())),
+        name: None,
+        tool_calls: None,
+        tool_call_id: None,
+        refusal: None,
+        reasoning_content: Some("reasoning".into()),
+    };
+    // "   " is non-empty so content wins.
+    assert_eq!(msg.effective_text(), Some("   ".into()));
+}
+
+// --- lax deserialization tests (item 6) ---
+
+#[test]
+fn response_missing_id_object_model_deserializes() {
+    let raw = json!({
+        "choices": [{
+            "index": 0,
+            "message": {"role": "assistant", "content": "hi"}
+        }]
+    });
+    let resp: ChatCompletionResponse = serde_json::from_value(raw).unwrap();
+    assert_eq!(resp.id, "");
+    assert_eq!(resp.object, "");
+    assert_eq!(resp.model, "");
+    assert_eq!(resp.choices.len(), 1);
+}
+
+#[test]
+fn usage_missing_counters_defaults_to_zero() {
+    let raw = json!({});
+    let usage: ChatUsage = serde_json::from_value(raw).unwrap();
+    assert_eq!(usage.prompt_tokens, 0);
+    assert_eq!(usage.completion_tokens, 0);
+    assert_eq!(usage.total_tokens, 0);
+}

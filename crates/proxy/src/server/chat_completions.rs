@@ -80,6 +80,14 @@ pub(crate) async fn chat_completions(
         }
     }
 
+    let body = match super::secret_redaction::redact_json_value(state.redact_secrets(), body).await
+    {
+        Ok(body) => body,
+        Err(err) => {
+            return openai_error_response(err.safe_message(), "api_error", err.status_code());
+        }
+    };
+
     let is_streaming = body.stream == Some(true);
     let original_model = body.model.clone();
     let mut safe_headers = safe_anthropic_extra_headers(&headers);
@@ -176,6 +184,7 @@ pub(crate) async fn chat_completions(
     }
 
     if is_streaming {
+        let deployment_accounting = super::streaming::StreamDeploymentAccounting::start(deployment);
         let stream_meta = ChatCompletionsStreamMeta {
             ctx,
             original_model,
@@ -186,6 +195,7 @@ pub(crate) async fn chat_completions(
             tool_context,
             concurrency_permit: permit,
             vk_ctx,
+            deployment_accounting,
         };
         let mut response = chat_completions_stream(effective, anthropic_req, stream_meta).await;
         response.headers_mut().insert(
@@ -298,6 +308,7 @@ pub(crate) async fn chat_completions(
                         let client_for_tools = client.clone();
                         let model_for_tools = mapped_model.clone();
                         let orig_model_for_tools = original_model.clone();
+                        let redact_follow_up = state.redact_secrets();
                         let server_advertised_tool_names = std::collections::HashSet::new();
                         let (resp, _trace) = crate::tools::execution::maybe_execute_tools(
                             engine,
@@ -309,6 +320,16 @@ pub(crate) async fn chat_completions(
                                 let m = model_for_tools.clone();
                                 let om = orig_model_for_tools.clone();
                                 async move {
+                                    let follow_up_req =
+                                        match super::secret_redaction::redact_json_value(
+                                            redact_follow_up,
+                                            follow_up_req,
+                                        )
+                                        .await
+                                        {
+                                            Ok(req) => req,
+                                            Err(err) => return Err(err.safe_message().to_string()),
+                                        };
                                     let mut oai_req =
                                         mapping::message_map::anthropic_to_openai_request(
                                             &follow_up_req,

@@ -72,14 +72,13 @@ export interface KeySpend {
 
 export interface Backend {
   name: string
-  model: string
-  provider: string
-  status: string
-  requests_total: number
-  requests_ok: number
-  requests_err: number
-  p50_ms: number
-  p95_ms: number
+  big_model: string
+  small_model: string
+  metrics: {
+    requests_total: number
+    requests_success: number
+    requests_error: number
+  }
 }
 
 export interface ConfigEntry {
@@ -91,6 +90,11 @@ export interface ConfigEntry {
 export interface ConfigResponse {
   entries: ConfigEntry[]
   env: Record<string, string>
+  log_level: string
+  log_bodies: boolean
+  redact_secrets: boolean
+  backends: Record<string, { big_model: string; small_model: string }>
+  overridden_keys: string[]
 }
 
 export interface ObservabilityPoint {
@@ -132,17 +136,14 @@ export interface ObservabilityResponse {
 }
 
 export interface ModelEntry {
-  name: string
-  provider: string
-  model: string
-  weight: number | null
-  rpm: number | null
-  tpm: number | null
+  model_name: string
+  deployments: number
 }
 
 export interface ModelsResponse {
   models: ModelEntry[]
-  routing_strategy: string
+  strategy: string | null
+  note?: string
 }
 
 export interface DiscoveredModel {

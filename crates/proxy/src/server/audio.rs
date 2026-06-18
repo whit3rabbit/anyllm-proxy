@@ -81,6 +81,17 @@ pub async fn audio_speech(
         .unwrap_or("application/json")
         .to_string();
 
+    let body = match super::secret_redaction::redact_body_with_content_type(
+        state.redact_secrets(),
+        Some(content_type.as_str()),
+        body,
+    )
+    .await
+    {
+        Ok(body) => body,
+        Err(err) => return super::secret_redaction::error_response(err),
+    };
+
     passthrough_response(&state, "/v1/audio/speech", body, &content_type).await
 }
 

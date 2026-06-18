@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import type { UseQueryResult } from '@tanstack/react-query'
+import { AdminButton } from './Performative'
 
 interface AsyncBoundaryProps<T> {
   query: UseQueryResult<T, Error>
@@ -31,14 +32,14 @@ export default function AsyncBoundary<T>({
         <div className="async-error-message">
           {query.error instanceof Error ? query.error.message : String(query.error)}
         </div>
-        <button
+        <AdminButton
           type="button"
-          className="btn btn-secondary"
           onClick={() => { void query.refetch() }}
           disabled={query.isFetching}
+          loading={query.isFetching}
         >
-          {query.isFetching ? 'Retrying…' : 'Retry'}
-        </button>
+          Retry
+        </AdminButton>
       </div>
     )
   }

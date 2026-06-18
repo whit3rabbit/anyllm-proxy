@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useModels, useAddModel, useRemoveModel, useDiscoverModels, useBackends, useManagedBackends } from '../../api/queries'
 import AsyncBoundary from '../../components/shared/AsyncBoundary'
 import ConfirmDialog from '../../components/shared/ConfirmDialog'
+import { AdminButton, AdminSurface } from '../../components/shared/Performative'
 
 const AUTH_HINTS: Record<string, { text: string; needsKey: boolean }> = {
   openrouter: { text: 'Public, no key needed', needsKey: false },
@@ -31,7 +32,6 @@ export default function Models() {
   const { data: managedBackends } = useManagedBackends()
   const [name, setName] = useState('')
   const [model, setModel] = useState('')
-  const [provider, setProvider] = useState('openai')
   const [backendName, setBackendName] = useState('')
   const [discoverSource, setDiscoverSource] = useState('openrouter')
   const [customUrl, setCustomUrl] = useState('')
@@ -56,11 +56,7 @@ export default function Models() {
   const filteredModels = useMemo(() => {
     const all = modelsQuery.data?.models ?? []
     if (!filter) return all
-    return all.filter((m) =>
-      m.name.toLowerCase().includes(filter) ||
-      m.model.toLowerCase().includes(filter) ||
-      m.provider.toLowerCase().includes(filter),
-    )
+    return all.filter((m) => m.model_name.toLowerCase().includes(filter))
   }, [modelsQuery.data, filter])
 
   return (
@@ -85,13 +81,13 @@ export default function Models() {
               style={{ minWidth: 220 }}
             />
           )}
-          <button
-            className="btn btn-secondary"
+          <AdminButton
             onClick={handleDiscover}
             disabled={discover.isPending || (discoverSource === 'custom' && !customUrl)}
+            loading={discover.isPending}
           >
-            {discover.isPending ? 'Fetching...' : 'Fetch'}
-          </button>
+            Fetch
+          </AdminButton>
           <span className="dim models-discover-hint">
             {hint.needsKey && <KeyIcon />}{hint.text}
           </span>
@@ -145,28 +141,21 @@ export default function Models() {
         <div className="form-row" style={{ flexWrap: 'wrap' }}>
           <input name="model-name" placeholder="Virtual name" value={name} onChange={(e) => setName(e.target.value)} />
           <input name="model-id" placeholder="Model ID" value={model} onChange={(e) => setModel(e.target.value)} />
-          <select name="provider" value={provider} onChange={(e) => setProvider(e.target.value)}>
-            <option value="openai">openai</option>
-            <option value="anthropic">anthropic</option>
-            <option value="gemini">gemini</option>
-            <option value="vertex">vertex</option>
-            <option value="azure">azure</option>
-            <option value="bedrock">bedrock</option>
-          </select>
           <input
             name="backend"
-            placeholder="Backend (optional)"
+            placeholder="Backend"
             value={backendName}
             onChange={(e) => setBackendName(e.target.value)}
             list="backends-list"
           />
-          <button
-            className="btn btn-primary"
-            onClick={() => add.mutate({ name, model, provider, ...(backendName ? { backend_name: backendName } : {}) })}
-            disabled={!name || !model || add.isPending}
+          <AdminButton
+            tone="primary"
+            onClick={() => add.mutate({ model_name: name, actual_model: model, backend_name: backendName })}
+            disabled={!name || !model || !backendName || add.isPending}
+            loading={add.isPending}
           >
             Add
-          </button>
+          </AdminButton>
         </div>
       </div>
 
@@ -192,12 +181,12 @@ export default function Models() {
         empty={{
           when: (d) => (d.models?.length ?? 0) === 0,
           render: () => (
-            <div className="empty-cta">
+            <AdminSurface className="empty-cta">
               <div className="empty-cta-title">No models configured</div>
               <div className="empty-cta-body">
                 Add a model above, or use Discover to pull a catalog from OpenRouter, DeepInfra, Ollama, or a custom endpoint.
               </div>
-            </div>
+            </AdminSurface>
           ),
         }}
       >
@@ -207,17 +196,16 @@ export default function Models() {
           ) : (
             <table className="route-table">
               <thead>
-                <tr><th>Virtual Name</th><th>Model</th><th>Provider</th><th>Strategy</th><th></th></tr>
+                <tr><th>Virtual Name</th><th>Deployments</th><th>Strategy</th><th></th></tr>
               </thead>
               <tbody>
                 {filteredModels.map((m) => (
-                  <tr key={`${m.name}-${m.model}`}>
-                    <td className="mono">{m.name}</td>
-                    <td className="mono">{m.model}</td>
-                    <td className="dim">{m.provider}</td>
-                    <td className="dim">{data.routing_strategy}</td>
+                  <tr key={m.model_name}>
+                    <td className="mono">{m.model_name}</td>
+                    <td className="mono">{m.deployments}</td>
+                    <td className="dim">{data.strategy ?? '—'}</td>
                     <td>
-                      <button className="btn btn-danger btn-sm" onClick={() => setPendingRemove(m.name)}>Remove</button>
+                      <AdminButton tone="danger" size="sm" onClick={() => setPendingRemove(m.model_name)}>Remove</AdminButton>
                     </td>
                   </tr>
                 ))}

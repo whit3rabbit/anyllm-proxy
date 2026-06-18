@@ -4,7 +4,7 @@ import {
   useManagedBackends,
   useCreateManagedBackend,
   useDeleteManagedBackend,
-  useBackends,
+  useUptime,
 } from '../../api/queries'
 import type { CatalogProvider, ManagedBackend } from '../../api/types'
 import { getProviderFields } from '../../utils/providerFields'
@@ -13,6 +13,7 @@ import AsyncBoundary from '../../components/shared/AsyncBoundary'
 import ConfirmDialog from '../../components/shared/ConfirmDialog'
 import StatusDot from '../../components/shared/StatusDot'
 import ProviderIcon from '../../components/shared/ProviderIcon'
+import { AdminButton, AdminSurface } from '../../components/shared/Performative'
 
 // ── Provider Tile ──────────────────────────────────────────────────────────────
 
@@ -56,17 +57,17 @@ function BackendRow({
   return (
     <div className="provider-backend-row">
       <StatusDot
-        status={healthStatus === 'ok' ? 'ok' : healthStatus ? 'err' : 'dim'}
-        pulse={healthStatus === 'ok'}
+        status={healthStatus === 'up' ? 'ok' : healthStatus === 'down' ? 'err' : 'dim'}
+        pulse={healthStatus === 'up'}
       />
       <span className="backend-name">{backend.name}</span>
       <span className="backend-status">
         {backend.api_key_set ? 'key set' : 'no key'}
         {backend.rpm != null && <> &middot; RPM {backend.rpm}</>}
       </span>
-      <button className="btn btn-danger btn-sm" onClick={onDelete}>
+      <AdminButton tone="danger" size="sm" onClick={onDelete}>
         Delete
-      </button>
+      </AdminButton>
     </div>
   )
 }
@@ -124,9 +125,9 @@ function AddBackendForm({
   if (!open) {
     return (
       <div className="provider-add-toggle">
-        <button className="btn btn-primary btn-sm" onClick={() => setOpen(true)}>
+        <AdminButton tone="primary" size="sm" onClick={() => setOpen(true)}>
           + Add key
-        </button>
+        </AdminButton>
       </div>
     )
   }
@@ -163,20 +164,22 @@ function AddBackendForm({
       ))}
       {create.isError && <div className="inline-error">Failed to create backend</div>}
       <div className="provider-add-actions">
-        <button
-          className="btn btn-secondary btn-sm"
+        <AdminButton
+          size="sm"
           onClick={() => setOpen(false)}
           disabled={create.isPending}
         >
           Cancel
-        </button>
-        <button
-          className="btn btn-primary btn-sm"
+        </AdminButton>
+        <AdminButton
+          tone="primary"
+          size="sm"
           onClick={submit}
           disabled={!form.name || create.isPending}
+          loading={create.isPending}
         >
-          {create.isPending ? 'Creating...' : 'Create'}
-        </button>
+          Create
+        </AdminButton>
       </div>
     </div>
   )
@@ -226,7 +229,7 @@ function ProviderDetailPanel({
   return (
     <>
       <div className="provider-scrim" onClick={onClose} />
-      <div className="provider-panel" role="dialog" aria-modal="true" aria-label={provider.display_name}>
+      <AdminSurface className="provider-panel" role="dialog" aria-modal="true" aria-label={provider.display_name}>
         {/* Header */}
         <div className="provider-panel-header">
           <ProviderIcon id={provider.id} size={36} />
@@ -290,7 +293,7 @@ function ProviderDetailPanel({
             onCreated={() => {}}
           />
         </div>
-      </div>
+      </AdminSurface>
     </>
   )
 }
@@ -300,7 +303,7 @@ function ProviderDetailPanel({
 export default function Providers() {
   const catalogQuery = useCatalogProviders()
   const managedQuery = useManagedBackends()
-  const { data: backends } = useBackends()
+  const { data: uptime } = useUptime()
   const deleteBackend = useDeleteManagedBackend()
 
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -320,14 +323,13 @@ export default function Providers() {
     return m
   }, [managed])
 
-  // Health lookup: backend name -> status
-  // useBackends() returns {backends: Backend[]} despite the type annotation
+  // Health lookup: backend name -> status. Real per-backend health lives in the
+  // uptime endpoint (health_checks table), not get_backends.
   const healthMap = useMemo(() => {
     const m = new Map<string, string>()
-    const list = Array.isArray(backends) ? backends : (backends as unknown as { backends: { name: string; status: string }[] })?.backends ?? []
-    for (const b of list) m.set(b.name, b.status)
+    for (const b of uptime?.backends ?? []) m.set(b.name, b.status)
     return m
-  }, [backends])
+  }, [uptime])
 
   // Filter by search, then group by tier
   const filtered = useMemo(() => {
@@ -366,12 +368,12 @@ export default function Providers() {
         empty={{
           when: () => catalog.length === 0,
           render: () => (
-            <div className="empty-cta">
+            <AdminSurface className="empty-cta">
               <div className="empty-cta-title">No providers available</div>
               <div className="empty-cta-body">
                 The provider catalog is empty. Check that the providers crate is loaded.
               </div>
-            </div>
+            </AdminSurface>
           ),
         }}
       >

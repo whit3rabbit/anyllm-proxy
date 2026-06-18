@@ -36,6 +36,8 @@ pub struct SharedState {
     /// frequent; async locking would add unnecessary overhead. Write
     /// contention is negligible since only the admin API writes.
     pub runtime_config: Arc<RwLock<RuntimeConfig>>,
+    /// Immutable runtime config defaults loaded from env/config files before DB overrides.
+    pub runtime_defaults: RuntimeConfigDefaults,
     /// Per-backend metrics (same Arc the proxy already uses).
     pub backend_metrics: Arc<HashMap<String, Metrics>>,
     /// Write buffer sender for batched SQLite inserts.
@@ -101,6 +103,16 @@ pub struct RuntimeConfig {
     pub log_level: String,
     /// Whether to log request/response bodies at debug level.
     pub log_bodies: bool,
+    /// Whether to redact detected secrets from upstream JSON/text request payloads.
+    pub redact_secrets: bool,
+}
+
+/// Runtime config defaults before SQLite overrides are applied. Used to restore
+/// the effective runtime value when an override is deleted.
+#[derive(Debug, Clone)]
+pub struct RuntimeConfigDefaults {
+    pub log_bodies: bool,
+    pub redact_secrets: bool,
 }
 
 /// Events broadcast to WebSocket clients for live dashboard updates.
@@ -173,7 +185,12 @@ impl SharedState {
                 model_mappings: IndexMap::new(),
                 log_level: "info".to_string(),
                 log_bodies: false,
+                redact_secrets: false,
             })),
+            runtime_defaults: RuntimeConfigDefaults {
+                log_bodies: false,
+                redact_secrets: false,
+            },
             backend_metrics: Arc::new(HashMap::new()),
             log_tx,
             log_reload: None,

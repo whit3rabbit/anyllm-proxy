@@ -21,41 +21,54 @@ use axum::{
 pub(crate) async fn bedrock_converse(
     State(state): State<AppState>,
     Path(model_id): Path<String>,
+    headers: HeaderMap,
     body: Bytes,
 ) -> Response {
-    forward_native(&state, &model_id, body, "converse", false).await
+    forward_native(&state, &model_id, &headers, body, "converse", false).await
 }
 
 /// POST /model/{modelId}/converse-stream — Bedrock Converse API (streaming).
 pub(crate) async fn bedrock_converse_stream(
     State(state): State<AppState>,
     Path(model_id): Path<String>,
+    headers: HeaderMap,
     body: Bytes,
 ) -> Response {
-    forward_native(&state, &model_id, body, "converse-stream", true).await
+    forward_native(&state, &model_id, &headers, body, "converse-stream", true).await
 }
 
 /// POST /model/{modelId}/invoke — Bedrock InvokeModel (non-streaming, model-native format).
 pub(crate) async fn bedrock_invoke(
     State(state): State<AppState>,
     Path(model_id): Path<String>,
+    headers: HeaderMap,
     body: Bytes,
 ) -> Response {
-    forward_native(&state, &model_id, body, "invoke", false).await
+    forward_native(&state, &model_id, &headers, body, "invoke", false).await
 }
 
 /// POST /model/{modelId}/invoke-with-response-stream — Bedrock InvokeModel (streaming).
 pub(crate) async fn bedrock_invoke_stream(
     State(state): State<AppState>,
     Path(model_id): Path<String>,
+    headers: HeaderMap,
     body: Bytes,
 ) -> Response {
-    forward_native(&state, &model_id, body, "invoke-with-response-stream", true).await
+    forward_native(
+        &state,
+        &model_id,
+        &headers,
+        body,
+        "invoke-with-response-stream",
+        true,
+    )
+    .await
 }
 
 async fn forward_native(
     state: &AppState,
     model_id: &str,
+    headers: &HeaderMap,
     body: Bytes,
     suffix: &str,
     streaming: bool,
@@ -71,6 +84,12 @@ async fn forward_native(
             return (StatusCode::NOT_IMPLEMENTED, axum::Json(err)).into_response();
         }
     };
+
+    let body =
+        match super::secret_redaction::redact_body(state.redact_secrets(), headers, body).await {
+            Ok(body) => body,
+            Err(err) => return super::secret_redaction::error_response(err),
+        };
 
     state.metrics.record_request();
 

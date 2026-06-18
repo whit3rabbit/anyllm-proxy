@@ -19,10 +19,45 @@
   --warn-dim: rgba(212, 146, 43, 0.12);
   --err: #e05252;
   --err-dim: rgba(224, 82, 82, 0.12);
+  --err-bdr: rgba(224, 82, 82, 0.35);
   --font-ui: "DM Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "DM Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
   --r: 2px;
   --rm: 3px;
+  --pui-bg: var(--bg-base);
+  --pui-bg-elev: var(--bg-raised);
+  --pui-bg-soft: var(--bg-hover);
+  --pui-border: var(--border-sub);
+  --pui-border-bright: var(--border);
+  --pui-fg: var(--text-1);
+  --pui-fg-dim: var(--text-2);
+  --pui-fg-mute: var(--text-3);
+  --pui-grad-from: var(--accent);
+  --pui-grad-mid: var(--ok);
+  --pui-grad-to: #5aa9e6;
+  --pui-success: var(--ok);
+  --pui-danger: var(--err);
+  --pui-warn: var(--warn);
+  --pui-font-sans: var(--font-ui);
+  --pui-font-mono: var(--font-mono);
+  --pui-radius-sm: var(--r);
+  --pui-radius: var(--rm);
+  --pui-radius-lg: 5px;
+  --pui-radius-xl: 6px;
+  --pui-glow: 0 0 16px rgba(232, 160, 48, 0.18);
+  --pui-glow-strong: 0 0 26px rgba(232, 160, 48, 0.22), 0 0 44px rgba(90, 169, 230, 0.12);
+  --pui-glass: var(--bg-raised);
+  --pui-glass-deep: var(--bg-raised);
+  --pui-glass-soft: var(--bg-sunken);
+  --pui-overlay: rgba(255, 255, 255, 0.03);
+  --pui-overlay-strong: rgba(255, 255, 255, 0.05);
+  --pui-overlay-bright: rgba(255, 255, 255, 0.08);
+  --pui-button-dark-fill: var(--bg-sunken);
+  --pui-button-dark-border: var(--border);
+  --pui-wave-text: var(--accent);
+  --pui-wave-text-hover: var(--text-1);
+  --pui-wave-border: var(--accent-bdr);
+  --pui-wave-border-hover: rgba(232, 160, 48, 0.55);
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -163,7 +198,8 @@ button[disabled] { opacity: 0.55; cursor: not-allowed; }
 
 /* Login */
 .login-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-base); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-.login-card { background: var(--bg-raised); border: 1px solid var(--border); border-top: 2px solid var(--accent); border-radius: var(--rm); padding: 32px; width: 320px; }
+.login-node-bg { position: absolute; inset: 0; opacity: 0.55; }
+.login-card { position: relative; background: var(--bg-raised); border: 1px solid var(--border); border-top: 2px solid var(--accent); border-radius: var(--rm); padding: 32px; width: 320px; z-index: 1; }
 .login-title { font-family: var(--font-mono); font-size: 15px; font-weight: 500; margin-bottom: 24px; color: var(--text-1); }
 .login-title .prompt { color: var(--accent); }
 .login-card input[type="password"] { width: 100%; padding: 8px 12px; margin-bottom: 12px; font-size: 14px; background: var(--bg-sunken); border: 1px solid var(--border); color: var(--text-1); border-radius: var(--r); }
@@ -230,6 +266,31 @@ button[disabled] { opacity: 0.55; cursor: not-allowed; }
 /* Button disabled state (shared across all variants) */
 .btn:disabled { cursor: not-allowed; opacity: 0.5; }
 .btn:disabled:hover { background: transparent; color: inherit; border-color: inherit; }
+
+/* performative-ui adapter */
+.admin-button { border-radius: var(--r); font-family: var(--font-ui); font-weight: 500; letter-spacing: 0; }
+.admin-button.pui-btn { min-height: 31px; padding: 7px 14px; font-size: 13px; }
+.admin-button.pui-btn--sm { min-height: 23px; padding: 3px 7px; font-size: 11px; }
+.admin-button-primary.pui-btn--wave { border-radius: var(--r); box-shadow: none; }
+.admin-button-primary.pui-btn--wave::before { opacity: 0.45; bottom: -3px; height: 3px; filter: blur(6px); }
+.admin-button-secondary.pui-btn--ghost { color: var(--text-2); border-color: var(--border); background: transparent; }
+.admin-button-secondary.pui-btn--ghost:hover { color: var(--text-1); border-color: var(--text-2); background: var(--bg-hover); }
+.admin-button-danger.pui-btn--ghost { color: var(--err); border-color: var(--err); background: transparent; }
+.admin-button-danger.pui-btn--ghost:hover { background: var(--err-dim); }
+.admin-button-icon.pui-btn { min-width: 24px; padding: 1px 5px; font-size: 10px; gap: 0; }
+.admin-status-dot { width: 7px; height: 7px; vertical-align: middle; margin-right: 6px; box-shadow: 0 0 8px currentColor; }
+.admin-surface.pui-glass-card { padding: 12px; background: var(--bg-raised); border: 1px solid var(--border); border-radius: var(--rm); box-shadow: none; color: var(--text-1); transform: none; }
+.admin-surface.pui-glass-card:hover { transform: none; border-color: var(--border); }
+.stats-row .admin-surface.stat { border: 0; border-right: 1px solid var(--border); border-radius: 0; }
+.stats-row .admin-surface.stat:last-child { border-right: 0; }
+.operator-grid .admin-surface.chart-card { border: 0; border-radius: 0; min-height: 210px; }
+.operator-grid .admin-surface.chart-card.wide { border-top: 1px solid var(--border); }
+.backend-cards .admin-surface.card { padding: 12px; }
+.login-card.admin-surface.pui-glass-card { padding: 32px; border-top: 2px solid var(--accent); }
+.settings-restart-banner.admin-surface.pui-glass-card { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; padding: 8px 12px; background: var(--warn-dim); border-left: 3px solid var(--warn); font-size: 13px; }
+.admin-loading { color: var(--text-2); }
+.admin-loading .pui-wibble__verb { color: var(--text-2); }
+.admin-loading .pui-wibble__info { color: var(--text-3); }
 
 /* Modal */
 .modal-backdrop-v2 { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.7); display: flex; align-items: flex-start; justify-content: center; padding: 8vh 16px; z-index: 100; overflow-y: auto; }

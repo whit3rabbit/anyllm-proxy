@@ -1,5 +1,7 @@
 import { useState, type FormEvent } from 'react'
+import { NodeGraphBackground } from 'performative-ui'
 import { useAuthStore } from '../../store/auth'
+import { AdminButton, AdminSurface } from '../shared/Performative'
 
 export default function LoginPage() {
   const login = useAuthStore((s) => s.login)
@@ -28,7 +30,18 @@ export default function LoginPage() {
 
   return (
     <div className="login-overlay">
-      <div className="login-card">
+      <NodeGraphBackground
+        density={24}
+        speed={0.16}
+        linkDistance={110}
+        hoverDistance={120}
+        hoverGravity={0.002}
+        baseOpacity={0.18}
+        colors={['#e8a030', '#4caf6e', '#5aa9e6']}
+        linkColor="#e8a030"
+        className="login-node-bg"
+      />
+      <AdminSurface className="login-card" glowOnHover breathing>
         <div className="login-title">
           <span className="prompt">&gt;&nbsp;</span>proxy admin
         </div>
@@ -40,12 +53,12 @@ export default function LoginPage() {
             autoComplete="current-password"
             autoFocus
           />
-          <button type="submit" className="btn btn-primary" disabled={loading}>
-            {loading ? 'Signing in\u2026' : 'Sign in'}
-          </button>
+          <AdminButton type="submit" tone="primary" loading={loading} block>
+            Sign in
+          </AdminButton>
         </form>
         <div className="login-error">{error}</div>
-      </div>
+      </AdminSurface>
     </div>
   )
 }

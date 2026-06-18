@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import { useAuthStore } from '../../store/auth'
 import { useWsStore } from '../../store/ws'
+import { AdminButton } from '../shared/Performative'
 
 interface SidebarGroup {
   label: string
@@ -22,6 +23,7 @@ const GROUPS: SidebarGroup[] = [
       { to: '/providers', label: 'Providers' },
       { to: '/routes', label: 'Routes' },
       { to: '/models', label: 'Models' },
+      { to: '/backends', label: 'Backends' },
     ],
   },
   {
@@ -69,9 +71,9 @@ export default function Sidebar() {
         <span className={`ws-status ${wsStatus === 'connected' ? 'connected' : 'disconnected'}`}>
           {wsStatus === 'connected' ? 'Live' : 'Offline'}
         </span>
-        <button className="btn btn-secondary btn-sm" onClick={logout}>
+        <AdminButton size="sm" onClick={logout}>
           Sign out
-        </button>
+        </AdminButton>
       </div>
     </aside>
   )
