@@ -4,395 +4,35 @@ pub mod audit;
 pub mod catalog;
 pub mod config;
 pub mod env;
+pub mod helpers;
 pub mod keys;
 pub mod logs;
 pub mod managed_backends;
 pub mod mcp;
+pub mod middleware;
 pub mod models;
 pub mod routes_api;
 pub mod status;
 pub mod traffic;
 pub mod uptime;
 
-use crate::admin::auth::{
-    extract_csrf_cookie, generate_csrf_token, validate_admin_token, validate_csrf_tokens,
-};
+use crate::admin::auth::{generate_csrf_token, validate_admin_token};
 use crate::admin::state::SharedState;
 use crate::admin::ws::ws_handler;
 use axum::{
-    extract::{ConnectInfo, DefaultBodyLimit, State},
+    extract::{DefaultBodyLimit, State},
     http::StatusCode,
-    middleware,
+    middleware as axum_middleware,
     response::IntoResponse,
     routing::{delete, get, post, put},
     Json, Router,
 };
-use dashmap::DashMap;
-use std::net::{IpAddr, SocketAddr};
-use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::{Arc, LazyLock};
+use std::sync::Arc;
 
-/// Validate that a string looks like an ISO 8601 / RFC 3339 timestamp.
-/// Accepts YYYY-MM-DD (date only) or YYYY-MM-DDTHH:MM:SS[...] (datetime).
-/// Does not check calendar validity — the goal is to reject strings that
-/// would bypass the timestamp index and force a full-table scan.
-pub(super) fn is_valid_timestamp(s: &str) -> bool {
-    let b = s.as_bytes();
-    if b.len() < 10 {
-        return false;
-    }
-    b[0..4].iter().all(|c| c.is_ascii_digit())
-        && b[4] == b'-'
-        && b[5..7].iter().all(|c| c.is_ascii_digit())
-        && b[7] == b'-'
-        && b[8..10].iter().all(|c| c.is_ascii_digit())
-        && (b.len() == 10
-            || (b.len() >= 19
-                && (b[10] == b'T' || b[10] == b' ')
-                && b[11..13].iter().all(|c| c.is_ascii_digit())
-                && b[13] == b':'
-                && b[14..16].iter().all(|c| c.is_ascii_digit())
-                && b[16] == b':'
-                && b[17..19].iter().all(|c| c.is_ascii_digit())))
-}
-
-/// Returns the name of the first `since`/`until` parameter that fails timestamp
-/// validation, or `None` if both are valid (or absent).
-pub(super) fn check_time_range(since: Option<&str>, until: Option<&str>) -> Option<&'static str> {
-    if since.is_some_and(|s| !is_valid_timestamp(s)) {
-        return Some("since");
-    }
-    if until.is_some_and(|u| !is_valid_timestamp(u)) {
-        return Some("until");
-    }
-    None
-}
-
-/// Per-IP sliding window rate limiter buckets, split by request method.
-/// READ buckets track GET/HEAD/OPTIONS; WRITE buckets track POST/PUT/DELETE/PATCH.
-static READ_RATE_BUCKETS: LazyLock<DashMap<IpAddr, std::collections::VecDeque<u64>>> =
-    LazyLock::new(DashMap::new);
-static WRITE_RATE_BUCKETS: LazyLock<DashMap<IpAddr, std::collections::VecDeque<u64>>> =
-    LazyLock::new(DashMap::new);
-
-/// Separate RPM limits for read vs write admin API requests per IP per 60s window.
-static ADMIN_READ_RPM: AtomicU32 = AtomicU32::new(240);
-static ADMIN_WRITE_RPM: AtomicU32 = AtomicU32::new(60);
-
-/// Override both admin rate limits (requests per minute per IP).
-/// Intended for integration tests that need a higher limit.
-pub fn set_admin_rpm(rpm: u32) {
-    ADMIN_READ_RPM.store(rpm, Ordering::Relaxed);
-    ADMIN_WRITE_RPM.store(rpm, Ordering::Relaxed);
-}
-
-/// Clear all rate limit state. Exposed for integration tests.
-pub fn reset_admin_rate_limit() {
-    READ_RATE_BUCKETS.clear();
-    WRITE_RATE_BUCKETS.clear();
-}
-
-/// Prune stale entries from a rate limiter bucket. Removes IPs whose newest
-/// timestamp is older than 60 seconds. Called periodically to prevent unbounded
-/// growth from distinct source IPs.
-fn prune_stale_rate_limit_entries(
-    now_ms: u64,
-    bucket: &DashMap<IpAddr, std::collections::VecDeque<u64>>,
-    last_prune: &std::sync::atomic::AtomicU64,
-) {
-    let last = last_prune.load(Ordering::Relaxed);
-    // Prune at most once every 60 seconds.
-    if now_ms.saturating_sub(last) < 60_000 {
-        return;
-    }
-    if last_prune
-        .compare_exchange(last, now_ms, Ordering::Relaxed, Ordering::Relaxed)
-        .is_err()
-    {
-        return; // another thread won the race
-    }
-    let cutoff = now_ms.saturating_sub(60_000);
-    bucket.retain(|_, window| window.back().is_some_and(|&ts| ts >= cutoff));
-}
-
-/// Inner rate-limit check with an explicit rpm and bucket; avoids touching the global
-/// statics in tests.
-fn check_admin_rate_limit_with_rpm(
-    ip: IpAddr,
-    rpm: u32,
-    bucket: &DashMap<IpAddr, std::collections::VecDeque<u64>>,
-    last_prune: &std::sync::atomic::AtomicU64,
-) -> bool {
-    let now_ms = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as u64;
-    let cutoff = now_ms.saturating_sub(60_000);
-
-    // Periodically prune entries for IPs that have gone silent.
-    prune_stale_rate_limit_entries(now_ms, bucket, last_prune);
-
-    let mut window = bucket.entry(ip).or_default();
-    // Evict timestamps older than 60 seconds.
-    while window.front().is_some_and(|&ts| ts < cutoff) {
-        window.pop_front();
-    }
-    if window.len() >= rpm as usize {
-        return false;
-    }
-    window.push_back(now_ms);
-    true
-}
-
-/// Returns true if the request is within the rate limit, false if exceeded.
-/// Uses the higher read limit for GET/HEAD/OPTIONS, and the lower write limit for mutations.
-fn check_admin_rate_limit(ip: IpAddr, is_read: bool) -> bool {
-    static LAST_READ_PRUNE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    static LAST_WRITE_PRUNE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    if is_read {
-        check_admin_rate_limit_with_rpm(
-            ip,
-            ADMIN_READ_RPM.load(Ordering::Relaxed),
-            &READ_RATE_BUCKETS,
-            &LAST_READ_PRUNE,
-        )
-    } else {
-        check_admin_rate_limit_with_rpm(
-            ip,
-            ADMIN_WRITE_RPM.load(Ordering::Relaxed),
-            &WRITE_RATE_BUCKETS,
-            &LAST_WRITE_PRUNE,
-        )
-    }
-}
-
-/// Axum middleware that enforces per-IP rate limiting on admin API routes.
-/// Returns 429 Too Many Requests when the limit is exceeded.
-async fn admin_rate_limit_middleware(
-    req: axum::extract::Request,
-    next: middleware::Next,
-) -> Result<axum::response::Response, StatusCode> {
-    // Liveness checks and CSRF-token mints are preconditions called on every session
-    // and before every mutation respectively. Billing them against the shared per-IP
-    // bucket causes spurious 429s during normal SPA navigation. The frontend caches
-    // the CSRF token so flood risk stays low in practice.
-    let path = req.uri().path();
-    if matches!(path, "/admin/health" | "/admin/csrf-token") {
-        return Ok(next.run(req).await);
-    }
-
-    // Extract client IP from ConnectInfo extension (set by into_make_service_with_connect_info).
-    let ip = req
-        .extensions()
-        .get::<ConnectInfo<SocketAddr>>()
-        .map(|ci| ci.0.ip())
-        .unwrap_or(IpAddr::V4(std::net::Ipv4Addr::LOCALHOST));
-
-    let is_read = matches!(
-        *req.method(),
-        axum::http::Method::GET | axum::http::Method::HEAD | axum::http::Method::OPTIONS
-    );
-
-    if !check_admin_rate_limit(ip, is_read) {
-        tracing::warn!(%ip, "admin API rate limit exceeded");
-        return Err(StatusCode::TOO_MANY_REQUESTS);
-    }
-    Ok(next.run(req).await)
-}
-
-/// Reject model names containing path traversal sequences or suspicious characters.
-/// Only alphanumerics plus `-_./: @` are allowed (covers known provider naming
-/// conventions like `gpt-4o`, `us.meta.llama3-2-1b-instruct-v1:0`,
-/// `accounts/fireworks/models/llama-v3p1-8b-instruct`).
-pub(super) fn is_safe_model_name(name: &str) -> bool {
-    !name.is_empty()
-        && !name.contains("..")
-        && !name.contains('?')
-        && !name.contains('#')
-        && name
-            .chars()
-            .all(|c| c.is_alphanumeric() || "-_./:@".contains(c))
-}
-
-/// Check whether a host string (without port) is a localhost address.
-fn is_localhost_host(host: &str) -> bool {
-    matches!(host, "127.0.0.1" | "localhost" | "[::1]" | "::1")
-}
-
-/// Reject cross-origin requests to the admin API.
-/// Parses the Origin URL and checks the host component exactly
-/// to prevent bypass via e.g. `http://127.0.0.1.attacker.com`.
-///
-/// When no Origin header is present, validates the Host header instead
-/// to guard against DNS rebinding attacks.
-async fn reject_cross_origin(
-    req: axum::extract::Request,
-    next: middleware::Next,
-) -> Result<axum::response::Response, StatusCode> {
-    if let Some(origin) = req.headers().get("origin") {
-        let origin_str = origin.to_str().map_err(|_| StatusCode::BAD_REQUEST)?;
-        let is_local = match url::Url::parse(origin_str) {
-            Ok(url) => url.host_str().is_some_and(is_localhost_host),
-            Err(_) => false,
-        };
-        if !is_local {
-            return Err(StatusCode::FORBIDDEN);
-        }
-    } else {
-        // No Origin header: validate Host to prevent DNS rebinding attacks,
-        // where an attacker's domain resolves to localhost, causing the
-        // browser to send requests to our admin API.
-        let host_valid = req
-            .headers()
-            .get("host")
-            .and_then(|h| h.to_str().ok())
-            .map(|h| {
-                // Strip optional port. Bracketed IPv6 like "[::1]:9090"
-                // must not be split naively on ':'.
-                let host_part = if h.starts_with('[') {
-                    // "[::1]:9090" -> "[::1]", or "[::1]" if no port
-                    h.split_once(']').map_or(h, |(bracket, _)| {
-                        // Include the closing bracket for is_localhost_host
-                        &h[..bracket.len() + 1]
-                    })
-                } else {
-                    // "localhost:9090" -> "localhost", but bare "::1" must
-                    // not be split (contains colons but no port suffix).
-                    // Only split if the part after the last colon is numeric.
-                    match h.rsplit_once(':') {
-                        Some((host, port)) if port.bytes().all(|b| b.is_ascii_digit()) => host,
-                        _ => h,
-                    }
-                };
-                is_localhost_host(host_part)
-            })
-            .unwrap_or(false);
-        if !host_valid {
-            return Err(StatusCode::FORBIDDEN);
-        }
-    }
-    Ok(next.run(req).await)
-}
-
-/// Middleware that validates CSRF tokens for state-mutating HTTP methods.
-///
-/// Skips validation for GET, HEAD, OPTIONS.
-/// For POST, PUT, DELETE: requires X-CSRF-Token header to match the csrf_token cookie.
-/// Also verifies the token was server-issued (tracked in SharedState) and removes it
-/// on first use (one-time token), preventing replay across multiple mutating requests.
-/// Returns 403 with a descriptive error if the token is missing, mismatched, or unknown.
-/// Applied inside validate_admin_token so unauthenticated requests are rejected first.
-///
-/// Long-lived sessions: the admin SPA fetches a fresh token before every mutating
-/// request (not once at login), so sessions open for more than 24 h still work as
-/// long as the browser can reach GET /admin/csrf-token. Both the cookie and the
-/// server-side entry expire after 24 h; if the cookie is gone the next mutation
-/// returns 403 until the page is refreshed.
-pub async fn validate_csrf(
-    axum::extract::State(shared): axum::extract::State<SharedState>,
-    req: axum::extract::Request,
-    next: middleware::Next,
-) -> axum::response::Response {
-    let method = req.method().clone();
-
-    // PATCH is included: partial updates mutate state just like PUT/DELETE.
-    if matches!(
-        method,
-        axum::http::Method::POST
-            | axum::http::Method::PUT
-            | axum::http::Method::DELETE
-            | axum::http::Method::PATCH
-    ) {
-        let headers = req.headers();
-
-        let header_token = headers
-            .get("x-csrf-token")
-            .and_then(|v| v.to_str().ok())
-            .unwrap_or("");
-
-        let cookie_token = headers
-            .get("cookie")
-            .and_then(|v| v.to_str().ok())
-            .and_then(extract_csrf_cookie)
-            .unwrap_or_default();
-
-        if !validate_csrf_tokens(header_token, &cookie_token) {
-            let body = serde_json::json!({
-                "type": "error",
-                "error": {
-                    "type": "permission_error",
-                    "message": "CSRF token missing or invalid. Fetch a token from GET /admin/csrf-token."
-                }
-            });
-            return (StatusCode::FORBIDDEN, axum::Json(body)).into_response();
-        }
-
-        // Verify the token was server-issued and consume it (one-time use).
-        // moka get() + invalidate() is not atomic across concurrent requests with
-        // the same token, but CSRF tokens are 256-bit random values so collision
-        // is not a realistic attack vector; the primary threat (replay) is mitigated
-        // by invalidation after first use.
-        if shared.issued_csrf_tokens.get(header_token).is_none() {
-            let body = serde_json::json!({
-                "type": "error",
-                "error": {
-                    "type": "permission_error",
-                    "message": "CSRF token not recognized or already used. Fetch a new token from GET /admin/csrf-token."
-                }
-            });
-            return (StatusCode::FORBIDDEN, axum::Json(body)).into_response();
-        }
-        // Consume the token so it cannot be replayed.
-        shared.issued_csrf_tokens.invalidate(header_token);
-    }
-
-    next.run(req).await
-}
-
-/// GET /admin/csrf-token
-///
-/// Returns a fresh CSRF token as JSON and sets it in a non-HttpOnly cookie.
-/// The admin SPA reads the cookie in JS and includes it as `X-CSRF-Token` on
-/// POST/PUT/DELETE requests (double-submit cookie pattern).
-///
-/// Security architecture note:
-/// This route is intentionally public (no Bearer auth required). The SPA must
-/// fetch a CSRF token to submit the login form itself, so requiring auth here
-/// would be circular. Protection comes from two middleware layers applied to all
-/// admin routes, including this one:
-///   1. `reject_cross_origin`: validates Origin/Host header; only requests
-///      from localhost can reach any admin endpoint.
-///   2. `SameSite=Strict` on the cookie: browsers do not attach the cookie on
-///      cross-site requests, preventing a cross-origin attacker from using a
-///      CSRF token they fetched independently.
-///
-/// Together these make unauthenticated CSRF token fetching safe: an attacker who
-/// can reach this endpoint is already on localhost and has other attack vectors.
-/// If TLS is ever added to the admin server, also add `Secure` to Set-Cookie.
-async fn get_csrf_token(State(shared): State<SharedState>) -> axum::response::Response {
-    let token = generate_csrf_token();
-    // moka Cache enforces max_capacity(1,000) and time_to_live(24h) automatically.
-    // Eviction is handled by the cache; no manual cap check needed.
-    shared.issued_csrf_tokens.insert(token.clone(), ());
-    let body = serde_json::json!({"csrf_token": token});
-    axum::http::Response::builder()
-        .status(StatusCode::OK)
-        .header("content-type", "application/json")
-        // SameSite=Strict prevents the cookie being sent on cross-site requests.
-        // Not httpOnly so the admin SPA JS can read and send it back as a header.
-        // Secure flag intentionally omitted: admin binds to 127.0.0.1 over plain HTTP,
-        // so setting Secure would prevent the browser from sending the cookie at all.
-        // If TLS is added to the admin server, Secure must be added here.
-        .header(
-            "set-cookie",
-            format!("csrf_token={token}; Path=/admin; SameSite=Strict; Max-Age=86400"),
-        )
-        .body(axum::body::Body::from(
-            serde_json::to_string(&body).unwrap(),
-        ))
-        .unwrap()
-        .into_response()
-}
+pub(super) use helpers::{base64_url_encode, check_time_range, is_safe_model_name};
+pub use helpers::{reset_admin_rate_limit, set_admin_rpm};
+pub use middleware::validate_csrf;
+use middleware::{admin_rate_limit_middleware, reject_cross_origin};
 
 /// Build the admin router.
 /// Token is used for auth middleware on all routes except /admin/health.
@@ -406,7 +46,7 @@ pub fn admin_router(shared: SharedState, token: Arc<zeroize::Zeroizing<String>>)
         .route("/admin/health", get(health))
         .route("/admin/csrf-token", get(get_csrf_token))
         .with_state(shared.clone())
-        .layer(middleware::from_fn(admin_rate_limit_middleware));
+        .layer(axum_middleware::from_fn(admin_rate_limit_middleware));
 
     // Protected routes (require admin token + localhost origin check).
     let protected = Router::new()
@@ -505,16 +145,16 @@ pub fn admin_router(shared: SharedState, token: Arc<zeroize::Zeroizing<String>>)
         )
         .with_state(shared.clone())
         // Innermost: CSRF check runs after auth succeeds.
-        .layer(middleware::from_fn_with_state(
+        .layer(axum_middleware::from_fn_with_state(
             shared.clone(),
             validate_csrf,
         ))
-        .layer(middleware::from_fn_with_state(
+        .layer(axum_middleware::from_fn_with_state(
             token.clone(),
             validate_admin_token,
         ))
-        .layer(middleware::from_fn(reject_cross_origin))
-        .layer(middleware::from_fn(admin_rate_limit_middleware));
+        .layer(axum_middleware::from_fn(reject_cross_origin))
+        .layer(axum_middleware::from_fn(admin_rate_limit_middleware));
 
     // WebSocket: auth via first message since browsers can't set headers on WS.
     // Origin check applied here too to prevent cross-site WebSocket hijacking.
@@ -522,7 +162,7 @@ pub fn admin_router(shared: SharedState, token: Arc<zeroize::Zeroizing<String>>)
     let ws_route = Router::new()
         .route("/admin/ws", get(ws_handler))
         .with_state(ws_state)
-        .layer(middleware::from_fn(reject_cross_origin));
+        .layer(axum_middleware::from_fn(reject_cross_origin));
 
     // SPA serving (no auth required, token passed via query param in browser).
     let spa_route = Router::new()
@@ -543,6 +183,51 @@ pub fn admin_router(shared: SharedState, token: Arc<zeroize::Zeroizing<String>>)
 
 async fn health() -> Json<serde_json::Value> {
     Json(serde_json::json!({"status": "ok"}))
+}
+
+/// GET /admin/csrf-token
+///
+/// Returns a fresh CSRF token as JSON and sets it in a non-HttpOnly cookie.
+/// The admin SPA reads the cookie in JS and includes it as `X-CSRF-Token` on
+/// POST/PUT/DELETE requests (double-submit cookie pattern).
+///
+/// Security architecture note:
+/// This route is intentionally public (no Bearer auth required). The SPA must
+/// fetch a CSRF token to submit the login form itself, so requiring auth here
+/// would be circular. Protection comes from two middleware layers applied to all
+/// admin routes, including this one:
+///   1. `reject_cross_origin`: validates Origin/Host header; only requests
+///      from localhost can reach any admin endpoint.
+///   2. `SameSite=Strict` on the cookie: browsers do not attach the cookie on
+///      cross-site requests, preventing a cross-origin attacker from using a
+///      CSRF token they fetched independently.
+///
+/// Together these make unauthenticated CSRF token fetching safe: an attacker who
+/// can reach this endpoint is already on localhost and has other attack vectors.
+/// If TLS is ever added to the admin server, also add `Secure` to Set-Cookie.
+async fn get_csrf_token(State(shared): State<SharedState>) -> axum::response::Response {
+    let token = generate_csrf_token();
+    // moka Cache enforces max_capacity(1,000) and time_to_live(24h) automatically.
+    // Eviction is handled by the cache; no manual cap check needed.
+    shared.issued_csrf_tokens.insert(token.clone(), ());
+    let body = serde_json::json!({"csrf_token": token});
+    axum::http::Response::builder()
+        .status(StatusCode::OK)
+        .header("content-type", "application/json")
+        // SameSite=Strict prevents the cookie being sent on cross-site requests.
+        // Not httpOnly so the admin SPA JS can read and send it back as a header.
+        // Secure flag intentionally omitted: admin binds to 127.0.0.1 over plain HTTP,
+        // so setting Secure would prevent the browser from sending the cookie at all.
+        // If TLS is added to the admin server, Secure must be added here.
+        .header(
+            "set-cookie",
+            format!("csrf_token={token}; Path=/admin; SameSite=Strict; Max-Age=86400"),
+        )
+        .body(axum::body::Body::from(
+            serde_json::to_string(&body).unwrap(),
+        ))
+        .unwrap()
+        .into_response()
 }
 
 /// Serve the embedded SPA HTML with a per-request CSP nonce.
@@ -574,12 +259,6 @@ async fn serve_spa() -> axum::response::Response {
         .body(axum::body::Body::from(html))
         .unwrap()
         .into_response()
-}
-
-/// Base64url-encode without padding (RFC 4648 section 5).
-fn base64_url_encode(input: &[u8]) -> String {
-    use base64::Engine;
-    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(input)
 }
 
 /// GET /admin/api/backends -- list configured backends with status.
@@ -622,6 +301,3 @@ pub(crate) fn emit_audit(shared: &SharedState, entry: crate::admin::db::AuditEnt
         }
     });
 }
-
-#[cfg(test)]
-mod tests;

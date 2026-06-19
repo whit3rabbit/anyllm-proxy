@@ -1,8 +1,3 @@
-// OpenAI Chat Completions input handler.
-//
-// Accepts POST /v1/chat/completions in OpenAI format, translates through
-// the Anthropic pipeline, returns OpenAI-format responses.
-
 use crate::backend::{BackendClient, BackendError};
 use crate::cache::{self, CacheBackend, CacheNamespace};
 use anyllm_translate::{
@@ -17,25 +12,21 @@ use axum::{
     response::{IntoResponse, Json, Response},
 };
 
-use super::routes::{
+use super::super::routes::{
     cache_auth_identity, inject_degradation_header, log_request, set_backend_error_kind, RequestCtx,
 };
-use super::state::{AppState, ConcurrencyPermit};
+use super::super::state::{AppState, ConcurrencyPermit};
 
-mod extensions;
-mod helpers;
-mod stream;
-
-use extensions::{
+use super::extensions::{
     apply_anthropic_chat_extensions, merge_anthropic_beta_headers,
     serialize_anthropic_upstream_request, AnthropicChatExtensions,
 };
-use helpers::{
+use super::helpers::{
     backend_error_to_openai_response, cache_key_body_for_chat_completions, header_refs,
     is_anthropic_backend, mapped_model_for_backend, openai_error_response,
     safe_anthropic_extra_headers,
 };
-use stream::{chat_completions_stream, ChatCompletionsStreamMeta};
+use super::stream::{chat_completions_stream, ChatCompletionsStreamMeta};
 
 /// Handler for POST /v1/chat/completions (non-streaming and streaming).
 pub(crate) async fn chat_completions(
@@ -80,7 +71,8 @@ pub(crate) async fn chat_completions(
         }
     }
 
-    let body = match super::secret_redaction::redact_json_value(state.redact_secrets(), body).await
+    let body = match super::super::secret_redaction::redact_json_value(state.redact_secrets(), body)
+        .await
     {
         Ok(body) => body,
         Err(err) => {
@@ -184,7 +176,8 @@ pub(crate) async fn chat_completions(
     }
 
     if is_streaming {
-        let deployment_accounting = super::streaming::StreamDeploymentAccounting::start(deployment);
+        let deployment_accounting =
+            super::super::streaming::StreamDeploymentAccounting::start(deployment);
         let stream_meta = ChatCompletionsStreamMeta {
             ctx,
             original_model,
@@ -258,12 +251,16 @@ pub(crate) async fn chat_completions(
         | BackendClient::Vertex(client)
         | BackendClient::GeminiOpenAI(client) => {
             let mut openai_req = mapping::message_map::anthropic_to_openai_request(&anthropic_req);
-            super::routes::inject_gemini_thinking(
+            super::super::routes::inject_gemini_thinking(
                 &anthropic_req,
                 &effective.backend,
                 &mut openai_req,
             );
-            super::routes::inject_glm_thinking(&anthropic_req, &effective.backend, &mut openai_req);
+            super::super::routes::inject_glm_thinking(
+                &anthropic_req,
+                &effective.backend,
+                &mut openai_req,
+            );
             // Gemini/Vertex rejects standard JSON Schema keywords; sanitize tool schemas.
             if matches!(
                 effective.backend,
@@ -321,7 +318,7 @@ pub(crate) async fn chat_completions(
                                 let om = orig_model_for_tools.clone();
                                 async move {
                                     let follow_up_req =
-                                        match super::secret_redaction::redact_json_value(
+                                        match super::super::secret_redaction::redact_json_value(
                                             redact_follow_up,
                                             follow_up_req,
                                         )
@@ -354,7 +351,7 @@ pub(crate) async fn chat_completions(
 
                     let oai_response =
                         translate_anthropic_to_openai_response(&anthropic_resp, &original_model);
-                    let cost = super::routes::record_virtual_key_usage(
+                    let cost = super::super::routes::record_virtual_key_usage(
                         &state.shared,
                         &vk_ctx,
                         &mapped_model,
@@ -377,7 +374,7 @@ pub(crate) async fn chat_completions(
                             Some(cost),
                         ),
                     );
-                    super::routes::try_cache_response(
+                    super::super::routes::try_cache_response(
                         &cache_key,
                         &state.cache,
                         cache_ttl,
@@ -386,7 +383,7 @@ pub(crate) async fn chat_completions(
                     )
                     .await;
 
-                    let cache_hv = super::routes::cache_header_value(bypass_cache);
+                    let cache_hv = super::super::routes::cache_header_value(bypass_cache);
                     let mut response = (StatusCode::OK, Json(oai_response)).into_response();
                     rate_limits.inject_anthropic_response_headers(response.headers_mut());
                     if state.expose_degradation_warnings {
@@ -436,7 +433,7 @@ pub(crate) async fn chat_completions(
                         );
                     let oai_response =
                         translate_anthropic_to_openai_response(&anthropic_resp, &original_model);
-                    let cost = super::routes::record_virtual_key_usage(
+                    let cost = super::super::routes::record_virtual_key_usage(
                         &state.shared,
                         &vk_ctx,
                         &mapped_model,
@@ -460,7 +457,7 @@ pub(crate) async fn chat_completions(
                         ),
                     );
 
-                    super::routes::try_cache_response(
+                    super::super::routes::try_cache_response(
                         &cache_key,
                         &state.cache,
                         cache_ttl,
@@ -469,7 +466,7 @@ pub(crate) async fn chat_completions(
                     )
                     .await;
 
-                    let cache_hv = super::routes::cache_header_value(bypass_cache);
+                    let cache_hv = super::super::routes::cache_header_value(bypass_cache);
                     let mut response = (StatusCode::OK, Json(oai_response)).into_response();
                     rate_limits.inject_anthropic_response_headers(response.headers_mut());
                     if state.expose_degradation_warnings {
@@ -557,7 +554,7 @@ pub(crate) async fn chat_completions(
                         &original_model,
                         &tool_context,
                     );
-                    let cost = super::routes::record_virtual_key_usage(
+                    let cost = super::super::routes::record_virtual_key_usage(
                         &state.shared,
                         &vk_ctx,
                         &mapped_model,
@@ -581,7 +578,7 @@ pub(crate) async fn chat_completions(
                         ),
                     );
 
-                    super::routes::try_cache_response(
+                    super::super::routes::try_cache_response(
                         &cache_key,
                         &state.cache,
                         cache_ttl,
@@ -590,7 +587,7 @@ pub(crate) async fn chat_completions(
                     )
                     .await;
 
-                    let cache_hv = super::routes::cache_header_value(bypass_cache);
+                    let cache_hv = super::super::routes::cache_header_value(bypass_cache);
                     let mut response = (StatusCode::OK, Json(oai_response)).into_response();
                     rate_limits.inject_anthropic_response_headers(response.headers_mut());
                     if state.expose_degradation_warnings {

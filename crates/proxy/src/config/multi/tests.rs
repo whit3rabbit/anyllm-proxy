@@ -1,4 +1,5 @@
 use super::*;
+use crate::config::{resolve_env_value, validate_base_url};
 
 #[test]
 fn model_mapping_haiku() {

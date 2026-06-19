@@ -19,20 +19,21 @@ use tokio::sync::Semaphore;
 use super::passthrough::anthropic_passthrough;
 use crate::batch::anthropic_batch;
 
+pub mod context;
 pub mod handlers;
 pub mod helpers;
 pub mod messages;
 #[cfg(test)]
 mod tests;
 
+pub(crate) use context::RequestCtx;
+pub(crate) use context::{inject_gemini_thinking, inject_glm_thinking};
 pub(super) use helpers::backend_error_to_response;
 pub(crate) use helpers::{
     cache_auth_identity, cache_header_value, inject_degradation_header, log_request,
     record_virtual_key_usage, set_backend_error_kind, try_cache_response,
 };
 pub use helpers::{get_callbacks, set_callbacks};
-pub(crate) use messages::RequestCtx;
-pub(crate) use messages::{inject_gemini_thinking, inject_glm_thinking};
 
 use handlers::{completions, embeddings, health, models, rerank, v2_rerank};
 use messages::messages;
