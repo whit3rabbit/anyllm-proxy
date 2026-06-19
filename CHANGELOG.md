@@ -12,6 +12,24 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ---
 
+## [0.10.0] - 2026-06-18
+
+### Added
+- Redesigned admin UI with admin API contract fixes.
+
+### Changed
+- Split oversized proxy modules into submodule directories (internal refactor).
+- Dependency updates: `bytes`, `h2`, `syn`, `time`, `webpki-roots` (cargo update); dropped unused `wit-bindgen` tree. Admin-UI dev deps: `vite` and `@vitejs/plugin-react` bumped.
+
+### Fixed
+- Virtual-key accounting is now enforced in the Gemini native messages path (`BACKEND=gemini`), so usage is recorded consistently with other backends.
+
+### Security
+- Response cache is now scoped by auth key and backend, preventing cross-tenant/cross-backend cache leakage.
+- Admin-UI dependency bumps: `dompurify` 3.4.11 and `js-yaml` 4.2.0.
+
+---
+
 ## [0.9.9] - 2026-06-14
 
 ### Added
@@ -77,7 +95,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 ### Changed
 - Dependency bumps (rand 0.8.5 → 0.8.6).
 
-[Unreleased]: https://github.com/whit3rabbit/anyllm-proxy/compare/v0.9.8...HEAD
+[Unreleased]: https://github.com/whit3rabbit/anyllm-proxy/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/whit3rabbit/anyllm-proxy/compare/v0.9.9...v0.10.0
+[0.9.9]: https://github.com/whit3rabbit/anyllm-proxy/compare/v0.9.8...v0.9.9
 [0.9.8]: https://github.com/whit3rabbit/anyllm-proxy/compare/v0.9.7...v0.9.8
 [0.9.7]: https://github.com/whit3rabbit/anyllm-proxy/compare/v0.9.6...v0.9.7
 [0.9.6]: https://github.com/whit3rabbit/anyllm-proxy/compare/v0.9.5...v0.9.6
