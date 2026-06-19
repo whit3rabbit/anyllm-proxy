@@ -23,7 +23,20 @@ export function BackendForm({ initial, onSuccess, onCancel }: BackendFormProps) 
 
   const [name, setName] = useState(initial?.name ?? '')
   const [providerId, setProviderId] = useState(initial?.provider_id ?? '')
-  const [fields, setFields] = useState<Record<string, string>>({})
+  // Seed non-secret fields from the existing backend so an edit shows current
+  // values. PUT omits empty fields and the patch has no clear-to-NULL sentinel,
+  // so a blank form would either no-op or look like it wiped the endpoint config.
+  // Secrets (api_key, aws_*) are never returned; leave them blank (placeholder shows •••).
+  const [fields, setFields] = useState<Record<string, string>>(() => {
+    if (!initial) return {}
+    const seeded: Record<string, string> = {}
+    for (const k of ['api_base', 'deployment', 'api_version', 'project', 'region'] as const) {
+      if (initial[k] != null) seeded[k] = initial[k] as string
+    }
+    if (initial.rpm != null) seeded.rpm = String(initial.rpm)
+    if (initial.tpm != null) seeded.tpm = String(initial.tpm)
+    return seeded
+  })
   const [submitError, setSubmitError] = useState<string | null>(null)
 
   useEffect(() => {

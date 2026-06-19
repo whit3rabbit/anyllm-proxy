@@ -77,11 +77,9 @@ function BackendRow({
 function AddBackendForm({
   provider,
   existingCount,
-  onCreated,
 }: {
   provider: CatalogProvider
   existingCount: number
-  onCreated: () => void
 }) {
   const create = useCreateManagedBackend()
   const [open, setOpen] = useState(false)
@@ -114,10 +112,8 @@ function AddBackendForm({
         tpm: form.tpm ? Number(form.tpm) : undefined,
       },
       {
-        onSuccess: () => {
-          setOpen(false)
-          onCreated()
-        },
+        // useCreateManagedBackend invalidates ['managed-backends'], so the list refreshes itself.
+        onSuccess: () => setOpen(false),
       },
     )
   }
@@ -290,7 +286,6 @@ function ProviderDetailPanel({
           <AddBackendForm
             provider={provider}
             existingCount={backends.length}
-            onCreated={() => {}}
           />
         </div>
       </AdminSurface>

@@ -62,6 +62,11 @@ export default function App() {
       qc.setQueryData(['metrics'], lastEvent.data)
     } else if (lastEvent.type === 'backend_health_changed') {
       qc.invalidateQueries({ queryKey: ['uptime'] })
+    } else if (lastEvent.type === 'config_changed') {
+      // Settings uses staleTime: Infinity; without this a config change from
+      // another admin session or the CLI never refreshes the UI.
+      qc.invalidateQueries({ queryKey: ['config'] })
+      qc.invalidateQueries({ queryKey: ['env'] })
     }
   }, [lastEvent, qc])
 

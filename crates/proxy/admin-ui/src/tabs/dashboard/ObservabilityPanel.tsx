@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useObservability } from '../../api/queries'
+import { useObservability, useBackends } from '../../api/queries'
 import LineChart from '../../components/shared/LineChart'
 import EmptyState from '../../components/shared/EmptyState'
 import { AdminSurface, AnimatedMetric } from '../../components/shared/Performative'
@@ -7,6 +7,7 @@ import { AdminSurface, AnimatedMetric } from '../../components/shared/Performati
 export default function ObservabilityPanel() {
   const [windowHours, setWindowHours] = useState(6)
   const [backend, setBackend] = useState('')
+  const { data: backends } = useBackends()
   const { data, isLoading, error } = useObservability(windowHours, backend)
 
   const reqSeries = data
@@ -39,6 +40,9 @@ export default function ObservabilityPanel() {
           </select>
           <select value={backend} onChange={(e) => setBackend(e.target.value)}>
             <option value="">All backends</option>
+            {backends?.map((b) => (
+              <option key={b.name} value={b.name}>{b.name}</option>
+            ))}
           </select>
         </div>
       </div>

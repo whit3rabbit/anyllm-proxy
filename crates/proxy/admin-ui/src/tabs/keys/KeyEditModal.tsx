@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { VirtualKey } from '../../api/types'
 import { useUpdateKey, useRevokeKey, useRoutes } from '../../api/queries'
 import Modal from '../../components/shared/Modal'
@@ -14,7 +14,7 @@ export default function KeyEditModal({ vk, onClose }: KeyEditModalProps) {
   const update = useUpdateKey()
   const revoke = useRevokeKey()
   const [desc, setDesc] = useState(vk.description ?? '')
-  const [spendLimit, setSpendLimit] = useState(vk.spend_limit?.toString() ?? '')
+  const [spendLimit, setSpendLimit] = useState(vk.max_budget_usd?.toString() ?? '')
   const [rpmLimit, setRpmLimit] = useState(vk.rpm_limit?.toString() ?? '')
   const [selectedRoutes, setSelectedRoutes] = useState<Set<string>>(
     new Set(vk.allowed_routes ?? []),
@@ -27,16 +27,29 @@ export default function KeyEditModal({ vk, onClose }: KeyEditModalProps) {
       id: vk.id,
       body: {
         description: desc || null,
-        spend_limit: spendLimit ? Number(spendLimit) : null,
+        // max_budget_usd is the enforced spend cap; spend_limit column is unused.
+        max_budget_usd: spendLimit ? Number(spendLimit) : null,
         rpm_limit: rpmLimit ? Number(rpmLimit) : null,
         allowed_routes: selectedRoutes.size > 0 ? [...selectedRoutes] : null,
+        // PUT clears any omitted field to NULL; resend current values so an edit
+        // does not silently wipe limits the form does not surface.
+        expires_at: vk.expires_at,
+        tpm_limit: vk.tpm_limit,
+        budget_duration: vk.budget_duration,
+        allowed_models: vk.allowed_models,
       },
     }, { onSuccess: onClose })
   }
 
+  // Return the promise so ConfirmDialog can await it and own its own close.
+  // Close the parent modal reactively on success, after ConfirmDialog has
+  // settled, so we never update its state on an unmounted component.
   function doRevoke() {
-    return revoke.mutateAsync(vk.id).then(() => { onClose() })
+    return revoke.mutateAsync(vk.id)
   }
+  useEffect(() => {
+    if (revoke.isSuccess) onClose()
+  }, [revoke.isSuccess]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>

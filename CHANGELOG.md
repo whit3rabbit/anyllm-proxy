@@ -10,6 +10,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ## [Unreleased]
 
+### Fixed
+- Admin UI key edit no longer wipes the enforced budget, TPM limit, model allowlist, and expiry on save; the spend-limit field now drives the enforced `max_budget_usd`.
+- Admin UI managed-backend edit form now seeds existing values instead of starting blank (no-op saves / apparent config wipe).
+- Admin UI now refreshes Settings/Env on `config_changed` websocket events from other sessions or the CLI.
+- Admin UI request-log and observability backend filters are now populated (were empty, dead controls).
+
 ---
 
 ## [0.10.0] - 2026-06-18

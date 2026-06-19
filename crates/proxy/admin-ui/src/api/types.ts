@@ -52,6 +52,8 @@ export interface VirtualKey {
   expires_at: string | null
   revoked_at: string | null
   spend_limit: number | null
+  max_budget_usd: number | null
+  budget_duration: string | null
   rpm_limit: number | null
   tpm_limit: number | null
   total_spend: number

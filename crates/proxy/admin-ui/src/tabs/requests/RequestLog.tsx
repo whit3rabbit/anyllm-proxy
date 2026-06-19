@@ -1,5 +1,5 @@
 import { useSearchParams } from 'react-router-dom'
-import { useRequests } from '../../api/queries'
+import { useRequests, useBackends } from '../../api/queries'
 import FeedRow from '../../components/feed/FeedRow'
 import Pagination from '../../components/shared/Pagination'
 import AsyncBoundary from '../../components/shared/AsyncBoundary'
@@ -25,6 +25,7 @@ export default function RequestLog() {
   }
 
   const query = useRequests({ page, page_size: 50, backend, status })
+  const { data: backends } = useBackends()
 
   return (
     <div>
@@ -37,6 +38,9 @@ export default function RequestLog() {
             onChange={(e) => updateParam('backend', e.target.value, { resetPage: true })}
           >
             <option value="">All backends</option>
+            {backends?.map((b) => (
+              <option key={b.name} value={b.name}>{b.name}</option>
+            ))}
           </select>
           <select
             name="requestlog-status"
