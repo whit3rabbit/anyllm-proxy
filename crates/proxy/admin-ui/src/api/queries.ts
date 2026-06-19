@@ -56,8 +56,10 @@ export function useRequests(params: {
   model?: string
 }) {
   const query = new URLSearchParams()
-  query.set('page', String(params.page))
-  query.set('page_size', String(params.page_size))
+  // Backend paginates by limit/offset, not page/page_size. Keep the page-based
+  // hook signature and translate at the boundary.
+  query.set('limit', String(params.page_size))
+  query.set('offset', String((params.page - 1) * params.page_size))
   if (params.backend) query.set('backend', params.backend)
   if (params.status) query.set('status', params.status)
   if (params.since) query.set('since', params.since)
@@ -75,7 +77,8 @@ export function useRequests(params: {
 export function useKeys() {
   return useQuery<VirtualKey[]>({
     queryKey: ['keys'],
-    queryFn: () => apiFetch('/admin/api/keys'),
+    // Backend returns { keys: [...] }; unwrap to the bare array consumers expect (mirrors useBackends).
+    queryFn: () => apiFetch<{ keys: VirtualKey[] }>('/admin/api/keys').then(r => r.keys),
     staleTime: Infinity,
   })
 }
@@ -209,7 +212,8 @@ export function useDiscoverModels() {
 export function useAudit(params: { page: number; page_size: number }) {
   return useQuery<AuditResponse>({
     queryKey: ['audit', params],
-    queryFn: () => apiFetch(`/admin/api/audit?page=${params.page}&page_size=${params.page_size}`),
+    // Backend paginates by limit/offset, not page/page_size; translate here.
+    queryFn: () => apiFetch(`/admin/api/audit?limit=${params.page_size}&offset=${(params.page - 1) * params.page_size}`),
     staleTime: Infinity,
   })
 }

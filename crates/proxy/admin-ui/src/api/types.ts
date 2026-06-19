@@ -38,9 +38,8 @@ export interface RequestLogEntry {
 
 export interface RequestsResponse {
   requests: RequestLogEntry[]
-  total: number
-  page: number
-  page_size: number
+  limit: number
+  offset: number
   has_more: boolean
 }
 
@@ -171,7 +170,8 @@ export interface AuditEntry {
 
 export interface AuditResponse {
   entries: AuditEntry[]
-  total: number
+  limit: number
+  offset: number
   has_more: boolean
 }
 

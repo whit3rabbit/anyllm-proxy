@@ -15,6 +15,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 - Admin UI managed-backend edit form now seeds existing values instead of starting blank (no-op saves / apparent config wipe).
 - Admin UI now refreshes Settings/Env on `config_changed` websocket events from other sessions or the CLI.
 - Admin UI request-log and observability backend filters are now populated (were empty, dead controls).
+- Admin UI Keys tab now renders again: the `useKeys` hook unwraps the `{keys:[...]}` response instead of treating it as a bare array (the tab threw at runtime).
+- Admin UI request-log and audit pagination now send `limit`/`offset` (the backend params) instead of `page`/`page_size`, so paging past the first page works.
 
 ---
 
