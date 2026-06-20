@@ -20,6 +20,7 @@ pub const PROVIDER: ProviderDef = ProviderDef {
         // Function/tool calling is supported on select models (e.g. Llama-3.1/3.3 Turbo,
         // DeepSeek-V3). Some Turbo variants have known tool-calling quirks.
         tool_use: true,
+        tool_choice: false,
         // Embeddings endpoint is available (e.g. intfloat/multilingual-e5-large-instruct).
         embeddings: true,
         // Together hosts multimodal models (Qwen VL family), so vision is supported at
@@ -44,6 +45,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -58,6 +60,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -72,6 +75,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -86,6 +90,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -100,6 +105,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -115,6 +121,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -129,6 +136,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },

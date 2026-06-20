@@ -33,3 +33,5 @@ cargo test -p anyllm_providers
 
 - **`ProviderProtocol::Custom` is not a runnable backend.** A provider with `Custom` protocol makes the proxy's `resolve_backend()` return `None` and panic at startup (e.g. `sagemaker`). Use an existing protocol unless you also add backend wiring in the proxy.
 - Model pricing is NOT here — it lives in `proxy/assets/model_pricing.json` (auto-updated by `scripts/update_pricing.py`).
+- **Registry lookup maps (`PROVIDERS_BY_ID`, `MODELS_BY_PROVIDER`, etc. in `registry.rs`) chain `ALL_*` then `LEGACY_ONLY_*` with `HashMap::insert` (last-writer-wins).** Safe ONLY because legacy ids/prefixes are disjoint from the LiteLLM snapshot. A colliding id or `litellm_prefix` makes the LEGACY entry silently win (the old `ALL.or_else(LEGACY)` made ALL win).
+- **`find_by_litellm_prefix`: a bare id (prefix minus `/`) resolves ONLY when it is an alias (`canonical_provider_id(id) != id`).** A non-alias bare id is not a routing prefix and returns None (e.g. `baidu/` != baidu's real prefix `qianfan/`).

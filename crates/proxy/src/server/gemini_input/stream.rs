@@ -1,4 +1,5 @@
 use crate::backend::{BackendClient, BackendError, SseFrameBuffer};
+use crate::openai_tool_policy::parse_openai_chat_completion_chunk;
 use crate::server::routes::{
     backend_error_to_response, log_request, record_virtual_key_usage, set_backend_error_kind,
     RequestCtx,
@@ -12,11 +13,14 @@ use axum::response::{
     sse::{Event, KeepAlive, Sse},
     IntoResponse, Response,
 };
+use axum::{http::StatusCode, Json};
 use futures::StreamExt;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
-use super::non_streaming::call_backend_non_streaming;
+use super::non_streaming::{
+    call_backend_non_streaming, gemini_error_from_backend, prepare_openai_request_for_state,
+};
 
 /// Streaming path: call the backend and translate events to Gemini SSE format.
 pub(super) async fn gemini_stream(
@@ -44,6 +48,22 @@ pub(super) async fn gemini_stream(
 
             let mut openai_req = message_map::anthropic_to_openai_request(&body);
             openai_req.model = mapped_model.clone();
+            if let Err(e) = prepare_openai_request_for_state(&state, &mut openai_req, &mapped_model)
+            {
+                let (status, msg) = gemini_error_from_backend(&e);
+                let status_str = if status == StatusCode::BAD_REQUEST {
+                    "INVALID_ARGUMENT"
+                } else {
+                    "INTERNAL"
+                };
+                return (
+                    status,
+                    Json(serde_json::json!({
+                        "error": {"code": status.as_u16(), "message": msg, "status": status_str}
+                    })),
+                )
+                    .into_response();
+            }
 
             tokio::spawn(async move {
                 let _permit = permit;
@@ -113,7 +133,7 @@ pub(super) async fn gemini_stream(
                                         done = true;
                                         translator.finish()
                                     } else {
-                                        match serde_json::from_str(json_str) {
+                                        match parse_openai_chat_completion_chunk(json_str) {
                                             Ok(chunk) => translator.process_chunk(&chunk),
                                             Err(_) => vec![],
                                         }

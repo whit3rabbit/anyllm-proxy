@@ -700,6 +700,7 @@ async fn spawn_counting_chat_backend() -> (String, Arc<AtomicUsize>) {
 fn openai_backend_config_with_base(base_url: &str) -> BackendConfig {
     BackendConfig {
         kind: BackendKind::OpenAI,
+        provider_id: None,
         api_key: "test-key".to_string(),
         base_url: base_url.to_string(),
         api_format: OpenAIApiFormat::Chat,

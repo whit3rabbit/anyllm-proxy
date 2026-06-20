@@ -43,3 +43,5 @@ cargo test --test live_api -- --ignored --test-threads=1    # needs real key
 - **Virtual keys use a global `OnceLock<DashMap>`** — integration tests share one `OnceLock` to avoid conflicts.
 - **Passthrough routes:** reuse `passthrough_to_backend(...)` in `routes.rs` (Translate mode) or `anthropic_generic_passthrough` in `passthrough.rs` (Anthropic mode).
 - **Admin UI npm:** with vite 8, `npm ci --legacy-peer-deps` (plugin-react peer dep caps at vite 7).
+- **Cache key is a DENYLIST.** `should_include_cache_field` (`cache/mod.rs`) hashes every request-body field EXCEPT `stream`/`stream_options`/`_scope_auth`/`_scope_backend`/`user`/`parallel_tool_calls`/`metadata`. Add response-irrelevant fields here or they fragment the cache per-request. The old `CACHE_FIELDS` allowlist is gone.
+- **Azure deployment URL is built once in `config/litellm/resolve_base_url`; `build_backend_config` passes it through.** `azure_deployment_from_model` strips route-group markers (`o_series/`, `gpt5_series/`); that list is the complete authoritative set.

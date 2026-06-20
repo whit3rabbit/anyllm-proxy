@@ -20,6 +20,8 @@ pub mod fallback;
 pub mod integrations;
 /// Request count, success/error tracking, exposed via GET /metrics.
 pub mod metrics;
+/// Provider/model-specific OpenAI-compatible tool request and response normalization.
+pub mod openai_tool_policy;
 /// Optional OpenTelemetry OTLP trace export (requires `otel` feature).
 #[cfg(feature = "otel")]
 pub mod otel;

@@ -2,7 +2,11 @@
 
 use crate::backend::{find_double_newline, BackendClient, RateLimitHeaders, SseFrameBuffer};
 use crate::metrics::Metrics;
-use anyllm_translate::{anthropic, mapping, openai};
+use crate::openai_tool_policy::{
+    backend_kind_for_policy, parse_openai_chat_completion_chunk, prepare_openai_tool_request,
+    tool_policy_error_to_backend_error, OpenAiToolPolicyContext,
+};
+use anyllm_translate::{anthropic, mapping, TranslationWarnings};
 use axum::response::sse::{Event, KeepAlive, Sse};
 use bytes::BytesMut;
 use futures::stream::Stream;
@@ -267,32 +271,24 @@ pub(crate) async fn messages_stream(
             let mut openai_req = mapping::message_map::anthropic_to_openai_request(&body);
             super::routes::inject_gemini_thinking(&body, &state.backend, &mut openai_req);
             super::routes::inject_glm_thinking(&body, &state.backend, &mut openai_req);
-            // Strip Gemini-incompatible JSON Schema keywords from tool parameters.
-            if matches!(
-                state.backend,
-                crate::backend::BackendClient::GeminiOpenAI(_)
-                    | crate::backend::BackendClient::Vertex(_)
-            ) {
-                if let Some(tools) = openai_req.tools.take() {
-                    openai_req.tools = Some(
-                        tools
-                            .into_iter()
-                            .map(|mut t| {
-                                if let Some(params) = t.function.parameters.take() {
-                                    t.function.parameters = Some(
-                                        anyllm_translate::mapping::tools_map::sanitize_schema_for_gemini(params),
-                                    );
-                                }
-                                t
-                            })
-                            .collect(),
-                    );
-                }
-            }
             if state.omit_stream_options {
                 openai_req.stream_options = None;
             }
             openai_req.model = mapped_model.clone();
+            let policy_model = openai_req.model.clone();
+            let mut policy_warnings = TranslationWarnings::default();
+            if let Err(err) = prepare_openai_tool_request(
+                &mut openai_req,
+                OpenAiToolPolicyContext {
+                    backend_kind: backend_kind_for_policy(&state.backend),
+                    provider_id: state.provider_id.as_deref(),
+                    model: &policy_model,
+                    provider_catalog: &state.provider_catalog,
+                },
+                &mut policy_warnings,
+            ) {
+                return Err(tool_policy_error_to_backend_error(err));
+            }
             let model = body.model.clone();
             let permit = concurrency_permit.clone();
             let mut deployment_accounting = deployment_accounting;
@@ -316,7 +312,7 @@ pub(crate) async fn messages_stream(
                                 let events = translator.finish();
                                 return Some(events);
                             }
-                            match serde_json::from_str::<openai::ChatCompletionChunk>(json_str) {
+                            match parse_openai_chat_completion_chunk(json_str) {
                                 Ok(chunk) => Some(translator.process_chunk(&chunk)),
                                 Err(e) => {
                                     tracing::debug!("failed to parse OpenAI streaming chunk: {e}");

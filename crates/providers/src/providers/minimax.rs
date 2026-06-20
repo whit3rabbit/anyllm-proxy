@@ -18,6 +18,7 @@ pub const PROVIDER: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: false,
         embeddings: false,
         // MiniMax OpenAI-compat chat API explicitly does not accept image or
         // audio inputs as of the M2.x lineup.
@@ -37,6 +38,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -50,6 +52,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -63,6 +66,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -76,6 +80,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -89,6 +94,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -102,6 +108,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -115,6 +122,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },

@@ -48,6 +48,34 @@ fn error_in_success_body_ignores_normal_completion_and_garbage() {
 }
 
 #[test]
+fn parse_chat_completion_response_normalizes_top_level_tool_call_shape() {
+    let body = br#"{
+        "id": "x",
+        "object": "chat.completion",
+        "created": 0,
+        "model": "local",
+        "choices": [{
+            "index": 0,
+            "message": {
+                "role": "assistant",
+                "tool_calls": [{
+                    "id": "call_1",
+                    "name": "lookup",
+                    "arguments": {"q":"x"}
+                }]
+            },
+            "finish_reason": "tool_calls"
+        }]
+    }"#;
+
+    let parsed = parse_chat_completion_response_bytes(body).expect("normalized response parses");
+    let tool_call = &parsed.choices[0].message.tool_calls.as_ref().unwrap()[0];
+    assert_eq!(tool_call.call_type, "function");
+    assert_eq!(tool_call.function.name, "lookup");
+    assert_eq!(tool_call.function.arguments, r#"{"q":"x"}"#);
+}
+
+#[test]
 fn finished_choice_error_is_surfaced() {
     // A valid 200 body whose choice carries finish_reason "error" (no top-level
     // error envelope) must surface as an ApiError, not a truncated success.

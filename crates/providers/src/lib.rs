@@ -16,5 +16,6 @@ pub use provider::{AuthKind, ProviderCapabilities, ProviderDef, ProviderProtocol
 pub use registry::{
     all_providers, canonical_provider_id, find_by_litellm_prefix, get_model, get_provider,
     list_models, model_supports_anthropic_adaptive_thinking,
-    model_supports_anthropic_reasoning_effort, resolve_backend,
+    model_supports_anthropic_reasoning_effort, requires_numeric_tool_call_ids, resolve_backend,
+    PROVIDERS_REQUIRING_NUMERIC_TOOL_CALL_IDS,
 };

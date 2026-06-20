@@ -2,6 +2,9 @@
 // No translation: the proxy receives Anthropic format and returns Anthropic format.
 
 use crate::backend::{BackendClient, MAX_SSE_BUFFER_SIZE};
+use crate::openai_tool_policy::{
+    backend_kind_for_policy, validate_anthropic_tool_request, OpenAiToolPolicyContext,
+};
 use crate::server::routes::{log_request, record_virtual_key_usage, RequestCtx};
 use crate::server::state::ConcurrencyPermit;
 use crate::server::streaming::{observe_anthropic_sse_frames, AnthropicStreamUsage, StreamOutcome};
@@ -107,6 +110,25 @@ pub(crate) async fn anthropic_passthrough(
                     return (StatusCode::BAD_REQUEST, Json(err)).into_response();
                 }
             }
+        }
+    }
+
+    if let Ok(parsed_req) = serde_json::from_slice::<anthropic::MessageCreateRequest>(&body) {
+        if let Err(err) = validate_anthropic_tool_request(
+            &parsed_req,
+            OpenAiToolPolicyContext {
+                backend_kind: backend_kind_for_policy(&state.backend),
+                provider_id: state.provider_id.as_deref(),
+                model: &parsed_req.model,
+                provider_catalog: &state.provider_catalog,
+            },
+        ) {
+            let err = mapping::errors_map::create_anthropic_error(
+                anthropic::ErrorType::InvalidRequestError,
+                err.to_string(),
+                None,
+            );
+            return (StatusCode::BAD_REQUEST, Json(err)).into_response();
         }
     }
 

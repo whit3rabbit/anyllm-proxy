@@ -68,6 +68,7 @@ async fn spawn_proxy(backend_base_url: String, deployment: Arc<Deployment>) -> S
         "openai".to_string(),
         BackendConfig {
             kind: BackendKind::OpenAI,
+            provider_id: None,
             api_key: "test-key".to_string(),
             base_url: backend_base_url,
             api_format: OpenAIApiFormat::Chat,

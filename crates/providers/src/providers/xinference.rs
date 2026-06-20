@@ -23,6 +23,7 @@ pub const PROVIDER: ProviderDef = ProviderDef {
         streaming: true,
         // Xinference supports OpenAI-style function/tool calling for compatible models.
         tool_use: true,
+        tool_choice: false,
         embeddings: true,
         // Vision-capable multimodal LLMs are supported when the user launches one.
         vision: true,

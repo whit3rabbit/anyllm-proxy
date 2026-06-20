@@ -362,7 +362,7 @@ impl BackendClient {
             redact_secrets: false,
             expose_degradation_warnings: false, // not used by BackendClient constructors
             openai_api_format: bc.api_format.clone(),
-            provider_id: None, // multi-backend configs don't carry a stub provider ID
+            provider_id: bc.provider_id.clone(),
         };
 
         match bc.kind {

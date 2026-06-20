@@ -65,6 +65,7 @@ fn litellm_overlay_preserves_known_provider_metadata() {
     assert_eq!(provider.env_vars, static_provider.env_vars);
     assert!(provider.capabilities.chat_completions);
     assert!(provider.capabilities.tool_use);
+    assert!(!provider.capabilities.tool_choice);
     assert!(provider.capabilities.vision);
 }
 
@@ -80,6 +81,7 @@ fn litellm_overlay_adds_new_provider_without_base_url() {
     assert!(provider.capabilities.chat_completions);
     assert!(provider.capabilities.embeddings);
     assert!(provider.capabilities.tool_use);
+    assert!(provider.capabilities.tool_choice);
 
     let (kind, base_url) = catalog.resolve_backend("newco").unwrap();
     assert_eq!(kind, "openai");
@@ -94,11 +96,13 @@ fn litellm_overlay_normalizes_models_and_capabilities() {
     assert_eq!(openai_model.max_output_tokens, 678);
     assert!(openai_model.capabilities.streaming);
     assert!(openai_model.capabilities.tool_use);
+    assert!(!openai_model.capabilities.tool_choice);
     assert!(openai_model.capabilities.vision);
     assert!(openai_model.capabilities.extended_thinking);
 
     let new_model = catalog.get_model("newco", "new-model").unwrap();
     assert_eq!(new_model.status, ModelStatus::Deprecated);
+    assert!(new_model.capabilities.tool_choice);
     assert_eq!(
         catalog.find_by_litellm_prefix("newco/").unwrap().id,
         "newco"

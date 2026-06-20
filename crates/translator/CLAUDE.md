@@ -24,7 +24,7 @@ cargo test -p anyllm_translate --test golden_fixtures   # fixture-based correctn
 ## Gotchas
 
 - **Keep this crate IO-free.** No reqwest/tokio in non-`middleware` code. If you need a network call, it belongs in `proxy` or `client`, not here.
-- **Tool call IDs pass through unchanged.** Anthropic `tool_use.id` == OpenAI `tool_call.id`. Do not regenerate.
+- **Tool call IDs pass through unchanged by default.** Anthropic `tool_use.id` == OpenAI `tool_call.id`. Do not regenerate. **Exception:** `openai::tool_normalization::normalize_request_tool_call_ids` with `ToolCallIdStrategy::NineDigitSequential` rewrites outbound IDs (and re-pairs the matching tool results) for providers that reject non-numeric/duplicate IDs — selected by `requires_safe_outbound_tool_ids` in the proxy (`mistral`/`codestral`/`openrouter`). `ToolCallIdStrategy::Preserve` (the default for everything else) keeps the pass-through invariant.
 - **`arguments` (OpenAI, JSON string) vs `input` (Anthropic, JSON object).** The mapping layer serializes/deserializes across this boundary; don't assume same type.
 - **`reasoning_content` <-> Anthropic thinking blocks** maps bidirectionally (DeepSeek/Qwen). Both directions must stay symmetric.
 - **`anthropic::ErrorType::as_wire_str()` is the canonical snake_case stringifier.** Use it; never round-trip through `serde_json::to_value`. Adding a variant fails to compile until the `match` is handled.

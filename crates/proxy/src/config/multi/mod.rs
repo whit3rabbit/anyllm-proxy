@@ -7,6 +7,8 @@ use indexmap::IndexMap;
 pub struct BackendConfig {
     /// Which provider type this backend uses (OpenAI, Vertex, Gemini, Anthropic).
     pub kind: BackendKind,
+    /// Canonical provider id used for provider-specific normalization policy.
+    pub provider_id: Option<String>,
     /// API key for authentication. Resolved from env vars via `env:VAR_NAME` syntax.
     pub api_key: String,
     /// Base URL of the backend API (e.g., `https://api.openai.com`).

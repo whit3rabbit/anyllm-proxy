@@ -227,6 +227,7 @@ def parse_local_catalogs(
                     "chat_completions": find_bool_field(provider_block, "chat_completions"),
                     "streaming": find_bool_field(provider_block, "streaming"),
                     "tool_use": find_bool_field(provider_block, "tool_use"),
+                    "tool_choice": find_bool_field(provider_block, "tool_choice"),
                     "embeddings": find_bool_field(provider_block, "embeddings"),
                     "vision": find_bool_field(provider_block, "vision"),
                     "batch": find_bool_field(provider_block, "batch"),
@@ -305,6 +306,7 @@ def litellm_provider_rows(
             "tool_use": bool(
                 data.get("supports_function_calling") or data.get("supports_tool_choice")
             ),
+            "tool_choice": bool(data.get("supports_tool_choice")),
             "vision": bool(data.get("supports_vision")),
             "extended_thinking": bool(
                 data.get("supports_reasoning") or data.get("supports_reasoning_content")
@@ -667,6 +669,7 @@ def provider_metadata(
     auth = source["auth"] if source else default_auth(protocol)
     modes = {row["mode"] for row in rows.values()}
     tool_use = any(row["tool_use"] for row in rows.values())
+    tool_choice = any(row["tool_choice"] for row in rows.values())
     vision = any(row["vision"] for row in rows.values())
     return {
         "id": provider,
@@ -682,6 +685,7 @@ def provider_metadata(
             "chat_completions": "chat" in modes or "responses" in modes,
             "streaming": "chat" in modes or "completion" in modes or "responses" in modes,
             "tool_use": tool_use,
+            "tool_choice": tool_choice,
             "embeddings": "embedding" in modes,
             "vision": vision,
             "batch": bool(source and source["capabilities"].get("batch")),
@@ -738,6 +742,7 @@ def write_rust_snapshot(path: Path, raw: dict[str, Any], allowed_modes: set[str]
                 f"        chat_completions: {str(caps['chat_completions']).lower()},",
                 f"        streaming: {str(caps['streaming']).lower()},",
                 f"        tool_use: {str(caps['tool_use']).lower()},",
+                f"        tool_choice: {str(caps['tool_choice']).lower()},",
                 f"        embeddings: {str(caps['embeddings']).lower()},",
                 f"        vision: {str(caps['vision']).lower()},",
                 f"        batch: {str(caps['batch']).lower()},",
@@ -761,6 +766,7 @@ def write_rust_snapshot(path: Path, raw: dict[str, Any], allowed_modes: set[str]
                     "        capabilities: ModelCapabilities {",
                     f"            streaming: {str(streaming).lower()},",
                     f"            tool_use: {str(row['tool_use']).lower()},",
+                    f"            tool_choice: {str(row['tool_choice']).lower()},",
                     f"            vision: {str(row['vision']).lower()},",
                     f"            extended_thinking: {str(row['extended_thinking']).lower()},",
                     "        },",

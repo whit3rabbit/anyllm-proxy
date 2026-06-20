@@ -3,6 +3,9 @@
 
 use crate::backend::bedrock_client::{eventstream, BedrockClientError};
 use crate::backend::BackendClient;
+use crate::openai_tool_policy::{
+    backend_kind_for_policy, validate_anthropic_tool_request, OpenAiToolPolicyContext,
+};
 use crate::server::routes::{log_request, record_virtual_key_usage, RequestCtx};
 use crate::server::state::ConcurrencyPermit;
 use crate::server::streaming::{AnthropicStreamUsage, StreamOutcome};
@@ -120,6 +123,27 @@ pub(crate) async fn bedrock_passthrough(
         start: std::time::Instant::now(),
         model_requested: model_id.clone(),
     };
+
+    if let Ok(parsed_req) =
+        serde_json::from_value::<anthropic::MessageCreateRequest>(parsed.clone())
+    {
+        if let Err(err) = validate_anthropic_tool_request(
+            &parsed_req,
+            OpenAiToolPolicyContext {
+                backend_kind: backend_kind_for_policy(&state.backend),
+                provider_id: state.provider_id.as_deref(),
+                model: &mapped_model,
+                provider_catalog: &state.provider_catalog,
+            },
+        ) {
+            let err = mapping::errors_map::create_anthropic_error(
+                anthropic::ErrorType::InvalidRequestError,
+                err.to_string(),
+                None,
+            );
+            return (StatusCode::BAD_REQUEST, Json(err)).into_response();
+        }
+    }
 
     // Bedrock: model goes in URL, not body. Add anthropic_version.
     if let Some(obj) = parsed.as_object_mut() {

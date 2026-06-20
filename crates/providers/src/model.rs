@@ -3,6 +3,7 @@
 pub struct ModelCapabilities {
     pub streaming: bool,
     pub tool_use: bool,
+    pub tool_choice: bool,
     pub vision: bool,
     /// Extended thinking / reasoning tokens (e.g. Claude extended thinking, o1/o3).
     pub extended_thinking: bool,

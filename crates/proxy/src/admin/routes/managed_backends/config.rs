@@ -123,6 +123,7 @@ pub fn row_to_backend_config(
 
     Ok(BackendConfig {
         kind,
+        provider_id: Some(row.provider_id.clone()),
         api_key,
         base_url,
         api_format: OpenAIApiFormat::Chat,

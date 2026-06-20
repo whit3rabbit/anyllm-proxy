@@ -2,7 +2,9 @@
 
 use super::{build_http_client, RateLimitHeaders, RetryableError};
 use crate::config::{BackendAuth, BackendKind, Config};
-use anyllm_translate::openai;
+use anyllm_translate::openai::{
+    self, tool_normalization::normalize_chat_completion_response_value,
+};
 use reqwest::Client;
 
 /// HTTP client for OpenAI-compatible Chat Completions APIs with retry logic.
@@ -22,7 +24,7 @@ pub struct OpenAIClient {
     base_url: String,
     /// Provider ID when this client was built for an OpenAI-compatible stub (e.g. "zai").
     /// None for first-party OpenAI, Azure, Gemini, and Vertex backends.
-    provider_id: Option<&'static str>,
+    provider_id: Option<String>,
 }
 
 impl OpenAIClient {
@@ -101,12 +103,12 @@ impl OpenAIClient {
             auth: config.backend_auth.clone(),
             backend_kind: config.backend.clone(),
             base_url: config.openai_base_url.clone(),
-            provider_id: config.provider_id,
+            provider_id: config.provider_id.clone(),
         }
     }
 
     pub fn provider_id(&self) -> Option<&str> {
-        self.provider_id
+        self.provider_id.as_deref()
     }
 
     /// Returns the API key/token for use in batch API calls.
@@ -169,30 +171,8 @@ impl OpenAIClient {
         let status = response.status().as_u16();
         let rate_limits = RateLimitHeaders::from_openai_headers(response.headers());
         let bytes = response.bytes().await.map_err(OpenAIClientError::Request)?;
-        match serde_json::from_slice::<openai::ChatCompletionResponse>(&bytes) {
-            Ok(body) => match error_in_finished_choices(&body) {
-                // A well-formed 200 body can still carry a per-choice
-                // finish_reason "error" with no top-level error envelope (some
-                // OpenAI-compatible gateways signal a mid-generation failure this
-                // way). Surface it instead of returning a truncated, apparently
-                // successful completion (the streaming path does the same).
-                Some(err) => Err(err),
-                None => Ok((body, status, rate_limits)),
-            },
-            Err(parse_err) => {
-                // OpenAI-compatible gateways (e.g. OpenRouter) can return an error
-                // inside a 2xx body when the upstream model fails mid-request. A
-                // valid completion requires `choices`, so an error envelope always
-                // lands here. Surface it as an ApiError instead of a confusing
-                // deserialization failure; otherwise report the parse error.
-                // <https://openrouter.ai/docs/api/reference/errors-and-debugging>
-                if let Some(err) = error_in_success_body(&bytes) {
-                    Err(err)
-                } else {
-                    Err(OpenAIClientError::Deserialization(parse_err.to_string()))
-                }
-            }
-        }
+        let body = parse_chat_completion_response_bytes(&bytes)?;
+        Ok((body, status, rate_limits))
     }
 
     /// Send a streaming chat completion request with retry on 429/5xx.
@@ -367,6 +347,48 @@ impl OpenAIClient {
     {
         self.raw_passthrough(&self.embeddings_url, body, content_type)
             .await
+    }
+}
+
+fn parse_chat_completion_response_bytes(
+    bytes: &[u8],
+) -> Result<openai::ChatCompletionResponse, OpenAIClientError> {
+    let mut value: serde_json::Value = match serde_json::from_slice(bytes) {
+        Ok(value) => value,
+        Err(parse_err) => {
+            return if let Some(err) = error_in_success_body(bytes) {
+                Err(err)
+            } else {
+                Err(OpenAIClientError::Deserialization(parse_err.to_string()))
+            };
+        }
+    };
+
+    normalize_chat_completion_response_value(&mut value);
+
+    match serde_json::from_value::<openai::ChatCompletionResponse>(value) {
+        Ok(body) => match error_in_finished_choices(&body) {
+            // A well-formed 200 body can still carry a per-choice
+            // finish_reason "error" with no top-level error envelope (some
+            // OpenAI-compatible gateways signal a mid-generation failure this
+            // way). Surface it instead of returning a truncated, apparently
+            // successful completion (the streaming path does the same).
+            Some(err) => Err(err),
+            None => Ok(body),
+        },
+        Err(parse_err) => {
+            // OpenAI-compatible gateways (e.g. OpenRouter) can return an error
+            // inside a 2xx body when the upstream model fails mid-request. A
+            // valid completion requires `choices`, so an error envelope always
+            // lands here. Surface it as an ApiError instead of a confusing
+            // deserialization failure; otherwise report the parse error.
+            // <https://openrouter.ai/docs/api/reference/errors-and-debugging>
+            if let Some(err) = error_in_success_body(bytes) {
+                Err(err)
+            } else {
+                Err(OpenAIClientError::Deserialization(parse_err.to_string()))
+            }
+        }
     }
 }
 

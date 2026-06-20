@@ -39,17 +39,21 @@ fn cached_anthropic_catalog_model_rows(
     catalog: &Arc<ProviderCatalog>,
 ) -> Arc<AnthropicCatalogRows> {
     let key = Arc::as_ptr(catalog) as usize;
-    let mut cache = ANTHROPIC_CATALOG_ROWS_CACHE
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
-    if let Some(entry) = cache.get(&key) {
-        if let Some(cached_catalog) = entry.catalog.upgrade() {
-            if Arc::ptr_eq(&cached_catalog, catalog) {
-                return entry.rows.clone();
+    {
+        let cache = ANTHROPIC_CATALOG_ROWS_CACHE
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        if let Some(entry) = cache.get(&key) {
+            if let Some(cached_catalog) = entry.catalog.upgrade() {
+                if Arc::ptr_eq(&cached_catalog, catalog) {
+                    return entry.rows.clone();
+                }
             }
         }
     }
 
+    // Build outside the lock so a miss doesn't serialize concurrent /v1/models
+    // callers behind the row construction.
     let rows = anthropic_catalog_model_rows(catalog);
     let ids = rows
         .iter()
@@ -59,6 +63,12 @@ fn cached_anthropic_catalog_model_rows(
         rows: Arc::from(rows),
         ids: Arc::new(ids),
     });
+    let mut cache = ANTHROPIC_CATALOG_ROWS_CACHE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    // Drop entries whose catalog has been freed so the pointer-keyed map can't
+    // accumulate dead entries across catalog replacements.
+    cache.retain(|_, entry| entry.catalog.upgrade().is_some());
     cache.insert(
         key,
         CachedAnthropicCatalogRows {

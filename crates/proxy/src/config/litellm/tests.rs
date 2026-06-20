@@ -59,6 +59,41 @@ fn parse_provider_model_unknown_treated_as_openai() {
 }
 
 #[test]
+fn litellm_config_preserves_stub_provider_id() {
+    let yaml = r#"
+model_list:
+  - model_name: mistral-large
+    litellm_params:
+      model: mistral/mistral-large-latest
+      api_key: sk-test-key
+"#;
+
+    let (multi, _) = from_litellm_yaml(yaml);
+    let bc = multi.backends.values().next().unwrap();
+    assert_eq!(bc.provider_id.as_deref(), Some("mistral"));
+}
+
+#[test]
+fn litellm_backend_key_separates_provider_policies() {
+    let yaml = r#"
+model_list:
+  - model_name: mistral-large
+    litellm_params:
+      model: mistral/mistral-large-latest
+      api_key: sk-test-key
+      api_base: https://compat.example.com/v1
+  - model_name: local-llama
+    litellm_params:
+      model: openai/local-llama
+      api_key: sk-test-key
+      api_base: https://compat.example.com/v1
+"#;
+
+    let (multi, _) = from_litellm_yaml(yaml);
+    assert_eq!(multi.backends.len(), 2);
+}
+
+#[test]
 fn minimal_litellm_config() {
     let yaml = r#"
 model_list:
@@ -169,6 +204,26 @@ model_list:
     assert_eq!(
         bc.base_url,
         "https://myresource.openai.azure.com/openai/deployments/gpt-4o-deploy/chat/completions?api-version=2024-10-21"
+    );
+}
+
+#[test]
+fn azure_deployment_url_without_api_version_gets_one_appended() {
+    let yaml = r#"
+model_list:
+  - model_name: gpt-4o
+    litellm_params:
+      model: azure/gpt-4o-deploy
+      api_key: sk-azure
+      api_base: https://myresource.openai.azure.com/openai/deployments/gpt-4o-deploy/chat/completions
+      api_version: "2025-01-01"
+"#;
+
+    let (multi, _) = from_litellm_yaml(yaml);
+    let bc = multi.backends.values().next().unwrap();
+    assert_eq!(
+        bc.base_url,
+        "https://myresource.openai.azure.com/openai/deployments/gpt-4o-deploy/chat/completions?api-version=2025-01-01"
     );
 }
 

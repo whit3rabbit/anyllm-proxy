@@ -10,7 +10,19 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ## [Unreleased]
 
+---
+
+## [0.10.1] - 2026-06-20
+
+### Added
+- OpenAI tool-call normalization: outbound tool-call IDs are rewritten to 9-digit sequential for providers that require it (Mistral, Codestral, OpenRouter), tools are sanitized for the Gemini/Vertex OpenAI shim (drops `strict`, sanitizes JSON Schema), and per-model tool capabilities (`tool_use`, `tool_choice`) gate unsupported requests with a clean 400.
+
 ### Fixed
+- Forced `tool_choice` (`required` / named tool) is no longer rejected for self-hosted OpenAI-compatible providers (vLLM, LM Studio, llamafile, Triton, etc.): a provider-level `tool_choice` default is no longer treated as authoritative for an unknown model.
+- `parallel_tool_calls=false` against Gemini/Vertex is now stripped with a degradation warning instead of returning a 400 when multiple tools are defined.
+- `parallel_tool_calls` is included in the response cache key again: it changes model output on backends that honor it, so distinct values no longer collide on one cache entry.
+- Streaming tool-call continuation deltas are no longer stamped with a synthetic `type:"function"`, which violated the OpenAI streaming contract on the passthrough path.
+- Tool-policy provider quirks are now driven by the provider catalog instead of hardcoded id lists: the Gemini/Vertex OpenAI-shim sanitization keys off `ProviderProtocol` (so every Vertex/Gemini-shim provider is covered, not just two ids), and the "needs numeric tool-call IDs" trait is a catalog flag (`requires_numeric_tool_call_ids`).
 - Admin UI key edit no longer wipes the enforced budget, TPM limit, model allowlist, and expiry on save; the spend-limit field now drives the enforced `max_budget_usd`.
 - Admin UI managed-backend edit form now seeds existing values instead of starting blank (no-op saves / apparent config wipe).
 - Admin UI now refreshes Settings/Env on `config_changed` websocket events from other sessions or the CLI.
@@ -103,7 +115,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 ### Changed
 - Dependency bumps (rand 0.8.5 → 0.8.6).
 
-[Unreleased]: https://github.com/whit3rabbit/anyllm-proxy/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/whit3rabbit/anyllm-proxy/compare/v0.10.1...HEAD
+[0.10.1]: https://github.com/whit3rabbit/anyllm-proxy/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/whit3rabbit/anyllm-proxy/compare/v0.9.9...v0.10.0
 [0.9.9]: https://github.com/whit3rabbit/anyllm-proxy/compare/v0.9.8...v0.9.9
 [0.9.8]: https://github.com/whit3rabbit/anyllm-proxy/compare/v0.9.7...v0.9.8

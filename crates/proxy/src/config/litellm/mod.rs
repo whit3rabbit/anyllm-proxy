@@ -164,12 +164,38 @@ fn parse_provider_model(
     (kind, model_name.to_string(), stub_provider)
 }
 
+fn provider_id_for_litellm_model(
+    model: &str,
+    kind: &BackendKind,
+    stub_provider: Option<&'static anyllm_providers::ProviderDef>,
+) -> String {
+    if let Some(provider) = stub_provider {
+        return provider.id.to_string();
+    }
+
+    let raw_provider = model
+        .split_once('/')
+        .map(|(provider, _)| provider)
+        .unwrap_or("openai")
+        .to_ascii_lowercase();
+
+    match kind {
+        BackendKind::OpenAI => raw_provider,
+        BackendKind::AzureOpenAI => "azure".to_string(),
+        BackendKind::Vertex => "vertex_ai".to_string(),
+        BackendKind::Gemini => "gemini".to_string(),
+        BackendKind::Anthropic => "anthropic".to_string(),
+        BackendKind::Bedrock => "bedrock".to_string(),
+    }
+}
+
 // ---- Backend deduplication key ----
 
 /// Unique identity for a backend: same kind + base_url + api_key share one connection pool.
 #[derive(Hash, PartialEq, Eq, Clone)]
 struct BackendKey {
     kind: String,
+    provider_id: String,
     base_url: String,
     /// Hash of the API key (not the key itself) to avoid holding secrets in hash keys.
     api_key_hash: u64,
@@ -266,6 +292,8 @@ pub fn parse_litellm_yaml(yaml: &str) -> LiteLLMParsed {
 
     for entry in &config.model_list {
         let (kind, actual_model, stub_provider) = parse_provider_model(&entry.litellm_params.model);
+        let provider_id =
+            provider_id_for_litellm_model(&entry.litellm_params.model, &kind, stub_provider);
         let params = &entry.litellm_params;
 
         let api_key = super::sanitize_api_key(
@@ -290,6 +318,7 @@ pub fn parse_litellm_yaml(yaml: &str) -> LiteLLMParsed {
 
         let bk = BackendKey {
             kind: format!("{kind:?}"),
+            provider_id: provider_id.clone(),
             base_url: base_url.clone(),
             api_key_hash: hash_string(&api_key),
         };
@@ -303,9 +332,9 @@ pub fn parse_litellm_yaml(yaml: &str) -> LiteLLMParsed {
             let bc = build_backend_config(
                 &name,
                 &kind,
+                &provider_id,
                 &api_key,
                 &base_url,
-                &actual_model,
                 params,
                 &tls,
                 log_bodies,
@@ -432,13 +461,22 @@ fn resolve_base_url(
     if let Some(ref url) = params.api_base {
         let resolved =
             resolve_env_value(url).unwrap_or_else(|e| panic!("model_list api_base: {e}"));
-        if *kind == BackendKind::AzureOpenAI && !resolved.contains("/openai/deployments/") {
+        if *kind == BackendKind::AzureOpenAI {
             let api_version = params.api_version.as_deref().unwrap_or("2024-10-21");
-            let deployment = azure_deployment_from_model(actual_model);
-            return format!(
-                "{}/openai/deployments/{deployment}/chat/completions?api-version={api_version}",
-                resolved.trim_end_matches('/'),
-            );
+            if !resolved.contains("/openai/deployments/") {
+                let deployment = azure_deployment_from_model(actual_model);
+                return format!(
+                    "{}/openai/deployments/{deployment}/chat/completions?api-version={api_version}",
+                    resolved.trim_end_matches('/'),
+                );
+            }
+            // api_base is already a deployment URL. Ensure the required api-version
+            // query is present so a partial deployment URL still authenticates.
+            if !resolved.contains("api-version=") {
+                let sep = if resolved.contains('?') { '&' } else { '?' };
+                return format!("{resolved}{sep}api-version={api_version}");
+            }
+            return resolved;
         }
         return resolved;
     }
@@ -493,6 +531,10 @@ fn resolve_base_url(
     }
 }
 
+// LiteLLM Azure model names may carry a route-group marker prefix that selects a
+// request-shaping path but is not part of the deployment name. This is the complete
+// set of such markers; they are defined only here (no external producer). Add a
+// marker here if a new Azure route group is introduced.
 fn azure_deployment_from_model(model: &str) -> &str {
     for marker in ["o_series/", "gpt5_series/"] {
         if let Some(deployment) = model.strip_prefix(marker) {
@@ -509,9 +551,9 @@ fn azure_deployment_from_model(model: &str) -> &str {
 fn build_backend_config(
     name: &str,
     kind: &BackendKind,
+    provider_id: &str,
     api_key: &str,
     base_url: &str,
-    actual_model: &str,
     params: &LiteLLMParams,
     tls: &TlsConfig,
     log_bodies: bool,
@@ -524,21 +566,10 @@ fn build_backend_config(
         _ => BackendAuth::BearerToken(api_key.to_string()),
     };
 
-    // For Azure, build deployment URL from api_base.
+    // For Azure, resolve_base_url already produced the full deployment URL
+    // (deployment name + api-version), so use it as-is here.
     let effective_url = if *kind == BackendKind::AzureOpenAI {
-        let api_version = params.api_version.as_deref().unwrap_or("2024-10-21");
-        // LiteLLM api_base for Azure is the resource endpoint.
-        // We need to append the deployment path.
-        if base_url.contains("/openai/deployments/") {
-            // Already a full deployment URL.
-            base_url.to_string()
-        } else {
-            let deployment = azure_deployment_from_model(actual_model);
-            format!(
-                "{}/openai/deployments/{deployment}/chat/completions?api-version={api_version}",
-                base_url.trim_end_matches('/'),
-            )
-        }
+        base_url.to_string()
     } else {
         // Validate non-Azure URLs.
         if *kind != BackendKind::Bedrock {
@@ -604,6 +635,7 @@ fn build_backend_config(
 
     BackendConfig {
         kind: kind.clone(),
+        provider_id: Some(provider_id.to_string()),
         api_key: api_key.to_string(),
         base_url: effective_url,
         api_format: OpenAIApiFormat::Chat,

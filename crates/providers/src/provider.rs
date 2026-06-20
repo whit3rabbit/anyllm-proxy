@@ -53,6 +53,7 @@ pub struct ProviderCapabilities {
     pub chat_completions: bool,
     pub streaming: bool,
     pub tool_use: bool,
+    pub tool_choice: bool,
     pub embeddings: bool,
     pub vision: bool,
     pub batch: bool,

@@ -6,6 +6,7 @@ use tokio_stream::wrappers::ReceiverStream;
 
 use super::{ChatCompletionChunkStream, ChatCompletionError};
 use crate::backend::SseFrameBuffer;
+use crate::openai_tool_policy::parse_openai_chat_completion_chunk;
 use anyllm_translate::{anthropic, mapping, openai, ReverseStreamingTranslator};
 
 pub(crate) struct DeploymentLatencyGuard {
@@ -85,7 +86,7 @@ pub(crate) fn openai_chunk_stream(
                         if json_str == "[DONE]" {
                             continue;
                         }
-                        let parsed = serde_json::from_str::<openai::ChatCompletionChunk>(json_str);
+                        let parsed = parse_openai_chat_completion_chunk(json_str);
                         match parsed {
                             Ok(chunk) => {
                                 if let (Some(deployment), Some(ref usage)) =

@@ -110,6 +110,7 @@ async fn spawn_app(app: Router) -> String {
 fn backend_config(kind: BackendKind, base_url: String) -> BackendConfig {
     BackendConfig {
         kind,
+        provider_id: None,
         api_key: "test-key".to_string(),
         base_url,
         api_format: OpenAIApiFormat::Chat,

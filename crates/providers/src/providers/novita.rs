@@ -19,6 +19,7 @@ pub const PROVIDER: ProviderDef = ProviderDef {
         streaming: true,
         // Function/tool calling is supported on many hosted models (Llama 3.x, Qwen, DeepSeek).
         tool_use: true,
+        tool_choice: false,
         embeddings: true,
         // Vision not documented as GA on novita OpenAI-compat path as of this writing.
         vision: false,
@@ -38,6 +39,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -51,6 +53,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -64,6 +67,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -77,6 +81,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -90,6 +95,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -103,6 +109,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -116,6 +123,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -130,6 +138,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -143,6 +152,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -156,6 +166,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             // R1 is a reasoning model; exposes reasoning_content.
             extended_thinking: true,
@@ -170,6 +181,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -184,6 +196,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -197,6 +210,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -210,6 +224,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -224,6 +239,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -237,6 +253,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -250,6 +267,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },

@@ -178,6 +178,22 @@ pub fn canonical_provider_id(id: &str) -> &str {
         .unwrap_or(id)
 }
 
+/// Providers whose OpenAI-compatible endpoint rejects non-numeric or duplicate
+/// tool-call IDs and therefore require outbound IDs to be rewritten to a safe
+/// 9-digit sequential form (with the matching tool results re-paired).
+///
+/// This is a per-provider wire quirk, not a model capability, so it lives here
+/// with the provider definitions rather than being hardcoded in the proxy.
+pub const PROVIDERS_REQUIRING_NUMERIC_TOOL_CALL_IDS: &[&str] =
+    &["mistral", "codestral", "openrouter"];
+
+/// Whether outbound tool-call IDs must be rewritten to a safe numeric form for
+/// this provider. See [`PROVIDERS_REQUIRING_NUMERIC_TOOL_CALL_IDS`].
+pub fn requires_numeric_tool_call_ids(provider_id: &str) -> bool {
+    let provider_id = canonical_provider_id(provider_id);
+    PROVIDERS_REQUIRING_NUMERIC_TOOL_CALL_IDS.contains(&provider_id)
+}
+
 /// Look up a provider by its `id` field (e.g. `"groq"`, `"together_ai"`).
 pub fn get_provider(id: &str) -> Option<&'static ProviderDef> {
     let id = canonical_provider_id(id);
@@ -261,6 +277,14 @@ pub fn find_by_litellm_prefix(prefix: &str) -> Option<&'static ProviderDef> {
 
     let provider_id = prefix.strip_suffix('/')?;
     let canonical = canonical_provider_id(provider_id);
+    // A bare provider id is only a valid routing prefix when it is an alias for a
+    // different canonical id (e.g. "zhipuai/" -> "zai"). A non-alias bare id is not
+    // a litellm_prefix, so it must not resolve here -- otherwise prefixes like
+    // "baidu/" (baidu's real prefix is "qianfan/") would silently route to the
+    // legacy provider instead of falling through to the OpenAI default.
+    if canonical == provider_id {
+        return None;
+    }
     PROVIDERS_BY_ID.get(canonical).copied()
 }
 
@@ -293,6 +317,67 @@ mod tests {
     #[test]
     fn openai_models_populated() {
         assert!(!list_models("openai").is_empty());
+    }
+
+    #[test]
+    fn tool_choice_capability_implies_tool_use() {
+        let mut models_checked = 0;
+        for provider in all_providers() {
+            assert!(
+                !provider.capabilities.tool_choice || provider.capabilities.tool_use,
+                "provider '{}' advertises tool_choice without tool_use",
+                provider.id
+            );
+            for model in list_models(provider.id) {
+                models_checked += 1;
+                assert!(
+                    !model.capabilities.tool_choice || model.capabilities.tool_use,
+                    "model '{}/{}' advertises tool_choice without tool_use",
+                    provider.id,
+                    model.id
+                );
+            }
+        }
+        assert!(models_checked > 0);
+    }
+
+    #[test]
+    fn requires_numeric_tool_call_ids_matches_known_quirk_providers() {
+        assert!(requires_numeric_tool_call_ids("mistral"));
+        assert!(requires_numeric_tool_call_ids("codestral"));
+        assert!(requires_numeric_tool_call_ids("openrouter"));
+        assert!(!requires_numeric_tool_call_ids("openai"));
+        assert!(!requires_numeric_tool_call_ids("groq"));
+        // Every quirk provider id must resolve to a real provider so the list
+        // cannot silently rot when a provider id is renamed/removed.
+        for id in PROVIDERS_REQUIRING_NUMERIC_TOOL_CALL_IDS {
+            assert!(
+                get_provider(id).is_some(),
+                "unknown quirk provider id '{id}'"
+            );
+        }
+    }
+
+    #[test]
+    fn find_by_litellm_prefix_resolves_real_prefixes_and_aliases() {
+        // Real litellm_prefix of a legacy provider resolves.
+        assert_eq!(
+            find_by_litellm_prefix("qianfan/").map(|p| p.id),
+            Some("baidu")
+        );
+        // Alias bare id ("zhipuai" -> "zai") resolves to its canonical provider.
+        assert_eq!(
+            find_by_litellm_prefix("zhipuai/").map(|p| p.id),
+            Some("zai")
+        );
+    }
+
+    #[test]
+    fn find_by_litellm_prefix_rejects_non_alias_bare_ids() {
+        // baidu's real prefix is "qianfan/", iflytek's is "spark/". The bare id
+        // prefix is not a routing prefix and must not resolve to the provider.
+        assert!(find_by_litellm_prefix("baidu/").is_none());
+        assert!(find_by_litellm_prefix("iflytek/").is_none());
     }
 
     #[test]

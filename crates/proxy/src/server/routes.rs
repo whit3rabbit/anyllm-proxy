@@ -114,6 +114,7 @@ pub fn app_multi_with_shared(
             runtime_config: runtime_config.clone(),
             shared: shared.clone(),
             backend_name: name.clone(),
+            provider_id: bc.provider_id.clone(),
             concurrency: Arc::new(Semaphore::new(super::middleware::MAX_CONCURRENT_REQUESTS)),
             omit_stream_options: bc.omit_stream_options,
             stream_timeout_secs: bc.stream_timeout_secs,

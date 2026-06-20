@@ -263,6 +263,7 @@ impl ProviderCatalog {
                         streaming: matches!(mode, "chat" | "completion" | "responses"),
                         tool_use: truthy_json_field(data, "supports_function_calling")
                             || truthy_json_field(data, "supports_tool_choice"),
+                        tool_choice: truthy_json_field(data, "supports_tool_choice"),
                         vision: truthy_json_field(data, "supports_vision"),
                         extended_thinking: truthy_json_field(data, "supports_reasoning")
                             || truthy_json_field(data, "supports_reasoning_content"),
@@ -398,6 +399,7 @@ impl ProviderCatalog {
 struct ProviderRows {
     modes: BTreeSet<String>,
     tool_use: bool,
+    tool_choice: bool,
     vision: bool,
     models: BTreeMap<String, OwnedModelDef>,
 }
@@ -410,6 +412,7 @@ impl ProviderRows {
         self.tool_use = self.tool_use
             || truthy_json_field(data, "supports_function_calling")
             || truthy_json_field(data, "supports_tool_choice");
+        self.tool_choice = self.tool_choice || truthy_json_field(data, "supports_tool_choice");
         self.vision = self.vision || truthy_json_field(data, "supports_vision");
     }
 
@@ -420,6 +423,7 @@ impl ProviderRows {
                 || self.modes.contains("completion")
                 || self.modes.contains("responses"),
             tool_use: self.tool_use,
+            tool_choice: self.tool_choice,
             embeddings: self.modes.contains("embedding"),
             vision: self.vision,
             batch,

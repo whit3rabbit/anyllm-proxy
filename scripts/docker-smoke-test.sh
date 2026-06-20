@@ -78,9 +78,11 @@ check_status "missing auth key returns 401" "401" "$PROXY_URL/v1/messages" \
 check "/v1/models returns data array" '"data"' \
   "$(curl -sf "$PROXY_URL/v1/models" -H "x-api-key: smoke-test-key")"
 
-# 5. CSRF token — GET /admin/csrf-token sets a cookie AND returns the token body.
+# 5. CSRF token — GET /admin/csrf-token requires admin auth, sets a cookie,
+#    and returns the token body.
 #    Both must be replayed on state-mutating admin requests (double-submit pattern).
-CSRF_RESP=$(curl -sf -c "$COOKIEJAR" "$ADMIN_URL/admin/csrf-token")
+CSRF_RESP=$(curl -sf -c "$COOKIEJAR" "$ADMIN_URL/admin/csrf-token" \
+  -H "Authorization: Bearer $ADMIN_TOKEN")
 CSRF=$(echo "$CSRF_RESP" | jq -r '.csrf_token // .token // empty')
 if [ -n "$CSRF" ]; then
   pass "csrf token fetch"
@@ -116,7 +118,8 @@ fi
 
 # 9. Delete virtual key — CSRF tokens are one-time-use; fetch a fresh one.
 if [ -n "$KEY_ID" ]; then
-  CSRF_DEL_RESP=$(curl -sf -c "$COOKIEJAR" "$ADMIN_URL/admin/csrf-token")
+  CSRF_DEL_RESP=$(curl -sf -c "$COOKIEJAR" "$ADMIN_URL/admin/csrf-token" \
+    -H "Authorization: Bearer $ADMIN_TOKEN")
   CSRF_DEL=$(echo "$CSRF_DEL_RESP" | jq -r '.csrf_token // .token // empty')
   DEL_CODE=$(curl -s -o /dev/null -w "%{http_code}" -b "$COOKIEJAR" -X DELETE \
     "$ADMIN_URL/admin/api/keys/$KEY_ID" \

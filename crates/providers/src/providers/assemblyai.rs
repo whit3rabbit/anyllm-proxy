@@ -22,6 +22,7 @@ pub const PROVIDER: ProviderDef = ProviderDef {
         streaming: true,
         // LLM Gateway supports tool calling.
         tool_use: true,
+        tool_choice: false,
         embeddings: false,
         vision: false,
         // No OpenAI-style /v1/batches endpoint; concurrent transcription submissions only.
@@ -40,6 +41,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -53,6 +55,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -67,6 +70,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -80,6 +84,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -94,6 +99,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },

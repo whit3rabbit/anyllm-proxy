@@ -20,6 +20,7 @@ pub const PROVIDER_AI21: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: false,
         vision: false,
         batch: false,
@@ -35,6 +36,7 @@ pub const MODELS_AI21: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -48,6 +50,7 @@ pub const MODELS_AI21: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -61,6 +64,7 @@ pub const MODELS_AI21: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -74,6 +78,7 @@ pub const MODELS_AI21: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -87,6 +92,7 @@ pub const MODELS_AI21: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -100,6 +106,7 @@ pub const MODELS_AI21: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -113,6 +120,7 @@ pub const MODELS_AI21: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -126,6 +134,7 @@ pub const MODELS_AI21: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -139,6 +148,7 @@ pub const MODELS_AI21: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -152,6 +162,7 @@ pub const MODELS_AI21: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -165,6 +176,7 @@ pub const MODELS_AI21: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -178,6 +190,7 @@ pub const MODELS_AI21: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -198,6 +211,7 @@ pub const PROVIDER_AIML: ProviderDef = ProviderDef {
         chat_completions: false,
         streaming: false,
         tool_use: false,
+        tool_choice: false,
         embeddings: false,
         vision: false,
         batch: false,
@@ -213,6 +227,7 @@ pub const MODELS_AIML: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -226,6 +241,7 @@ pub const MODELS_AIML: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -239,6 +255,7 @@ pub const MODELS_AIML: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -252,6 +269,7 @@ pub const MODELS_AIML: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -265,6 +283,7 @@ pub const MODELS_AIML: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -278,6 +297,7 @@ pub const MODELS_AIML: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -291,6 +311,7 @@ pub const MODELS_AIML: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -304,6 +325,7 @@ pub const MODELS_AIML: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -317,6 +339,7 @@ pub const MODELS_AIML: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -330,6 +353,7 @@ pub const MODELS_AIML: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -343,6 +367,7 @@ pub const MODELS_AIML: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -356,6 +381,7 @@ pub const MODELS_AIML: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -376,6 +402,7 @@ pub const PROVIDER_AMAZON_NOVA: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: false,
         embeddings: false,
         vision: true,
         batch: false,
@@ -391,6 +418,7 @@ pub const MODELS_AMAZON_NOVA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -404,6 +432,7 @@ pub const MODELS_AMAZON_NOVA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -417,6 +446,7 @@ pub const MODELS_AMAZON_NOVA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -430,6 +460,7 @@ pub const MODELS_AMAZON_NOVA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -450,6 +481,7 @@ pub const PROVIDER_ANTHROPIC: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: false,
         vision: true,
         batch: true,
@@ -465,6 +497,7 @@ pub const MODELS_ANTHROPIC: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -478,6 +511,7 @@ pub const MODELS_ANTHROPIC: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -491,6 +525,7 @@ pub const MODELS_ANTHROPIC: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -504,6 +539,7 @@ pub const MODELS_ANTHROPIC: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -517,6 +553,7 @@ pub const MODELS_ANTHROPIC: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -530,6 +567,7 @@ pub const MODELS_ANTHROPIC: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -543,6 +581,7 @@ pub const MODELS_ANTHROPIC: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -556,6 +595,7 @@ pub const MODELS_ANTHROPIC: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -569,6 +609,7 @@ pub const MODELS_ANTHROPIC: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -582,6 +623,7 @@ pub const MODELS_ANTHROPIC: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -595,6 +637,7 @@ pub const MODELS_ANTHROPIC: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -608,6 +651,7 @@ pub const MODELS_ANTHROPIC: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -621,6 +665,7 @@ pub const MODELS_ANTHROPIC: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -634,6 +679,7 @@ pub const MODELS_ANTHROPIC: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -647,6 +693,7 @@ pub const MODELS_ANTHROPIC: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -660,6 +707,7 @@ pub const MODELS_ANTHROPIC: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -673,6 +721,7 @@ pub const MODELS_ANTHROPIC: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -686,6 +735,7 @@ pub const MODELS_ANTHROPIC: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -699,6 +749,7 @@ pub const MODELS_ANTHROPIC: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -712,6 +763,7 @@ pub const MODELS_ANTHROPIC: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -725,6 +777,7 @@ pub const MODELS_ANTHROPIC: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -738,6 +791,7 @@ pub const MODELS_ANTHROPIC: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -758,6 +812,7 @@ pub const PROVIDER_ANYSCALE: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: false,
         embeddings: false,
         vision: false,
         batch: false,
@@ -773,6 +828,7 @@ pub const MODELS_ANYSCALE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -786,6 +842,7 @@ pub const MODELS_ANYSCALE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -799,6 +856,7 @@ pub const MODELS_ANYSCALE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -812,6 +870,7 @@ pub const MODELS_ANYSCALE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -825,6 +884,7 @@ pub const MODELS_ANYSCALE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -838,6 +898,7 @@ pub const MODELS_ANYSCALE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -851,6 +912,7 @@ pub const MODELS_ANYSCALE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -864,6 +926,7 @@ pub const MODELS_ANYSCALE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -877,6 +940,7 @@ pub const MODELS_ANYSCALE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -890,6 +954,7 @@ pub const MODELS_ANYSCALE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -903,6 +968,7 @@ pub const MODELS_ANYSCALE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -916,6 +982,7 @@ pub const MODELS_ANYSCALE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -936,6 +1003,7 @@ pub const PROVIDER_APISERPENT: ProviderDef = ProviderDef {
         chat_completions: false,
         streaming: false,
         tool_use: false,
+        tool_choice: false,
         embeddings: false,
         vision: false,
         batch: false,
@@ -951,6 +1019,7 @@ pub const MODELS_APISERPENT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -964,6 +1033,7 @@ pub const MODELS_APISERPENT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -984,6 +1054,7 @@ pub const PROVIDER_ASSEMBLYAI: ProviderDef = ProviderDef {
         chat_completions: false,
         streaming: false,
         tool_use: false,
+        tool_choice: false,
         embeddings: false,
         vision: false,
         batch: false,
@@ -999,6 +1070,7 @@ pub const MODELS_ASSEMBLYAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -1012,6 +1084,7 @@ pub const MODELS_ASSEMBLYAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -1032,6 +1105,7 @@ pub const PROVIDER_AWS_POLLY: ProviderDef = ProviderDef {
         chat_completions: false,
         streaming: false,
         tool_use: false,
+        tool_choice: false,
         embeddings: false,
         vision: false,
         batch: false,
@@ -1047,6 +1121,7 @@ pub const MODELS_AWS_POLLY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -1060,6 +1135,7 @@ pub const MODELS_AWS_POLLY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -1073,6 +1149,7 @@ pub const MODELS_AWS_POLLY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -1086,6 +1163,7 @@ pub const MODELS_AWS_POLLY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -1106,6 +1184,7 @@ pub const PROVIDER_AZURE: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: true,
         vision: true,
         batch: false,
@@ -1121,6 +1200,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -1134,6 +1214,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -1147,6 +1228,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -1160,6 +1242,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -1173,6 +1256,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -1186,6 +1270,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -1199,6 +1284,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -1212,6 +1298,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -1225,6 +1312,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -1238,6 +1326,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -1251,6 +1340,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -1264,6 +1354,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -1277,6 +1368,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -1290,6 +1382,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -1303,6 +1396,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -1316,6 +1410,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -1329,6 +1424,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -1342,6 +1438,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -1355,6 +1452,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -1368,6 +1466,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -1381,6 +1480,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -1394,6 +1494,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -1407,6 +1508,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -1420,6 +1522,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -1433,6 +1536,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -1446,6 +1550,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -1459,6 +1564,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -1472,6 +1578,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -1485,6 +1592,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -1498,6 +1606,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -1511,6 +1620,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -1524,6 +1634,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -1537,6 +1648,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -1550,6 +1662,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -1563,6 +1676,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -1576,6 +1690,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -1589,6 +1704,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -1602,6 +1718,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -1615,6 +1732,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -1628,6 +1746,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -1641,6 +1760,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -1654,6 +1774,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -1667,6 +1788,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -1680,6 +1802,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -1693,6 +1816,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -1706,6 +1830,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -1719,6 +1844,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -1732,6 +1858,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -1745,6 +1872,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -1758,6 +1886,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -1771,6 +1900,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -1784,6 +1914,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -1797,6 +1928,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -1810,6 +1942,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -1823,6 +1956,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -1836,6 +1970,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -1849,6 +1984,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -1862,6 +1998,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -1875,6 +2012,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -1888,6 +2026,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -1901,6 +2040,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -1914,6 +2054,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -1927,6 +2068,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -1940,6 +2082,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -1953,6 +2096,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -1966,6 +2110,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -1979,6 +2124,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -1992,6 +2138,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -2005,6 +2152,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -2018,6 +2166,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -2031,6 +2180,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -2044,6 +2194,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -2057,6 +2208,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -2070,6 +2222,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -2083,6 +2236,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -2096,6 +2250,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -2109,6 +2264,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -2122,6 +2278,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -2135,6 +2292,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -2148,6 +2306,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -2161,6 +2320,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -2174,6 +2334,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -2187,6 +2348,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: true,
         },
@@ -2200,6 +2362,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -2213,6 +2376,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -2226,6 +2390,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -2239,6 +2404,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -2252,6 +2418,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -2265,6 +2432,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -2278,6 +2446,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -2291,6 +2460,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -2304,6 +2474,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -2317,6 +2488,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -2330,6 +2502,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -2343,6 +2516,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -2356,6 +2530,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -2369,6 +2544,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -2382,6 +2558,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -2395,6 +2572,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -2408,6 +2586,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -2421,6 +2600,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -2434,6 +2614,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -2447,6 +2628,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -2460,6 +2642,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -2473,6 +2656,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -2486,6 +2670,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -2499,6 +2684,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -2512,6 +2698,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -2525,6 +2712,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -2538,6 +2726,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -2551,6 +2740,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -2564,6 +2754,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -2577,6 +2768,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -2590,6 +2782,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -2603,6 +2796,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -2616,6 +2810,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -2629,6 +2824,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -2642,6 +2838,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -2655,6 +2852,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -2668,6 +2866,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -2681,6 +2880,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -2694,6 +2894,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -2707,6 +2908,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -2720,6 +2922,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -2733,6 +2936,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -2746,6 +2950,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -2759,6 +2964,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -2772,6 +2978,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -2785,6 +2992,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -2798,6 +3006,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -2811,6 +3020,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -2824,6 +3034,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -2837,6 +3048,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -2850,6 +3062,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -2863,6 +3076,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -2876,6 +3090,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -2889,6 +3104,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -2902,6 +3118,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -2915,6 +3132,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -2928,6 +3146,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -2941,6 +3160,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -2954,6 +3174,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -2967,6 +3188,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -2980,6 +3202,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -2993,6 +3216,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -3006,6 +3230,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -3019,6 +3244,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -3032,6 +3258,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -3045,6 +3272,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -3058,6 +3286,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -3071,6 +3300,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -3084,6 +3314,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -3097,6 +3328,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -3110,6 +3342,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -3123,6 +3356,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -3136,6 +3370,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -3149,6 +3384,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -3162,6 +3398,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -3175,6 +3412,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -3188,6 +3426,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -3201,6 +3440,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -3214,6 +3454,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -3227,6 +3468,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -3240,6 +3482,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -3253,6 +3496,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -3266,6 +3510,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -3279,6 +3524,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -3292,6 +3538,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -3305,6 +3552,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -3318,6 +3566,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -3331,6 +3580,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -3344,6 +3594,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -3357,6 +3608,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -3370,6 +3622,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -3383,6 +3636,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -3396,6 +3650,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -3409,6 +3664,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -3422,6 +3678,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -3435,6 +3692,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -3448,6 +3706,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -3461,6 +3720,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -3474,6 +3734,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -3487,6 +3748,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -3500,6 +3762,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -3513,6 +3776,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -3526,6 +3790,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -3539,6 +3804,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -3552,6 +3818,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -3565,6 +3832,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -3578,6 +3846,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -3591,6 +3860,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -3604,6 +3874,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -3617,6 +3888,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -3630,6 +3902,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -3643,6 +3916,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -3656,6 +3930,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -3669,6 +3944,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -3689,6 +3965,7 @@ pub const PROVIDER_AZURE_AI: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: true,
         vision: true,
         batch: false,
@@ -3704,6 +3981,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -3717,6 +3995,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -3730,6 +4009,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -3743,6 +4023,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -3756,6 +4037,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -3769,6 +4051,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -3782,6 +4065,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -3795,6 +4079,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -3808,6 +4093,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -3821,6 +4107,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -3834,6 +4121,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -3847,6 +4135,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -3860,6 +4149,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -3873,6 +4163,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -3886,6 +4177,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -3899,6 +4191,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -3912,6 +4205,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -3925,6 +4219,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -3938,6 +4233,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -3951,6 +4247,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -3964,6 +4261,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -3977,6 +4275,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -3990,6 +4289,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -4003,6 +4303,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -4016,6 +4317,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -4029,6 +4331,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -4042,6 +4345,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -4055,6 +4359,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -4068,6 +4373,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -4081,6 +4387,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -4094,6 +4401,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -4107,6 +4415,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -4120,6 +4429,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -4133,6 +4443,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -4146,6 +4457,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -4159,6 +4471,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -4172,6 +4485,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -4185,6 +4499,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -4198,6 +4513,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -4211,6 +4527,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -4224,6 +4541,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -4237,6 +4555,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -4250,6 +4569,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -4263,6 +4583,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -4276,6 +4597,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -4289,6 +4611,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -4302,6 +4625,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -4315,6 +4639,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -4328,6 +4653,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -4341,6 +4667,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -4354,6 +4681,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -4367,6 +4695,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -4380,6 +4709,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -4393,6 +4723,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -4406,6 +4737,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -4419,6 +4751,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -4432,6 +4765,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -4445,6 +4779,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -4458,6 +4793,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -4471,6 +4807,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -4484,6 +4821,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -4497,6 +4835,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -4510,6 +4849,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -4523,6 +4863,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -4536,6 +4877,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -4549,6 +4891,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -4562,6 +4905,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -4575,6 +4919,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -4588,6 +4933,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -4601,6 +4947,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -4614,6 +4961,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -4627,6 +4975,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -4640,6 +4989,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -4653,6 +5003,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -4666,6 +5017,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -4679,6 +5031,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -4692,6 +5045,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -4705,6 +5059,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -4718,6 +5073,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -4731,6 +5087,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -4744,6 +5101,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -4757,6 +5115,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -4770,6 +5129,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -4783,6 +5143,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -4796,6 +5157,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -4809,6 +5171,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -4822,6 +5185,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -4842,6 +5206,7 @@ pub const PROVIDER_AZURE_TEXT: ProviderDef = ProviderDef {
         chat_completions: false,
         streaming: true,
         tool_use: false,
+        tool_choice: false,
         embeddings: false,
         vision: false,
         batch: false,
@@ -4857,6 +5222,7 @@ pub const MODELS_AZURE_TEXT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -4870,6 +5236,7 @@ pub const MODELS_AZURE_TEXT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -4883,6 +5250,7 @@ pub const MODELS_AZURE_TEXT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -4903,6 +5271,7 @@ pub const PROVIDER_BASETEN: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: false,
+        tool_choice: false,
         embeddings: false,
         vision: false,
         batch: false,
@@ -4918,6 +5287,7 @@ pub const MODELS_BASETEN: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -4931,6 +5301,7 @@ pub const MODELS_BASETEN: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -4944,6 +5315,7 @@ pub const MODELS_BASETEN: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -4957,6 +5329,7 @@ pub const MODELS_BASETEN: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -4970,6 +5343,7 @@ pub const MODELS_BASETEN: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -4983,6 +5357,7 @@ pub const MODELS_BASETEN: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -4996,6 +5371,7 @@ pub const MODELS_BASETEN: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -5009,6 +5385,7 @@ pub const MODELS_BASETEN: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -5022,6 +5399,7 @@ pub const MODELS_BASETEN: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -5035,6 +5413,7 @@ pub const MODELS_BASETEN: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -5048,6 +5427,7 @@ pub const MODELS_BASETEN: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -5068,6 +5448,7 @@ pub const PROVIDER_BEDROCK: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: true,
         vision: true,
         batch: false,
@@ -5083,6 +5464,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -5096,6 +5478,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -5109,6 +5492,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -5122,6 +5506,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -5135,6 +5520,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -5148,6 +5534,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -5161,6 +5548,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -5174,6 +5562,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -5187,6 +5576,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -5200,6 +5590,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -5213,6 +5604,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -5226,6 +5618,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -5239,6 +5632,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -5252,6 +5646,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -5265,6 +5660,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -5278,6 +5674,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -5291,6 +5688,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -5304,6 +5702,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -5317,6 +5716,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -5330,6 +5730,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -5343,6 +5744,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -5356,6 +5758,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -5369,6 +5772,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -5382,6 +5786,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -5395,6 +5800,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -5408,6 +5814,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -5421,6 +5828,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -5434,6 +5842,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -5447,6 +5856,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -5460,6 +5870,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -5473,6 +5884,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -5486,6 +5898,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -5499,6 +5912,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -5512,6 +5926,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -5525,6 +5940,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -5538,6 +5954,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -5551,6 +5968,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -5564,6 +5982,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -5577,6 +5996,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -5590,6 +6010,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -5603,6 +6024,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -5616,6 +6038,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -5629,6 +6052,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -5642,6 +6066,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -5655,6 +6080,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -5668,6 +6094,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -5681,6 +6108,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -5694,6 +6122,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -5707,6 +6136,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -5720,6 +6150,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -5733,6 +6164,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -5746,6 +6178,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -5759,6 +6192,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -5772,6 +6206,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -5785,6 +6220,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -5798,6 +6234,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -5811,6 +6248,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -5824,6 +6262,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -5837,6 +6276,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -5850,6 +6290,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -5863,6 +6304,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -5876,6 +6318,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -5889,6 +6332,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -5902,6 +6346,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -5915,6 +6360,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -5928,6 +6374,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -5941,6 +6388,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -5954,6 +6402,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -5967,6 +6416,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -5980,6 +6430,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -5993,6 +6444,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -6006,6 +6458,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -6019,6 +6472,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -6032,6 +6486,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -6045,6 +6500,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -6058,6 +6514,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -6071,6 +6528,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -6084,6 +6542,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -6097,6 +6556,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -6110,6 +6570,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -6123,6 +6584,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -6136,6 +6598,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -6149,6 +6612,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -6162,6 +6626,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -6175,6 +6640,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -6188,6 +6654,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -6201,6 +6668,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -6214,6 +6682,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -6227,6 +6696,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -6240,6 +6710,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -6253,6 +6724,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -6266,6 +6738,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -6279,6 +6752,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -6292,6 +6766,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -6305,6 +6780,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -6318,6 +6794,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -6331,6 +6808,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -6344,6 +6822,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -6357,6 +6836,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -6370,6 +6850,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -6383,6 +6864,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -6396,6 +6878,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -6409,6 +6892,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -6422,6 +6906,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -6435,6 +6920,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -6448,6 +6934,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -6461,6 +6948,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -6474,6 +6962,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -6487,6 +6976,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -6500,6 +6990,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -6513,6 +7004,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -6526,6 +7018,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -6539,6 +7032,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -6552,6 +7046,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -6565,6 +7060,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -6578,6 +7074,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -6591,6 +7088,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -6604,6 +7102,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -6617,6 +7116,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -6630,6 +7130,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -6643,6 +7144,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -6656,6 +7158,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -6669,6 +7172,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -6682,6 +7186,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -6695,6 +7200,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -6708,6 +7214,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -6721,6 +7228,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -6734,6 +7242,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -6747,6 +7256,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -6760,6 +7270,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -6773,6 +7284,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -6786,6 +7298,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -6799,6 +7312,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -6812,6 +7326,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -6825,6 +7340,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -6838,6 +7354,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -6851,6 +7368,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -6864,6 +7382,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -6877,6 +7396,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -6890,6 +7410,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -6903,6 +7424,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -6916,6 +7438,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -6929,6 +7452,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -6942,6 +7466,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -6955,6 +7480,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -6968,6 +7494,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -6981,6 +7508,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -6994,6 +7522,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -7007,6 +7536,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -7020,6 +7550,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -7033,6 +7564,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -7046,6 +7578,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -7059,6 +7592,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -7072,6 +7606,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -7085,6 +7620,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -7098,6 +7634,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -7111,6 +7648,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -7124,6 +7662,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -7137,6 +7676,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -7150,6 +7690,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -7163,6 +7704,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -7176,6 +7718,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -7189,6 +7732,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -7202,6 +7746,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -7215,6 +7760,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -7228,6 +7774,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -7241,6 +7788,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -7254,6 +7802,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -7267,6 +7816,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -7280,6 +7830,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -7293,6 +7844,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -7306,6 +7858,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -7319,6 +7872,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -7332,6 +7886,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -7345,6 +7900,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -7358,6 +7914,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -7371,6 +7928,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -7384,6 +7942,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -7397,6 +7956,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -7410,6 +7970,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -7423,6 +7984,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -7436,6 +7998,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -7449,6 +8012,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -7462,6 +8026,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -7475,6 +8040,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -7488,6 +8054,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -7501,6 +8068,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -7514,6 +8082,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -7527,6 +8096,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -7540,6 +8110,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -7553,6 +8124,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -7566,6 +8138,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -7579,6 +8152,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -7592,6 +8166,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -7605,6 +8180,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -7618,6 +8194,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -7631,6 +8208,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -7644,6 +8222,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -7657,6 +8236,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -7670,6 +8250,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -7683,6 +8264,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -7696,6 +8278,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -7709,6 +8292,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -7722,6 +8306,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -7735,6 +8320,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -7748,6 +8334,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -7761,6 +8348,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -7774,6 +8362,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -7787,6 +8376,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -7800,6 +8390,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -7813,6 +8404,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -7826,6 +8418,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -7839,6 +8432,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -7852,6 +8446,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -7865,6 +8460,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -7878,6 +8474,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -7891,6 +8488,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -7904,6 +8502,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -7917,6 +8516,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -7930,6 +8530,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -7943,6 +8544,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -7956,6 +8558,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -7969,6 +8572,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -7982,6 +8586,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -7995,6 +8600,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -8008,6 +8614,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -8021,6 +8628,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -8034,6 +8642,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -8047,6 +8656,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -8060,6 +8670,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -8073,6 +8684,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -8086,6 +8698,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -8099,6 +8712,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -8112,6 +8726,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -8125,6 +8740,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -8138,6 +8754,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -8151,6 +8768,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -8164,6 +8782,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -8177,6 +8796,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -8190,6 +8810,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -8203,6 +8824,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -8216,6 +8838,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -8229,6 +8852,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -8242,6 +8866,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -8255,6 +8880,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -8268,6 +8894,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -8281,6 +8908,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -8294,6 +8922,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -8307,6 +8936,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -8320,6 +8950,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -8333,6 +8964,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -8346,6 +8978,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -8359,6 +8992,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -8372,6 +9006,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -8385,6 +9020,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -8398,6 +9034,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -8411,6 +9048,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -8424,6 +9062,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -8437,6 +9076,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -8450,6 +9090,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -8463,6 +9104,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -8476,6 +9118,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -8489,6 +9132,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -8502,6 +9146,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -8515,6 +9160,7 @@ pub const MODELS_BEDROCK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -8535,6 +9181,7 @@ pub const PROVIDER_BEDROCK_CONVERSE: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: false,
         vision: true,
         batch: false,
@@ -8550,6 +9197,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: true,
         },
@@ -8563,6 +9211,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: true,
         },
@@ -8576,6 +9225,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -8589,6 +9239,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -8602,6 +9253,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -8615,6 +9267,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -8628,6 +9281,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -8641,6 +9295,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -8654,6 +9309,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -8667,6 +9323,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -8680,6 +9337,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -8693,6 +9351,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -8706,6 +9365,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -8719,6 +9379,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -8732,6 +9393,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -8745,6 +9407,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -8758,6 +9421,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -8771,6 +9435,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -8784,6 +9449,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: true,
         },
@@ -8797,6 +9463,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: true,
         },
@@ -8810,6 +9477,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -8823,6 +9491,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -8836,6 +9505,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -8849,6 +9519,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -8862,6 +9533,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -8875,6 +9547,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -8888,6 +9561,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -8901,6 +9575,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -8914,6 +9589,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -8927,6 +9603,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -8940,6 +9617,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -8953,6 +9631,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -8966,6 +9645,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -8979,6 +9659,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: true,
         },
@@ -8992,6 +9673,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: true,
         },
@@ -9005,6 +9687,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -9018,6 +9701,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -9031,6 +9715,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -9044,6 +9729,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -9057,6 +9743,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -9070,6 +9757,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -9083,6 +9771,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -9096,6 +9785,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -9109,6 +9799,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -9122,6 +9813,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -9135,6 +9827,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -9148,6 +9841,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -9161,6 +9855,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -9174,6 +9869,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -9187,6 +9883,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -9200,6 +9897,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -9213,6 +9911,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: true,
         },
@@ -9226,6 +9925,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -9239,6 +9939,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -9252,6 +9953,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -9265,6 +9967,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -9278,6 +9981,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -9291,6 +9995,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -9304,6 +10009,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -9317,6 +10023,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -9330,6 +10037,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -9343,6 +10051,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -9356,6 +10065,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -9369,6 +10079,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -9382,6 +10093,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -9395,6 +10107,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -9408,6 +10121,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -9421,6 +10135,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -9434,6 +10149,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -9447,6 +10163,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -9460,6 +10177,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -9473,6 +10191,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -9486,6 +10205,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -9499,6 +10219,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -9512,6 +10233,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -9525,6 +10247,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -9538,6 +10261,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -9551,6 +10275,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -9564,6 +10289,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -9577,6 +10303,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -9590,6 +10317,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -9603,6 +10331,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -9616,6 +10345,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -9629,6 +10359,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -9642,6 +10373,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -9655,6 +10387,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -9668,6 +10401,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -9681,6 +10415,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -9694,6 +10429,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -9707,6 +10443,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -9720,6 +10457,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -9733,6 +10471,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -9746,6 +10485,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -9759,6 +10499,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -9772,6 +10513,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -9785,6 +10527,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -9798,6 +10541,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -9811,6 +10555,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -9824,6 +10569,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -9837,6 +10583,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -9850,6 +10597,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: true,
         },
@@ -9863,6 +10611,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: true,
         },
@@ -9876,6 +10625,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -9889,6 +10639,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -9902,6 +10653,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -9915,6 +10667,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -9928,6 +10681,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -9941,6 +10695,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -9954,6 +10709,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -9967,6 +10723,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -9980,6 +10737,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -9993,6 +10751,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -10006,6 +10765,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -10019,6 +10779,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -10032,6 +10793,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -10045,6 +10807,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -10058,6 +10821,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -10071,6 +10835,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -10084,6 +10849,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -10097,6 +10863,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -10110,6 +10877,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -10123,6 +10891,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -10136,6 +10905,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -10149,6 +10919,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -10162,6 +10933,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -10175,6 +10947,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -10188,6 +10961,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -10201,6 +10975,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -10214,6 +10989,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -10227,6 +11003,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -10240,6 +11017,7 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -10260,6 +11038,7 @@ pub const PROVIDER_BEDROCK_MANTLE: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: false,
         vision: true,
         batch: false,
@@ -10275,6 +11054,7 @@ pub const MODELS_BEDROCK_MANTLE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -10288,6 +11068,7 @@ pub const MODELS_BEDROCK_MANTLE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -10301,6 +11082,7 @@ pub const MODELS_BEDROCK_MANTLE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -10314,6 +11096,7 @@ pub const MODELS_BEDROCK_MANTLE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -10327,6 +11110,7 @@ pub const MODELS_BEDROCK_MANTLE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -10340,6 +11124,7 @@ pub const MODELS_BEDROCK_MANTLE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -10360,6 +11145,7 @@ pub const PROVIDER_BLACK_FOREST_LABS: ProviderDef = ProviderDef {
         chat_completions: false,
         streaming: false,
         tool_use: false,
+        tool_choice: false,
         embeddings: false,
         vision: false,
         batch: false,
@@ -10375,6 +11161,7 @@ pub const MODELS_BLACK_FOREST_LABS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -10388,6 +11175,7 @@ pub const MODELS_BLACK_FOREST_LABS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -10401,6 +11189,7 @@ pub const MODELS_BLACK_FOREST_LABS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -10414,6 +11203,7 @@ pub const MODELS_BLACK_FOREST_LABS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -10427,6 +11217,7 @@ pub const MODELS_BLACK_FOREST_LABS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -10440,6 +11231,7 @@ pub const MODELS_BLACK_FOREST_LABS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -10453,6 +11245,7 @@ pub const MODELS_BLACK_FOREST_LABS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -10466,6 +11259,7 @@ pub const MODELS_BLACK_FOREST_LABS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -10486,6 +11280,7 @@ pub const PROVIDER_CEREBRAS: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: false,
         vision: false,
         batch: false,
@@ -10501,6 +11296,7 @@ pub const MODELS_CEREBRAS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -10514,6 +11310,7 @@ pub const MODELS_CEREBRAS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -10527,6 +11324,7 @@ pub const MODELS_CEREBRAS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -10540,6 +11338,7 @@ pub const MODELS_CEREBRAS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -10553,6 +11352,7 @@ pub const MODELS_CEREBRAS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -10566,6 +11366,7 @@ pub const MODELS_CEREBRAS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -10579,6 +11380,7 @@ pub const MODELS_CEREBRAS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -10599,6 +11401,7 @@ pub const PROVIDER_CHATGPT: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: false,
         embeddings: false,
         vision: true,
         batch: false,
@@ -10614,6 +11417,7 @@ pub const MODELS_CHATGPT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -10627,6 +11431,7 @@ pub const MODELS_CHATGPT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -10640,6 +11445,7 @@ pub const MODELS_CHATGPT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -10653,6 +11459,7 @@ pub const MODELS_CHATGPT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -10666,6 +11473,7 @@ pub const MODELS_CHATGPT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -10679,6 +11487,7 @@ pub const MODELS_CHATGPT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -10692,6 +11501,7 @@ pub const MODELS_CHATGPT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -10705,6 +11515,7 @@ pub const MODELS_CHATGPT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -10718,6 +11529,7 @@ pub const MODELS_CHATGPT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -10731,6 +11543,7 @@ pub const MODELS_CHATGPT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -10751,6 +11564,7 @@ pub const PROVIDER_CLOUDFLARE: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: false,
+        tool_choice: false,
         embeddings: false,
         vision: false,
         batch: false,
@@ -10766,6 +11580,7 @@ pub const MODELS_CLOUDFLARE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -10779,6 +11594,7 @@ pub const MODELS_CLOUDFLARE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -10792,6 +11608,7 @@ pub const MODELS_CLOUDFLARE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -10805,6 +11622,7 @@ pub const MODELS_CLOUDFLARE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -10825,6 +11643,7 @@ pub const PROVIDER_CODESTRAL: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: false,
         vision: false,
         batch: false,
@@ -10840,6 +11659,7 @@ pub const MODELS_CODESTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -10853,6 +11673,7 @@ pub const MODELS_CODESTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -10873,6 +11694,7 @@ pub const PROVIDER_COHERE: ProviderDef = ProviderDef {
         chat_completions: false,
         streaming: true,
         tool_use: false,
+        tool_choice: false,
         embeddings: true,
         vision: false,
         batch: false,
@@ -10888,6 +11710,7 @@ pub const MODELS_COHERE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -10901,6 +11724,7 @@ pub const MODELS_COHERE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -10914,6 +11738,7 @@ pub const MODELS_COHERE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -10927,6 +11752,7 @@ pub const MODELS_COHERE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -10940,6 +11766,7 @@ pub const MODELS_COHERE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -10953,6 +11780,7 @@ pub const MODELS_COHERE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -10966,6 +11794,7 @@ pub const MODELS_COHERE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -10979,6 +11808,7 @@ pub const MODELS_COHERE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -10992,6 +11822,7 @@ pub const MODELS_COHERE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -11005,6 +11836,7 @@ pub const MODELS_COHERE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -11018,6 +11850,7 @@ pub const MODELS_COHERE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -11031,6 +11864,7 @@ pub const MODELS_COHERE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -11044,6 +11878,7 @@ pub const MODELS_COHERE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -11057,6 +11892,7 @@ pub const MODELS_COHERE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -11070,6 +11906,7 @@ pub const MODELS_COHERE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -11090,6 +11927,7 @@ pub const PROVIDER_COHERE_CHAT: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: false,
         vision: false,
         batch: false,
@@ -11105,6 +11943,7 @@ pub const MODELS_COHERE_CHAT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -11118,6 +11957,7 @@ pub const MODELS_COHERE_CHAT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -11131,6 +11971,7 @@ pub const MODELS_COHERE_CHAT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -11144,6 +11985,7 @@ pub const MODELS_COHERE_CHAT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -11157,6 +11999,7 @@ pub const MODELS_COHERE_CHAT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -11170,6 +12013,7 @@ pub const MODELS_COHERE_CHAT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -11183,6 +12027,7 @@ pub const MODELS_COHERE_CHAT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -11203,6 +12048,7 @@ pub const PROVIDER_CRUSOE: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: false,
         vision: true,
         batch: false,
@@ -11218,6 +12064,7 @@ pub const MODELS_CRUSOE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -11231,6 +12078,7 @@ pub const MODELS_CRUSOE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -11244,6 +12092,7 @@ pub const MODELS_CRUSOE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -11257,6 +12106,7 @@ pub const MODELS_CRUSOE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -11270,6 +12120,7 @@ pub const MODELS_CRUSOE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -11283,6 +12134,7 @@ pub const MODELS_CRUSOE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -11296,6 +12148,7 @@ pub const MODELS_CRUSOE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -11316,6 +12169,7 @@ pub const PROVIDER_DASHSCOPE: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: false,
         vision: true,
         batch: false,
@@ -11331,6 +12185,7 @@ pub const MODELS_DASHSCOPE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -11344,6 +12199,7 @@ pub const MODELS_DASHSCOPE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -11357,6 +12213,7 @@ pub const MODELS_DASHSCOPE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -11370,6 +12227,7 @@ pub const MODELS_DASHSCOPE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -11383,6 +12241,7 @@ pub const MODELS_DASHSCOPE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -11396,6 +12255,7 @@ pub const MODELS_DASHSCOPE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -11409,6 +12269,7 @@ pub const MODELS_DASHSCOPE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -11422,6 +12283,7 @@ pub const MODELS_DASHSCOPE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -11435,6 +12297,7 @@ pub const MODELS_DASHSCOPE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -11448,6 +12311,7 @@ pub const MODELS_DASHSCOPE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -11461,6 +12325,7 @@ pub const MODELS_DASHSCOPE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -11474,6 +12339,7 @@ pub const MODELS_DASHSCOPE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -11487,6 +12353,7 @@ pub const MODELS_DASHSCOPE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -11500,6 +12367,7 @@ pub const MODELS_DASHSCOPE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -11513,6 +12381,7 @@ pub const MODELS_DASHSCOPE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -11526,6 +12395,7 @@ pub const MODELS_DASHSCOPE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -11539,6 +12409,7 @@ pub const MODELS_DASHSCOPE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -11552,6 +12423,7 @@ pub const MODELS_DASHSCOPE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -11565,6 +12437,7 @@ pub const MODELS_DASHSCOPE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -11578,6 +12451,7 @@ pub const MODELS_DASHSCOPE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -11591,6 +12465,7 @@ pub const MODELS_DASHSCOPE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -11604,6 +12479,7 @@ pub const MODELS_DASHSCOPE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -11617,6 +12493,7 @@ pub const MODELS_DASHSCOPE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -11630,6 +12507,7 @@ pub const MODELS_DASHSCOPE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -11643,6 +12521,7 @@ pub const MODELS_DASHSCOPE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -11656,6 +12535,7 @@ pub const MODELS_DASHSCOPE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -11669,6 +12549,7 @@ pub const MODELS_DASHSCOPE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -11682,6 +12563,7 @@ pub const MODELS_DASHSCOPE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -11695,6 +12577,7 @@ pub const MODELS_DASHSCOPE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -11708,6 +12591,7 @@ pub const MODELS_DASHSCOPE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -11721,6 +12605,7 @@ pub const MODELS_DASHSCOPE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -11734,6 +12619,7 @@ pub const MODELS_DASHSCOPE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -11747,6 +12633,7 @@ pub const MODELS_DASHSCOPE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -11760,6 +12647,7 @@ pub const MODELS_DASHSCOPE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -11780,6 +12668,7 @@ pub const PROVIDER_DATABRICKS: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: true,
         vision: false,
         batch: false,
@@ -11795,6 +12684,7 @@ pub const MODELS_DATABRICKS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -11808,6 +12698,7 @@ pub const MODELS_DATABRICKS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -11821,6 +12712,7 @@ pub const MODELS_DATABRICKS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -11834,6 +12726,7 @@ pub const MODELS_DATABRICKS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -11847,6 +12740,7 @@ pub const MODELS_DATABRICKS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -11860,6 +12754,7 @@ pub const MODELS_DATABRICKS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -11873,6 +12768,7 @@ pub const MODELS_DATABRICKS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -11886,6 +12782,7 @@ pub const MODELS_DATABRICKS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -11899,6 +12796,7 @@ pub const MODELS_DATABRICKS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -11912,6 +12810,7 @@ pub const MODELS_DATABRICKS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -11925,6 +12824,7 @@ pub const MODELS_DATABRICKS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -11938,6 +12838,7 @@ pub const MODELS_DATABRICKS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -11951,6 +12852,7 @@ pub const MODELS_DATABRICKS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -11964,6 +12866,7 @@ pub const MODELS_DATABRICKS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -11977,6 +12880,7 @@ pub const MODELS_DATABRICKS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -11990,6 +12894,7 @@ pub const MODELS_DATABRICKS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12003,6 +12908,7 @@ pub const MODELS_DATABRICKS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12016,6 +12922,7 @@ pub const MODELS_DATABRICKS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12029,6 +12936,7 @@ pub const MODELS_DATABRICKS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12042,6 +12950,7 @@ pub const MODELS_DATABRICKS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -12055,6 +12964,7 @@ pub const MODELS_DATABRICKS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -12068,6 +12978,7 @@ pub const MODELS_DATABRICKS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -12081,6 +12992,7 @@ pub const MODELS_DATABRICKS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12094,6 +13006,7 @@ pub const MODELS_DATABRICKS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -12107,6 +13020,7 @@ pub const MODELS_DATABRICKS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -12120,6 +13034,7 @@ pub const MODELS_DATABRICKS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -12133,6 +13048,7 @@ pub const MODELS_DATABRICKS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -12146,6 +13062,7 @@ pub const MODELS_DATABRICKS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -12166,6 +13083,7 @@ pub const PROVIDER_DATAFORSEO: ProviderDef = ProviderDef {
         chat_completions: false,
         streaming: false,
         tool_use: false,
+        tool_choice: false,
         embeddings: false,
         vision: false,
         batch: false,
@@ -12180,6 +13098,7 @@ pub const MODELS_DATAFORSEO: &[ModelDef] = &[ModelDef {
     capabilities: ModelCapabilities {
         streaming: false,
         tool_use: false,
+        tool_choice: false,
         vision: false,
         extended_thinking: false,
     },
@@ -12199,6 +13118,7 @@ pub const PROVIDER_DEEPGRAM: ProviderDef = ProviderDef {
         chat_completions: false,
         streaming: false,
         tool_use: false,
+        tool_choice: false,
         embeddings: false,
         vision: false,
         batch: false,
@@ -12214,6 +13134,7 @@ pub const MODELS_DEEPGRAM: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12227,6 +13148,7 @@ pub const MODELS_DEEPGRAM: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12240,6 +13162,7 @@ pub const MODELS_DEEPGRAM: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12253,6 +13176,7 @@ pub const MODELS_DEEPGRAM: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12266,6 +13190,7 @@ pub const MODELS_DEEPGRAM: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12279,6 +13204,7 @@ pub const MODELS_DEEPGRAM: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12292,6 +13218,7 @@ pub const MODELS_DEEPGRAM: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12305,6 +13232,7 @@ pub const MODELS_DEEPGRAM: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12318,6 +13246,7 @@ pub const MODELS_DEEPGRAM: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12331,6 +13260,7 @@ pub const MODELS_DEEPGRAM: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12344,6 +13274,7 @@ pub const MODELS_DEEPGRAM: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12357,6 +13288,7 @@ pub const MODELS_DEEPGRAM: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12370,6 +13302,7 @@ pub const MODELS_DEEPGRAM: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12383,6 +13316,7 @@ pub const MODELS_DEEPGRAM: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12396,6 +13330,7 @@ pub const MODELS_DEEPGRAM: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12409,6 +13344,7 @@ pub const MODELS_DEEPGRAM: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12422,6 +13358,7 @@ pub const MODELS_DEEPGRAM: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12435,6 +13372,7 @@ pub const MODELS_DEEPGRAM: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12448,6 +13386,7 @@ pub const MODELS_DEEPGRAM: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12461,6 +13400,7 @@ pub const MODELS_DEEPGRAM: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12474,6 +13414,7 @@ pub const MODELS_DEEPGRAM: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12487,6 +13428,7 @@ pub const MODELS_DEEPGRAM: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12500,6 +13442,7 @@ pub const MODELS_DEEPGRAM: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12513,6 +13456,7 @@ pub const MODELS_DEEPGRAM: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12526,6 +13470,7 @@ pub const MODELS_DEEPGRAM: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12539,6 +13484,7 @@ pub const MODELS_DEEPGRAM: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12552,6 +13498,7 @@ pub const MODELS_DEEPGRAM: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12565,6 +13512,7 @@ pub const MODELS_DEEPGRAM: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12578,6 +13526,7 @@ pub const MODELS_DEEPGRAM: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12591,6 +13540,7 @@ pub const MODELS_DEEPGRAM: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12604,6 +13554,7 @@ pub const MODELS_DEEPGRAM: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12617,6 +13568,7 @@ pub const MODELS_DEEPGRAM: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12630,6 +13582,7 @@ pub const MODELS_DEEPGRAM: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12643,6 +13596,7 @@ pub const MODELS_DEEPGRAM: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12656,6 +13610,7 @@ pub const MODELS_DEEPGRAM: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12669,6 +13624,7 @@ pub const MODELS_DEEPGRAM: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12689,6 +13645,7 @@ pub const PROVIDER_DEEPINFRA: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: false,
         vision: true,
         batch: false,
@@ -12704,6 +13661,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -12717,6 +13675,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -12730,6 +13689,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12743,6 +13703,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -12756,6 +13717,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -12769,6 +13731,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12782,6 +13745,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -12795,6 +13759,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -12808,6 +13773,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -12821,6 +13787,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -12834,6 +13801,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -12847,6 +13815,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -12860,6 +13829,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -12873,6 +13843,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -12886,6 +13857,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -12899,6 +13871,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -12912,6 +13885,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -12925,6 +13899,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12938,6 +13913,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12951,6 +13927,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12964,6 +13941,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -12977,6 +13955,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -12990,6 +13969,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -13003,6 +13983,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -13016,6 +13997,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -13029,6 +14011,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -13042,6 +14025,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -13055,6 +14039,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -13068,6 +14053,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -13081,6 +14067,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -13094,6 +14081,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -13107,6 +14095,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -13120,6 +14109,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -13133,6 +14123,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -13146,6 +14137,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -13159,6 +14151,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -13172,6 +14165,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -13185,6 +14179,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -13198,6 +14193,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -13211,6 +14207,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -13224,6 +14221,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -13237,6 +14235,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -13250,6 +14249,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -13263,6 +14263,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -13276,6 +14277,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -13289,6 +14291,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -13302,6 +14305,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -13315,6 +14319,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -13328,6 +14333,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -13341,6 +14347,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -13354,6 +14361,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -13367,6 +14375,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -13380,6 +14389,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -13393,6 +14403,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -13406,6 +14417,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -13419,6 +14431,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -13432,6 +14445,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -13445,6 +14459,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -13458,6 +14473,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -13471,6 +14487,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -13484,6 +14501,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -13497,6 +14515,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -13510,6 +14529,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -13523,6 +14543,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -13536,6 +14557,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -13549,6 +14571,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -13562,6 +14585,7 @@ pub const MODELS_DEEPINFRA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -13582,6 +14606,7 @@ pub const PROVIDER_DEEPSEEK: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: false,
         vision: false,
         batch: false,
@@ -13597,6 +14622,7 @@ pub const MODELS_DEEPSEEK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -13610,6 +14636,7 @@ pub const MODELS_DEEPSEEK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -13623,6 +14650,7 @@ pub const MODELS_DEEPSEEK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -13636,6 +14664,7 @@ pub const MODELS_DEEPSEEK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -13649,6 +14678,7 @@ pub const MODELS_DEEPSEEK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -13662,6 +14692,7 @@ pub const MODELS_DEEPSEEK: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -13682,6 +14713,7 @@ pub const PROVIDER_DUCKDUCKGO: ProviderDef = ProviderDef {
         chat_completions: false,
         streaming: false,
         tool_use: false,
+        tool_choice: false,
         embeddings: false,
         vision: false,
         batch: false,
@@ -13696,6 +14728,7 @@ pub const MODELS_DUCKDUCKGO: &[ModelDef] = &[ModelDef {
     capabilities: ModelCapabilities {
         streaming: false,
         tool_use: false,
+        tool_choice: false,
         vision: false,
         extended_thinking: false,
     },
@@ -13715,6 +14748,7 @@ pub const PROVIDER_ELEVENLABS: ProviderDef = ProviderDef {
         chat_completions: false,
         streaming: false,
         tool_use: false,
+        tool_choice: false,
         embeddings: false,
         vision: false,
         batch: false,
@@ -13730,6 +14764,7 @@ pub const MODELS_ELEVENLABS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -13743,6 +14778,7 @@ pub const MODELS_ELEVENLABS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -13756,6 +14792,7 @@ pub const MODELS_ELEVENLABS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -13769,6 +14806,7 @@ pub const MODELS_ELEVENLABS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -13789,6 +14827,7 @@ pub const PROVIDER_EXA_AI: ProviderDef = ProviderDef {
         chat_completions: false,
         streaming: false,
         tool_use: false,
+        tool_choice: false,
         embeddings: false,
         vision: false,
         batch: false,
@@ -13803,6 +14842,7 @@ pub const MODELS_EXA_AI: &[ModelDef] = &[ModelDef {
     capabilities: ModelCapabilities {
         streaming: false,
         tool_use: false,
+        tool_choice: false,
         vision: false,
         extended_thinking: false,
     },
@@ -13822,6 +14862,7 @@ pub const PROVIDER_FAL_AI: ProviderDef = ProviderDef {
         chat_completions: false,
         streaming: false,
         tool_use: false,
+        tool_choice: false,
         embeddings: false,
         vision: false,
         batch: false,
@@ -13837,6 +14878,7 @@ pub const MODELS_FAL_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -13850,6 +14892,7 @@ pub const MODELS_FAL_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -13863,6 +14906,7 @@ pub const MODELS_FAL_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -13876,6 +14920,7 @@ pub const MODELS_FAL_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -13889,6 +14934,7 @@ pub const MODELS_FAL_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -13902,6 +14948,7 @@ pub const MODELS_FAL_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -13915,6 +14962,7 @@ pub const MODELS_FAL_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -13928,6 +14976,7 @@ pub const MODELS_FAL_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -13941,6 +14990,7 @@ pub const MODELS_FAL_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -13954,6 +15004,7 @@ pub const MODELS_FAL_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -13967,6 +15018,7 @@ pub const MODELS_FAL_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -13980,6 +15032,7 @@ pub const MODELS_FAL_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -13993,6 +15046,7 @@ pub const MODELS_FAL_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14006,6 +15060,7 @@ pub const MODELS_FAL_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14026,6 +15081,7 @@ pub const PROVIDER_FEATHERLESS_AI: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: false,
+        tool_choice: false,
         embeddings: false,
         vision: false,
         batch: false,
@@ -14041,6 +15097,7 @@ pub const MODELS_FEATHERLESS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14054,6 +15111,7 @@ pub const MODELS_FEATHERLESS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14074,6 +15132,7 @@ pub const PROVIDER_FIRECRAWL: ProviderDef = ProviderDef {
         chat_completions: false,
         streaming: false,
         tool_use: false,
+        tool_choice: false,
         embeddings: false,
         vision: false,
         batch: false,
@@ -14088,6 +15147,7 @@ pub const MODELS_FIRECRAWL: &[ModelDef] = &[ModelDef {
     capabilities: ModelCapabilities {
         streaming: false,
         tool_use: false,
+        tool_choice: false,
         vision: false,
         extended_thinking: false,
     },
@@ -14107,6 +15167,7 @@ pub const PROVIDER_FIREWORKS_AI: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: true,
         vision: true,
         batch: false,
@@ -14122,6 +15183,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14135,6 +15197,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14148,6 +15211,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14161,6 +15225,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14174,6 +15239,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14187,6 +15253,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14200,6 +15267,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14213,6 +15281,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14226,6 +15295,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14239,6 +15309,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14252,6 +15323,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14265,6 +15337,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14278,6 +15351,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14291,6 +15365,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14304,6 +15379,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14317,6 +15393,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14330,6 +15407,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14343,6 +15421,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14356,6 +15435,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14369,6 +15449,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14382,6 +15463,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14395,6 +15477,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14408,6 +15491,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14421,6 +15505,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14434,6 +15519,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14447,6 +15533,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14460,6 +15547,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14473,6 +15561,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14486,6 +15575,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14499,6 +15589,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14512,6 +15603,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14525,6 +15617,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14538,6 +15631,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14551,6 +15645,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14564,6 +15659,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14577,6 +15673,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14590,6 +15687,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14603,6 +15701,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14616,6 +15715,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14629,6 +15729,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14642,6 +15743,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14655,6 +15757,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14668,6 +15771,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14681,6 +15785,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14694,6 +15799,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14707,6 +15813,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14720,6 +15827,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14733,6 +15841,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14746,6 +15855,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -14759,6 +15869,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -14772,6 +15883,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -14785,6 +15897,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14798,6 +15911,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14811,6 +15925,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14824,6 +15939,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14837,6 +15953,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14850,6 +15967,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14863,6 +15981,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14876,6 +15995,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14889,6 +16009,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14902,6 +16023,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -14915,6 +16037,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14928,6 +16051,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14941,6 +16065,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14954,6 +16079,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14967,6 +16093,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14980,6 +16107,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -14993,6 +16121,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15006,6 +16135,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15019,6 +16149,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15032,6 +16163,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15045,6 +16177,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15058,6 +16191,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15071,6 +16205,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15084,6 +16219,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15097,6 +16233,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15110,6 +16247,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15123,6 +16261,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -15136,6 +16275,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -15149,6 +16289,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -15162,6 +16303,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -15175,6 +16317,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -15188,6 +16331,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -15201,6 +16345,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -15214,6 +16359,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -15227,6 +16373,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15240,6 +16387,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15253,6 +16401,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15266,6 +16415,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15279,6 +16429,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15292,6 +16443,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15305,6 +16457,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15318,6 +16471,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15331,6 +16485,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15344,6 +16499,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15357,6 +16513,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -15370,6 +16527,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -15383,6 +16541,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -15396,6 +16555,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -15409,6 +16569,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15422,6 +16583,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15435,6 +16597,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15448,6 +16611,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15461,6 +16625,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15474,6 +16639,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15487,6 +16653,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15500,6 +16667,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15513,6 +16681,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15526,6 +16695,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15539,6 +16709,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15552,6 +16723,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15565,6 +16737,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15578,6 +16751,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -15591,6 +16765,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15604,6 +16779,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15617,6 +16793,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15630,6 +16807,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15643,6 +16821,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15656,6 +16835,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -15669,6 +16849,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15682,6 +16863,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15695,6 +16877,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15708,6 +16891,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15721,6 +16905,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -15734,6 +16919,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15747,6 +16933,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15760,6 +16947,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15773,6 +16961,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15786,6 +16975,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15799,6 +16989,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15812,6 +17003,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15825,6 +17017,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -15838,6 +17031,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15851,6 +17045,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15864,6 +17059,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15877,6 +17073,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15890,6 +17087,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15903,6 +17101,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15916,6 +17115,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15929,6 +17129,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15942,6 +17143,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15955,6 +17157,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15968,6 +17171,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15981,6 +17185,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -15994,6 +17199,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16007,6 +17213,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16020,6 +17227,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -16033,6 +17241,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16046,6 +17255,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16059,6 +17269,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16072,6 +17283,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16085,6 +17297,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16098,6 +17311,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16111,6 +17325,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16124,6 +17339,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16137,6 +17353,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16150,6 +17367,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16163,6 +17381,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16176,6 +17395,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16189,6 +17409,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16202,6 +17423,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16215,6 +17437,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16228,6 +17451,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16241,6 +17465,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16254,6 +17479,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16267,6 +17493,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16280,6 +17507,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16293,6 +17521,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16306,6 +17535,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16319,6 +17549,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16332,6 +17563,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16345,6 +17577,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16358,6 +17591,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16371,6 +17605,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16384,6 +17619,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16397,6 +17633,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16410,6 +17647,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16423,6 +17661,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16436,6 +17675,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16449,6 +17689,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16462,6 +17703,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16475,6 +17717,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16488,6 +17731,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16501,6 +17745,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16514,6 +17759,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16527,6 +17773,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16540,6 +17787,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16553,6 +17801,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16566,6 +17815,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16579,6 +17829,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16592,6 +17843,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16605,6 +17857,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16618,6 +17871,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16631,6 +17885,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16644,6 +17899,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16657,6 +17913,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16670,6 +17927,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16683,6 +17941,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16696,6 +17955,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16709,6 +17969,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16722,6 +17983,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16735,6 +17997,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16748,6 +18011,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16761,6 +18025,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16774,6 +18039,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16787,6 +18053,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16800,6 +18067,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16813,6 +18081,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16826,6 +18095,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16839,6 +18109,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16852,6 +18123,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16865,6 +18137,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16878,6 +18151,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16891,6 +18165,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16904,6 +18179,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16917,6 +18193,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16930,6 +18207,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16943,6 +18221,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16956,6 +18235,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16969,6 +18249,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16982,6 +18263,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -16995,6 +18277,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17008,6 +18291,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -17021,6 +18305,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17034,6 +18319,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17047,6 +18333,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -17060,6 +18347,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17073,6 +18361,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -17086,6 +18375,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17099,6 +18389,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17112,6 +18403,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17125,6 +18417,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17138,6 +18431,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17151,6 +18445,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17164,6 +18459,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17177,6 +18473,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17190,6 +18487,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17203,6 +18501,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17216,6 +18515,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17229,6 +18529,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17242,6 +18543,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17255,6 +18557,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17268,6 +18571,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17281,6 +18585,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17294,6 +18599,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17307,6 +18613,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17320,6 +18627,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17333,6 +18641,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17346,6 +18655,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17359,6 +18669,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17372,6 +18683,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17385,6 +18697,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17398,6 +18711,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17411,6 +18725,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17424,6 +18739,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17437,6 +18753,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17450,6 +18767,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17463,6 +18781,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17476,6 +18795,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17489,6 +18809,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17502,6 +18823,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17515,6 +18837,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17528,6 +18851,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17541,6 +18865,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17554,6 +18879,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17567,6 +18893,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17580,6 +18907,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17593,6 +18921,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -17606,6 +18935,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -17619,6 +18949,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -17632,6 +18963,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -17652,6 +18984,7 @@ pub const PROVIDER_FIREWORKS_AI_EMBEDDING_MODELS: ProviderDef = ProviderDef {
         chat_completions: false,
         streaming: false,
         tool_use: false,
+        tool_choice: false,
         embeddings: true,
         vision: false,
         batch: false,
@@ -17667,6 +19000,7 @@ pub const MODELS_FIREWORKS_AI_EMBEDDING_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17680,6 +19014,7 @@ pub const MODELS_FIREWORKS_AI_EMBEDDING_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17693,6 +19028,7 @@ pub const MODELS_FIREWORKS_AI_EMBEDDING_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17706,6 +19042,7 @@ pub const MODELS_FIREWORKS_AI_EMBEDDING_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17719,6 +19056,7 @@ pub const MODELS_FIREWORKS_AI_EMBEDDING_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17732,6 +19070,7 @@ pub const MODELS_FIREWORKS_AI_EMBEDDING_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17745,6 +19084,7 @@ pub const MODELS_FIREWORKS_AI_EMBEDDING_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17765,6 +19105,7 @@ pub const PROVIDER_FRIENDLIAI: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: false,
         vision: false,
         batch: false,
@@ -17780,6 +19121,7 @@ pub const MODELS_FRIENDLIAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -17793,6 +19135,7 @@ pub const MODELS_FRIENDLIAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -17813,6 +19156,7 @@ pub const PROVIDER_GEMINI: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: true,
         vision: true,
         batch: false,
@@ -17828,6 +19172,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -17841,6 +19186,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -17854,6 +19200,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -17867,6 +19214,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -17880,6 +19228,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -17893,6 +19242,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -17906,6 +19256,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -17919,6 +19270,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -17932,6 +19284,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -17945,6 +19298,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -17958,6 +19312,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -17971,6 +19326,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -17984,6 +19340,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -17997,6 +19354,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -18010,6 +19368,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -18023,6 +19382,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -18036,6 +19396,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -18049,6 +19410,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -18062,6 +19424,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -18075,6 +19438,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -18088,6 +19452,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -18101,6 +19466,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -18114,6 +19480,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -18127,6 +19494,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -18140,6 +19508,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -18153,6 +19522,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -18166,6 +19536,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -18179,6 +19550,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -18192,6 +19564,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -18205,6 +19578,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -18218,6 +19592,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -18231,6 +19606,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -18244,6 +19620,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -18257,6 +19634,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -18270,6 +19648,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -18283,6 +19662,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -18296,6 +19676,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -18309,6 +19690,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -18322,6 +19704,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -18335,6 +19718,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -18348,6 +19732,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -18361,6 +19746,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -18374,6 +19760,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -18387,6 +19774,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -18400,6 +19788,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -18413,6 +19802,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -18426,6 +19816,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -18439,6 +19830,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -18452,6 +19844,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -18465,6 +19858,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -18478,6 +19872,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -18491,6 +19886,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -18504,6 +19900,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -18517,6 +19914,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -18530,6 +19928,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -18543,6 +19942,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -18556,6 +19956,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -18569,6 +19970,7 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -18589,6 +19991,7 @@ pub const PROVIDER_GIGACHAT: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: false,
         embeddings: true,
         vision: true,
         batch: false,
@@ -18604,6 +20007,7 @@ pub const MODELS_GIGACHAT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -18617,6 +20021,7 @@ pub const MODELS_GIGACHAT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -18630,6 +20035,7 @@ pub const MODELS_GIGACHAT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -18643,6 +20049,7 @@ pub const MODELS_GIGACHAT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -18656,6 +20063,7 @@ pub const MODELS_GIGACHAT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -18669,6 +20077,7 @@ pub const MODELS_GIGACHAT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -18689,6 +20098,7 @@ pub const PROVIDER_GITHUB_COPILOT: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: false,
         embeddings: true,
         vision: true,
         batch: false,
@@ -18704,6 +20114,7 @@ pub const MODELS_GITHUB_COPILOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -18717,6 +20128,7 @@ pub const MODELS_GITHUB_COPILOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -18730,6 +20142,7 @@ pub const MODELS_GITHUB_COPILOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -18743,6 +20156,7 @@ pub const MODELS_GITHUB_COPILOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -18756,6 +20170,7 @@ pub const MODELS_GITHUB_COPILOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -18769,6 +20184,7 @@ pub const MODELS_GITHUB_COPILOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -18782,6 +20198,7 @@ pub const MODELS_GITHUB_COPILOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -18795,6 +20212,7 @@ pub const MODELS_GITHUB_COPILOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -18808,6 +20226,7 @@ pub const MODELS_GITHUB_COPILOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -18821,6 +20240,7 @@ pub const MODELS_GITHUB_COPILOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -18834,6 +20254,7 @@ pub const MODELS_GITHUB_COPILOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -18847,6 +20268,7 @@ pub const MODELS_GITHUB_COPILOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -18860,6 +20282,7 @@ pub const MODELS_GITHUB_COPILOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -18873,6 +20296,7 @@ pub const MODELS_GITHUB_COPILOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -18886,6 +20310,7 @@ pub const MODELS_GITHUB_COPILOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -18899,6 +20324,7 @@ pub const MODELS_GITHUB_COPILOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -18912,6 +20338,7 @@ pub const MODELS_GITHUB_COPILOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -18925,6 +20352,7 @@ pub const MODELS_GITHUB_COPILOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -18938,6 +20366,7 @@ pub const MODELS_GITHUB_COPILOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -18951,6 +20380,7 @@ pub const MODELS_GITHUB_COPILOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -18964,6 +20394,7 @@ pub const MODELS_GITHUB_COPILOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -18977,6 +20408,7 @@ pub const MODELS_GITHUB_COPILOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -18990,6 +20422,7 @@ pub const MODELS_GITHUB_COPILOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -19003,6 +20436,7 @@ pub const MODELS_GITHUB_COPILOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -19016,6 +20450,7 @@ pub const MODELS_GITHUB_COPILOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -19029,6 +20464,7 @@ pub const MODELS_GITHUB_COPILOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -19042,6 +20478,7 @@ pub const MODELS_GITHUB_COPILOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -19055,6 +20492,7 @@ pub const MODELS_GITHUB_COPILOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -19068,6 +20506,7 @@ pub const MODELS_GITHUB_COPILOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -19081,6 +20520,7 @@ pub const MODELS_GITHUB_COPILOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -19094,6 +20534,7 @@ pub const MODELS_GITHUB_COPILOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -19114,6 +20555,7 @@ pub const PROVIDER_GMI: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: false,
         embeddings: false,
         vision: true,
         batch: false,
@@ -19129,6 +20571,7 @@ pub const MODELS_GMI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -19142,6 +20585,7 @@ pub const MODELS_GMI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -19155,6 +20599,7 @@ pub const MODELS_GMI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -19168,6 +20613,7 @@ pub const MODELS_GMI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -19181,6 +20627,7 @@ pub const MODELS_GMI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -19194,6 +20641,7 @@ pub const MODELS_GMI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -19207,6 +20655,7 @@ pub const MODELS_GMI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -19220,6 +20669,7 @@ pub const MODELS_GMI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -19233,6 +20683,7 @@ pub const MODELS_GMI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -19246,6 +20697,7 @@ pub const MODELS_GMI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -19259,6 +20711,7 @@ pub const MODELS_GMI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -19272,6 +20725,7 @@ pub const MODELS_GMI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -19285,6 +20739,7 @@ pub const MODELS_GMI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -19298,6 +20753,7 @@ pub const MODELS_GMI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -19311,6 +20767,7 @@ pub const MODELS_GMI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -19324,6 +20781,7 @@ pub const MODELS_GMI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -19337,6 +20795,7 @@ pub const MODELS_GMI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -19357,6 +20816,7 @@ pub const PROVIDER_GOOGLE_PSE: ProviderDef = ProviderDef {
         chat_completions: false,
         streaming: false,
         tool_use: false,
+        tool_choice: false,
         embeddings: false,
         vision: false,
         batch: false,
@@ -19371,6 +20831,7 @@ pub const MODELS_GOOGLE_PSE: &[ModelDef] = &[ModelDef {
     capabilities: ModelCapabilities {
         streaming: false,
         tool_use: false,
+        tool_choice: false,
         vision: false,
         extended_thinking: false,
     },
@@ -19390,6 +20851,7 @@ pub const PROVIDER_GRADIENT_AI: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: false,
+        tool_choice: false,
         embeddings: false,
         vision: false,
         batch: false,
@@ -19405,6 +20867,7 @@ pub const MODELS_GRADIENT_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -19418,6 +20881,7 @@ pub const MODELS_GRADIENT_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -19431,6 +20895,7 @@ pub const MODELS_GRADIENT_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -19444,6 +20909,7 @@ pub const MODELS_GRADIENT_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -19457,6 +20923,7 @@ pub const MODELS_GRADIENT_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -19470,6 +20937,7 @@ pub const MODELS_GRADIENT_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -19483,6 +20951,7 @@ pub const MODELS_GRADIENT_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -19496,6 +20965,7 @@ pub const MODELS_GRADIENT_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -19509,6 +20979,7 @@ pub const MODELS_GRADIENT_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -19522,6 +20993,7 @@ pub const MODELS_GRADIENT_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -19535,6 +21007,7 @@ pub const MODELS_GRADIENT_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -19548,6 +21021,7 @@ pub const MODELS_GRADIENT_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -19561,6 +21035,7 @@ pub const MODELS_GRADIENT_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -19581,6 +21056,7 @@ pub const PROVIDER_GROQ: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: false,
         vision: true,
         batch: false,
@@ -19596,6 +21072,7 @@ pub const MODELS_GROQ: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -19609,6 +21086,7 @@ pub const MODELS_GROQ: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -19622,6 +21100,7 @@ pub const MODELS_GROQ: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -19635,6 +21114,7 @@ pub const MODELS_GROQ: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -19648,6 +21128,7 @@ pub const MODELS_GROQ: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -19661,6 +21142,7 @@ pub const MODELS_GROQ: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -19674,6 +21156,7 @@ pub const MODELS_GROQ: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -19687,6 +21170,7 @@ pub const MODELS_GROQ: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -19700,6 +21184,7 @@ pub const MODELS_GROQ: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -19713,6 +21198,7 @@ pub const MODELS_GROQ: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -19726,6 +21212,7 @@ pub const MODELS_GROQ: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -19739,6 +21226,7 @@ pub const MODELS_GROQ: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -19752,6 +21240,7 @@ pub const MODELS_GROQ: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -19765,6 +21254,7 @@ pub const MODELS_GROQ: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -19785,6 +21275,7 @@ pub const PROVIDER_HEROKU: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: false,
         vision: false,
         batch: false,
@@ -19800,6 +21291,7 @@ pub const MODELS_HEROKU: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -19813,6 +21305,7 @@ pub const MODELS_HEROKU: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -19826,6 +21319,7 @@ pub const MODELS_HEROKU: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -19839,6 +21333,7 @@ pub const MODELS_HEROKU: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -19859,6 +21354,7 @@ pub const PROVIDER_HYPERBOLIC: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: false,
         vision: false,
         batch: false,
@@ -19874,6 +21370,7 @@ pub const MODELS_HYPERBOLIC: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -19887,6 +21384,7 @@ pub const MODELS_HYPERBOLIC: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -19900,6 +21398,7 @@ pub const MODELS_HYPERBOLIC: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -19913,6 +21412,7 @@ pub const MODELS_HYPERBOLIC: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -19926,6 +21426,7 @@ pub const MODELS_HYPERBOLIC: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -19939,6 +21440,7 @@ pub const MODELS_HYPERBOLIC: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -19952,6 +21454,7 @@ pub const MODELS_HYPERBOLIC: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -19965,6 +21468,7 @@ pub const MODELS_HYPERBOLIC: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -19978,6 +21482,7 @@ pub const MODELS_HYPERBOLIC: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -19991,6 +21496,7 @@ pub const MODELS_HYPERBOLIC: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -20004,6 +21510,7 @@ pub const MODELS_HYPERBOLIC: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -20017,6 +21524,7 @@ pub const MODELS_HYPERBOLIC: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -20030,6 +21538,7 @@ pub const MODELS_HYPERBOLIC: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -20043,6 +21552,7 @@ pub const MODELS_HYPERBOLIC: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -20056,6 +21566,7 @@ pub const MODELS_HYPERBOLIC: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -20069,6 +21580,7 @@ pub const MODELS_HYPERBOLIC: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -20089,6 +21601,7 @@ pub const PROVIDER_INCEPTION: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: false,
         vision: false,
         batch: false,
@@ -20103,6 +21616,7 @@ pub const MODELS_INCEPTION: &[ModelDef] = &[ModelDef {
     capabilities: ModelCapabilities {
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         vision: false,
         extended_thinking: false,
     },
@@ -20122,6 +21636,7 @@ pub const PROVIDER_JINA_AI: ProviderDef = ProviderDef {
         chat_completions: false,
         streaming: false,
         tool_use: false,
+        tool_choice: false,
         embeddings: false,
         vision: false,
         batch: false,
@@ -20136,6 +21651,7 @@ pub const MODELS_JINA_AI: &[ModelDef] = &[ModelDef {
     capabilities: ModelCapabilities {
         streaming: false,
         tool_use: false,
+        tool_choice: false,
         vision: false,
         extended_thinking: false,
     },
@@ -20155,6 +21671,7 @@ pub const PROVIDER_LAMBDA_AI: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: false,
         vision: true,
         batch: false,
@@ -20170,6 +21687,7 @@ pub const MODELS_LAMBDA_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -20183,6 +21701,7 @@ pub const MODELS_LAMBDA_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -20196,6 +21715,7 @@ pub const MODELS_LAMBDA_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -20209,6 +21729,7 @@ pub const MODELS_LAMBDA_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -20222,6 +21743,7 @@ pub const MODELS_LAMBDA_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -20235,6 +21757,7 @@ pub const MODELS_LAMBDA_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -20248,6 +21771,7 @@ pub const MODELS_LAMBDA_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -20261,6 +21785,7 @@ pub const MODELS_LAMBDA_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -20274,6 +21799,7 @@ pub const MODELS_LAMBDA_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -20287,6 +21813,7 @@ pub const MODELS_LAMBDA_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -20300,6 +21827,7 @@ pub const MODELS_LAMBDA_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -20313,6 +21841,7 @@ pub const MODELS_LAMBDA_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -20326,6 +21855,7 @@ pub const MODELS_LAMBDA_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -20339,6 +21869,7 @@ pub const MODELS_LAMBDA_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -20352,6 +21883,7 @@ pub const MODELS_LAMBDA_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -20365,6 +21897,7 @@ pub const MODELS_LAMBDA_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -20378,6 +21911,7 @@ pub const MODELS_LAMBDA_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -20391,6 +21925,7 @@ pub const MODELS_LAMBDA_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -20404,6 +21939,7 @@ pub const MODELS_LAMBDA_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -20417,6 +21953,7 @@ pub const MODELS_LAMBDA_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -20437,6 +21974,7 @@ pub const PROVIDER_LEMONADE: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: false,
         vision: false,
         batch: false,
@@ -20452,6 +21990,7 @@ pub const MODELS_LEMONADE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -20465,6 +22004,7 @@ pub const MODELS_LEMONADE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -20478,6 +22018,7 @@ pub const MODELS_LEMONADE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -20491,6 +22032,7 @@ pub const MODELS_LEMONADE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -20504,6 +22046,7 @@ pub const MODELS_LEMONADE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -20524,6 +22067,7 @@ pub const PROVIDER_LINKUP: ProviderDef = ProviderDef {
         chat_completions: false,
         streaming: false,
         tool_use: false,
+        tool_choice: false,
         embeddings: false,
         vision: false,
         batch: false,
@@ -20539,6 +22083,7 @@ pub const MODELS_LINKUP: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -20552,6 +22097,7 @@ pub const MODELS_LINKUP: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -20572,6 +22118,7 @@ pub const PROVIDER_LLAMAGATE: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: false,
         embeddings: true,
         vision: true,
         batch: false,
@@ -20587,6 +22134,7 @@ pub const MODELS_LLAMAGATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -20600,6 +22148,7 @@ pub const MODELS_LLAMAGATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -20613,6 +22162,7 @@ pub const MODELS_LLAMAGATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -20626,6 +22176,7 @@ pub const MODELS_LLAMAGATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -20639,6 +22190,7 @@ pub const MODELS_LLAMAGATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -20652,6 +22204,7 @@ pub const MODELS_LLAMAGATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -20665,6 +22218,7 @@ pub const MODELS_LLAMAGATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -20678,6 +22232,7 @@ pub const MODELS_LLAMAGATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -20691,6 +22246,7 @@ pub const MODELS_LLAMAGATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -20704,6 +22260,7 @@ pub const MODELS_LLAMAGATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -20717,6 +22274,7 @@ pub const MODELS_LLAMAGATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -20730,6 +22288,7 @@ pub const MODELS_LLAMAGATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -20743,6 +22302,7 @@ pub const MODELS_LLAMAGATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -20756,6 +22316,7 @@ pub const MODELS_LLAMAGATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -20769,6 +22330,7 @@ pub const MODELS_LLAMAGATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -20782,6 +22344,7 @@ pub const MODELS_LLAMAGATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -20802,6 +22365,7 @@ pub const PROVIDER_META_LLAMA: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: false,
         vision: false,
         batch: false,
@@ -20817,6 +22381,7 @@ pub const MODELS_META_LLAMA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -20830,6 +22395,7 @@ pub const MODELS_META_LLAMA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -20843,6 +22409,7 @@ pub const MODELS_META_LLAMA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -20856,6 +22423,7 @@ pub const MODELS_META_LLAMA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -20876,6 +22444,7 @@ pub const PROVIDER_MINIMAX: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: false,
         vision: true,
         batch: false,
@@ -20891,6 +22460,7 @@ pub const MODELS_MINIMAX: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -20904,6 +22474,7 @@ pub const MODELS_MINIMAX: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -20917,6 +22488,7 @@ pub const MODELS_MINIMAX: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -20930,6 +22502,7 @@ pub const MODELS_MINIMAX: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -20943,6 +22516,7 @@ pub const MODELS_MINIMAX: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -20956,6 +22530,7 @@ pub const MODELS_MINIMAX: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -20969,6 +22544,7 @@ pub const MODELS_MINIMAX: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -20982,6 +22558,7 @@ pub const MODELS_MINIMAX: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -20995,6 +22572,7 @@ pub const MODELS_MINIMAX: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -21008,6 +22586,7 @@ pub const MODELS_MINIMAX: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -21028,6 +22607,7 @@ pub const PROVIDER_MISTRAL: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: true,
         vision: true,
         batch: false,
@@ -21043,6 +22623,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -21056,6 +22637,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -21069,6 +22651,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -21082,6 +22665,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -21095,6 +22679,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -21108,6 +22693,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -21121,6 +22707,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -21134,6 +22721,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -21147,6 +22735,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -21160,6 +22749,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -21173,6 +22763,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -21186,6 +22777,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -21199,6 +22791,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -21212,6 +22805,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -21225,6 +22819,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -21238,6 +22833,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -21251,6 +22847,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -21264,6 +22861,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -21277,6 +22875,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -21290,6 +22889,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -21303,6 +22903,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -21316,6 +22917,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -21329,6 +22931,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -21342,6 +22945,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -21355,6 +22959,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -21368,6 +22973,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -21381,6 +22987,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -21394,6 +23001,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -21407,6 +23015,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -21420,6 +23029,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -21433,6 +23043,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -21446,6 +23057,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -21459,6 +23071,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -21472,6 +23085,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -21485,6 +23099,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -21498,6 +23113,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -21511,6 +23127,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -21524,6 +23141,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -21537,6 +23155,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -21550,6 +23169,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -21563,6 +23183,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -21576,6 +23197,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -21589,6 +23211,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -21602,6 +23225,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -21615,6 +23239,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -21628,6 +23253,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -21641,6 +23267,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -21654,6 +23281,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -21667,6 +23295,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -21680,6 +23309,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -21693,6 +23323,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -21706,6 +23337,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -21719,6 +23351,7 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -21739,6 +23372,7 @@ pub const PROVIDER_MOONSHOT: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: false,
         vision: true,
         batch: false,
@@ -21754,6 +23388,7 @@ pub const MODELS_MOONSHOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -21767,6 +23402,7 @@ pub const MODELS_MOONSHOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -21780,6 +23416,7 @@ pub const MODELS_MOONSHOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -21793,6 +23430,7 @@ pub const MODELS_MOONSHOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -21806,6 +23444,7 @@ pub const MODELS_MOONSHOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -21819,6 +23458,7 @@ pub const MODELS_MOONSHOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -21832,6 +23472,7 @@ pub const MODELS_MOONSHOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -21845,6 +23486,7 @@ pub const MODELS_MOONSHOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -21858,6 +23500,7 @@ pub const MODELS_MOONSHOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -21871,6 +23514,7 @@ pub const MODELS_MOONSHOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -21884,6 +23528,7 @@ pub const MODELS_MOONSHOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -21897,6 +23542,7 @@ pub const MODELS_MOONSHOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -21910,6 +23556,7 @@ pub const MODELS_MOONSHOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -21923,6 +23570,7 @@ pub const MODELS_MOONSHOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -21936,6 +23584,7 @@ pub const MODELS_MOONSHOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -21949,6 +23598,7 @@ pub const MODELS_MOONSHOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -21962,6 +23612,7 @@ pub const MODELS_MOONSHOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -21975,6 +23626,7 @@ pub const MODELS_MOONSHOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -21988,6 +23640,7 @@ pub const MODELS_MOONSHOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -22001,6 +23654,7 @@ pub const MODELS_MOONSHOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -22014,6 +23668,7 @@ pub const MODELS_MOONSHOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -22027,6 +23682,7 @@ pub const MODELS_MOONSHOT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -22047,6 +23703,7 @@ pub const PROVIDER_MORPH: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: false,
+        tool_choice: false,
         embeddings: false,
         vision: false,
         batch: false,
@@ -22062,6 +23719,7 @@ pub const MODELS_MORPH: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -22075,6 +23733,7 @@ pub const MODELS_MORPH: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -22095,6 +23754,7 @@ pub const PROVIDER_NEBIUS: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: false,
         embeddings: true,
         vision: true,
         batch: false,
@@ -22110,6 +23770,7 @@ pub const MODELS_NEBIUS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -22123,6 +23784,7 @@ pub const MODELS_NEBIUS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -22136,6 +23798,7 @@ pub const MODELS_NEBIUS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -22149,6 +23812,7 @@ pub const MODELS_NEBIUS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -22162,6 +23826,7 @@ pub const MODELS_NEBIUS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -22175,6 +23840,7 @@ pub const MODELS_NEBIUS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -22188,6 +23854,7 @@ pub const MODELS_NEBIUS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -22201,6 +23868,7 @@ pub const MODELS_NEBIUS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -22214,6 +23882,7 @@ pub const MODELS_NEBIUS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -22227,6 +23896,7 @@ pub const MODELS_NEBIUS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -22240,6 +23910,7 @@ pub const MODELS_NEBIUS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -22253,6 +23924,7 @@ pub const MODELS_NEBIUS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -22266,6 +23938,7 @@ pub const MODELS_NEBIUS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -22279,6 +23952,7 @@ pub const MODELS_NEBIUS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -22292,6 +23966,7 @@ pub const MODELS_NEBIUS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -22305,6 +23980,7 @@ pub const MODELS_NEBIUS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -22318,6 +23994,7 @@ pub const MODELS_NEBIUS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -22331,6 +24008,7 @@ pub const MODELS_NEBIUS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -22344,6 +24022,7 @@ pub const MODELS_NEBIUS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -22357,6 +24036,7 @@ pub const MODELS_NEBIUS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -22370,6 +24050,7 @@ pub const MODELS_NEBIUS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -22383,6 +24064,7 @@ pub const MODELS_NEBIUS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -22396,6 +24078,7 @@ pub const MODELS_NEBIUS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -22409,6 +24092,7 @@ pub const MODELS_NEBIUS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -22422,6 +24106,7 @@ pub const MODELS_NEBIUS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -22435,6 +24120,7 @@ pub const MODELS_NEBIUS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -22448,6 +24134,7 @@ pub const MODELS_NEBIUS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -22461,6 +24148,7 @@ pub const MODELS_NEBIUS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -22474,6 +24162,7 @@ pub const MODELS_NEBIUS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -22487,6 +24176,7 @@ pub const MODELS_NEBIUS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -22507,6 +24197,7 @@ pub const PROVIDER_NLP_CLOUD: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: false,
+        tool_choice: false,
         embeddings: false,
         vision: false,
         batch: false,
@@ -22522,6 +24213,7 @@ pub const MODELS_NLP_CLOUD: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -22535,6 +24227,7 @@ pub const MODELS_NLP_CLOUD: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -22555,6 +24248,7 @@ pub const PROVIDER_NOVITA: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: true,
         vision: true,
         batch: false,
@@ -22570,6 +24264,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -22583,6 +24278,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -22596,6 +24292,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -22609,6 +24306,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -22622,6 +24320,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -22635,6 +24334,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -22648,6 +24348,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -22661,6 +24362,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -22674,6 +24376,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -22687,6 +24390,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: true,
         },
@@ -22700,6 +24404,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -22713,6 +24418,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -22726,6 +24432,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -22739,6 +24446,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -22752,6 +24460,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -22765,6 +24474,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -22778,6 +24488,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -22791,6 +24502,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -22804,6 +24516,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -22817,6 +24530,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -22830,6 +24544,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -22843,6 +24558,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -22856,6 +24572,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -22869,6 +24586,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -22882,6 +24600,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -22895,6 +24614,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -22908,6 +24628,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -22921,6 +24642,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -22934,6 +24656,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -22947,6 +24670,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -22960,6 +24684,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -22973,6 +24698,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -22986,6 +24712,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -22999,6 +24726,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -23012,6 +24740,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -23025,6 +24754,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -23038,6 +24768,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -23051,6 +24782,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -23064,6 +24796,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -23077,6 +24810,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -23090,6 +24824,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -23103,6 +24838,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -23116,6 +24852,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -23129,6 +24866,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -23142,6 +24880,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -23155,6 +24894,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -23168,6 +24908,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -23181,6 +24922,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -23194,6 +24936,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -23207,6 +24950,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -23220,6 +24964,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -23233,6 +24978,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -23246,6 +24992,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -23259,6 +25006,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -23272,6 +25020,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -23285,6 +25034,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -23298,6 +25048,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -23311,6 +25062,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -23324,6 +25076,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -23337,6 +25090,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -23350,6 +25104,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -23363,6 +25118,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -23376,6 +25132,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -23389,6 +25146,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -23402,6 +25160,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -23415,6 +25174,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -23428,6 +25188,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -23441,6 +25202,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -23454,6 +25216,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -23467,6 +25230,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: true,
         },
@@ -23480,6 +25244,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -23493,6 +25258,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -23506,6 +25272,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -23519,6 +25286,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -23532,6 +25300,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -23545,6 +25314,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -23558,6 +25328,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -23571,6 +25342,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -23584,6 +25356,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -23597,6 +25370,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -23610,6 +25384,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -23623,6 +25398,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -23636,6 +25412,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -23649,6 +25426,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -23662,6 +25440,7 @@ pub const MODELS_NOVITA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -23682,6 +25461,7 @@ pub const PROVIDER_NSCALE: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: false,
+        tool_choice: false,
         embeddings: false,
         vision: false,
         batch: false,
@@ -23697,6 +25477,7 @@ pub const MODELS_NSCALE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -23710,6 +25491,7 @@ pub const MODELS_NSCALE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -23723,6 +25505,7 @@ pub const MODELS_NSCALE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -23736,6 +25519,7 @@ pub const MODELS_NSCALE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -23749,6 +25533,7 @@ pub const MODELS_NSCALE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -23762,6 +25547,7 @@ pub const MODELS_NSCALE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -23775,6 +25561,7 @@ pub const MODELS_NSCALE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -23788,6 +25575,7 @@ pub const MODELS_NSCALE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -23801,6 +25589,7 @@ pub const MODELS_NSCALE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -23814,6 +25603,7 @@ pub const MODELS_NSCALE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -23827,6 +25617,7 @@ pub const MODELS_NSCALE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -23840,6 +25631,7 @@ pub const MODELS_NSCALE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -23853,6 +25645,7 @@ pub const MODELS_NSCALE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -23866,6 +25659,7 @@ pub const MODELS_NSCALE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -23879,6 +25673,7 @@ pub const MODELS_NSCALE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -23892,6 +25687,7 @@ pub const MODELS_NSCALE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -23912,6 +25708,7 @@ pub const PROVIDER_NVIDIA_NIM: ProviderDef = ProviderDef {
         chat_completions: false,
         streaming: false,
         tool_use: false,
+        tool_choice: false,
         embeddings: false,
         vision: false,
         batch: false,
@@ -23927,6 +25724,7 @@ pub const MODELS_NVIDIA_NIM: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -23940,6 +25738,7 @@ pub const MODELS_NVIDIA_NIM: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -23953,6 +25752,7 @@ pub const MODELS_NVIDIA_NIM: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -23973,6 +25773,7 @@ pub const PROVIDER_OCI: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: false,
         embeddings: true,
         vision: true,
         batch: false,
@@ -23988,6 +25789,7 @@ pub const MODELS_OCI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24001,6 +25803,7 @@ pub const MODELS_OCI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24014,6 +25817,7 @@ pub const MODELS_OCI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24027,6 +25831,7 @@ pub const MODELS_OCI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24040,6 +25845,7 @@ pub const MODELS_OCI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -24053,6 +25859,7 @@ pub const MODELS_OCI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -24066,6 +25873,7 @@ pub const MODELS_OCI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24079,6 +25887,7 @@ pub const MODELS_OCI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24092,6 +25901,7 @@ pub const MODELS_OCI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24105,6 +25915,7 @@ pub const MODELS_OCI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24118,6 +25929,7 @@ pub const MODELS_OCI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24131,6 +25943,7 @@ pub const MODELS_OCI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24144,6 +25957,7 @@ pub const MODELS_OCI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24157,6 +25971,7 @@ pub const MODELS_OCI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24170,6 +25985,7 @@ pub const MODELS_OCI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -24183,6 +25999,7 @@ pub const MODELS_OCI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24196,6 +26013,7 @@ pub const MODELS_OCI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24209,6 +26027,7 @@ pub const MODELS_OCI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24222,6 +26041,7 @@ pub const MODELS_OCI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24235,6 +26055,7 @@ pub const MODELS_OCI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -24248,6 +26069,7 @@ pub const MODELS_OCI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -24261,6 +26083,7 @@ pub const MODELS_OCI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -24274,6 +26097,7 @@ pub const MODELS_OCI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24287,6 +26111,7 @@ pub const MODELS_OCI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24300,6 +26125,7 @@ pub const MODELS_OCI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24313,6 +26139,7 @@ pub const MODELS_OCI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -24326,6 +26153,7 @@ pub const MODELS_OCI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -24339,6 +26167,7 @@ pub const MODELS_OCI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24352,6 +26181,7 @@ pub const MODELS_OCI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24365,6 +26195,7 @@ pub const MODELS_OCI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -24378,6 +26209,7 @@ pub const MODELS_OCI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24391,6 +26223,7 @@ pub const MODELS_OCI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: true,
         },
@@ -24404,6 +26237,7 @@ pub const MODELS_OCI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: true,
         },
@@ -24417,6 +26251,7 @@ pub const MODELS_OCI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: true,
         },
@@ -24430,6 +26265,7 @@ pub const MODELS_OCI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24443,6 +26279,7 @@ pub const MODELS_OCI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24456,6 +26293,7 @@ pub const MODELS_OCI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24469,6 +26307,7 @@ pub const MODELS_OCI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24482,6 +26321,7 @@ pub const MODELS_OCI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24495,6 +26335,7 @@ pub const MODELS_OCI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24508,6 +26349,7 @@ pub const MODELS_OCI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24521,6 +26363,7 @@ pub const MODELS_OCI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24534,6 +26377,7 @@ pub const MODELS_OCI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24547,6 +26391,7 @@ pub const MODELS_OCI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24567,6 +26412,7 @@ pub const PROVIDER_OLLAMA: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: false,
         embeddings: false,
         vision: false,
         batch: false,
@@ -24582,6 +26428,7 @@ pub const MODELS_OLLAMA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24595,6 +26442,7 @@ pub const MODELS_OLLAMA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24608,6 +26456,7 @@ pub const MODELS_OLLAMA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24621,6 +26470,7 @@ pub const MODELS_OLLAMA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24634,6 +26484,7 @@ pub const MODELS_OLLAMA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24647,6 +26498,7 @@ pub const MODELS_OLLAMA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24660,6 +26512,7 @@ pub const MODELS_OLLAMA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24673,6 +26526,7 @@ pub const MODELS_OLLAMA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24686,6 +26540,7 @@ pub const MODELS_OLLAMA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24699,6 +26554,7 @@ pub const MODELS_OLLAMA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24712,6 +26568,7 @@ pub const MODELS_OLLAMA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24725,6 +26582,7 @@ pub const MODELS_OLLAMA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24738,6 +26596,7 @@ pub const MODELS_OLLAMA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24751,6 +26610,7 @@ pub const MODELS_OLLAMA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24764,6 +26624,7 @@ pub const MODELS_OLLAMA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24777,6 +26638,7 @@ pub const MODELS_OLLAMA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24790,6 +26652,7 @@ pub const MODELS_OLLAMA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24803,6 +26666,7 @@ pub const MODELS_OLLAMA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24816,6 +26680,7 @@ pub const MODELS_OLLAMA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24829,6 +26694,7 @@ pub const MODELS_OLLAMA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24842,6 +26708,7 @@ pub const MODELS_OLLAMA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24855,6 +26722,7 @@ pub const MODELS_OLLAMA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24868,6 +26736,7 @@ pub const MODELS_OLLAMA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24881,6 +26750,7 @@ pub const MODELS_OLLAMA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24894,6 +26764,7 @@ pub const MODELS_OLLAMA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24907,6 +26778,7 @@ pub const MODELS_OLLAMA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24920,6 +26792,7 @@ pub const MODELS_OLLAMA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24933,6 +26806,7 @@ pub const MODELS_OLLAMA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24946,6 +26820,7 @@ pub const MODELS_OLLAMA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24966,6 +26841,7 @@ pub const PROVIDER_OPENAI: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: true,
         vision: true,
         batch: true,
@@ -24981,6 +26857,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -24994,6 +26871,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -25007,6 +26885,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -25020,6 +26899,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -25033,6 +26913,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -25046,6 +26927,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -25059,6 +26941,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -25072,6 +26955,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -25085,6 +26969,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -25098,6 +26983,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -25111,6 +26997,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -25124,6 +27011,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -25137,6 +27025,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -25150,6 +27039,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -25163,6 +27053,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -25176,6 +27067,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -25189,6 +27081,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -25202,6 +27095,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -25215,6 +27109,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -25228,6 +27123,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -25241,6 +27137,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -25254,6 +27151,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -25267,6 +27165,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -25280,6 +27179,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -25293,6 +27193,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -25306,6 +27207,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -25319,6 +27221,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -25332,6 +27235,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -25345,6 +27249,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -25358,6 +27263,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -25371,6 +27277,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -25384,6 +27291,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -25397,6 +27305,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -25410,6 +27319,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -25423,6 +27333,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -25436,6 +27347,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -25449,6 +27361,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -25462,6 +27375,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -25475,6 +27389,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -25488,6 +27403,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -25501,6 +27417,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -25514,6 +27431,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -25527,6 +27445,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -25540,6 +27459,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -25553,6 +27473,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -25566,6 +27487,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -25579,6 +27501,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -25592,6 +27515,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -25605,6 +27529,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -25618,6 +27543,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -25631,6 +27557,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -25644,6 +27571,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -25657,6 +27585,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -25670,6 +27599,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -25683,6 +27613,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -25696,6 +27627,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -25709,6 +27641,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -25722,6 +27655,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -25735,6 +27669,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -25748,6 +27683,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -25761,6 +27697,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -25774,6 +27711,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -25787,6 +27725,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -25800,6 +27739,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -25813,6 +27753,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -25826,6 +27767,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -25839,6 +27781,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -25852,6 +27795,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -25865,6 +27809,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -25878,6 +27823,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -25891,6 +27837,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -25904,6 +27851,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -25917,6 +27865,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -25930,6 +27879,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -25943,6 +27893,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -25956,6 +27907,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: true,
         },
@@ -25969,6 +27921,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: true,
         },
@@ -25982,6 +27935,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -25995,6 +27949,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -26008,6 +27963,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -26021,6 +27977,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -26034,6 +27991,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -26047,6 +28005,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -26060,6 +28019,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -26073,6 +28033,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -26086,6 +28047,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -26099,6 +28061,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -26112,6 +28075,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -26125,6 +28089,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: true,
         },
@@ -26138,6 +28103,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -26151,6 +28117,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -26164,6 +28131,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -26177,6 +28145,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -26190,6 +28159,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -26203,6 +28173,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -26216,6 +28187,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -26229,6 +28201,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -26242,6 +28215,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -26255,6 +28229,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -26268,6 +28243,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -26281,6 +28257,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -26294,6 +28271,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -26307,6 +28285,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -26320,6 +28299,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -26333,6 +28313,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -26346,6 +28327,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -26359,6 +28341,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -26372,6 +28355,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -26385,6 +28369,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -26398,6 +28383,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -26411,6 +28397,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -26424,6 +28411,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -26437,6 +28425,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -26450,6 +28439,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -26463,6 +28453,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -26476,6 +28467,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -26489,6 +28481,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -26502,6 +28495,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -26515,6 +28509,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -26528,6 +28523,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -26541,6 +28537,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -26554,6 +28551,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -26567,6 +28565,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -26580,6 +28579,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -26593,6 +28593,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -26606,6 +28607,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -26619,6 +28621,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -26632,6 +28635,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -26645,6 +28649,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -26658,6 +28663,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -26671,6 +28677,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -26684,6 +28691,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -26697,6 +28705,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -26710,6 +28719,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -26723,6 +28733,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -26736,6 +28747,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -26749,6 +28761,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -26762,6 +28775,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -26775,6 +28789,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -26788,6 +28803,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -26801,6 +28817,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -26814,6 +28831,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -26827,6 +28845,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -26840,6 +28859,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -26853,6 +28873,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -26866,6 +28887,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -26879,6 +28901,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -26892,6 +28915,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -26905,6 +28929,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -26918,6 +28943,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -26931,6 +28957,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -26944,6 +28971,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -26957,6 +28985,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -26970,6 +28999,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -26983,6 +29013,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -26996,6 +29027,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -27009,6 +29041,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -27022,6 +29055,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -27035,6 +29069,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -27048,6 +29083,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -27061,6 +29097,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -27074,6 +29111,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -27087,6 +29125,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -27100,6 +29139,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -27113,6 +29153,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -27126,6 +29167,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -27139,6 +29181,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -27152,6 +29195,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -27165,6 +29209,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -27178,6 +29223,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -27191,6 +29237,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -27204,6 +29251,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -27217,6 +29265,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -27230,6 +29279,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -27243,6 +29293,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -27256,6 +29307,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -27269,6 +29321,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -27282,6 +29335,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -27295,6 +29349,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -27308,6 +29363,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -27321,6 +29377,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -27334,6 +29391,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -27347,6 +29405,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -27360,6 +29419,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -27373,6 +29433,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -27386,6 +29447,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -27399,6 +29461,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -27412,6 +29475,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -27425,6 +29489,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -27438,6 +29503,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -27451,6 +29517,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -27464,6 +29531,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -27477,6 +29545,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -27490,6 +29559,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -27503,6 +29573,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -27516,6 +29587,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -27529,6 +29601,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -27542,6 +29615,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -27555,6 +29629,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -27568,6 +29643,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -27581,6 +29657,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -27594,6 +29671,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -27607,6 +29685,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -27620,6 +29699,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -27633,6 +29713,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -27646,6 +29727,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -27659,6 +29741,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -27672,6 +29755,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -27685,6 +29769,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -27705,6 +29790,7 @@ pub const PROVIDER_OPENROUTER: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: false,
         vision: true,
         batch: false,
@@ -27720,6 +29806,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -27733,6 +29820,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -27746,6 +29834,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -27759,6 +29848,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -27772,6 +29862,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -27785,6 +29876,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -27798,6 +29890,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -27811,6 +29904,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -27824,6 +29918,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -27837,6 +29932,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -27850,6 +29946,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -27863,6 +29960,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -27876,6 +29974,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -27889,6 +29988,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -27902,6 +30002,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -27915,6 +30016,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -27928,6 +30030,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -27941,6 +30044,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -27954,6 +30058,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -27967,6 +30072,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -27980,6 +30086,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -27993,6 +30100,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -28006,6 +30114,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -28019,6 +30128,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -28032,6 +30142,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -28045,6 +30156,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -28058,6 +30170,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -28071,6 +30184,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -28084,6 +30198,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -28097,6 +30212,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -28110,6 +30226,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -28123,6 +30240,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -28136,6 +30254,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -28149,6 +30268,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -28162,6 +30282,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -28175,6 +30296,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -28188,6 +30310,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -28201,6 +30324,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -28214,6 +30338,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -28227,6 +30352,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -28240,6 +30366,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -28253,6 +30380,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -28266,6 +30394,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -28279,6 +30408,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -28292,6 +30422,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -28305,6 +30436,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -28318,6 +30450,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -28331,6 +30464,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -28344,6 +30478,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -28357,6 +30492,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -28370,6 +30506,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -28383,6 +30520,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -28396,6 +30534,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -28409,6 +30548,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -28422,6 +30562,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -28435,6 +30576,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -28448,6 +30590,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -28461,6 +30604,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -28474,6 +30618,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -28487,6 +30632,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -28500,6 +30646,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -28513,6 +30660,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -28526,6 +30674,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -28539,6 +30688,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -28552,6 +30702,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -28565,6 +30716,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -28578,6 +30730,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -28591,6 +30744,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -28604,6 +30758,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -28617,6 +30772,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -28630,6 +30786,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -28643,6 +30800,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -28656,6 +30814,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -28669,6 +30828,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -28682,6 +30842,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -28695,6 +30856,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -28708,6 +30870,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -28721,6 +30884,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -28734,6 +30898,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -28747,6 +30912,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -28760,6 +30926,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -28773,6 +30940,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -28786,6 +30954,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -28799,6 +30968,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -28812,6 +30982,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -28825,6 +30996,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -28838,6 +31010,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -28851,6 +31024,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -28864,6 +31038,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -28877,6 +31052,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -28890,6 +31066,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -28903,6 +31080,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -28916,6 +31094,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -28929,6 +31108,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -28942,6 +31122,7 @@ pub const MODELS_OPENROUTER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -28962,6 +31143,7 @@ pub const PROVIDER_OVHCLOUD: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: false,
         vision: true,
         batch: false,
@@ -28977,6 +31159,7 @@ pub const MODELS_OVHCLOUD: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -28990,6 +31173,7 @@ pub const MODELS_OVHCLOUD: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -29003,6 +31187,7 @@ pub const MODELS_OVHCLOUD: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29016,6 +31201,7 @@ pub const MODELS_OVHCLOUD: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -29029,6 +31215,7 @@ pub const MODELS_OVHCLOUD: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -29042,6 +31229,7 @@ pub const MODELS_OVHCLOUD: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -29055,6 +31243,7 @@ pub const MODELS_OVHCLOUD: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -29068,6 +31257,7 @@ pub const MODELS_OVHCLOUD: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29081,6 +31271,7 @@ pub const MODELS_OVHCLOUD: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29094,6 +31285,7 @@ pub const MODELS_OVHCLOUD: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -29107,6 +31299,7 @@ pub const MODELS_OVHCLOUD: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -29120,6 +31313,7 @@ pub const MODELS_OVHCLOUD: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -29133,6 +31327,7 @@ pub const MODELS_OVHCLOUD: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -29146,6 +31341,7 @@ pub const MODELS_OVHCLOUD: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -29159,6 +31355,7 @@ pub const MODELS_OVHCLOUD: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29179,6 +31376,7 @@ pub const PROVIDER_PALM: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: false,
+        tool_choice: false,
         embeddings: false,
         vision: false,
         batch: false,
@@ -29194,6 +31392,7 @@ pub const MODELS_PALM: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29207,6 +31406,7 @@ pub const MODELS_PALM: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29220,6 +31420,7 @@ pub const MODELS_PALM: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29233,6 +31434,7 @@ pub const MODELS_PALM: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29246,6 +31448,7 @@ pub const MODELS_PALM: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29259,6 +31462,7 @@ pub const MODELS_PALM: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29279,6 +31483,7 @@ pub const PROVIDER_PARALLEL_AI: ProviderDef = ProviderDef {
         chat_completions: false,
         streaming: false,
         tool_use: false,
+        tool_choice: false,
         embeddings: false,
         vision: false,
         batch: false,
@@ -29294,6 +31499,7 @@ pub const MODELS_PARALLEL_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29307,6 +31513,7 @@ pub const MODELS_PARALLEL_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29327,6 +31534,7 @@ pub const PROVIDER_PERPLEXITY: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: false,
         embeddings: true,
         vision: false,
         batch: false,
@@ -29342,6 +31550,7 @@ pub const MODELS_PERPLEXITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29355,6 +31564,7 @@ pub const MODELS_PERPLEXITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29368,6 +31578,7 @@ pub const MODELS_PERPLEXITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29381,6 +31592,7 @@ pub const MODELS_PERPLEXITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29394,6 +31606,7 @@ pub const MODELS_PERPLEXITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29407,6 +31620,7 @@ pub const MODELS_PERPLEXITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29420,6 +31634,7 @@ pub const MODELS_PERPLEXITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29433,6 +31648,7 @@ pub const MODELS_PERPLEXITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29446,6 +31662,7 @@ pub const MODELS_PERPLEXITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29459,6 +31676,7 @@ pub const MODELS_PERPLEXITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29472,6 +31690,7 @@ pub const MODELS_PERPLEXITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29485,6 +31704,7 @@ pub const MODELS_PERPLEXITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29498,6 +31718,7 @@ pub const MODELS_PERPLEXITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29511,6 +31732,7 @@ pub const MODELS_PERPLEXITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29524,6 +31746,7 @@ pub const MODELS_PERPLEXITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29537,6 +31760,7 @@ pub const MODELS_PERPLEXITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29550,6 +31774,7 @@ pub const MODELS_PERPLEXITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29563,6 +31788,7 @@ pub const MODELS_PERPLEXITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29576,6 +31802,7 @@ pub const MODELS_PERPLEXITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -29589,6 +31816,7 @@ pub const MODELS_PERPLEXITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29602,6 +31830,7 @@ pub const MODELS_PERPLEXITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29615,6 +31844,7 @@ pub const MODELS_PERPLEXITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29628,6 +31858,7 @@ pub const MODELS_PERPLEXITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29641,6 +31872,7 @@ pub const MODELS_PERPLEXITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29654,6 +31886,7 @@ pub const MODELS_PERPLEXITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29667,6 +31900,7 @@ pub const MODELS_PERPLEXITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29680,6 +31914,7 @@ pub const MODELS_PERPLEXITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29693,6 +31928,7 @@ pub const MODELS_PERPLEXITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29706,6 +31942,7 @@ pub const MODELS_PERPLEXITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29719,6 +31956,7 @@ pub const MODELS_PERPLEXITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29732,6 +31970,7 @@ pub const MODELS_PERPLEXITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29745,6 +31984,7 @@ pub const MODELS_PERPLEXITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29758,6 +31998,7 @@ pub const MODELS_PERPLEXITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -29771,6 +32012,7 @@ pub const MODELS_PERPLEXITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29784,6 +32026,7 @@ pub const MODELS_PERPLEXITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29797,6 +32040,7 @@ pub const MODELS_PERPLEXITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29810,6 +32054,7 @@ pub const MODELS_PERPLEXITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -29823,6 +32068,7 @@ pub const MODELS_PERPLEXITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -29836,6 +32082,7 @@ pub const MODELS_PERPLEXITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29849,6 +32096,7 @@ pub const MODELS_PERPLEXITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29862,6 +32110,7 @@ pub const MODELS_PERPLEXITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -29882,6 +32131,7 @@ pub const PROVIDER_PUBLICAI: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: false,
         vision: false,
         batch: false,
@@ -29897,6 +32147,7 @@ pub const MODELS_PUBLICAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -29910,6 +32161,7 @@ pub const MODELS_PUBLICAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -29923,6 +32175,7 @@ pub const MODELS_PUBLICAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -29936,6 +32189,7 @@ pub const MODELS_PUBLICAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -29949,6 +32203,7 @@ pub const MODELS_PUBLICAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -29962,6 +32217,7 @@ pub const MODELS_PUBLICAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -29975,6 +32231,7 @@ pub const MODELS_PUBLICAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -29988,6 +32245,7 @@ pub const MODELS_PUBLICAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -30001,6 +32259,7 @@ pub const MODELS_PUBLICAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -30021,6 +32280,7 @@ pub const PROVIDER_RECRAFT: ProviderDef = ProviderDef {
         chat_completions: false,
         streaming: false,
         tool_use: false,
+        tool_choice: false,
         embeddings: false,
         vision: false,
         batch: false,
@@ -30036,6 +32296,7 @@ pub const MODELS_RECRAFT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -30049,6 +32310,7 @@ pub const MODELS_RECRAFT: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -30069,6 +32331,7 @@ pub const PROVIDER_REDUCTO: ProviderDef = ProviderDef {
         chat_completions: false,
         streaming: false,
         tool_use: false,
+        tool_choice: false,
         embeddings: false,
         vision: false,
         batch: false,
@@ -30084,6 +32347,7 @@ pub const MODELS_REDUCTO: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -30097,6 +32361,7 @@ pub const MODELS_REDUCTO: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -30117,6 +32382,7 @@ pub const PROVIDER_REPLICATE: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: false,
         vision: true,
         batch: false,
@@ -30132,6 +32398,7 @@ pub const MODELS_REPLICATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -30145,6 +32412,7 @@ pub const MODELS_REPLICATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -30158,6 +32426,7 @@ pub const MODELS_REPLICATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -30171,6 +32440,7 @@ pub const MODELS_REPLICATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -30184,6 +32454,7 @@ pub const MODELS_REPLICATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -30197,6 +32468,7 @@ pub const MODELS_REPLICATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -30210,6 +32482,7 @@ pub const MODELS_REPLICATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -30223,6 +32496,7 @@ pub const MODELS_REPLICATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -30236,6 +32510,7 @@ pub const MODELS_REPLICATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -30249,6 +32524,7 @@ pub const MODELS_REPLICATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -30262,6 +32538,7 @@ pub const MODELS_REPLICATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -30275,6 +32552,7 @@ pub const MODELS_REPLICATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -30288,6 +32566,7 @@ pub const MODELS_REPLICATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -30301,6 +32580,7 @@ pub const MODELS_REPLICATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -30314,6 +32594,7 @@ pub const MODELS_REPLICATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -30327,6 +32608,7 @@ pub const MODELS_REPLICATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -30340,6 +32622,7 @@ pub const MODELS_REPLICATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -30353,6 +32636,7 @@ pub const MODELS_REPLICATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -30366,6 +32650,7 @@ pub const MODELS_REPLICATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -30379,6 +32664,7 @@ pub const MODELS_REPLICATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -30392,6 +32678,7 @@ pub const MODELS_REPLICATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -30405,6 +32692,7 @@ pub const MODELS_REPLICATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -30418,6 +32706,7 @@ pub const MODELS_REPLICATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -30431,6 +32720,7 @@ pub const MODELS_REPLICATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -30444,6 +32734,7 @@ pub const MODELS_REPLICATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -30457,6 +32748,7 @@ pub const MODELS_REPLICATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -30470,6 +32762,7 @@ pub const MODELS_REPLICATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -30483,6 +32776,7 @@ pub const MODELS_REPLICATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -30496,6 +32790,7 @@ pub const MODELS_REPLICATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -30509,6 +32804,7 @@ pub const MODELS_REPLICATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -30522,6 +32818,7 @@ pub const MODELS_REPLICATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -30535,6 +32832,7 @@ pub const MODELS_REPLICATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -30548,6 +32846,7 @@ pub const MODELS_REPLICATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -30561,6 +32860,7 @@ pub const MODELS_REPLICATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -30574,6 +32874,7 @@ pub const MODELS_REPLICATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -30587,6 +32888,7 @@ pub const MODELS_REPLICATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -30600,6 +32902,7 @@ pub const MODELS_REPLICATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -30613,6 +32916,7 @@ pub const MODELS_REPLICATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -30626,6 +32930,7 @@ pub const MODELS_REPLICATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -30639,6 +32944,7 @@ pub const MODELS_REPLICATE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -30659,6 +32965,7 @@ pub const PROVIDER_RUNWAYML: ProviderDef = ProviderDef {
         chat_completions: false,
         streaming: false,
         tool_use: false,
+        tool_choice: false,
         embeddings: false,
         vision: false,
         batch: false,
@@ -30674,6 +32981,7 @@ pub const MODELS_RUNWAYML: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -30687,6 +32995,7 @@ pub const MODELS_RUNWAYML: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -30700,6 +33009,7 @@ pub const MODELS_RUNWAYML: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -30713,6 +33023,7 @@ pub const MODELS_RUNWAYML: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -30726,6 +33037,7 @@ pub const MODELS_RUNWAYML: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -30739,6 +33051,7 @@ pub const MODELS_RUNWAYML: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -30763,6 +33076,7 @@ pub const PROVIDER_SAGEMAKER: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: false,
+        tool_choice: false,
         embeddings: false,
         vision: false,
         batch: false,
@@ -30778,6 +33092,7 @@ pub const MODELS_SAGEMAKER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -30791,6 +33106,7 @@ pub const MODELS_SAGEMAKER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -30804,6 +33120,7 @@ pub const MODELS_SAGEMAKER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -30817,6 +33134,7 @@ pub const MODELS_SAGEMAKER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -30830,6 +33148,7 @@ pub const MODELS_SAGEMAKER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -30843,6 +33162,7 @@ pub const MODELS_SAGEMAKER: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -30863,6 +33183,7 @@ pub const PROVIDER_SAMBANOVA: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: false,
         vision: true,
         batch: false,
@@ -30878,6 +33199,7 @@ pub const MODELS_SAMBANOVA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -30891,6 +33213,7 @@ pub const MODELS_SAMBANOVA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -30904,6 +33227,7 @@ pub const MODELS_SAMBANOVA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -30917,6 +33241,7 @@ pub const MODELS_SAMBANOVA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -30930,6 +33255,7 @@ pub const MODELS_SAMBANOVA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -30943,6 +33269,7 @@ pub const MODELS_SAMBANOVA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -30956,6 +33283,7 @@ pub const MODELS_SAMBANOVA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -30969,6 +33297,7 @@ pub const MODELS_SAMBANOVA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -30982,6 +33311,7 @@ pub const MODELS_SAMBANOVA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -30995,6 +33325,7 @@ pub const MODELS_SAMBANOVA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31008,6 +33339,7 @@ pub const MODELS_SAMBANOVA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -31021,6 +33353,7 @@ pub const MODELS_SAMBANOVA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31034,6 +33367,7 @@ pub const MODELS_SAMBANOVA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -31047,6 +33381,7 @@ pub const MODELS_SAMBANOVA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31060,6 +33395,7 @@ pub const MODELS_SAMBANOVA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31073,6 +33409,7 @@ pub const MODELS_SAMBANOVA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -31086,6 +33423,7 @@ pub const MODELS_SAMBANOVA: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -31106,6 +33444,7 @@ pub const PROVIDER_SARVAM: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: false,
+        tool_choice: false,
         embeddings: false,
         vision: false,
         batch: false,
@@ -31120,6 +33459,7 @@ pub const MODELS_SARVAM: &[ModelDef] = &[ModelDef {
     capabilities: ModelCapabilities {
         streaming: true,
         tool_use: false,
+        tool_choice: false,
         vision: false,
         extended_thinking: true,
     },
@@ -31139,6 +33479,7 @@ pub const PROVIDER_SEARXNG: ProviderDef = ProviderDef {
         chat_completions: false,
         streaming: false,
         tool_use: false,
+        tool_choice: false,
         embeddings: false,
         vision: false,
         batch: false,
@@ -31153,6 +33494,7 @@ pub const MODELS_SEARXNG: &[ModelDef] = &[ModelDef {
     capabilities: ModelCapabilities {
         streaming: false,
         tool_use: false,
+        tool_choice: false,
         vision: false,
         extended_thinking: false,
     },
@@ -31172,6 +33514,7 @@ pub const PROVIDER_SERPER: ProviderDef = ProviderDef {
         chat_completions: false,
         streaming: false,
         tool_use: false,
+        tool_choice: false,
         embeddings: false,
         vision: false,
         batch: false,
@@ -31186,6 +33529,7 @@ pub const MODELS_SERPER: &[ModelDef] = &[ModelDef {
     capabilities: ModelCapabilities {
         streaming: false,
         tool_use: false,
+        tool_choice: false,
         vision: false,
         extended_thinking: false,
     },
@@ -31205,6 +33549,7 @@ pub const PROVIDER_SNOWFLAKE: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: false,
         embeddings: true,
         vision: true,
         batch: false,
@@ -31220,6 +33565,7 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -31233,6 +33579,7 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: true,
         },
@@ -31246,6 +33593,7 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: true,
         },
@@ -31259,6 +33607,7 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -31272,6 +33621,7 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -31285,6 +33635,7 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -31298,6 +33649,7 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -31311,6 +33663,7 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -31324,6 +33677,7 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31337,6 +33691,7 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31350,6 +33705,7 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31363,6 +33719,7 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31376,6 +33733,7 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31389,6 +33747,7 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31402,6 +33761,7 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31415,6 +33775,7 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31428,6 +33789,7 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31441,6 +33803,7 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31454,6 +33817,7 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31467,6 +33831,7 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31480,6 +33845,7 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31493,6 +33859,7 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31506,6 +33873,7 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31519,6 +33887,7 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31532,6 +33901,7 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31545,6 +33915,7 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31558,6 +33929,7 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -31571,6 +33943,7 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: true,
         },
@@ -31584,6 +33957,7 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31597,6 +33971,7 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31610,6 +33985,7 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31623,6 +33999,7 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31636,6 +34013,7 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31649,6 +34027,7 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31662,6 +34041,7 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31675,6 +34055,7 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31688,6 +34069,7 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31708,6 +34090,7 @@ pub const PROVIDER_SONIOX: ProviderDef = ProviderDef {
         chat_completions: false,
         streaming: false,
         tool_use: false,
+        tool_choice: false,
         embeddings: false,
         vision: false,
         batch: false,
@@ -31722,6 +34105,7 @@ pub const MODELS_SONIOX: &[ModelDef] = &[ModelDef {
     capabilities: ModelCapabilities {
         streaming: false,
         tool_use: false,
+        tool_choice: false,
         vision: false,
         extended_thinking: false,
     },
@@ -31741,6 +34125,7 @@ pub const PROVIDER_STABILITY: ProviderDef = ProviderDef {
         chat_completions: false,
         streaming: false,
         tool_use: false,
+        tool_choice: false,
         embeddings: false,
         vision: false,
         batch: false,
@@ -31756,6 +34141,7 @@ pub const MODELS_STABILITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31769,6 +34155,7 @@ pub const MODELS_STABILITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31782,6 +34169,7 @@ pub const MODELS_STABILITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31795,6 +34183,7 @@ pub const MODELS_STABILITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31808,6 +34197,7 @@ pub const MODELS_STABILITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31821,6 +34211,7 @@ pub const MODELS_STABILITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31834,6 +34225,7 @@ pub const MODELS_STABILITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31847,6 +34239,7 @@ pub const MODELS_STABILITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31860,6 +34253,7 @@ pub const MODELS_STABILITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31873,6 +34267,7 @@ pub const MODELS_STABILITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31886,6 +34281,7 @@ pub const MODELS_STABILITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31899,6 +34295,7 @@ pub const MODELS_STABILITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31912,6 +34309,7 @@ pub const MODELS_STABILITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31925,6 +34323,7 @@ pub const MODELS_STABILITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31938,6 +34337,7 @@ pub const MODELS_STABILITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31951,6 +34351,7 @@ pub const MODELS_STABILITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31964,6 +34365,7 @@ pub const MODELS_STABILITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31977,6 +34379,7 @@ pub const MODELS_STABILITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -31990,6 +34393,7 @@ pub const MODELS_STABILITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -32003,6 +34407,7 @@ pub const MODELS_STABILITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -32016,6 +34421,7 @@ pub const MODELS_STABILITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -32029,6 +34435,7 @@ pub const MODELS_STABILITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -32042,6 +34449,7 @@ pub const MODELS_STABILITY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -32062,6 +34470,7 @@ pub const PROVIDER_TAVILY: ProviderDef = ProviderDef {
         chat_completions: false,
         streaming: false,
         tool_use: false,
+        tool_choice: false,
         embeddings: false,
         vision: false,
         batch: false,
@@ -32077,6 +34486,7 @@ pub const MODELS_TAVILY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -32090,6 +34500,7 @@ pub const MODELS_TAVILY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -32110,6 +34521,7 @@ pub const PROVIDER_TEXT_COMPLETION_CODESTRAL: ProviderDef = ProviderDef {
         chat_completions: false,
         streaming: true,
         tool_use: false,
+        tool_choice: false,
         embeddings: false,
         vision: false,
         batch: false,
@@ -32125,6 +34537,7 @@ pub const MODELS_TEXT_COMPLETION_CODESTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -32138,6 +34551,7 @@ pub const MODELS_TEXT_COMPLETION_CODESTRAL: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -32158,6 +34572,7 @@ pub const PROVIDER_TEXT_COMPLETION_INCEPTION: ProviderDef = ProviderDef {
         chat_completions: false,
         streaming: true,
         tool_use: false,
+        tool_choice: false,
         embeddings: false,
         vision: false,
         batch: false,
@@ -32172,6 +34587,7 @@ pub const MODELS_TEXT_COMPLETION_INCEPTION: &[ModelDef] = &[ModelDef {
     capabilities: ModelCapabilities {
         streaming: true,
         tool_use: false,
+        tool_choice: false,
         vision: false,
         extended_thinking: false,
     },
@@ -32191,6 +34607,7 @@ pub const PROVIDER_TEXT_COMPLETION_OPENAI: ProviderDef = ProviderDef {
         chat_completions: false,
         streaming: true,
         tool_use: false,
+        tool_choice: false,
         embeddings: false,
         vision: false,
         batch: true,
@@ -32206,6 +34623,7 @@ pub const MODELS_TEXT_COMPLETION_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -32219,6 +34637,7 @@ pub const MODELS_TEXT_COMPLETION_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -32232,6 +34651,7 @@ pub const MODELS_TEXT_COMPLETION_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -32245,6 +34665,7 @@ pub const MODELS_TEXT_COMPLETION_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -32258,6 +34679,7 @@ pub const MODELS_TEXT_COMPLETION_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -32271,6 +34693,7 @@ pub const MODELS_TEXT_COMPLETION_OPENAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -32291,6 +34714,7 @@ pub const PROVIDER_TOGETHER_AI: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: true,
         vision: true,
         batch: false,
@@ -32306,6 +34730,7 @@ pub const MODELS_TOGETHER_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -32319,6 +34744,7 @@ pub const MODELS_TOGETHER_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -32332,6 +34758,7 @@ pub const MODELS_TOGETHER_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -32345,6 +34772,7 @@ pub const MODELS_TOGETHER_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -32358,6 +34786,7 @@ pub const MODELS_TOGETHER_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -32371,6 +34800,7 @@ pub const MODELS_TOGETHER_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -32384,6 +34814,7 @@ pub const MODELS_TOGETHER_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -32397,6 +34828,7 @@ pub const MODELS_TOGETHER_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -32410,6 +34842,7 @@ pub const MODELS_TOGETHER_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -32423,6 +34856,7 @@ pub const MODELS_TOGETHER_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -32436,6 +34870,7 @@ pub const MODELS_TOGETHER_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -32449,6 +34884,7 @@ pub const MODELS_TOGETHER_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -32462,6 +34898,7 @@ pub const MODELS_TOGETHER_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -32475,6 +34912,7 @@ pub const MODELS_TOGETHER_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -32488,6 +34926,7 @@ pub const MODELS_TOGETHER_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -32501,6 +34940,7 @@ pub const MODELS_TOGETHER_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -32514,6 +34954,7 @@ pub const MODELS_TOGETHER_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -32527,6 +34968,7 @@ pub const MODELS_TOGETHER_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -32540,6 +34982,7 @@ pub const MODELS_TOGETHER_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -32553,6 +34996,7 @@ pub const MODELS_TOGETHER_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -32566,6 +35010,7 @@ pub const MODELS_TOGETHER_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -32579,6 +35024,7 @@ pub const MODELS_TOGETHER_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -32592,6 +35038,7 @@ pub const MODELS_TOGETHER_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -32605,6 +35052,7 @@ pub const MODELS_TOGETHER_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -32618,6 +35066,7 @@ pub const MODELS_TOGETHER_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -32631,6 +35080,7 @@ pub const MODELS_TOGETHER_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -32644,6 +35094,7 @@ pub const MODELS_TOGETHER_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -32657,6 +35108,7 @@ pub const MODELS_TOGETHER_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -32670,6 +35122,7 @@ pub const MODELS_TOGETHER_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -32683,6 +35136,7 @@ pub const MODELS_TOGETHER_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -32696,6 +35150,7 @@ pub const MODELS_TOGETHER_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -32709,6 +35164,7 @@ pub const MODELS_TOGETHER_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -32722,6 +35178,7 @@ pub const MODELS_TOGETHER_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -32735,6 +35192,7 @@ pub const MODELS_TOGETHER_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -32748,6 +35206,7 @@ pub const MODELS_TOGETHER_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -32761,6 +35220,7 @@ pub const MODELS_TOGETHER_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -32774,6 +35234,7 @@ pub const MODELS_TOGETHER_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -32787,6 +35248,7 @@ pub const MODELS_TOGETHER_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -32800,6 +35262,7 @@ pub const MODELS_TOGETHER_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -32813,6 +35276,7 @@ pub const MODELS_TOGETHER_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -32826,6 +35290,7 @@ pub const MODELS_TOGETHER_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -32839,6 +35304,7 @@ pub const MODELS_TOGETHER_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -32852,6 +35318,7 @@ pub const MODELS_TOGETHER_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -32872,6 +35339,7 @@ pub const PROVIDER_V0: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: false,
         vision: true,
         batch: false,
@@ -32887,6 +35355,7 @@ pub const MODELS_V0: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -32900,6 +35369,7 @@ pub const MODELS_V0: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -32913,6 +35383,7 @@ pub const MODELS_V0: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -32933,6 +35404,7 @@ pub const PROVIDER_VERCEL_AI_GATEWAY: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: true,
         vision: true,
         batch: false,
@@ -32948,6 +35420,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -32961,6 +35434,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -32974,6 +35448,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -32987,6 +35462,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -33000,6 +35476,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -33013,6 +35490,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -33026,6 +35504,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -33039,6 +35518,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -33052,6 +35532,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -33065,6 +35546,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -33078,6 +35560,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -33091,6 +35574,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -33104,6 +35588,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -33117,6 +35602,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -33130,6 +35616,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -33143,6 +35630,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -33156,6 +35644,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -33169,6 +35658,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -33182,6 +35672,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -33195,6 +35686,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -33208,6 +35700,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -33221,6 +35714,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -33234,6 +35728,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -33247,6 +35742,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -33260,6 +35756,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -33273,6 +35770,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -33286,6 +35784,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -33299,6 +35798,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -33312,6 +35812,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -33325,6 +35826,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -33338,6 +35840,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -33351,6 +35854,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -33364,6 +35868,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -33377,6 +35882,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -33390,6 +35896,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -33403,6 +35910,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -33416,6 +35924,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -33429,6 +35938,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -33442,6 +35952,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -33455,6 +35966,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -33468,6 +35980,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -33481,6 +35994,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -33494,6 +36008,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -33507,6 +36022,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -33520,6 +36036,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -33533,6 +36050,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -33546,6 +36064,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -33559,6 +36078,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -33572,6 +36092,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -33585,6 +36106,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -33598,6 +36120,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -33611,6 +36134,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -33624,6 +36148,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -33637,6 +36162,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -33650,6 +36176,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -33663,6 +36190,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -33676,6 +36204,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -33689,6 +36218,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -33702,6 +36232,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -33715,6 +36246,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -33728,6 +36260,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -33741,6 +36274,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -33754,6 +36288,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -33767,6 +36302,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -33780,6 +36316,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -33793,6 +36330,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -33806,6 +36344,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -33819,6 +36358,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -33832,6 +36372,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -33845,6 +36386,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -33858,6 +36400,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -33871,6 +36414,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -33884,6 +36428,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -33897,6 +36442,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -33910,6 +36456,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -33923,6 +36470,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -33936,6 +36484,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -33949,6 +36498,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -33962,6 +36512,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -33975,6 +36526,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -33988,6 +36540,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -34001,6 +36554,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -34014,6 +36568,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -34027,6 +36582,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -34040,6 +36596,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -34053,6 +36610,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -34066,6 +36624,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -34079,6 +36638,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -34092,6 +36652,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -34105,6 +36666,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -34118,6 +36680,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -34131,6 +36694,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -34144,6 +36708,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -34157,6 +36722,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -34170,6 +36736,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -34183,6 +36750,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -34196,6 +36764,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -34209,6 +36778,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -34222,6 +36792,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -34235,6 +36806,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -34248,6 +36820,7 @@ pub const MODELS_VERCEL_AI_GATEWAY: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -34276,6 +36849,7 @@ pub const PROVIDER_VERTEX_AI: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: true,
         vision: true,
         batch: true,
@@ -34291,6 +36865,7 @@ pub const MODELS_VERTEX_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -34304,6 +36879,7 @@ pub const MODELS_VERTEX_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -34317,6 +36893,7 @@ pub const MODELS_VERTEX_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -34330,6 +36907,7 @@ pub const MODELS_VERTEX_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -34343,6 +36921,7 @@ pub const MODELS_VERTEX_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -34356,6 +36935,7 @@ pub const MODELS_VERTEX_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -34369,6 +36949,7 @@ pub const MODELS_VERTEX_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -34382,6 +36963,7 @@ pub const MODELS_VERTEX_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -34395,6 +36977,7 @@ pub const MODELS_VERTEX_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -34408,6 +36991,7 @@ pub const MODELS_VERTEX_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -34421,6 +37005,7 @@ pub const MODELS_VERTEX_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -34434,6 +37019,7 @@ pub const MODELS_VERTEX_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -34447,6 +37033,7 @@ pub const MODELS_VERTEX_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -34460,6 +37047,7 @@ pub const MODELS_VERTEX_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -34473,6 +37061,7 @@ pub const MODELS_VERTEX_AI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -34501,6 +37090,7 @@ pub const PROVIDER_VERTEX_AI_AI21_MODELS: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: false,
         vision: false,
         batch: true,
@@ -34516,6 +37106,7 @@ pub const MODELS_VERTEX_AI_AI21_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -34529,6 +37120,7 @@ pub const MODELS_VERTEX_AI_AI21_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -34542,6 +37134,7 @@ pub const MODELS_VERTEX_AI_AI21_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -34555,6 +37148,7 @@ pub const MODELS_VERTEX_AI_AI21_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -34568,6 +37162,7 @@ pub const MODELS_VERTEX_AI_AI21_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -34596,6 +37191,7 @@ pub const PROVIDER_VERTEX_AI_ANTHROPIC_MODELS: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: false,
         vision: true,
         batch: true,
@@ -34611,6 +37207,7 @@ pub const MODELS_VERTEX_AI_ANTHROPIC_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -34624,6 +37221,7 @@ pub const MODELS_VERTEX_AI_ANTHROPIC_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -34637,6 +37235,7 @@ pub const MODELS_VERTEX_AI_ANTHROPIC_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -34650,6 +37249,7 @@ pub const MODELS_VERTEX_AI_ANTHROPIC_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -34663,6 +37263,7 @@ pub const MODELS_VERTEX_AI_ANTHROPIC_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -34676,6 +37277,7 @@ pub const MODELS_VERTEX_AI_ANTHROPIC_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -34689,6 +37291,7 @@ pub const MODELS_VERTEX_AI_ANTHROPIC_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -34702,6 +37305,7 @@ pub const MODELS_VERTEX_AI_ANTHROPIC_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -34715,6 +37319,7 @@ pub const MODELS_VERTEX_AI_ANTHROPIC_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -34728,6 +37333,7 @@ pub const MODELS_VERTEX_AI_ANTHROPIC_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -34741,6 +37347,7 @@ pub const MODELS_VERTEX_AI_ANTHROPIC_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -34754,6 +37361,7 @@ pub const MODELS_VERTEX_AI_ANTHROPIC_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -34767,6 +37375,7 @@ pub const MODELS_VERTEX_AI_ANTHROPIC_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -34780,6 +37389,7 @@ pub const MODELS_VERTEX_AI_ANTHROPIC_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -34793,6 +37403,7 @@ pub const MODELS_VERTEX_AI_ANTHROPIC_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -34806,6 +37417,7 @@ pub const MODELS_VERTEX_AI_ANTHROPIC_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -34819,6 +37431,7 @@ pub const MODELS_VERTEX_AI_ANTHROPIC_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -34832,6 +37445,7 @@ pub const MODELS_VERTEX_AI_ANTHROPIC_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -34845,6 +37459,7 @@ pub const MODELS_VERTEX_AI_ANTHROPIC_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -34858,6 +37473,7 @@ pub const MODELS_VERTEX_AI_ANTHROPIC_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -34871,6 +37487,7 @@ pub const MODELS_VERTEX_AI_ANTHROPIC_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -34884,6 +37501,7 @@ pub const MODELS_VERTEX_AI_ANTHROPIC_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -34897,6 +37515,7 @@ pub const MODELS_VERTEX_AI_ANTHROPIC_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -34910,6 +37529,7 @@ pub const MODELS_VERTEX_AI_ANTHROPIC_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -34923,6 +37543,7 @@ pub const MODELS_VERTEX_AI_ANTHROPIC_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -34936,6 +37557,7 @@ pub const MODELS_VERTEX_AI_ANTHROPIC_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -34949,6 +37571,7 @@ pub const MODELS_VERTEX_AI_ANTHROPIC_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -34962,6 +37585,7 @@ pub const MODELS_VERTEX_AI_ANTHROPIC_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -34975,6 +37599,7 @@ pub const MODELS_VERTEX_AI_ANTHROPIC_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -34988,6 +37613,7 @@ pub const MODELS_VERTEX_AI_ANTHROPIC_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -35001,6 +37627,7 @@ pub const MODELS_VERTEX_AI_ANTHROPIC_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -35014,6 +37641,7 @@ pub const MODELS_VERTEX_AI_ANTHROPIC_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -35027,6 +37655,7 @@ pub const MODELS_VERTEX_AI_ANTHROPIC_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -35055,6 +37684,7 @@ pub const PROVIDER_VERTEX_AI_DEEPSEEK_MODELS: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: false,
         vision: false,
         batch: true,
@@ -35070,6 +37700,7 @@ pub const MODELS_VERTEX_AI_DEEPSEEK_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -35083,6 +37714,7 @@ pub const MODELS_VERTEX_AI_DEEPSEEK_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -35096,6 +37728,7 @@ pub const MODELS_VERTEX_AI_DEEPSEEK_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -35124,6 +37757,7 @@ pub const PROVIDER_VERTEX_AI_EMBEDDING_MODELS: ProviderDef = ProviderDef {
         chat_completions: false,
         streaming: false,
         tool_use: false,
+        tool_choice: false,
         embeddings: true,
         vision: false,
         batch: true,
@@ -35139,6 +37773,7 @@ pub const MODELS_VERTEX_AI_EMBEDDING_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -35152,6 +37787,7 @@ pub const MODELS_VERTEX_AI_EMBEDDING_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -35165,6 +37801,7 @@ pub const MODELS_VERTEX_AI_EMBEDDING_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -35178,6 +37815,7 @@ pub const MODELS_VERTEX_AI_EMBEDDING_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -35191,6 +37829,7 @@ pub const MODELS_VERTEX_AI_EMBEDDING_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -35204,6 +37843,7 @@ pub const MODELS_VERTEX_AI_EMBEDDING_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -35217,6 +37857,7 @@ pub const MODELS_VERTEX_AI_EMBEDDING_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -35230,6 +37871,7 @@ pub const MODELS_VERTEX_AI_EMBEDDING_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -35243,6 +37885,7 @@ pub const MODELS_VERTEX_AI_EMBEDDING_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -35256,6 +37899,7 @@ pub const MODELS_VERTEX_AI_EMBEDDING_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -35284,6 +37928,7 @@ pub const PROVIDER_VERTEX_AI_IMAGE_MODELS: ProviderDef = ProviderDef {
         chat_completions: false,
         streaming: false,
         tool_use: false,
+        tool_choice: false,
         embeddings: false,
         vision: false,
         batch: true,
@@ -35299,6 +37944,7 @@ pub const MODELS_VERTEX_AI_IMAGE_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -35312,6 +37958,7 @@ pub const MODELS_VERTEX_AI_IMAGE_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -35325,6 +37972,7 @@ pub const MODELS_VERTEX_AI_IMAGE_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -35338,6 +37986,7 @@ pub const MODELS_VERTEX_AI_IMAGE_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -35351,6 +38000,7 @@ pub const MODELS_VERTEX_AI_IMAGE_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -35364,6 +38014,7 @@ pub const MODELS_VERTEX_AI_IMAGE_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -35377,6 +38028,7 @@ pub const MODELS_VERTEX_AI_IMAGE_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -35390,6 +38042,7 @@ pub const MODELS_VERTEX_AI_IMAGE_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -35418,6 +38071,7 @@ pub const PROVIDER_VERTEX_AI_LANGUAGE_MODELS: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: true,
         vision: true,
         batch: true,
@@ -35433,6 +38087,7 @@ pub const MODELS_VERTEX_AI_LANGUAGE_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -35446,6 +38101,7 @@ pub const MODELS_VERTEX_AI_LANGUAGE_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -35459,6 +38115,7 @@ pub const MODELS_VERTEX_AI_LANGUAGE_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -35472,6 +38129,7 @@ pub const MODELS_VERTEX_AI_LANGUAGE_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -35485,6 +38143,7 @@ pub const MODELS_VERTEX_AI_LANGUAGE_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -35498,6 +38157,7 @@ pub const MODELS_VERTEX_AI_LANGUAGE_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -35511,6 +38171,7 @@ pub const MODELS_VERTEX_AI_LANGUAGE_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -35524,6 +38185,7 @@ pub const MODELS_VERTEX_AI_LANGUAGE_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -35537,6 +38199,7 @@ pub const MODELS_VERTEX_AI_LANGUAGE_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -35550,6 +38213,7 @@ pub const MODELS_VERTEX_AI_LANGUAGE_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -35563,6 +38227,7 @@ pub const MODELS_VERTEX_AI_LANGUAGE_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -35576,6 +38241,7 @@ pub const MODELS_VERTEX_AI_LANGUAGE_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -35589,6 +38255,7 @@ pub const MODELS_VERTEX_AI_LANGUAGE_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -35602,6 +38269,7 @@ pub const MODELS_VERTEX_AI_LANGUAGE_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -35615,6 +38283,7 @@ pub const MODELS_VERTEX_AI_LANGUAGE_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -35628,6 +38297,7 @@ pub const MODELS_VERTEX_AI_LANGUAGE_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -35641,6 +38311,7 @@ pub const MODELS_VERTEX_AI_LANGUAGE_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -35654,6 +38325,7 @@ pub const MODELS_VERTEX_AI_LANGUAGE_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -35667,6 +38339,7 @@ pub const MODELS_VERTEX_AI_LANGUAGE_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -35680,6 +38353,7 @@ pub const MODELS_VERTEX_AI_LANGUAGE_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -35693,6 +38367,7 @@ pub const MODELS_VERTEX_AI_LANGUAGE_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -35706,6 +38381,7 @@ pub const MODELS_VERTEX_AI_LANGUAGE_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -35719,6 +38395,7 @@ pub const MODELS_VERTEX_AI_LANGUAGE_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -35732,6 +38409,7 @@ pub const MODELS_VERTEX_AI_LANGUAGE_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -35745,6 +38423,7 @@ pub const MODELS_VERTEX_AI_LANGUAGE_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -35758,6 +38437,7 @@ pub const MODELS_VERTEX_AI_LANGUAGE_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -35771,6 +38451,7 @@ pub const MODELS_VERTEX_AI_LANGUAGE_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -35784,6 +38465,7 @@ pub const MODELS_VERTEX_AI_LANGUAGE_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -35797,6 +38479,7 @@ pub const MODELS_VERTEX_AI_LANGUAGE_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -35810,6 +38493,7 @@ pub const MODELS_VERTEX_AI_LANGUAGE_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -35823,6 +38507,7 @@ pub const MODELS_VERTEX_AI_LANGUAGE_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -35836,6 +38521,7 @@ pub const MODELS_VERTEX_AI_LANGUAGE_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -35849,6 +38535,7 @@ pub const MODELS_VERTEX_AI_LANGUAGE_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -35862,6 +38549,7 @@ pub const MODELS_VERTEX_AI_LANGUAGE_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -35890,6 +38578,7 @@ pub const PROVIDER_VERTEX_AI_LLAMA_MODELS: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: false,
         vision: true,
         batch: true,
@@ -35905,6 +38594,7 @@ pub const MODELS_VERTEX_AI_LLAMA_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -35918,6 +38608,7 @@ pub const MODELS_VERTEX_AI_LLAMA_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -35931,6 +38622,7 @@ pub const MODELS_VERTEX_AI_LLAMA_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -35944,6 +38636,7 @@ pub const MODELS_VERTEX_AI_LLAMA_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -35957,6 +38650,7 @@ pub const MODELS_VERTEX_AI_LLAMA_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -35970,6 +38664,7 @@ pub const MODELS_VERTEX_AI_LLAMA_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -35983,6 +38678,7 @@ pub const MODELS_VERTEX_AI_LLAMA_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -35996,6 +38692,7 @@ pub const MODELS_VERTEX_AI_LLAMA_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -36009,6 +38706,7 @@ pub const MODELS_VERTEX_AI_LLAMA_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -36022,6 +38720,7 @@ pub const MODELS_VERTEX_AI_LLAMA_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -36035,6 +38734,7 @@ pub const MODELS_VERTEX_AI_LLAMA_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -36063,6 +38763,7 @@ pub const PROVIDER_VERTEX_AI_MINIMAX_MODELS: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: false,
         vision: false,
         batch: true,
@@ -36077,6 +38778,7 @@ pub const MODELS_VERTEX_AI_MINIMAX_MODELS: &[ModelDef] = &[ModelDef {
     capabilities: ModelCapabilities {
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         vision: false,
         extended_thinking: false,
     },
@@ -36104,6 +38806,7 @@ pub const PROVIDER_VERTEX_AI_MISTRAL_MODELS: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: false,
         vision: true,
         batch: true,
@@ -36119,6 +38822,7 @@ pub const MODELS_VERTEX_AI_MISTRAL_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -36132,6 +38836,7 @@ pub const MODELS_VERTEX_AI_MISTRAL_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -36145,6 +38850,7 @@ pub const MODELS_VERTEX_AI_MISTRAL_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -36158,6 +38864,7 @@ pub const MODELS_VERTEX_AI_MISTRAL_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -36171,6 +38878,7 @@ pub const MODELS_VERTEX_AI_MISTRAL_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -36184,6 +38892,7 @@ pub const MODELS_VERTEX_AI_MISTRAL_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -36197,6 +38906,7 @@ pub const MODELS_VERTEX_AI_MISTRAL_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -36210,6 +38920,7 @@ pub const MODELS_VERTEX_AI_MISTRAL_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -36223,6 +38934,7 @@ pub const MODELS_VERTEX_AI_MISTRAL_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -36236,6 +38948,7 @@ pub const MODELS_VERTEX_AI_MISTRAL_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -36249,6 +38962,7 @@ pub const MODELS_VERTEX_AI_MISTRAL_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -36262,6 +38976,7 @@ pub const MODELS_VERTEX_AI_MISTRAL_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -36275,6 +38990,7 @@ pub const MODELS_VERTEX_AI_MISTRAL_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -36288,6 +39004,7 @@ pub const MODELS_VERTEX_AI_MISTRAL_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -36301,6 +39018,7 @@ pub const MODELS_VERTEX_AI_MISTRAL_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -36314,6 +39032,7 @@ pub const MODELS_VERTEX_AI_MISTRAL_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -36327,6 +39046,7 @@ pub const MODELS_VERTEX_AI_MISTRAL_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -36340,6 +39060,7 @@ pub const MODELS_VERTEX_AI_MISTRAL_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -36353,6 +39074,7 @@ pub const MODELS_VERTEX_AI_MISTRAL_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -36381,6 +39103,7 @@ pub const PROVIDER_VERTEX_AI_MOONSHOT_MODELS: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: false,
         vision: false,
         batch: true,
@@ -36395,6 +39118,7 @@ pub const MODELS_VERTEX_AI_MOONSHOT_MODELS: &[ModelDef] = &[ModelDef {
     capabilities: ModelCapabilities {
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         vision: false,
         extended_thinking: false,
     },
@@ -36422,6 +39146,7 @@ pub const PROVIDER_VERTEX_AI_OPENAI_MODELS: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: false,
         vision: true,
         batch: true,
@@ -36437,6 +39162,7 @@ pub const MODELS_VERTEX_AI_OPENAI_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -36450,6 +39176,7 @@ pub const MODELS_VERTEX_AI_OPENAI_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -36463,6 +39190,7 @@ pub const MODELS_VERTEX_AI_OPENAI_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -36491,6 +39219,7 @@ pub const PROVIDER_VERTEX_AI_QWEN_MODELS: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: false,
         vision: false,
         batch: true,
@@ -36506,6 +39235,7 @@ pub const MODELS_VERTEX_AI_QWEN_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -36519,6 +39249,7 @@ pub const MODELS_VERTEX_AI_QWEN_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -36532,6 +39263,7 @@ pub const MODELS_VERTEX_AI_QWEN_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -36545,6 +39277,7 @@ pub const MODELS_VERTEX_AI_QWEN_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -36573,6 +39306,7 @@ pub const PROVIDER_VERTEX_AI_TEXT_MODELS: ProviderDef = ProviderDef {
         chat_completions: false,
         streaming: true,
         tool_use: false,
+        tool_choice: false,
         embeddings: false,
         vision: false,
         batch: true,
@@ -36588,6 +39322,7 @@ pub const MODELS_VERTEX_AI_TEXT_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -36601,6 +39336,7 @@ pub const MODELS_VERTEX_AI_TEXT_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -36629,6 +39365,7 @@ pub const PROVIDER_VERTEX_AI_VIDEO_MODELS: ProviderDef = ProviderDef {
         chat_completions: false,
         streaming: false,
         tool_use: false,
+        tool_choice: false,
         embeddings: false,
         vision: false,
         batch: true,
@@ -36644,6 +39381,7 @@ pub const MODELS_VERTEX_AI_VIDEO_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -36657,6 +39395,7 @@ pub const MODELS_VERTEX_AI_VIDEO_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -36670,6 +39409,7 @@ pub const MODELS_VERTEX_AI_VIDEO_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -36683,6 +39423,7 @@ pub const MODELS_VERTEX_AI_VIDEO_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -36696,6 +39437,7 @@ pub const MODELS_VERTEX_AI_VIDEO_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -36709,6 +39451,7 @@ pub const MODELS_VERTEX_AI_VIDEO_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -36722,6 +39465,7 @@ pub const MODELS_VERTEX_AI_VIDEO_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -36750,6 +39494,7 @@ pub const PROVIDER_VERTEX_AI_ZAI_MODELS: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: false,
         vision: false,
         batch: true,
@@ -36765,6 +39510,7 @@ pub const MODELS_VERTEX_AI_ZAI_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -36778,6 +39524,7 @@ pub const MODELS_VERTEX_AI_ZAI_MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -36798,6 +39545,7 @@ pub const PROVIDER_VOLCENGINE: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: true,
         vision: true,
         batch: false,
@@ -36813,6 +39561,7 @@ pub const MODELS_VOLCENGINE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -36826,6 +39575,7 @@ pub const MODELS_VOLCENGINE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -36839,6 +39589,7 @@ pub const MODELS_VOLCENGINE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -36852,6 +39603,7 @@ pub const MODELS_VOLCENGINE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -36865,6 +39617,7 @@ pub const MODELS_VOLCENGINE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -36878,6 +39631,7 @@ pub const MODELS_VOLCENGINE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -36891,6 +39645,7 @@ pub const MODELS_VOLCENGINE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: true,
         },
@@ -36904,6 +39659,7 @@ pub const MODELS_VOLCENGINE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: true,
         },
@@ -36917,6 +39673,7 @@ pub const MODELS_VOLCENGINE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: true,
         },
@@ -36930,6 +39687,7 @@ pub const MODELS_VOLCENGINE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: true,
         },
@@ -36943,6 +39701,7 @@ pub const MODELS_VOLCENGINE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -36956,6 +39715,7 @@ pub const MODELS_VOLCENGINE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -36976,6 +39736,7 @@ pub const PROVIDER_VOYAGE: ProviderDef = ProviderDef {
         chat_completions: false,
         streaming: false,
         tool_use: false,
+        tool_choice: false,
         embeddings: true,
         vision: false,
         batch: false,
@@ -36991,6 +39752,7 @@ pub const MODELS_VOYAGE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37004,6 +39766,7 @@ pub const MODELS_VOYAGE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37017,6 +39780,7 @@ pub const MODELS_VOYAGE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37030,6 +39794,7 @@ pub const MODELS_VOYAGE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37043,6 +39808,7 @@ pub const MODELS_VOYAGE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37056,6 +39822,7 @@ pub const MODELS_VOYAGE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37069,6 +39836,7 @@ pub const MODELS_VOYAGE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37082,6 +39850,7 @@ pub const MODELS_VOYAGE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37095,6 +39864,7 @@ pub const MODELS_VOYAGE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37108,6 +39878,7 @@ pub const MODELS_VOYAGE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37121,6 +39892,7 @@ pub const MODELS_VOYAGE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37134,6 +39906,7 @@ pub const MODELS_VOYAGE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37147,6 +39920,7 @@ pub const MODELS_VOYAGE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37160,6 +39934,7 @@ pub const MODELS_VOYAGE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37173,6 +39948,7 @@ pub const MODELS_VOYAGE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37186,6 +39962,7 @@ pub const MODELS_VOYAGE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37199,6 +39976,7 @@ pub const MODELS_VOYAGE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37212,6 +39990,7 @@ pub const MODELS_VOYAGE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37225,6 +40004,7 @@ pub const MODELS_VOYAGE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37245,6 +40025,7 @@ pub const PROVIDER_WANDB: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: false,
         embeddings: false,
         vision: true,
         batch: false,
@@ -37260,6 +40041,7 @@ pub const MODELS_WANDB: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -37273,6 +40055,7 @@ pub const MODELS_WANDB: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37286,6 +40069,7 @@ pub const MODELS_WANDB: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37299,6 +40083,7 @@ pub const MODELS_WANDB: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37312,6 +40097,7 @@ pub const MODELS_WANDB: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37325,6 +40111,7 @@ pub const MODELS_WANDB: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37338,6 +40125,7 @@ pub const MODELS_WANDB: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37351,6 +40139,7 @@ pub const MODELS_WANDB: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37364,6 +40153,7 @@ pub const MODELS_WANDB: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37377,6 +40167,7 @@ pub const MODELS_WANDB: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37390,6 +40181,7 @@ pub const MODELS_WANDB: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37403,6 +40195,7 @@ pub const MODELS_WANDB: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37416,6 +40209,7 @@ pub const MODELS_WANDB: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: true,
         },
@@ -37429,6 +40223,7 @@ pub const MODELS_WANDB: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37442,6 +40237,7 @@ pub const MODELS_WANDB: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37455,6 +40251,7 @@ pub const MODELS_WANDB: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37483,6 +40280,7 @@ pub const PROVIDER_WATSONX: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: false,
         vision: true,
         batch: false,
@@ -37498,6 +40296,7 @@ pub const MODELS_WATSONX: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37511,6 +40310,7 @@ pub const MODELS_WATSONX: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37524,6 +40324,7 @@ pub const MODELS_WATSONX: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37537,6 +40338,7 @@ pub const MODELS_WATSONX: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37550,6 +40352,7 @@ pub const MODELS_WATSONX: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37563,6 +40366,7 @@ pub const MODELS_WATSONX: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37576,6 +40380,7 @@ pub const MODELS_WATSONX: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -37589,6 +40394,7 @@ pub const MODELS_WATSONX: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37602,6 +40408,7 @@ pub const MODELS_WATSONX: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37615,6 +40422,7 @@ pub const MODELS_WATSONX: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37628,6 +40436,7 @@ pub const MODELS_WATSONX: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37641,6 +40450,7 @@ pub const MODELS_WATSONX: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37654,6 +40464,7 @@ pub const MODELS_WATSONX: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37667,6 +40478,7 @@ pub const MODELS_WATSONX: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -37680,6 +40492,7 @@ pub const MODELS_WATSONX: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -37693,6 +40506,7 @@ pub const MODELS_WATSONX: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37706,6 +40520,7 @@ pub const MODELS_WATSONX: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37719,6 +40534,7 @@ pub const MODELS_WATSONX: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -37732,6 +40548,7 @@ pub const MODELS_WATSONX: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37745,6 +40562,7 @@ pub const MODELS_WATSONX: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37758,6 +40576,7 @@ pub const MODELS_WATSONX: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -37771,6 +40590,7 @@ pub const MODELS_WATSONX: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -37784,6 +40604,7 @@ pub const MODELS_WATSONX: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37797,6 +40618,7 @@ pub const MODELS_WATSONX: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37810,6 +40632,7 @@ pub const MODELS_WATSONX: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37823,6 +40646,7 @@ pub const MODELS_WATSONX: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -37836,6 +40660,7 @@ pub const MODELS_WATSONX: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37849,6 +40674,7 @@ pub const MODELS_WATSONX: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37862,6 +40688,7 @@ pub const MODELS_WATSONX: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: false,
             tool_use: false,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -37882,6 +40709,7 @@ pub const PROVIDER_XAI: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: false,
         vision: true,
         batch: false,
@@ -37897,6 +40725,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -37910,6 +40739,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -37923,6 +40753,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -37936,6 +40767,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -37949,6 +40781,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -37962,6 +40795,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -37975,6 +40809,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -37988,6 +40823,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -38001,6 +40837,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -38014,6 +40851,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -38027,6 +40865,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -38040,6 +40879,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -38053,6 +40893,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -38066,6 +40907,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -38079,6 +40921,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -38092,6 +40935,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -38105,6 +40949,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -38118,6 +40963,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -38131,6 +40977,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -38144,6 +40991,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -38157,6 +41005,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -38170,6 +41019,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -38183,6 +41033,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -38196,6 +41047,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -38209,6 +41061,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -38222,6 +41075,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -38235,6 +41089,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -38248,6 +41103,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -38261,6 +41117,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -38274,6 +41131,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -38287,6 +41145,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -38300,6 +41159,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -38313,6 +41173,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: true,
         },
@@ -38326,6 +41187,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -38339,6 +41201,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -38352,6 +41215,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -38365,6 +41229,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -38378,6 +41243,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -38398,6 +41264,7 @@ pub const PROVIDER_YOU_COM: ProviderDef = ProviderDef {
         chat_completions: false,
         streaming: false,
         tool_use: false,
+        tool_choice: false,
         embeddings: false,
         vision: false,
         batch: false,
@@ -38412,6 +41279,7 @@ pub const MODELS_YOU_COM: &[ModelDef] = &[ModelDef {
     capabilities: ModelCapabilities {
         streaming: false,
         tool_use: false,
+        tool_choice: false,
         vision: false,
         extended_thinking: false,
     },
@@ -38431,6 +41299,7 @@ pub const PROVIDER_ZAI: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: true,
         embeddings: false,
         vision: true,
         batch: false,
@@ -38446,6 +41315,7 @@ pub const MODELS_ZAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -38459,6 +41329,7 @@ pub const MODELS_ZAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -38472,6 +41343,7 @@ pub const MODELS_ZAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -38485,6 +41357,7 @@ pub const MODELS_ZAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -38498,6 +41371,7 @@ pub const MODELS_ZAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -38511,6 +41385,7 @@ pub const MODELS_ZAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: false,
         },
@@ -38524,6 +41399,7 @@ pub const MODELS_ZAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: true,
             extended_thinking: false,
         },
@@ -38537,6 +41413,7 @@ pub const MODELS_ZAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -38550,6 +41427,7 @@ pub const MODELS_ZAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -38563,6 +41441,7 @@ pub const MODELS_ZAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },
@@ -38576,6 +41455,7 @@ pub const MODELS_ZAI: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: true,
             vision: false,
             extended_thinking: true,
         },

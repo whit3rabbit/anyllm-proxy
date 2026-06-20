@@ -47,6 +47,7 @@ pub fn parse_simple_yaml(yaml: &str) -> SimpleParsed {
     #[derive(Hash, PartialEq, Eq)]
     struct BackendKey {
         kind: String,
+        provider_id: String,
         base_url: String,
         api_key_hash: u64,
     }
@@ -96,6 +97,7 @@ pub fn parse_simple_yaml(yaml: &str) -> SimpleParsed {
 
         let bk = BackendKey {
             kind: format!("{kind:?}"),
+            provider_id: norm.provider.clone(),
             base_url: base_url.clone(),
             api_key_hash: hash_str(&api_key),
         };
@@ -412,6 +414,7 @@ fn build_backend_config(
 
     BackendConfig {
         kind: kind.clone(),
+        provider_id: Some(entry.provider.clone()),
         api_key: api_key.to_string(),
         base_url: base_url.to_string(),
         api_format: OpenAIApiFormat::Chat,

@@ -51,6 +51,20 @@ fn prefix_match() {
 }
 
 #[test]
+fn empty_pattern_is_not_a_catch_all() {
+    // A custom pricing file with an empty model_pattern must not become a
+    // catch-all that bills every unknown model; the miss path must still fire.
+    let pricing = ModelPricing::from_entries(vec![ModelPricingEntry {
+        model_pattern: String::new(),
+        input_cost_per_token: 1.0,
+        output_cost_per_token: 1.0,
+        provider: "bogus".to_string(),
+    }]);
+    assert_eq!(pricing.price_for_model("anything"), None);
+    assert_eq!(pricing.cost_for_usage("anything", 1000, 500), 0.0);
+}
+
+#[test]
 fn prefix_match_longest_wins() {
     let pricing = test_pricing();
     // "gpt-4o-mini-2024" should match "gpt-4o-mini" (longer prefix) not "gpt-4o"

@@ -1,9 +1,17 @@
 use crate::backend::openai_client::OpenAIClient;
 use crate::backend::SseFrameBuffer;
+use crate::config::BackendKind;
+use crate::openai_tool_policy::{
+    parse_openai_chat_completion_chunk, prepare_openai_tool_request, OpenAiToolPolicyContext,
+};
 use crate::server::middleware::VirtualKeyContext;
 use crate::server::state::ToolEngineState;
-use anyllm_translate::{anthropic, mapping, openai, ReverseStreamingTranslator};
+use anyllm_providers::ProviderCatalog;
+use anyllm_translate::{
+    anthropic, mapping, openai, ReverseStreamingTranslator, TranslationWarnings,
+};
 use futures::StreamExt;
+use std::sync::Arc;
 
 #[allow(clippy::too_many_arguments)]
 pub(super) async fn run_tool_loop_for_stream(
@@ -17,6 +25,9 @@ pub(super) async fn run_tool_loop_for_stream(
     tx: &tokio::sync::mpsc::Sender<Result<String, std::convert::Infallible>>,
     _vk_ctx: &Option<VirtualKeyContext>,
     _log_shared: &Option<crate::admin::state::SharedState>,
+    backend_kind: BackendKind,
+    provider_id: Option<String>,
+    provider_catalog: Arc<ProviderCatalog>,
 ) {
     let loop_start = std::time::Instant::now();
     let mut current_messages = anthropic_req_for_tools.messages.clone();
@@ -91,6 +102,23 @@ pub(super) async fn run_tool_loop_for_stream(
                 include_usage: true,
             });
         }
+        let mut follow_up_warnings = TranslationWarnings::default();
+        if let Err(err) = prepare_openai_tool_request(
+            &mut follow_up_openai,
+            OpenAiToolPolicyContext {
+                backend_kind: backend_kind.clone(),
+                provider_id: provider_id.as_deref(),
+                model: cost_model,
+                provider_catalog: &provider_catalog,
+            },
+            &mut follow_up_warnings,
+        ) {
+            tracing::warn!(
+                error = %err,
+                "follow-up streaming backend call rejected by tool policy"
+            );
+            break 'tool_loop;
+        }
 
         tracing::info!(
             tools_executed = results.len(),
@@ -141,10 +169,7 @@ pub(super) async fn run_tool_loop_for_stream(
                                     if json_str == "[DONE]" {
                                         continue;
                                     }
-                                    if let Ok(chunk) =
-                                        serde_json::from_str::<openai::ChatCompletionChunk>(
-                                            json_str,
-                                        )
+                                    if let Ok(chunk) = parse_openai_chat_completion_chunk(json_str)
                                     {
                                         // Accumulate tool calls for the next iteration.
                                         if let Some(choice) = chunk.choices.first() {

@@ -83,6 +83,8 @@ pub struct AppState {
     pub shared: Option<SharedState>,
     /// Backend name for logging purposes.
     pub backend_name: String,
+    /// Canonical provider id used for provider/model policy decisions.
+    pub provider_id: Option<String>,
     /// Concurrency limiter. Uses try_acquire (fail-fast) instead of queueing
     /// to prevent cascading latency under load. Requests exceeding the limit
     /// get 429 immediately, matching Anthropic's rate limiting behavior.
@@ -187,10 +189,11 @@ impl AppState {
                                     tracing::warn!("managed_backends RwLock is poisoned; skipping managed backend lookup");
                                     None
                                 })?;
-                            guard.get(&backend_name).map(|(_, client)| {
+                            guard.get(&backend_name).map(|(row, client)| {
                                 let mut state = self.clone();
                                 state.backend = client.clone();
                                 state.backend_name = backend_name.clone();
+                                state.provider_id = Some(row.provider_id.clone());
                                 state
                             })
                         })

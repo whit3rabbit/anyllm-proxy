@@ -6,6 +6,8 @@ pub mod errors;
 pub mod responses;
 /// OpenAI Chat Completions SSE streaming chunk types.
 pub mod streaming;
+/// OpenAI-compatible tool-call wire normalization helpers.
+pub mod tool_normalization;
 
 pub use chat_completions::{
     ChatCompletionRequest, ChatCompletionResponse, ChatContent, ChatContentPart, ChatMessage,

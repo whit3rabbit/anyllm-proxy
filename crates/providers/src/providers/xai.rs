@@ -17,6 +17,7 @@ pub const PROVIDER: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: true,
+        tool_choice: false,
         // xAI does not publish a public embeddings endpoint as of this writing.
         embeddings: false,
         // Vision is supported on a subset of models (grok-2-vision-1212, grok-4.1-fast, etc.).
@@ -39,6 +40,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -54,6 +56,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -67,6 +70,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -82,6 +86,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -95,6 +100,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },
@@ -109,6 +115,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -122,6 +129,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -136,6 +144,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: true,
         },

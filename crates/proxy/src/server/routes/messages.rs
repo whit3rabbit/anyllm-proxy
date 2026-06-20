@@ -5,8 +5,11 @@ use super::helpers::{
 };
 use crate::backend::{BackendClient, BackendError};
 use crate::cache::{self, CacheBackend, CacheNamespace};
+use crate::openai_tool_policy::{
+    backend_kind_for_policy, prepare_openai_tool_request, OpenAiToolPolicyContext,
+};
 use crate::server::state::{AnthropicJson, AppState, ConcurrencyPermit};
-use anyllm_translate::{anthropic, compute_request_warnings, mapping};
+use anyllm_translate::{anthropic, compute_request_warnings, mapping, TranslationWarnings};
 use axum::{
     extract::State,
     http::StatusCode,
@@ -68,7 +71,7 @@ pub(crate) async fn messages(
         );
     }
 
-    let warnings = compute_request_warnings(&body);
+    let mut warnings = compute_request_warnings(&body);
 
     let is_streaming = body.stream == Some(true);
 
@@ -131,8 +134,8 @@ pub(crate) async fn messages(
 
     // Non-streaming: check cache before calling backend.
     let body_value = serde_json::to_value(&body).unwrap_or_default();
-    let cache_ttl = match cache::parse_cache_ttl(&body_value) {
-        Ok(ttl) => ttl,
+    let cache_control = match cache::parse_cache_control(&body_value) {
+        Ok(control) => control,
         Err(msg) => {
             let err = mapping::errors_map::create_anthropic_error(
                 anthropic::ErrorType::InvalidRequestError,
@@ -142,7 +145,6 @@ pub(crate) async fn messages(
             return (StatusCode::BAD_REQUEST, Json(err)).into_response();
         }
     };
-    let bypass_cache = cache_ttl == Some(0);
 
     // Resolve model routing (may switch to a different backend) before reading
     // cache so route-scoped keys cannot receive cached disallowed-backend data.
@@ -162,33 +164,42 @@ pub(crate) async fn messages(
         }
     }
     let auth_identity = cache_auth_identity(&headers, &vk_ctx);
-    let cache_key = if !bypass_cache {
+    let cache_key = if cache_control.lookup || cache_control.store {
         Some(cache::cache_key_for_request(
             &body_value,
             CacheNamespace::Anthropic,
             &cache::CacheScope {
                 backend_name: &effective.backend_name,
                 auth_identity: &auth_identity,
+                namespace: cache_control.namespace.as_deref(),
             },
         ))
     } else {
         None
     };
+    let store_cache_key = if cache_control.store {
+        cache_key.clone()
+    } else {
+        None
+    };
 
-    // Check cache on non-bypass requests
-    if let (Some(ref key), Some(ref c)) = (&cache_key, &state.cache) {
+    // Check cache when lookup is enabled.
+    if let (true, Some(ref key), Some(ref c)) = (cache_control.lookup, &cache_key, &state.cache) {
         if let Some(entry) = c.get(key).await {
-            tracing::debug!(cache_key = %key, "cache hit for /v1/messages");
-            let mut response = Response::builder()
-                .status(StatusCode::OK)
-                .header("content-type", "application/json")
-                .header("x-anyllm-cache", "hit")
-                .body(axum::body::Body::from(entry.response_body))
-                .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response());
-            if state.expose_degradation_warnings {
-                inject_degradation_header(response.headers_mut(), &warnings);
+            if cache::cache_entry_is_fresh(&entry, cache_control.max_age_secs) {
+                tracing::debug!(cache_key = %key, "cache hit for /v1/messages");
+                let mut response = Response::builder()
+                    .status(StatusCode::OK)
+                    .header("content-type", "application/json")
+                    .header("x-anyllm-cache", "hit")
+                    .body(axum::body::Body::from(entry.response_body))
+                    .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response());
+                if state.expose_degradation_warnings {
+                    inject_degradation_header(response.headers_mut(), &warnings);
+                }
+                return response;
             }
-            return response;
+            tracing::debug!(cache_key = %key, "cache entry rejected by cache.s-maxage");
         }
     }
 
@@ -205,31 +216,27 @@ pub(crate) async fn messages(
             let mut openai_req = mapping::message_map::anthropic_to_openai_request(&body);
             inject_gemini_thinking(&body, &effective.backend, &mut openai_req);
             inject_glm_thinking(&body, &effective.backend, &mut openai_req);
-            // Gemini/Vertex rejects standard JSON Schema keywords; sanitize tool schemas.
-            if matches!(
-                effective.backend,
-                BackendClient::GeminiOpenAI(_) | BackendClient::Vertex(_)
-            ) {
-                if let Some(tools) = openai_req.tools.take() {
-                    openai_req.tools = Some(
-                        tools
-                            .into_iter()
-                            .map(|mut t| {
-                                if let Some(params) = t.function.parameters.take() {
-                                    t.function.parameters = Some(
-                                        mapping::tools_map::sanitize_schema_for_gemini(params),
-                                    );
-                                }
-                                t
-                            })
-                            .collect(),
-                    );
-                }
-            }
             if effective.omit_stream_options {
                 openai_req.stream_options = None;
             }
             openai_req.model = mapped_model.clone();
+            if let Err(err) = prepare_openai_tool_request(
+                &mut openai_req,
+                OpenAiToolPolicyContext {
+                    backend_kind: backend_kind_for_policy(&effective.backend),
+                    provider_id: effective.provider_id.as_deref(),
+                    model: &mapped_model,
+                    provider_catalog: &effective.provider_catalog,
+                },
+                &mut warnings,
+            ) {
+                let err = mapping::errors_map::create_anthropic_error(
+                    anthropic::ErrorType::InvalidRequestError,
+                    err.to_string(),
+                    None,
+                );
+                return (StatusCode::BAD_REQUEST, Json(err)).into_response();
+            }
             let mapped_model = openai_req.model.clone();
             let original_model = body.model.clone();
 
@@ -250,6 +257,9 @@ pub(crate) async fn messages(
                         let model_for_tools = mapped_model.clone();
                         let orig_model_for_tools = original_model.clone();
                         let redact_follow_up = state.redact_secrets();
+                        let backend_kind_for_tools = backend_kind_for_policy(&effective.backend);
+                        let provider_id_for_tools = effective.provider_id.clone();
+                        let provider_catalog_for_tools = effective.provider_catalog.clone();
                         let server_advertised_tool_names = std::collections::HashSet::new();
                         let (resp, trace) = crate::tools::execution::maybe_execute_tools(
                             engine,
@@ -259,7 +269,11 @@ pub(crate) async fn messages(
                             |follow_up_req| {
                                 let c = client_for_tools.clone();
                                 let m = model_for_tools.clone();
+                                let policy_model = m.clone();
                                 let om = orig_model_for_tools.clone();
+                                let backend_kind = backend_kind_for_tools.clone();
+                                let provider_id = provider_id_for_tools.clone();
+                                let provider_catalog = provider_catalog_for_tools.clone();
                                 async move {
                                     let follow_up_req =
                                         match super::super::secret_redaction::redact_json_value(
@@ -276,6 +290,18 @@ pub(crate) async fn messages(
                                             &follow_up_req,
                                         );
                                     oai_req.model = m;
+                                    let mut follow_up_warnings = TranslationWarnings::default();
+                                    prepare_openai_tool_request(
+                                        &mut oai_req,
+                                        OpenAiToolPolicyContext {
+                                            backend_kind,
+                                            provider_id: provider_id.as_deref(),
+                                            model: &policy_model,
+                                            provider_catalog: &provider_catalog,
+                                        },
+                                        &mut follow_up_warnings,
+                                    )
+                                    .map_err(|err| err.to_string())?;
                                     match c.chat_completion(&oai_req).await {
                                         Ok((resp, _, _)) => {
                                             Ok(mapping::message_map::openai_to_anthropic_response(
@@ -331,15 +357,15 @@ pub(crate) async fn messages(
                     );
 
                     try_cache_response(
-                        &cache_key,
+                        &store_cache_key,
                         &state.cache,
-                        cache_ttl,
+                        cache_control.ttl_secs,
                         &anthropic_resp,
                         original_model,
                     )
                     .await;
 
-                    let cache_hv = cache_header_value(bypass_cache);
+                    let cache_hv = cache_header_value(!cache_control.lookup);
                     let mut response = (StatusCode::OK, Json(anthropic_resp)).into_response();
                     rate_limits.inject_anthropic_response_headers(response.headers_mut());
                     if state.expose_degradation_warnings {
@@ -418,15 +444,15 @@ pub(crate) async fn messages(
                         ),
                     );
                     try_cache_response(
-                        &cache_key,
+                        &store_cache_key,
                         &state.cache,
-                        cache_ttl,
+                        cache_control.ttl_secs,
                         &anthropic_resp,
                         original_model,
                     )
                     .await;
 
-                    let cache_hv = cache_header_value(bypass_cache);
+                    let cache_hv = cache_header_value(!cache_control.lookup);
                     let mut response = (StatusCode::OK, Json(anthropic_resp)).into_response();
                     rate_limits.inject_anthropic_response_headers(response.headers_mut());
                     if state.expose_degradation_warnings {

@@ -24,6 +24,7 @@ struct TomlConfig {
 #[derive(Deserialize)]
 struct TomlBackendConfig {
     kind: String,
+    provider_id: Option<String>,
     api_key: Option<String>,
     base_url: Option<String>,
     api_format: Option<String>,
@@ -346,6 +347,7 @@ impl MultiConfig {
 
         BackendConfig {
             kind,
+            provider_id: tb.provider_id.clone(),
             api_key,
             base_url,
             api_format,

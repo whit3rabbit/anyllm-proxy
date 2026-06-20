@@ -146,6 +146,7 @@ impl MultiConfig {
 
         let bc = BackendConfig {
             kind: config.backend.clone(),
+            provider_id: config.provider_id.clone(),
             api_key: config.openai_api_key.clone(),
             base_url: config.openai_base_url.clone(),
             api_format: config.openai_api_format.clone(),

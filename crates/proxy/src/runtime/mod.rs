@@ -5,6 +5,8 @@
 
 use crate::backend::{BackendClient, BackendError, RateLimitHeaders};
 use crate::config::{BackendKind, Config, ModelMapping, MultiConfig, OpenAIApiFormat};
+use crate::openai_tool_policy::{prepare_openai_tool_request, OpenAiToolPolicyContext};
+use anyllm_providers::ProviderCatalog;
 use anyllm_translate::{
     mapping, openai, translate_anthropic_to_openai_response, translate_openai_to_anthropic_request,
     TranslationWarnings,
@@ -150,6 +152,7 @@ pub struct ChatCompletionRuntime {
     default_backend: String,
     backends: Arc<HashMap<String, RuntimeBackend>>,
     model_router: Option<Arc<RwLock<crate::config::model_router::ModelRouter>>>,
+    provider_catalog: Arc<ProviderCatalog>,
 }
 
 #[derive(Clone)]
@@ -197,7 +200,7 @@ impl ChatCompletionRuntime {
                 api_format: bc.api_format.clone(),
                 omit_stream_options: bc.omit_stream_options,
                 stream_timeout_secs: bc.stream_timeout_secs,
-                provider_id: config.provider_id.map(str::to_string),
+                provider_id: config.provider_id.clone(),
             },
         );
 
@@ -205,6 +208,7 @@ impl ChatCompletionRuntime {
             default_backend,
             backends: Arc::new(backends),
             model_router: None,
+            provider_catalog: Arc::new(ProviderCatalog::bundled()),
         }
     }
 
@@ -230,7 +234,7 @@ impl ChatCompletionRuntime {
                     api_format: bc.api_format.clone(),
                     omit_stream_options: bc.omit_stream_options,
                     stream_timeout_secs: bc.stream_timeout_secs,
-                    provider_id: None,
+                    provider_id: bc.provider_id.clone(),
                 },
             );
         }
@@ -239,6 +243,7 @@ impl ChatCompletionRuntime {
             default_backend: config.default_backend,
             backends: Arc::new(backends),
             model_router,
+            provider_catalog: Arc::new(ProviderCatalog::bundled()),
         }
     }
 
@@ -328,7 +333,13 @@ impl ChatCompletionRuntime {
             | BackendClient::Vertex(client)
             | BackendClient::GeminiOpenAI(client) => {
                 let mut openai_req = req;
-                prepare_openai_request(&mut openai_req, &resolved, false, &mut warnings);
+                prepare_openai_request(
+                    &mut openai_req,
+                    &resolved,
+                    false,
+                    &mut warnings,
+                    &self.provider_catalog,
+                )?;
 
                 let start = record_start(&resolved.deployment);
                 match client.chat_completion(&openai_req).await {
@@ -416,7 +427,13 @@ impl ChatCompletionRuntime {
             | BackendClient::Vertex(client)
             | BackendClient::GeminiOpenAI(client) => {
                 let mut openai_req = req;
-                prepare_openai_request(&mut openai_req, &resolved, true, &mut warnings);
+                prepare_openai_request(
+                    &mut openai_req,
+                    &resolved,
+                    true,
+                    &mut warnings,
+                    &self.provider_catalog,
+                )?;
 
                 let start = record_start(&resolved.deployment);
                 match client.chat_completion_stream(&openai_req).await {
@@ -518,7 +535,8 @@ fn prepare_openai_request(
     resolved: &ResolvedBackend,
     streaming: bool,
     warnings: &mut TranslationWarnings,
-) {
+    provider_catalog: &ProviderCatalog,
+) -> Result<(), ChatCompletionError> {
     req.model = resolved.mapped_model.clone();
     req.stream = Some(streaming);
 
@@ -540,27 +558,16 @@ fn prepare_openai_request(
         req.stream_options = None;
     }
 
-    if matches!(
-        resolved.state.backend,
-        BackendClient::GeminiOpenAI(_) | BackendClient::Vertex(_)
-    ) {
-        sanitize_tools_for_gemini(req);
-    }
-}
-
-fn sanitize_tools_for_gemini(req: &mut openai::ChatCompletionRequest) {
-    if let Some(tools) = req.tools.take() {
-        req.tools = Some(
-            tools
-                .into_iter()
-                .map(|mut t| {
-                    if let Some(params) = t.function.parameters.take() {
-                        t.function.parameters =
-                            Some(mapping::tools_map::sanitize_schema_for_gemini(params));
-                    }
-                    t
-                })
-                .collect(),
-        );
-    }
+    prepare_openai_tool_request(
+        req,
+        OpenAiToolPolicyContext {
+            backend_kind: resolved.state.backend_kind.clone(),
+            provider_id: resolved.state.provider_id.as_deref(),
+            model: &resolved.mapped_model,
+            provider_catalog,
+        },
+        warnings,
+    )
+    .map(|_| ())
+    .map_err(|e| ChatCompletionError::InvalidRequest(e.to_string()))
 }

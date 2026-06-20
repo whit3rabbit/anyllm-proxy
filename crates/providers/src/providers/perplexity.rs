@@ -20,6 +20,7 @@ pub const PROVIDER: ProviderDef = ProviderDef {
         chat_completions: true,
         streaming: true,
         tool_use: false,
+        tool_choice: false,
         embeddings: false,
         vision: true,
         batch: false,
@@ -40,6 +41,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -54,6 +56,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: false,
         },
@@ -68,6 +71,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: true,
         },
@@ -82,6 +86,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: true,
         },
@@ -96,6 +101,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            tool_choice: false,
             vision: true,
             extended_thinking: true,
         },

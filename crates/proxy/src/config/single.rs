@@ -23,9 +23,8 @@ pub struct Config {
     pub expose_degradation_warnings: bool,
     /// Which OpenAI API format to use (only relevant when BACKEND=openai).
     pub openai_api_format: OpenAIApiFormat,
-    /// Provider ID when backend is an OpenAI-compatible stub (e.g. "zai", "groq").
-    /// None for first-party backends (OpenAI, Azure, Gemini, etc.).
-    pub provider_id: Option<&'static str>,
+    /// Provider ID when backend has provider-specific policy.
+    pub provider_id: Option<String>,
 }
 
 /// Validate that a GCP identifier (project ID, region) contains only safe characters.
@@ -162,7 +161,7 @@ impl Config {
                     redact_secrets,
                     expose_degradation_warnings,
                     openai_api_format,
-                    provider_id: stub_provider.map(|p| p.id),
+                    provider_id: stub_provider.map(|p| p.id.to_string()),
                 }
             }
             BackendKind::AzureOpenAI => {

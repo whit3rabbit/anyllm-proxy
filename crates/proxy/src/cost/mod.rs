@@ -192,10 +192,16 @@ impl ModelPricing {
             return self.entries.get(*index);
         }
 
+        // Skip empty patterns: `model.starts_with("")` is always true, which would
+        // turn an empty model_pattern (possible in a custom MODEL_PRICING_FILE) into
+        // a silent catch-all and bill every unknown model at that rate instead of
+        // logging the billing-leak miss.
         self.prefix_indexes
             .iter()
             .map(|index| &self.entries[*index])
-            .find(|entry| model.starts_with(&entry.model_pattern))
+            .find(|entry| {
+                !entry.model_pattern.is_empty() && model.starts_with(&entry.model_pattern)
+            })
     }
 
     /// Return (input_cost_per_token, output_cost_per_token) for a model, or None if unknown.

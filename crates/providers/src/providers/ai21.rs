@@ -20,6 +20,7 @@ pub const PROVIDER: ProviderDef = ProviderDef {
         streaming: true,
         // Jamba chat API accepts a `tools` array (function-type only).
         tool_use: true,
+        tool_choice: false,
         // Legacy J2 embed endpoint is no longer a listed Studio product.
         embeddings: false,
         // No image/vision input documented for Jamba chat.
@@ -41,6 +42,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },
@@ -54,6 +56,7 @@ pub const MODELS: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            tool_choice: false,
             vision: false,
             extended_thinking: false,
         },

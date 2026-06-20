@@ -1,9 +1,13 @@
 use crate::backend::anthropic_client::AnthropicClientError;
 use crate::backend::bedrock_client::BedrockClientError;
 use crate::backend::{BackendClient, BackendError};
+use crate::openai_tool_policy::{
+    backend_kind_for_policy, prepare_openai_tool_request, tool_policy_error_to_backend_error,
+    validate_anthropic_tool_request, OpenAiToolPolicyContext,
+};
 use crate::server::state::AppState;
-use anyllm_translate::anthropic;
 use anyllm_translate::mapping::message_map;
+use anyllm_translate::{anthropic, TranslationWarnings};
 use axum::http::StatusCode;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -35,6 +39,21 @@ pub(super) async fn call_backend_non_streaming(
     mapped_model: &str,
 ) -> Result<anthropic::MessageResponse, BackendError> {
     let original_model = req.model.clone();
+    if matches!(
+        state.backend,
+        BackendClient::Anthropic(_) | BackendClient::Bedrock(_)
+    ) {
+        validate_anthropic_tool_request(
+            req,
+            OpenAiToolPolicyContext {
+                backend_kind: backend_kind_for_policy(&state.backend),
+                provider_id: state.provider_id.as_deref(),
+                model: mapped_model,
+                provider_catalog: &state.provider_catalog,
+            },
+        )
+        .map_err(tool_policy_error_to_backend_error)?;
+    }
     match &state.backend {
         BackendClient::OpenAI(client)
         | BackendClient::AzureOpenAI(client)
@@ -42,6 +61,7 @@ pub(super) async fn call_backend_non_streaming(
         | BackendClient::GeminiOpenAI(client) => {
             let mut openai_req = message_map::anthropic_to_openai_request(req);
             openai_req.model = mapped_model.to_string();
+            prepare_openai_request_for_state(state, &mut openai_req, mapped_model)?;
             let (openai_resp, _status, _rate_limits) = client.chat_completion(&openai_req).await?;
             Ok(message_map::openai_to_anthropic_response(
                 &openai_resp,
@@ -51,6 +71,7 @@ pub(super) async fn call_backend_non_streaming(
         BackendClient::OpenAIResponses(client) => {
             let mut openai_req = message_map::anthropic_to_openai_request(req);
             openai_req.model = mapped_model.to_string();
+            prepare_openai_request_for_state(state, &mut openai_req, mapped_model)?;
             let (openai_resp, _status, _rate_limits) = client.chat_completion(&openai_req).await?;
             Ok(message_map::openai_to_anthropic_response(
                 &openai_resp,
@@ -91,6 +112,26 @@ pub(super) async fn call_backend_non_streaming(
             Ok(resp)
         }
     }
+}
+
+pub(super) fn prepare_openai_request_for_state(
+    state: &AppState,
+    openai_req: &mut anyllm_translate::openai::ChatCompletionRequest,
+    mapped_model: &str,
+) -> Result<(), BackendError> {
+    let mut warnings = TranslationWarnings::default();
+    prepare_openai_tool_request(
+        openai_req,
+        OpenAiToolPolicyContext {
+            backend_kind: backend_kind_for_policy(&state.backend),
+            provider_id: state.provider_id.as_deref(),
+            model: mapped_model,
+            provider_catalog: &state.provider_catalog,
+        },
+        &mut warnings,
+    )
+    .map(|_| ())
+    .map_err(tool_policy_error_to_backend_error)
 }
 
 /// Map a BackendError to an HTTP status and message for the Gemini error response.

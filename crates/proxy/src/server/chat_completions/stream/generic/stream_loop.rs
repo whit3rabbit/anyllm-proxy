@@ -1,4 +1,8 @@
 use crate::backend::{BackendClient, BackendError, SseFrameBuffer};
+use crate::openai_tool_policy::{
+    backend_kind_for_policy, parse_openai_chat_completion_chunk, prepare_openai_tool_request,
+    OpenAiToolPolicyContext,
+};
 use crate::server::routes::{inject_degradation_header, log_request, set_backend_error_kind};
 use crate::server::state::AppState;
 use anyllm_translate::{anthropic, mapping, openai, ReverseStreamingTranslator};
@@ -24,7 +28,7 @@ pub async fn generic_chat_completions_stream(
         ctx,
         original_model,
         mapped_model: mapped_model_resolved,
-        warnings,
+        mut warnings,
         safe_headers: _,
         concurrency_permit,
         vk_ctx,
@@ -36,26 +40,6 @@ pub async fn generic_chat_completions_stream(
     let mut openai_req = mapping::message_map::anthropic_to_openai_request(&anthropic_req);
     crate::server::routes::inject_gemini_thinking(&anthropic_req, &state.backend, &mut openai_req);
     crate::server::routes::inject_glm_thinking(&anthropic_req, &state.backend, &mut openai_req);
-    // Gemini/Vertex rejects standard JSON Schema keywords; sanitize tool schemas.
-    if matches!(
-        state.backend,
-        BackendClient::GeminiOpenAI(_) | BackendClient::Vertex(_)
-    ) {
-        if let Some(tools) = openai_req.tools.take() {
-            openai_req.tools = Some(
-                tools
-                    .into_iter()
-                    .map(|mut t| {
-                        if let Some(params) = t.function.parameters.take() {
-                            t.function.parameters =
-                                Some(mapping::tools_map::sanitize_schema_for_gemini(params));
-                        }
-                        t
-                    })
-                    .collect(),
-            );
-        }
-    }
     openai_req.model = mapped_model_resolved;
     openai_req.stream = Some(true);
     if !state.omit_stream_options {
@@ -81,6 +65,24 @@ pub async fn generic_chat_completions_stream(
         }
     };
 
+    let policy_model = openai_req.model.clone();
+    if let Err(err) = prepare_openai_tool_request(
+        &mut openai_req,
+        OpenAiToolPolicyContext {
+            backend_kind: backend_kind_for_policy(&state.backend),
+            provider_id: state.provider_id.as_deref(),
+            model: &policy_model,
+            provider_catalog: &state.provider_catalog,
+        },
+        &mut warnings,
+    ) {
+        return openai_error_response(
+            err.message(),
+            "invalid_request_error",
+            StatusCode::BAD_REQUEST,
+        );
+    }
+
     let mapped_model = openai_req.model.clone();
 
     // Start the backend request
@@ -99,6 +101,9 @@ pub async fn generic_chat_completions_stream(
             let anthropic_req_for_tools = anthropic_req.clone();
             let client_for_tools = client.clone();
             let omit_stream_options_for_tools = state.omit_stream_options;
+            let backend_kind_for_tools = backend_kind_for_policy(&state.backend);
+            let provider_id_for_tools = state.provider_id.clone();
+            let provider_catalog_for_tools = state.provider_catalog.clone();
             let permit = concurrency_permit;
             let mut deployment_accounting = deployment_accounting;
 
@@ -152,9 +157,7 @@ pub async fn generic_chat_completions_stream(
                                         // Parse OpenAI chunk, translate to Anthropic events,
                                         // then reverse-translate to OpenAI chunks
                                         if let Ok(chunk) =
-                                            serde_json::from_str::<openai::ChatCompletionChunk>(
-                                                json_str,
-                                            )
+                                            parse_openai_chat_completion_chunk(json_str)
                                         {
                                             // Accumulate tool call fragments from delta.
                                             if let Some(choice) = chunk.choices.first() {
@@ -285,6 +288,9 @@ pub async fn generic_chat_completions_stream(
                             &tx,
                             &vk_ctx,
                             &log_shared,
+                            backend_kind_for_tools.clone(),
+                            provider_id_for_tools.clone(),
+                            provider_catalog_for_tools.clone(),
                         )
                         .await;
                     }

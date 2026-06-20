@@ -23,6 +23,7 @@ pub const PROVIDER: ProviderDef = ProviderDef {
         streaming: true,
         // Tool use supported with llama.cpp backend for compatible models.
         tool_use: true,
+        tool_choice: false,
         // `/engines/v1/embeddings` is a first-class endpoint.
         embeddings: true,
         // Vision supported for multi-modal models (e.g. LLaVA).

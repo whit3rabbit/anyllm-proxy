@@ -29,6 +29,7 @@ pub const PROVIDER: ProviderDef = ProviderDef {
         // llama.cpp server supports function/tool calling for compatible
         // instruction-tuned models (grammar-constrained JSON output).
         tool_use: true,
+        tool_choice: false,
         // `/v1/embeddings` available when the bundled model supports it
         // (or when launched with `--embedding`).
         embeddings: true,

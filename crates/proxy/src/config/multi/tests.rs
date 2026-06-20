@@ -217,6 +217,22 @@ fn multi_config_custom_base_url() {
 }
 
 #[test]
+fn multi_config_preserves_provider_id() {
+    let toml = r#"
+        [backends.compat]
+        kind = "openai"
+        provider_id = "mistral"
+        api_key = "sk-test"
+        base_url = "https://api.mistral.ai/v1"
+    "#;
+    let mc = MultiConfig::from_toml_str(toml);
+    assert_eq!(
+        mc.backends["compat"].provider_id.as_deref(),
+        Some("mistral")
+    );
+}
+
+#[test]
 fn multi_config_api_format_responses() {
     let toml = r#"
         [backends.openai]

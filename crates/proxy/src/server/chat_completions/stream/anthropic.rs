@@ -1,4 +1,7 @@
 use crate::backend::{BackendError, SseFrameBuffer};
+use crate::openai_tool_policy::{
+    backend_kind_for_policy, validate_anthropic_tool_request, OpenAiToolPolicyContext,
+};
 use crate::server::routes::{inject_degradation_header, log_request, set_backend_error_kind};
 use crate::server::state::AppState;
 use crate::server::streaming::{AnthropicStreamUsage, StreamOutcome};
@@ -42,6 +45,21 @@ pub(super) async fn anthropic_chat_completions_stream(
 
     anthropic_req.model = mapped_model.clone();
     anthropic_req.stream = Some(true);
+    if let Err(err) = validate_anthropic_tool_request(
+        &anthropic_req,
+        OpenAiToolPolicyContext {
+            backend_kind: backend_kind_for_policy(&state.backend),
+            provider_id: state.provider_id.as_deref(),
+            model: &mapped_model,
+            provider_catalog: &state.provider_catalog,
+        },
+    ) {
+        return openai_error_response(
+            err.message(),
+            "invalid_request_error",
+            StatusCode::BAD_REQUEST,
+        );
+    }
     let body = match serialize_anthropic_upstream_request(&anthropic_req, &raw_anthropic_tools) {
         Ok(body) => body,
         Err(e) => {
