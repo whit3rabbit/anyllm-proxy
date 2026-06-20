@@ -3,6 +3,21 @@ use crate::server::state::AppState;
 use anyllm_providers::ProviderCatalog;
 use axum::extract::State;
 use axum::response::{IntoResponse, Json, Response};
+use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, LazyLock, Mutex, Weak};
+
+struct CachedAnthropicCatalogRows {
+    catalog: Weak<ProviderCatalog>,
+    rows: Arc<AnthropicCatalogRows>,
+}
+
+struct AnthropicCatalogRows {
+    rows: Arc<[serde_json::Value]>,
+    ids: Arc<HashSet<String>>,
+}
+
+static ANTHROPIC_CATALOG_ROWS_CACHE: LazyLock<Mutex<HashMap<usize, CachedAnthropicCatalogRows>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 pub(crate) fn anthropic_catalog_model_rows(catalog: &ProviderCatalog) -> Vec<serde_json::Value> {
     catalog
@@ -18,6 +33,40 @@ pub(crate) fn anthropic_catalog_model_rows(catalog: &ProviderCatalog) -> Vec<ser
             })
         })
         .collect()
+}
+
+fn cached_anthropic_catalog_model_rows(
+    catalog: &Arc<ProviderCatalog>,
+) -> Arc<AnthropicCatalogRows> {
+    let key = Arc::as_ptr(catalog) as usize;
+    let mut cache = ANTHROPIC_CATALOG_ROWS_CACHE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    if let Some(entry) = cache.get(&key) {
+        if let Some(cached_catalog) = entry.catalog.upgrade() {
+            if Arc::ptr_eq(&cached_catalog, catalog) {
+                return entry.rows.clone();
+            }
+        }
+    }
+
+    let rows = anthropic_catalog_model_rows(catalog);
+    let ids = rows
+        .iter()
+        .filter_map(|model| model["id"].as_str().map(str::to_string))
+        .collect();
+    let rows = Arc::new(AnthropicCatalogRows {
+        rows: Arc::from(rows),
+        ids: Arc::new(ids),
+    });
+    cache.insert(
+        key,
+        CachedAnthropicCatalogRows {
+            catalog: Arc::downgrade(catalog),
+            rows: rows.clone(),
+        },
+    );
+    rows
 }
 
 fn claude_display_name(model_id: &str) -> String {
@@ -46,17 +95,14 @@ fn claude_display_name(model_id: &str) -> String {
 
 /// GET /v1/models -- returns catalog Claude models merged with model_list entries.
 pub async fn models(State(state): State<AppState>) -> Json<serde_json::Value> {
-    let mut data = anthropic_catalog_model_rows(&state.provider_catalog);
+    let cached_rows = cached_anthropic_catalog_model_rows(&state.provider_catalog);
+    let mut data = cached_rows.rows.iter().cloned().collect::<Vec<_>>();
 
     // Merge models from the model router (LiteLLM model_list config).
     if let Some(ref router_lock) = state.model_router {
         let router = router_lock.read().unwrap_or_else(|e| e.into_inner());
-        let static_ids: std::collections::HashSet<String> = data
-            .iter()
-            .filter_map(|m| m["id"].as_str().map(|s| s.to_string()))
-            .collect();
         for model_name in router.known_models() {
-            if !static_ids.contains(model_name) {
+            if !cached_rows.ids.contains(model_name) {
                 data.push(serde_json::json!({
                     "id": model_name,
                     "object": "model",

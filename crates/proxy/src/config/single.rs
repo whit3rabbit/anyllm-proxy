@@ -53,7 +53,7 @@ impl Config {
         let backend = match backend_str.to_ascii_lowercase().as_str() {
             "openai" => BackendKind::OpenAI,
             "azure" => BackendKind::AzureOpenAI,
-            "vertex" => BackendKind::Vertex,
+            "vertex" | "vertex_ai" => BackendKind::Vertex,
             "gemini" => BackendKind::Gemini,
             "anthropic" => BackendKind::Anthropic,
             "bedrock" => BackendKind::Bedrock,
@@ -423,5 +423,34 @@ mod tests {
         );
 
         clear_anthropic_env();
+    }
+
+    #[test]
+    fn backend_vertex_ai_alias_uses_vertex_config() {
+        let _lock = crate::config::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        clear_anthropic_env();
+        unsafe {
+            std::env::set_var("BACKEND", "vertex_ai");
+            std::env::set_var("VERTEX_PROJECT", "project-123");
+            std::env::set_var("VERTEX_REGION", "us-central1");
+            std::env::set_var("VERTEX_API_KEY", "AIzaSy-test");
+            std::env::remove_var("GOOGLE_ACCESS_TOKEN");
+        }
+
+        let config = Config::from_env();
+        assert_eq!(config.backend, BackendKind::Vertex);
+        assert_eq!(
+            config.openai_base_url,
+            "https://us-central1-aiplatform.googleapis.com/v1/projects/project-123/locations/us-central1/endpoints/openapi"
+        );
+
+        unsafe {
+            std::env::remove_var("BACKEND");
+            std::env::remove_var("VERTEX_PROJECT");
+            std::env::remove_var("VERTEX_REGION");
+            std::env::remove_var("VERTEX_API_KEY");
+        }
     }
 }

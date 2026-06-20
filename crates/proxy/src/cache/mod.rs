@@ -17,7 +17,7 @@ pub mod semantic;
 
 use bytes::Bytes;
 use sha2::{Digest, Sha256};
-use std::collections::BTreeMap;
+use std::io::{self, Write};
 use std::time::Instant;
 
 /// Maximum allowed value for per-request `cache_ttl_secs`.
@@ -80,51 +80,93 @@ pub fn cache_key_for_request(
     ns: CacheNamespace,
     scope: &CacheScope<'_>,
 ) -> String {
-    // Fields that affect the backend response. Order does not matter because
-    // BTreeMap sorts keys alphabetically before serialization.
-    const CACHE_FIELDS: &[&str] = &[
-        "_header_anthropic-beta",
-        "_header_x-claude-code-session-id",
-        "cache_ttl_secs",
-        "max_completion_tokens",
-        "max_tokens",
-        "messages",
-        "model",
-        "reasoning_effort",
-        "response_format",
-        "system",
-        "stop",
-        "temperature",
-        "tool_choice",
-        "tools",
-        "top_p",
-    ];
-
-    let mut canonical = BTreeMap::new();
-    if let Some(obj) = body.as_object() {
-        for &field in CACHE_FIELDS {
-            if let Some(val) = obj.get(field) {
-                // Skip null values so absent fields and explicit null produce the same key.
-                if !val.is_null() {
-                    canonical.insert(field, val.clone());
-                }
-            }
-        }
-    }
-    canonical.insert(
-        "_scope_backend",
-        serde_json::Value::String(scope.backend_name.to_string()),
-    );
-    canonical.insert(
-        "_scope_auth",
-        serde_json::Value::String(scope.auth_identity.to_string()),
-    );
-
-    // serde_json serializes BTreeMap in key order, giving us canonical JSON.
-    let json = serde_json::to_string(&canonical).unwrap_or_default();
-    let hash = Sha256::digest(json.as_bytes());
+    let mut hasher = Sha256::new();
+    write_canonical_cache_body(&mut hasher, body, scope);
+    let hash = hasher.finalize();
     let hex = hex::encode(hash);
     format!("{}:{}", ns.prefix(), hex)
+}
+
+enum CacheField<'a> {
+    Json(&'a str, &'a serde_json::Value),
+    Str(&'static str, &'a str),
+}
+
+impl<'a> CacheField<'a> {
+    fn key(&self) -> &str {
+        match self {
+            Self::Json(key, _) | Self::Str(key, _) => key,
+        }
+    }
+}
+
+struct HashWriter<'a> {
+    hasher: &'a mut Sha256,
+}
+
+impl Write for HashWriter<'_> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.hasher.update(buf);
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+fn write_canonical_cache_body(
+    hasher: &mut Sha256,
+    body: &serde_json::Value,
+    scope: &CacheScope<'_>,
+) {
+    let mut fields = Vec::new();
+    if let Some(obj) = body.as_object() {
+        fields.extend(
+            obj.iter()
+                .filter(|(key, value)| should_include_cache_field(key, value))
+                .map(|(key, value)| CacheField::Json(key.as_str(), value)),
+        );
+    }
+    fields.push(CacheField::Str("_scope_auth", scope.auth_identity));
+    fields.push(CacheField::Str("_scope_backend", scope.backend_name));
+    fields.sort_unstable_by(|a, b| a.key().cmp(b.key()));
+
+    let mut writer = HashWriter { hasher };
+    writer
+        .write_all(b"{")
+        .expect("hash writer should not fail writing object start");
+    for (idx, field) in fields.iter().enumerate() {
+        if idx > 0 {
+            writer
+                .write_all(b",")
+                .expect("hash writer should not fail writing separator");
+        }
+        serde_json::to_writer(&mut writer, field.key())
+            .expect("hash writer should not fail writing key");
+        writer
+            .write_all(b":")
+            .expect("hash writer should not fail writing colon");
+        match field {
+            CacheField::Json(_, value) => serde_json::to_writer(&mut writer, value)
+                .expect("hash writer should not fail writing JSON value"),
+            CacheField::Str(_, value) => serde_json::to_writer(&mut writer, value)
+                .expect("hash writer should not fail writing string value"),
+        }
+    }
+    writer
+        .write_all(b"}")
+        .expect("hash writer should not fail writing object end");
+}
+
+fn should_include_cache_field(key: &str, value: &serde_json::Value) -> bool {
+    if value.is_null() {
+        return false;
+    }
+    !matches!(
+        key,
+        "stream" | "stream_options" | "_scope_auth" | "_scope_backend"
+    )
 }
 
 pub struct CacheScope<'a> {
@@ -477,5 +519,67 @@ mod tests {
             key1, key2,
             "different cache_ttl_secs must produce different cache keys"
         );
+    }
+
+    fn test_scope() -> CacheScope<'static> {
+        CacheScope {
+            backend_name: "openai",
+            auth_identity: "k1",
+        }
+    }
+
+    fn anthropic_key(body: &serde_json::Value) -> String {
+        cache_key_for_request(body, CacheNamespace::Anthropic, &test_scope())
+    }
+
+    fn openai_key(body: &serde_json::Value) -> String {
+        cache_key_for_request(body, CacheNamespace::OpenAI, &test_scope())
+    }
+
+    #[test]
+    fn cache_key_includes_anthropic_response_affecting_fields() {
+        let base = serde_json::json!({
+            "model": "claude-sonnet-4-6",
+            "max_tokens": 128,
+            "messages": [{"role": "user", "content": "hi"}]
+        });
+
+        let with_top_k = serde_json::json!({
+            "model": "claude-sonnet-4-6",
+            "max_tokens": 128,
+            "messages": [{"role": "user", "content": "hi"}],
+            "top_k": 10
+        });
+        let with_stop_sequences = serde_json::json!({
+            "model": "claude-sonnet-4-6",
+            "max_tokens": 128,
+            "messages": [{"role": "user", "content": "hi"}],
+            "stop_sequences": ["END"]
+        });
+        let with_thinking = serde_json::json!({
+            "model": "claude-sonnet-4-6",
+            "max_tokens": 128,
+            "messages": [{"role": "user", "content": "hi"}],
+            "thinking": {"type": "enabled", "budget_tokens": 1024}
+        });
+
+        assert_ne!(anthropic_key(&base), anthropic_key(&with_top_k));
+        assert_ne!(anthropic_key(&base), anthropic_key(&with_stop_sequences));
+        assert_ne!(anthropic_key(&base), anthropic_key(&with_thinking));
+    }
+
+    #[test]
+    fn cache_key_includes_unknown_extra_fields() {
+        let base = serde_json::json!({
+            "model": "gpt-4o",
+            "messages": [{"role": "user", "content": "hi"}]
+        });
+        let with_extra = serde_json::json!({
+            "model": "gpt-4o",
+            "messages": [{"role": "user", "content": "hi"}],
+            "prediction": {"type": "content", "content": "expected"}
+        });
+
+        assert_ne!(openai_key(&base), openai_key(&with_extra));
     }
 }

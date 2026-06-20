@@ -1,6 +1,6 @@
 use super::*;
 use crate::model::ModelStatus;
-use crate::provider::{ProviderCapabilities, ProviderStatus};
+use crate::provider::ProviderStatus;
 
 const TEST_FIXTURE: &str = r#"{
       "openai/gpt-fresh": {

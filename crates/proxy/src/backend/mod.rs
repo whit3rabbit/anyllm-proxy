@@ -18,7 +18,7 @@ pub use anyllm_client::rate_limit::RateLimitHeaders;
 pub use anyllm_client::retry::{
     backoff_delay, is_retryable, parse_retry_after, RetryableError, MAX_RETRIES,
 };
-pub use anyllm_client::sse::{find_double_newline, MAX_SSE_BUFFER_SIZE};
+pub use anyllm_client::sse::{find_double_newline, SseFrameBuffer, MAX_SSE_BUFFER_SIZE};
 
 use anyllm_client::http::HttpClientConfig;
 

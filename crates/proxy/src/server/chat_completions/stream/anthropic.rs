@@ -1,4 +1,4 @@
-use crate::backend::{find_double_newline, BackendError, MAX_SSE_BUFFER_SIZE};
+use crate::backend::{BackendError, SseFrameBuffer};
 use crate::server::routes::{inject_degradation_header, log_request, set_backend_error_kind};
 use crate::server::state::AppState;
 use crate::server::streaming::{AnthropicStreamUsage, StreamOutcome};
@@ -7,7 +7,6 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use bytes::BytesMut;
 use futures::StreamExt;
 
 use crate::server::chat_completions::extensions::serialize_anthropic_upstream_request;
@@ -94,8 +93,7 @@ pub(super) async fn anthropic_chat_completions_stream(
         );
         let mut usage = AnthropicStreamUsage::default();
         let mut byte_stream = response.bytes_stream();
-        let mut buffer = BytesMut::new();
-        let mut search_from: usize = 0;
+        let mut buffer = SseFrameBuffer::new();
         let mut emitted_done = false;
 
         let stream_loop = async {
@@ -109,18 +107,20 @@ pub(super) async fn anthropic_chat_completions_stream(
                     }
                 };
 
-                if buffer.len() + bytes.len() > MAX_SSE_BUFFER_SIZE {
-                    tracing::error!(
-                        buffer_len = buffer.len(),
-                        "Anthropic chat-completions SSE buffer exceeded maximum size"
-                    );
-                    metrics.record_error();
-                    return StreamOutcome::UpstreamError;
-                }
-                buffer.extend_from_slice(&bytes);
+                let frames = match buffer.push(&bytes) {
+                    Ok(frames) => frames,
+                    Err(e) => {
+                        tracing::error!(
+                            error = %e,
+                            "Anthropic chat-completions SSE buffer exceeded maximum size"
+                        );
+                        metrics.record_error();
+                        return StreamOutcome::UpstreamError;
+                    }
+                };
 
-                while let Some((pos, delim_len)) = find_double_newline(&buffer, search_from) {
-                    if let Ok(frame_str) = std::str::from_utf8(&buffer[..pos]) {
+                for frame in frames {
+                    if let Ok(frame_str) = std::str::from_utf8(&frame) {
                         for line in frame_str.lines() {
                             let line = line.trim();
                             let Some(json_str) = line.strip_prefix("data: ") else {
@@ -154,10 +154,7 @@ pub(super) async fn anthropic_chat_completions_stream(
                             }
                         }
                     }
-                    let _ = buffer.split_to(pos + delim_len);
-                    search_from = 0;
                 }
-                search_from = buffer.len().saturating_sub(3);
             }
             StreamOutcome::Completed
         };

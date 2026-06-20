@@ -85,7 +85,7 @@ pub use retry::{
     backoff_delay, is_quota_exhausted, is_retryable, parse_retry_after, send_with_retry,
     send_with_retry_policy, RetryPolicy, RetryableError,
 };
-pub use sse::{find_double_newline, SseError};
+pub use sse::{find_double_newline, SseError, SseFrameBuffer};
 pub use tools::{ToolBuilder, ToolChoiceBuilder};
 
 // Re-export key types from the translator crate so downstream users

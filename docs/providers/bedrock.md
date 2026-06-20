@@ -50,6 +50,8 @@ model_list:
       aws_region_name: us-east-1
 ```
 
+LiteLLM YAML compatibility is limited to `aws_access_key_id`, `aws_secret_access_key`, and `aws_region_name`, with access key and secret falling back to `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`. Bedrock bearer API keys, profiles, role assumption, web identity, custom runtime endpoints, and `aws_session_token` in LiteLLM YAML are not implemented.
+
 ## Usage Examples
 
 ### Anthropic Messages API

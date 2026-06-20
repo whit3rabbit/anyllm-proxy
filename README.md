@@ -453,6 +453,14 @@ cp .env.example .env   # set OPENAI_API_KEY
 docker compose up
 ```
 
+Published images are on [Docker Hub](https://hub.docker.com/r/followthewhit3rabbit/anyllm-proxy). CI publishes multi-arch images for `linux/amd64` and `linux/arm64` when a `v*` release tag is pushed.
+
+Release tags:
+- `X.Y.Z` for the exact release
+- `X.Y` for the latest patch in a minor series
+- `sha-<short-sha>` for the release commit
+- `latest` for stable `vX.Y.Z` releases only, prerelease tags do not update it
+
 <details>
 <summary>Smoke tests (no real API key needed)</summary>
 

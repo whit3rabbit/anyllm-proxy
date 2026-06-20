@@ -1,6 +1,8 @@
 use crate::model::ModelDef;
 use crate::provider::{ProviderDef, ProviderProtocol};
 use crate::providers;
+use std::collections::HashMap;
+use std::sync::LazyLock;
 
 /// All registered LiteLLM-compatible providers.
 ///
@@ -93,6 +95,60 @@ static LEGACY_ONLY_MODELS: &[(&str, &[ModelDef])] = &[
     ("xinference", providers::xinference::MODELS),
 ];
 
+static PROVIDERS_BY_ID: LazyLock<HashMap<&'static str, &'static ProviderDef>> =
+    LazyLock::new(|| {
+        let mut map = HashMap::with_capacity(ALL_PROVIDERS.len() + LEGACY_ONLY_PROVIDERS.len());
+        for provider in ALL_PROVIDERS
+            .iter()
+            .copied()
+            .chain(LEGACY_ONLY_PROVIDERS.iter().copied())
+        {
+            map.insert(provider.id, provider);
+        }
+        map
+    });
+
+static PROVIDERS_BY_LITELLM_PREFIX: LazyLock<HashMap<&'static str, &'static ProviderDef>> =
+    LazyLock::new(|| {
+        let mut map = HashMap::new();
+        for provider in ALL_PROVIDERS
+            .iter()
+            .copied()
+            .chain(LEGACY_ONLY_PROVIDERS.iter().copied())
+        {
+            if !provider.litellm_prefix.is_empty() {
+                map.insert(provider.litellm_prefix, provider);
+            }
+        }
+        map
+    });
+
+static MODELS_BY_PROVIDER: LazyLock<HashMap<&'static str, &'static [ModelDef]>> =
+    LazyLock::new(|| {
+        let mut map = HashMap::with_capacity(ALL_MODELS.len() + LEGACY_ONLY_MODELS.len());
+        for (provider_id, models) in ALL_MODELS.iter().chain(LEGACY_ONLY_MODELS.iter()) {
+            map.insert(*provider_id, *models);
+        }
+        map
+    });
+
+static MODEL_BY_PROVIDER_AND_ID: LazyLock<
+    HashMap<(&'static str, &'static str), &'static ModelDef>,
+> = LazyLock::new(|| {
+    let model_count = ALL_MODELS
+        .iter()
+        .chain(LEGACY_ONLY_MODELS.iter())
+        .map(|(_, models)| models.len())
+        .sum();
+    let mut map = HashMap::with_capacity(model_count);
+    for (provider_id, models) in ALL_MODELS.iter().chain(LEGACY_ONLY_MODELS.iter()) {
+        for model in *models {
+            map.insert((*provider_id, model.id), model);
+        }
+    }
+    map
+});
+
 #[cfg(feature = "runtime-catalog")]
 pub(crate) fn advertised_provider_defs() -> &'static [&'static ProviderDef] {
     ALL_PROVIDERS
@@ -125,11 +181,7 @@ pub fn canonical_provider_id(id: &str) -> &str {
 /// Look up a provider by its `id` field (e.g. `"groq"`, `"together_ai"`).
 pub fn get_provider(id: &str) -> Option<&'static ProviderDef> {
     let id = canonical_provider_id(id);
-    ALL_PROVIDERS
-        .iter()
-        .find(|p| p.id == id)
-        .copied()
-        .or_else(|| LEGACY_ONLY_PROVIDERS.iter().find(|p| p.id == id).copied())
+    PROVIDERS_BY_ID.get(id).copied()
 }
 
 /// All registered providers.
@@ -140,22 +192,15 @@ pub fn all_providers() -> impl Iterator<Item = &'static ProviderDef> {
 /// All models registered for a given provider id.
 pub fn list_models(provider_id: &str) -> &'static [ModelDef] {
     let provider_id = canonical_provider_id(provider_id);
-    ALL_MODELS
-        .iter()
-        .find(|(id, _)| *id == provider_id)
-        .map(|(_, models)| *models)
-        .or_else(|| {
-            LEGACY_ONLY_MODELS
-                .iter()
-                .find(|(id, _)| *id == provider_id)
-                .map(|(_, models)| *models)
-        })
-        .unwrap_or(&[])
+    MODELS_BY_PROVIDER.get(provider_id).copied().unwrap_or(&[])
 }
 
 /// Look up a specific model by provider id and model id.
 pub fn get_model(provider_id: &str, model_id: &str) -> Option<&'static ModelDef> {
-    list_models(provider_id).iter().find(|m| m.id == model_id)
+    let provider_id = canonical_provider_id(provider_id);
+    MODEL_BY_PROVIDER_AND_ID
+        .get(&(provider_id, model_id))
+        .copied()
 }
 
 /// Whether a native Anthropic model supports LiteLLM's adaptive-thinking mode.
@@ -210,23 +255,13 @@ pub fn resolve_backend(provider_id: &str) -> Option<(&'static str, &'static str)
 /// Find a provider by its LiteLLM routing prefix (e.g. `"groq/"` or `"together_ai/"`).
 /// Used by `parse_provider_model()` in litellm config parsing.
 pub fn find_by_litellm_prefix(prefix: &str) -> Option<&'static ProviderDef> {
-    let direct = ALL_PROVIDERS
-        .iter()
-        .find(|p| !p.litellm_prefix.is_empty() && prefix == p.litellm_prefix)
-        .copied();
-    if direct.is_some() {
-        return direct;
+    if let Some(provider) = PROVIDERS_BY_LITELLM_PREFIX.get(prefix).copied() {
+        return Some(provider);
     }
 
     let provider_id = prefix.strip_suffix('/')?;
     let canonical = canonical_provider_id(provider_id);
-    if canonical == provider_id {
-        return LEGACY_ONLY_PROVIDERS
-            .iter()
-            .find(|p| !p.litellm_prefix.is_empty() && prefix == p.litellm_prefix)
-            .copied();
-    }
-    ALL_PROVIDERS.iter().find(|p| p.id == canonical).copied()
+    PROVIDERS_BY_ID.get(canonical).copied()
 }
 
 #[cfg(test)]

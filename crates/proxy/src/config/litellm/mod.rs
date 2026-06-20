@@ -10,6 +10,7 @@ use indexmap::IndexMap;
 use serde::Deserialize;
 
 use super::model_router::{Deployment, ModelRouter, RoutingStrategy};
+use super::single::validate_gcp_identifier;
 use super::{
     resolve_env_value, validate_base_url, BackendAuth, BackendConfig, BackendKind, ModelMapping,
     MultiConfig, OpenAIApiFormat, TlsConfig,
@@ -46,6 +47,9 @@ struct LiteLLMParams {
     weight: Option<u32>,
     // Azure-specific
     api_version: Option<String>,
+    // Vertex-specific
+    vertex_project: Option<String>,
+    vertex_location: Option<String>,
     // Bedrock-specific
     aws_access_key_id: Option<String>,
     aws_secret_access_key: Option<String>,
@@ -282,7 +286,7 @@ pub fn parse_litellm_yaml(yaml: &str) -> LiteLLMParsed {
                 }),
         );
 
-        let base_url = resolve_base_url(&kind, params, stub_provider);
+        let base_url = resolve_base_url(&kind, params, stub_provider, &actual_model);
 
         let bk = BackendKey {
             kind: format!("{kind:?}"),
@@ -297,7 +301,15 @@ pub fn parse_litellm_yaml(yaml: &str) -> LiteLLMParsed {
             backend_counter += 1;
 
             let bc = build_backend_config(
-                &name, &kind, &api_key, &base_url, params, &tls, log_bodies, &config,
+                &name,
+                &kind,
+                &api_key,
+                &base_url,
+                &actual_model,
+                params,
+                &tls,
+                log_bodies,
+                &config,
             );
             backend_map.insert(bk, (name.clone(), bc));
             name
@@ -415,10 +427,19 @@ fn resolve_base_url(
     kind: &BackendKind,
     params: &LiteLLMParams,
     stub_provider: Option<&'static anyllm_providers::ProviderDef>,
+    actual_model: &str,
 ) -> String {
     if let Some(ref url) = params.api_base {
         let resolved =
             resolve_env_value(url).unwrap_or_else(|e| panic!("model_list api_base: {e}"));
+        if *kind == BackendKind::AzureOpenAI && !resolved.contains("/openai/deployments/") {
+            let api_version = params.api_version.as_deref().unwrap_or("2024-10-21");
+            let deployment = azure_deployment_from_model(actual_model);
+            return format!(
+                "{}/openai/deployments/{deployment}/chat/completions?api-version={api_version}",
+                resolved.trim_end_matches('/'),
+            );
+        }
         return resolved;
     }
     match kind {
@@ -457,9 +478,30 @@ fn resolve_base_url(
             panic!("api_base is required for azure deployments in model_list")
         }
         BackendKind::Vertex => {
-            panic!("api_base is required for vertex deployments in model_list")
+            let project = params.vertex_project.as_deref().unwrap_or_else(|| {
+                panic!("vertex_project is required for vertex deployments in model_list")
+            });
+            let location = params.vertex_location.as_deref().unwrap_or_else(|| {
+                panic!("vertex_location is required for vertex deployments in model_list")
+            });
+            validate_gcp_identifier("vertex_project", project);
+            validate_gcp_identifier("vertex_location", location);
+            format!(
+                "https://{location}-aiplatform.googleapis.com/v1/projects/{project}/locations/{location}/endpoints/openapi"
+            )
         }
     }
+}
+
+fn azure_deployment_from_model(model: &str) -> &str {
+    for marker in ["o_series/", "gpt5_series/"] {
+        if let Some(deployment) = model.strip_prefix(marker) {
+            if !deployment.is_empty() {
+                return deployment;
+            }
+        }
+    }
+    model
 }
 
 /// Build a BackendConfig from LiteLLM model_list params.
@@ -469,6 +511,7 @@ fn build_backend_config(
     kind: &BackendKind,
     api_key: &str,
     base_url: &str,
+    actual_model: &str,
     params: &LiteLLMParams,
     tls: &TlsConfig,
     log_bodies: bool,
@@ -490,9 +533,10 @@ fn build_backend_config(
             // Already a full deployment URL.
             base_url.to_string()
         } else {
+            let deployment = azure_deployment_from_model(actual_model);
             format!(
-                "{}/openai/deployments/chat/completions?api-version={api_version}",
-                base_url.trim_end_matches('/')
+                "{}/openai/deployments/{deployment}/chat/completions?api-version={api_version}",
+                base_url.trim_end_matches('/'),
             )
         }
     } else {

@@ -1,4 +1,4 @@
-use crate::backend::{find_double_newline, BackendClient, BackendError, MAX_SSE_BUFFER_SIZE};
+use crate::backend::{BackendClient, BackendError, SseFrameBuffer};
 use crate::server::routes::{
     backend_error_to_response, log_request, record_virtual_key_usage, set_backend_error_kind,
     RequestCtx,
@@ -12,7 +12,6 @@ use axum::response::{
     sse::{Event, KeepAlive, Sse},
     IntoResponse, Response,
 };
-use bytes::BytesMut;
 use futures::StreamExt;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
@@ -74,9 +73,8 @@ pub(super) async fn gemini_stream(
                         }
                     };
 
-                let mut buffer = BytesMut::new();
+                let mut buffer = SseFrameBuffer::new();
                 let mut translator = streaming_map::StreamingTranslator::new(model.clone());
-                let mut search_from: usize = 0;
                 let mut byte_stream = response.bytes_stream();
 
                 let mut outcome = StreamOutcome::Completed;
@@ -93,16 +91,21 @@ pub(super) async fn gemini_stream(
                         }
                     };
 
-                    if buffer.len() + bytes.len() > MAX_SSE_BUFFER_SIZE {
-                        tracing::error!("SSE buffer exceeded max, aborting gemini input stream");
-                        metrics.record_error();
-                        outcome = StreamOutcome::UpstreamError;
-                        break;
-                    }
-                    buffer.extend_from_slice(&bytes);
+                    let frames = match buffer.push(&bytes) {
+                        Ok(frames) => frames,
+                        Err(e) => {
+                            tracing::error!(
+                                error = %e,
+                                "SSE buffer exceeded max, aborting gemini input stream"
+                            );
+                            metrics.record_error();
+                            outcome = StreamOutcome::UpstreamError;
+                            break;
+                        }
+                    };
 
-                    while let Some((pos, delim_len)) = find_double_newline(&buffer, search_from) {
-                        if let Ok(frame_str) = std::str::from_utf8(&buffer[..pos]) {
+                    for frame in frames {
+                        if let Ok(frame_str) = std::str::from_utf8(&frame) {
                             for line in frame_str.lines() {
                                 let line = line.trim();
                                 if let Some(json_str) = line.strip_prefix("data: ") {
@@ -136,10 +139,7 @@ pub(super) async fn gemini_stream(
                                 }
                             }
                         }
-                        let _ = buffer.split_to(pos + delim_len);
-                        search_from = 0;
                     }
-                    search_from = buffer.len().saturating_sub(3);
                 }
                 if matches!(outcome, StreamOutcome::Completed) && !done {
                     let _ = translator.finish();

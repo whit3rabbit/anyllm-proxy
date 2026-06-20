@@ -58,6 +58,8 @@ pub struct ProviderCatalog {
     providers: BTreeMap<String, OwnedProviderDef>,
     advertised_provider_ids: BTreeSet<String>,
     models_by_provider: BTreeMap<String, Vec<OwnedModelDef>>,
+    provider_ids_by_litellm_prefix: BTreeMap<String, String>,
+    model_indexes_by_provider: BTreeMap<String, BTreeMap<String, usize>>,
 }
 
 #[derive(Debug)]
@@ -220,6 +222,8 @@ impl ProviderCatalog {
             providers,
             advertised_provider_ids,
             models_by_provider,
+            provider_ids_by_litellm_prefix: BTreeMap::new(),
+            model_indexes_by_provider: BTreeMap::new(),
         };
         catalog.refresh_metadata_counts();
         catalog
@@ -325,9 +329,12 @@ impl ProviderCatalog {
     }
 
     pub fn get_model(&self, provider_id: &str, model_id: &str) -> Option<&OwnedModelDef> {
-        self.list_models(provider_id)
-            .iter()
-            .find(|model| model.id == model_id)
+        let provider_id = registry::canonical_provider_id(provider_id);
+        let index = self
+            .model_indexes_by_provider
+            .get(provider_id)?
+            .get(model_id)?;
+        self.models_by_provider.get(provider_id)?.get(*index)
     }
 
     pub fn resolve_backend(&self, provider_id: &str) -> Option<(&'static str, &str)> {
@@ -346,12 +353,8 @@ impl ProviderCatalog {
     }
 
     pub fn find_by_litellm_prefix(&self, prefix: &str) -> Option<&OwnedProviderDef> {
-        let direct = self
-            .providers
-            .values()
-            .find(|p| !p.litellm_prefix.is_empty() && prefix == p.litellm_prefix);
-        if direct.is_some() {
-            return direct;
+        if let Some(provider_id) = self.provider_ids_by_litellm_prefix.get(prefix) {
+            return self.providers.get(provider_id);
         }
 
         let provider_id = prefix.strip_suffix('/')?;
@@ -360,6 +363,7 @@ impl ProviderCatalog {
     }
 
     fn refresh_metadata_counts(&mut self) {
+        self.rebuild_indexes();
         self.metadata.provider_count = self.all_providers().count();
         self.metadata.model_count = self
             .advertised_provider_ids
@@ -367,6 +371,26 @@ impl ProviderCatalog {
             .filter_map(|id| self.models_by_provider.get(id))
             .map(Vec::len)
             .sum();
+    }
+
+    fn rebuild_indexes(&mut self) {
+        self.provider_ids_by_litellm_prefix.clear();
+        for (provider_id, provider) in &self.providers {
+            if !provider.litellm_prefix.is_empty() {
+                self.provider_ids_by_litellm_prefix
+                    .insert(provider.litellm_prefix.clone(), provider_id.clone());
+            }
+        }
+
+        self.model_indexes_by_provider.clear();
+        for (provider_id, models) in &self.models_by_provider {
+            let mut indexes = BTreeMap::new();
+            for (index, model) in models.iter().enumerate() {
+                indexes.insert(model.id.clone(), index);
+            }
+            self.model_indexes_by_provider
+                .insert(provider_id.clone(), indexes);
+        }
     }
 }
 

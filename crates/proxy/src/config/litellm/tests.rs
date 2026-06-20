@@ -110,6 +110,131 @@ model_list:
 }
 
 #[test]
+fn azure_api_base_uses_model_deployment_name() {
+    let yaml = r#"
+model_list:
+  - model_name: gpt-35
+    litellm_params:
+      model: azure/chatgpt-v-2
+      api_key: sk-azure
+      api_base: https://openai-gpt-4-test-v-1.openai.azure.com/
+      api_version: "2023-05-15"
+"#;
+
+    let (multi, router) = from_litellm_yaml(yaml);
+    let bc = multi.backends.values().next().unwrap();
+    assert_eq!(
+        bc.base_url,
+        "https://openai-gpt-4-test-v-1.openai.azure.com/openai/deployments/chatgpt-v-2/chat/completions?api-version=2023-05-15"
+    );
+    assert_eq!(router.route("gpt-35").unwrap().actual_model, "chatgpt-v-2");
+}
+
+#[test]
+fn azure_route_marker_is_not_used_as_deployment_name() {
+    let yaml = r#"
+model_list:
+  - model_name: o3-mini
+    litellm_params:
+      model: azure/o_series/my-o3-deployment
+      api_key: sk-azure
+      api_base: https://azure-o-series.openai.azure.com
+"#;
+
+    let (multi, router) = from_litellm_yaml(yaml);
+    let bc = multi.backends.values().next().unwrap();
+    assert_eq!(
+        bc.base_url,
+        "https://azure-o-series.openai.azure.com/openai/deployments/my-o3-deployment/chat/completions?api-version=2024-10-21"
+    );
+    assert_eq!(
+        router.route("o3-mini").unwrap().actual_model,
+        "o_series/my-o3-deployment"
+    );
+}
+
+#[test]
+fn azure_full_deployment_url_is_preserved() {
+    let yaml = r#"
+model_list:
+  - model_name: gpt-4o
+    litellm_params:
+      model: azure/gpt-4o-deploy
+      api_key: sk-azure
+      api_base: https://myresource.openai.azure.com/openai/deployments/gpt-4o-deploy/chat/completions?api-version=2024-10-21
+"#;
+
+    let (multi, _) = from_litellm_yaml(yaml);
+    let bc = multi.backends.values().next().unwrap();
+    assert_eq!(
+        bc.base_url,
+        "https://myresource.openai.azure.com/openai/deployments/gpt-4o-deploy/chat/completions?api-version=2024-10-21"
+    );
+}
+
+#[test]
+fn azure_deployments_on_same_resource_are_distinct_backends() {
+    let yaml = r#"
+model_list:
+  - model_name: gpt-4o
+    litellm_params:
+      model: azure/gpt-4o-deploy
+      api_key: sk-azure
+      api_base: https://myresource.openai.azure.com
+  - model_name: gpt-4o-mini
+    litellm_params:
+      model: azure/gpt-4o-mini-deploy
+      api_key: sk-azure
+      api_base: https://myresource.openai.azure.com
+"#;
+
+    let (multi, router) = from_litellm_yaml(yaml);
+    assert_eq!(multi.backends.len(), 2);
+
+    let first = router.route("gpt-4o").unwrap();
+    let second = router.route("gpt-4o-mini").unwrap();
+    assert_ne!(first.backend_name, second.backend_name);
+
+    assert!(multi
+        .backends
+        .get(first.backend_name)
+        .unwrap()
+        .base_url
+        .contains("/openai/deployments/gpt-4o-deploy/"));
+    assert!(multi
+        .backends
+        .get(second.backend_name)
+        .unwrap()
+        .base_url
+        .contains("/openai/deployments/gpt-4o-mini-deploy/"));
+}
+
+#[test]
+fn vertex_litellm_project_and_location_build_base_url() {
+    let yaml = r#"
+model_list:
+  - model_name: gemini-pro
+    litellm_params:
+      model: vertex_ai/gemini-2.5-pro
+      api_key: ya29-test
+      vertex_project: project-123
+      vertex_location: us-central1
+"#;
+
+    let (multi, router) = from_litellm_yaml(yaml);
+    let bc = multi.backends.values().next().unwrap();
+    assert_eq!(bc.kind, BackendKind::Vertex);
+    assert_eq!(
+        bc.base_url,
+        "https://us-central1-aiplatform.googleapis.com/v1/projects/project-123/locations/us-central1/endpoints/openapi"
+    );
+    assert_eq!(
+        router.route("gemini-pro").unwrap().actual_model,
+        "gemini-2.5-pro"
+    );
+}
+
+#[test]
 fn multiple_deployments_same_model() {
     let yaml = r#"
 model_list:

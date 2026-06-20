@@ -1,9 +1,8 @@
-use crate::backend::find_double_newline;
 use crate::backend::openai_client::OpenAIClient;
+use crate::backend::SseFrameBuffer;
 use crate::server::middleware::VirtualKeyContext;
 use crate::server::state::ToolEngineState;
 use anyllm_translate::{anthropic, mapping, openai, ReverseStreamingTranslator};
-use bytes::BytesMut;
 use futures::StreamExt;
 
 #[allow(clippy::too_many_arguments)]
@@ -116,8 +115,7 @@ pub(super) async fn run_tool_loop_for_stream(
         {
             Ok((follow_resp, _follow_rate_limits)) => {
                 let mut follow_byte_stream = follow_resp.bytes_stream();
-                let mut follow_buffer = BytesMut::new();
-                let mut follow_search_from: usize = 0;
+                let mut follow_buffer = SseFrameBuffer::new();
 
                 while let Some(chunk_result) = follow_byte_stream.next().await {
                     let bytes = match chunk_result {
@@ -127,12 +125,16 @@ pub(super) async fn run_tool_loop_for_stream(
                             break;
                         }
                     };
-                    follow_buffer.extend_from_slice(&bytes);
+                    let frames = match follow_buffer.push(&bytes) {
+                        Ok(frames) => frames,
+                        Err(e) => {
+                            tracing::error!(error = %e, "follow-up SSE buffer exceeded maximum size");
+                            break;
+                        }
+                    };
 
-                    while let Some((pos, delim_len)) =
-                        find_double_newline(&follow_buffer, follow_search_from)
-                    {
-                        if let Ok(frame_str) = std::str::from_utf8(&follow_buffer[..pos]) {
+                    for frame in frames {
+                        if let Ok(frame_str) = std::str::from_utf8(&frame) {
                             for line in frame_str.lines() {
                                 let line = line.trim();
                                 if let Some(json_str) = line.strip_prefix("data: ") {
@@ -198,10 +200,7 @@ pub(super) async fn run_tool_loop_for_stream(
                                 }
                             }
                         }
-                        let _ = follow_buffer.split_to(pos + delim_len);
-                        follow_search_from = 0;
                     }
-                    follow_search_from = follow_buffer.len().saturating_sub(3);
                 }
 
                 // Emit finish events for the follow-up stream.

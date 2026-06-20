@@ -1,4 +1,3 @@
-use bytes::BytesMut;
 use futures::StreamExt;
 use std::sync::Arc;
 use std::time::Instant;
@@ -6,7 +5,7 @@ use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
 use super::{ChatCompletionChunkStream, ChatCompletionError};
-use crate::backend::MAX_SSE_BUFFER_SIZE;
+use crate::backend::SseFrameBuffer;
 use anyllm_translate::{anthropic, mapping, openai, ReverseStreamingTranslator};
 
 pub(crate) struct DeploymentLatencyGuard {
@@ -48,8 +47,7 @@ pub(crate) fn openai_chunk_stream(
     tokio::spawn(async move {
         let fut = async {
             let mut byte_stream = response.bytes_stream();
-            let mut buffer = BytesMut::new();
-            let mut search_from: usize = 0;
+            let mut buffer = SseFrameBuffer::new();
 
             while let Some(chunk_result) = byte_stream.next().await {
                 let bytes = match chunk_result {
@@ -61,16 +59,16 @@ pub(crate) fn openai_chunk_stream(
                     }
                 };
 
-                if buffer.len() + bytes.len() > MAX_SSE_BUFFER_SIZE {
-                    send_stream_error(&tx, ChatCompletionError::StreamBufferOverflow).await;
-                    return;
-                }
-                buffer.extend_from_slice(&bytes);
+                let frames = match buffer.push(&bytes) {
+                    Ok(frames) => frames,
+                    Err(_) => {
+                        send_stream_error(&tx, ChatCompletionError::StreamBufferOverflow).await;
+                        return;
+                    }
+                };
 
-                while let Some((pos, delim_len)) =
-                    anyllm_client::find_double_newline(&buffer, search_from)
-                {
-                    let frame = match std::str::from_utf8(&buffer[..pos]) {
+                for frame in frames {
+                    let frame = match std::str::from_utf8(&frame) {
                         Ok(frame) => frame,
                         Err(e) => {
                             send_stream_error(&tx, ChatCompletionError::StreamParse(e.to_string()))
@@ -109,11 +107,7 @@ pub(crate) fn openai_chunk_stream(
                             }
                         }
                     }
-
-                    let _ = buffer.split_to(pos + delim_len);
-                    search_from = 0;
                 }
-                search_from = buffer.len().saturating_sub(3);
             }
         };
 
@@ -149,8 +143,7 @@ pub(crate) fn responses_chunk_stream(
                 model,
             );
             let mut byte_stream = response.bytes_stream();
-            let mut buffer = BytesMut::new();
-            let mut search_from: usize = 0;
+            let mut buffer = SseFrameBuffer::new();
 
             while let Some(chunk_result) = byte_stream.next().await {
                 let bytes = match chunk_result {
@@ -162,16 +155,16 @@ pub(crate) fn responses_chunk_stream(
                     }
                 };
 
-                if buffer.len() + bytes.len() > MAX_SSE_BUFFER_SIZE {
-                    send_stream_error(&tx, ChatCompletionError::StreamBufferOverflow).await;
-                    return;
-                }
-                buffer.extend_from_slice(&bytes);
+                let frames = match buffer.push(&bytes) {
+                    Ok(frames) => frames,
+                    Err(_) => {
+                        send_stream_error(&tx, ChatCompletionError::StreamBufferOverflow).await;
+                        return;
+                    }
+                };
 
-                while let Some((pos, delim_len)) =
-                    anyllm_client::find_double_newline(&buffer, search_from)
-                {
-                    let frame = match std::str::from_utf8(&buffer[..pos]) {
+                for frame in frames {
+                    let frame = match std::str::from_utf8(&frame) {
                         Ok(frame) => frame,
                         Err(e) => {
                             send_stream_error(&tx, ChatCompletionError::StreamParse(e.to_string()))
@@ -212,11 +205,7 @@ pub(crate) fn responses_chunk_stream(
                             }
                         }
                     }
-
-                    let _ = buffer.split_to(pos + delim_len);
-                    search_from = 0;
                 }
-                search_from = buffer.len().saturating_sub(3);
             }
 
             let final_events = responses_translator.finish();

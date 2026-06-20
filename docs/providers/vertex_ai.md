@@ -12,11 +12,10 @@ Google Vertex AI — enterprise Gemini and third-party models via GCP.
 |---|---|---|
 | `VERTEX_PROJECT` | Yes | GCP project ID (e.g. `my-project-123`) |
 | `VERTEX_REGION` | Yes | GCP region (e.g. `us-central1`) |
-| `GOOGLE_APPLICATION_CREDENTIALS` | Yes (or alt) | Path to service account JSON key file |
-| `VERTEX_API_KEY` | Yes (or alt) | API key if not using a service account |
-| `GOOGLE_ACCESS_TOKEN` | No | Short-lived bearer token (overrides key auth) |
+| `VERTEX_API_KEY` | Yes (or alt) | Google API key |
+| `GOOGLE_ACCESS_TOKEN` | Yes (or alt) | Short-lived bearer token |
 
-Provide either `GOOGLE_APPLICATION_CREDENTIALS` (service account) or `VERTEX_API_KEY`, not both.
+Provide either `VERTEX_API_KEY` or `GOOGLE_ACCESS_TOKEN`. Service-account JSON loading from `GOOGLE_APPLICATION_CREDENTIALS` is not implemented; mint a token externally and pass it via `GOOGLE_ACCESS_TOKEN`.
 
 ## Quick Start
 
@@ -26,15 +25,14 @@ Provide either `GOOGLE_APPLICATION_CREDENTIALS` (service account) or `VERTEX_API
 BACKEND=vertex_ai \
   VERTEX_PROJECT=my-project-123 \
   VERTEX_REGION=us-central1 \
-  GOOGLE_APPLICATION_CREDENTIALS=/path/to/sa.json \
+  VERTEX_API_KEY=AIza... \
   cargo run -p anyllm_proxy
 # or with Docker:
 docker run \
   -e BACKEND=vertex_ai \
   -e VERTEX_PROJECT=my-project-123 \
   -e VERTEX_REGION=us-central1 \
-  -e GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/sa.json \
-  -v /path/to/sa.json:/run/secrets/sa.json:ro \
+  -e VERTEX_API_KEY=AIza... \
   -e PROXY_OPEN_RELAY=true \
   -p 3000:3000 \
   followthewhit3rabbit/anyllm-proxy
@@ -47,11 +45,13 @@ model_list:
   - model_name: gemini-2.5-pro
     litellm_params:
       model: vertex_ai/gemini-2.5-pro
+      api_key: os.environ/VERTEX_API_KEY
       vertex_project: my-project-123
       vertex_location: us-central1
   - model_name: claude-3-5-sonnet-vertex
     litellm_params:
       model: vertex_ai/claude-3-5-sonnet@20241022
+      api_key: os.environ/GOOGLE_ACCESS_TOKEN
       vertex_project: my-project-123
       vertex_location: us-east5
 ```
@@ -106,8 +106,8 @@ curl http://localhost:3000/v1/chat/completions \
 
 ## Notes
 
-- The base URL is constructed per request: `https://{VERTEX_REGION}-aiplatform.googleapis.com/v1/projects/{VERTEX_PROJECT}/locations/{VERTEX_REGION}/publishers/google/models/{model}`.
+- The OpenAI-compatible base URL is constructed from project and region: `https://{VERTEX_REGION}-aiplatform.googleapis.com/v1/projects/{VERTEX_PROJECT}/locations/{VERTEX_REGION}/endpoints/openapi`.
 - Vertex AI serves the same Gemini model IDs as Google AI Studio but requires a GCP project with the Vertex AI API enabled (`gcloud services enable aiplatform.googleapis.com`).
 - Claude models (Anthropic Model Garden) use region-specific availability. `us-east5` is the primary region for Claude on Vertex; check the GCP console for current availability.
-- Service account must have the `roles/aiplatform.user` IAM role.
+- If you mint `GOOGLE_ACCESS_TOKEN` from a service account, that account must have the `roles/aiplatform.user` IAM role.
 - No static model list is maintained in the proxy. Pass the model ID directly as it appears in the Vertex API.

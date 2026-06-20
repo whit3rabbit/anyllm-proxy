@@ -1,6 +1,6 @@
 // SSE streaming infrastructure and the messages_stream handler.
 
-use crate::backend::{find_double_newline, BackendClient, RateLimitHeaders, MAX_SSE_BUFFER_SIZE};
+use crate::backend::{find_double_newline, BackendClient, RateLimitHeaders, SseFrameBuffer};
 use crate::metrics::Metrics;
 use anyllm_translate::{anthropic, mapping, openai};
 use axum::response::sse::{Event, KeepAlive, Sse};
@@ -172,15 +172,12 @@ where
 {
     use futures::StreamExt;
     let mut stream = response.bytes_stream();
-    // BytesMut (not String) because TCP chunks may split mid-UTF-8 character.
+    // Buffer bytes (not String) because TCP chunks may split mid-UTF-8 character.
     // String::from_utf8_lossy would permanently replace partial trailing bytes
     // with U+FFFD, corrupting the JSON payload.
-    let mut buffer = BytesMut::new();
+    let mut buffer = SseFrameBuffer::new();
     // Reuse a single events buffer across all frames to avoid per-frame allocation
     let mut frame_events: Vec<anthropic::StreamEvent> = Vec::new();
-    // Track where to start the next delimiter search so we don't rescan
-    // already-inspected bytes when a large SSE event spans many TCP chunks.
-    let mut search_from: usize = 0;
 
     while let Some(chunk_result) = stream.next().await {
         let bytes = match chunk_result {
@@ -191,24 +188,21 @@ where
                 return StreamOutcome::UpstreamError;
             }
         };
-        // Guard against unbounded buffer growth from a misbehaving backend.
-        // Check before appending so a single oversized chunk can't exceed the limit.
-        if buffer.len() + bytes.len() > MAX_SSE_BUFFER_SIZE {
-            tracing::error!(
-                buffer_len = buffer.len(),
-                "SSE buffer exceeded maximum size, aborting stream"
-            );
-            metrics.record_error();
-            return StreamOutcome::UpstreamError;
-        }
-        buffer.extend_from_slice(&bytes);
+        let frames = match buffer.push(&bytes) {
+            Ok(frames) => frames,
+            Err(e) => {
+                tracing::error!(error = %e, "SSE buffer exceeded maximum size, aborting stream");
+                metrics.record_error();
+                return StreamOutcome::UpstreamError;
+            }
+        };
 
-        while let Some((pos, delim_len)) = find_double_newline(&buffer, search_from) {
+        for frame in frames {
             frame_events.clear();
             // Convert the complete frame bytes to UTF-8. A frame ending at
             // a double-newline boundary should always be valid UTF-8; if not,
             // skip the malformed frame rather than injecting replacement chars.
-            match std::str::from_utf8(&buffer[..pos]) {
+            match std::str::from_utf8(&frame) {
                 Ok(frame_str) => {
                     for line in frame_str.lines() {
                         let line = line.trim();
@@ -223,19 +217,12 @@ where
                     tracing::warn!("skipping non-UTF-8 SSE frame: {e}");
                 }
             }
-            let _ = buffer.split_to(pos + delim_len);
-            // split_to shifted the buffer; restart search at the beginning
-            search_from = 0;
 
             if !send_events(tx, &frame_events).await {
                 tracing::debug!("client disconnected during stream");
                 return StreamOutcome::ClientDisconnected;
             }
         }
-        // Next chunk: resume scanning 3 bytes back from the end. The 4-byte
-        // delimiter \r\n\r\n could straddle the chunk boundary (e.g., \r\n at
-        // end of this chunk, \r\n at start of the next).
-        search_from = buffer.len().saturating_sub(3);
     }
 
     StreamOutcome::Completed

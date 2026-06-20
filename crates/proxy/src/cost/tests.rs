@@ -1,28 +1,26 @@
 use super::*;
 
 fn test_pricing() -> ModelPricing {
-    ModelPricing {
-        entries: vec![
-            ModelPricingEntry {
-                model_pattern: "gpt-4o".to_string(),
-                input_cost_per_token: 0.0000025,
-                output_cost_per_token: 0.00001,
-                provider: "openai".to_string(),
-            },
-            ModelPricingEntry {
-                model_pattern: "gpt-4o-mini".to_string(),
-                input_cost_per_token: 0.00000015,
-                output_cost_per_token: 0.0000006,
-                provider: "openai".to_string(),
-            },
-            ModelPricingEntry {
-                model_pattern: "gemini-2.5-pro".to_string(),
-                input_cost_per_token: 0.00000125,
-                output_cost_per_token: 0.00001,
-                provider: "google".to_string(),
-            },
-        ],
-    }
+    ModelPricing::from_entries(vec![
+        ModelPricingEntry {
+            model_pattern: "gpt-4o".to_string(),
+            input_cost_per_token: 0.0000025,
+            output_cost_per_token: 0.00001,
+            provider: "openai".to_string(),
+        },
+        ModelPricingEntry {
+            model_pattern: "gpt-4o-mini".to_string(),
+            input_cost_per_token: 0.00000015,
+            output_cost_per_token: 0.0000006,
+            provider: "openai".to_string(),
+        },
+        ModelPricingEntry {
+            model_pattern: "gemini-2.5-pro".to_string(),
+            input_cost_per_token: 0.00000125,
+            output_cost_per_token: 0.00001,
+            provider: "google".to_string(),
+        },
+    ])
 }
 
 #[test]

@@ -4,12 +4,11 @@
 use anyllm_translate::anthropic::streaming::StreamEvent;
 use anyllm_translate::mapping;
 use anyllm_translate::openai::ChatCompletionChunk;
-use bytes::BytesMut;
 use futures::{SinkExt, Stream, StreamExt};
 use pin_project_lite::pin_project;
 
 use crate::error::ClientError;
-use crate::sse::{find_double_newline, SseError, MAX_SSE_BUFFER_SIZE};
+use crate::sse::{SseError, SseFrameBuffer};
 
 /// Argument to the [`run_sse_task`] handler. Either a parsed UTF-8 SSE frame
 /// or the end-of-stream signal (bytes exhausted without a transport error).
@@ -30,8 +29,7 @@ async fn run_sse_task(
     mut handler: impl FnMut(SseEvent<'_>) -> Vec<Result<StreamEvent, ClientError>>,
 ) {
     let mut stream = response.bytes_stream();
-    let mut buffer = BytesMut::new();
-    let mut search_from = 0usize;
+    let mut buffer = SseFrameBuffer::new();
 
     while let Some(chunk_result) = stream.next().await {
         let bytes = match chunk_result {
@@ -41,25 +39,22 @@ async fn run_sse_task(
                 return;
             }
         };
-        buffer.extend_from_slice(&bytes);
+        let frames = match buffer.push(&bytes) {
+            Ok(frames) => frames,
+            Err(e) => {
+                let _ = tx.send(Err(ClientError::Sse(e))).await;
+                return;
+            }
+        };
 
-        if buffer.len() > MAX_SSE_BUFFER_SIZE {
-            let _ = tx
-                .send(Err(ClientError::Sse(SseError::BufferOverflow)))
-                .await;
-            return;
-        }
-
-        while let Some((pos, delim_len)) = find_double_newline(&buffer, search_from) {
-            let events = match std::str::from_utf8(&buffer[..pos]) {
+        for frame in frames {
+            let events = match std::str::from_utf8(&frame) {
                 Ok(frame_str) => handler(SseEvent::Frame(frame_str)),
                 Err(e) => {
                     tracing::warn!("skipping non-UTF-8 SSE frame: {e}");
                     vec![]
                 }
             };
-            let _ = buffer.split_to(pos + delim_len);
-            search_from = 0;
 
             for event in events {
                 if tx.send(event).await.is_err() {
@@ -67,7 +62,6 @@ async fn run_sse_task(
                 }
             }
         }
-        search_from = buffer.len().saturating_sub(3);
     }
 
     for event in handler(SseEvent::End) {

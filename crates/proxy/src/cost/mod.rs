@@ -6,6 +6,7 @@
 pub mod db;
 
 use dashmap::DashMap;
+use std::collections::HashMap;
 use std::sync::LazyLock;
 
 /// Global pricing data, loaded once from embedded JSON at first access.
@@ -126,6 +127,8 @@ pub struct ModelPricingEntry {
 /// The full model pricing table. Loaded at startup from embedded JSON or `MODEL_PRICING_FILE`.
 pub struct ModelPricing {
     entries: Vec<ModelPricingEntry>,
+    exact_index: HashMap<String, usize>,
+    prefix_indexes: Vec<usize>,
 }
 
 impl ModelPricing {
@@ -157,7 +160,42 @@ impl ModelPricing {
         };
         let entries: Vec<ModelPricingEntry> =
             serde_json::from_str(&json).expect("invalid model_pricing.json");
-        Self { entries }
+        Self::from_entries(entries)
+    }
+
+    fn from_entries(entries: Vec<ModelPricingEntry>) -> Self {
+        let mut exact_index = HashMap::with_capacity(entries.len());
+        for (index, entry) in entries.iter().enumerate() {
+            exact_index
+                .entry(entry.model_pattern.clone())
+                .or_insert(index);
+        }
+
+        let mut prefix_indexes: Vec<usize> = (0..entries.len()).collect();
+        prefix_indexes.sort_by(|left, right| {
+            entries[*right]
+                .model_pattern
+                .len()
+                .cmp(&entries[*left].model_pattern.len())
+                .then_with(|| left.cmp(right))
+        });
+
+        Self {
+            entries,
+            exact_index,
+            prefix_indexes,
+        }
+    }
+
+    fn entry_for_model(&self, model: &str) -> Option<&ModelPricingEntry> {
+        if let Some(index) = self.exact_index.get(model) {
+            return self.entries.get(*index);
+        }
+
+        self.prefix_indexes
+            .iter()
+            .map(|index| &self.entries[*index])
+            .find(|entry| model.starts_with(&entry.model_pattern))
     }
 
     /// Return (input_cost_per_token, output_cost_per_token) for a model, or None if unknown.
@@ -165,18 +203,8 @@ impl ModelPricing {
     /// Same lookup order as cost_for_usage (exact then longest-prefix) but does not log
     /// on miss, so it is safe to call during routing decisions.
     pub fn price_for_model(&self, model: &str) -> Option<(f64, f64)> {
-        if let Some(entry) = self.entries.iter().find(|e| e.model_pattern == model) {
-            return Some((entry.input_cost_per_token, entry.output_cost_per_token));
-        }
-        let mut best: Option<&ModelPricingEntry> = None;
-        let mut best_len: usize = 0;
-        for entry in &self.entries {
-            if model.starts_with(&entry.model_pattern) && entry.model_pattern.len() > best_len {
-                best = Some(entry);
-                best_len = entry.model_pattern.len();
-            }
-        }
-        best.map(|e| (e.input_cost_per_token, e.output_cost_per_token))
+        self.entry_for_model(model)
+            .map(|entry| (entry.input_cost_per_token, entry.output_cost_per_token))
     }
 
     /// Calculate cost for a usage record.
@@ -184,28 +212,11 @@ impl ModelPricing {
     /// Matching strategy: exact match first, then longest prefix match.
     /// Returns 0.0 with a warning log if no match found.
     pub fn cost_for_usage(&self, model: &str, input_tokens: u64, output_tokens: u64) -> f64 {
-        // 1. Try exact match
-        if let Some(entry) = self.entries.iter().find(|e| e.model_pattern == model) {
+        if let Some(entry) = self.entry_for_model(model) {
             return entry.input_cost_per_token * input_tokens as f64
                 + entry.output_cost_per_token * output_tokens as f64;
         }
 
-        // 2. Try longest prefix match (e.g., "gpt-4o-2024-05-13" matches "gpt-4o")
-        let mut best: Option<&ModelPricingEntry> = None;
-        let mut best_len: usize = 0;
-        for entry in &self.entries {
-            if model.starts_with(&entry.model_pattern) && entry.model_pattern.len() > best_len {
-                best = Some(entry);
-                best_len = entry.model_pattern.len();
-            }
-        }
-
-        if let Some(entry) = best {
-            return entry.input_cost_per_token * input_tokens as f64
-                + entry.output_cost_per_token * output_tokens as f64;
-        }
-
-        // 3. No match
         tracing::error!(
             model = model,
             "BILLING LEAK: no pricing entry found for model, cost set to 0.0"

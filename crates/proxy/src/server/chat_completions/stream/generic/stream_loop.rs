@@ -1,4 +1,4 @@
-use crate::backend::{find_double_newline, BackendClient, BackendError, MAX_SSE_BUFFER_SIZE};
+use crate::backend::{BackendClient, BackendError, SseFrameBuffer};
 use crate::server::routes::{inject_degradation_header, log_request, set_backend_error_kind};
 use crate::server::state::AppState;
 use anyllm_translate::{anthropic, mapping, openai, ReverseStreamingTranslator};
@@ -6,7 +6,6 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use bytes::BytesMut;
 use futures::StreamExt;
 
 use crate::server::chat_completions::helpers::{
@@ -114,8 +113,7 @@ pub async fn generic_chat_completions_stream(
                     mapping::streaming_map::StreamingTranslator::new(model_for_translator.clone());
 
                 let mut byte_stream = resp.bytes_stream();
-                let mut buffer = BytesMut::new();
-                let mut search_from: usize = 0;
+                let mut buffer = SseFrameBuffer::new();
                 let mut timed_out = false;
                 // Accumulate tool call fragments for collect-then-execute.
                 // Each entry: (id, function_name, arguments_json).
@@ -132,18 +130,18 @@ pub async fn generic_chat_completions_stream(
                                 return;
                             }
                         };
-                        buffer.extend_from_slice(&bytes);
+                        let frames = match buffer.push(&bytes) {
+                            Ok(frames) => frames,
+                            Err(e) => {
+                                tracing::error!(error = %e, "SSE buffer exceeded maximum size");
+                                metrics.record_error();
+                                metrics.record_stream_failed();
+                                return;
+                            }
+                        };
 
-                        if buffer.len() > MAX_SSE_BUFFER_SIZE {
-                            tracing::error!("SSE buffer exceeded maximum size");
-                            metrics.record_error();
-                            metrics.record_stream_failed();
-                            return;
-                        }
-
-                        while let Some((pos, delim_len)) = find_double_newline(&buffer, search_from)
-                        {
-                            if let Ok(frame_str) = std::str::from_utf8(&buffer[..pos]) {
+                        for frame in frames {
+                            if let Ok(frame_str) = std::str::from_utf8(&frame) {
                                 for line in frame_str.lines() {
                                     let line = line.trim();
                                     if let Some(json_str) = line.strip_prefix("data: ") {
@@ -216,10 +214,7 @@ pub async fn generic_chat_completions_stream(
                                     }
                                 }
                             }
-                            let _ = buffer.split_to(pos + delim_len);
-                            search_from = 0;
                         }
-                        search_from = buffer.len().saturating_sub(3);
                     }
                 };
 
