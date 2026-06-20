@@ -465,10 +465,9 @@ async fn anthropic_chat_completions_defaults_and_extensions() {
 
     let upstream = captured_body.lock().unwrap().clone().unwrap();
     assert_eq!(upstream["model"], "claude-sonnet-4-6");
-    assert_eq!(upstream["max_tokens"], 6144);
-    assert_eq!(upstream["thinking"]["type"], "enabled");
-    assert_eq!(upstream["thinking"]["budget_tokens"], 2048);
-    assert!(upstream["output_config"].get("effort").is_none());
+    assert_eq!(upstream["max_tokens"], 4096);
+    assert_eq!(upstream["thinking"]["type"], "adaptive");
+    assert_eq!(upstream["output_config"]["effort"], "medium");
     assert_eq!(
         upstream["output_config"]["format"]["schema"]["properties"]["answer"]["type"],
         "string"

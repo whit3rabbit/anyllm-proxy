@@ -1460,7 +1460,7 @@ async fn virtual_key_auth_and_revocation_lifecycle() {
     let client = Client::new();
 
     // 1. Create a virtual key (fetch fresh CSRF token for each mutation)
-    let csrf = fetch_csrf(&client, &admin_url, admin_port).await;
+    let csrf = fetch_csrf(&client, &admin_url, admin_port, "admin-token").await;
     let resp = client
         .post(format!("{admin_url}/admin/api/keys"))
         .header("host", format!("localhost:{admin_port}"))
@@ -1491,7 +1491,7 @@ async fn virtual_key_auth_and_revocation_lifecycle() {
     assert_eq!(resp.status(), 200, "virtual key should authenticate");
 
     // 3. Revoke the key
-    let csrf = fetch_csrf(&client, &admin_url, admin_port).await;
+    let csrf = fetch_csrf(&client, &admin_url, admin_port, "admin-token").await;
     let resp = client
         .delete(format!("{admin_url}/admin/api/keys/{key_id}"))
         .header("host", format!("localhost:{admin_port}"))
@@ -1685,7 +1685,7 @@ async fn rpm_limit_returns_429_after_exceeded() {
     let client = Client::new();
 
     // Create a key with rpm_limit: 2
-    let csrf = fetch_csrf(&client, &admin_url, admin_port).await;
+    let csrf = fetch_csrf(&client, &admin_url, admin_port, "admin-token2").await;
     let resp = client
         .post(format!("{admin_url}/admin/api/keys"))
         .header("host", format!("localhost:{admin_port}"))
@@ -1738,10 +1738,16 @@ async fn rpm_limit_returns_429_after_exceeded() {
 // ---------------------------------------------------------------------------
 
 /// Fetch a fresh server-issued CSRF token from the real admin server.
-async fn fetch_csrf(client: &Client, admin_url: &str, admin_port: u16) -> String {
+async fn fetch_csrf(
+    client: &Client,
+    admin_url: &str,
+    admin_port: u16,
+    admin_token: &str,
+) -> String {
     let resp = client
         .get(format!("{admin_url}/admin/csrf-token"))
         .header("host", format!("localhost:{admin_port}"))
+        .header("authorization", format!("Bearer {admin_token}"))
         .send()
         .await
         .unwrap();
@@ -1761,6 +1767,7 @@ async fn create_key_via_admin(
     let csrf_resp = client
         .get(format!("{admin_url}/admin/csrf-token"))
         .header("host", format!("localhost:{admin_port}"))
+        .header("authorization", format!("Bearer {admin_token}"))
         .send()
         .await
         .unwrap();

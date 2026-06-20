@@ -6,27 +6,42 @@ interface AuthState {
   logout: () => void
 }
 
-function getCookie(name: string): string | null {
-  const m = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'))
-  return m ? decodeURIComponent(m[1]) : null
+const STORAGE_KEY = 'anyllm_admin_token'
+
+function getStoredToken(): string | null {
+  try {
+    return window.sessionStorage.getItem(STORAGE_KEY)
+  } catch {
+    return null
+  }
 }
 
-function setCookie(name: string, value: string) {
-  document.cookie = `${name}=${encodeURIComponent(value)}; Path=/admin; SameSite=Strict; Max-Age=604800`
+function setStoredToken(token: string) {
+  try {
+    // Session storage is origin-scoped and avoids leaking the admin token to
+    // sibling localhost ports via a shared Path=/admin cookie.
+    window.sessionStorage.setItem(STORAGE_KEY, token)
+  } catch {
+    // Zustand still keeps the token for the current page lifetime.
+  }
 }
 
-function deleteCookie(name: string) {
-  document.cookie = `${name}=; Path=/admin; SameSite=Strict; Max-Age=0`
+function deleteStoredToken() {
+  try {
+    window.sessionStorage.removeItem(STORAGE_KEY)
+  } catch {
+    // Nothing to clear when storage is unavailable.
+  }
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
-  token: getCookie('admin_session'),
+  token: getStoredToken(),
   login(token) {
-    setCookie('admin_session', token)
+    setStoredToken(token)
     set({ token })
   },
   logout() {
-    deleteCookie('admin_session')
+    deleteStoredToken()
     set({ token: null })
   },
 }))

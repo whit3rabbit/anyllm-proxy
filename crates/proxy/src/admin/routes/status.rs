@@ -24,6 +24,7 @@ pub fn is_backend_configured() -> bool {
         "OPENAI_BASE_URL",
         "BACKEND",
         "ANTHROPIC_API_KEY",
+        "ANTHROPIC_AUTH_TOKEN",
         "GEMINI_API_KEY",
         "VERTEX_API_KEY",
         "GOOGLE_ACCESS_TOKEN",

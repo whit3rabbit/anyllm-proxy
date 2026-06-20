@@ -444,7 +444,7 @@ pub const PROVIDER_ANTHROPIC: ProviderDef = ProviderDef {
     protocol: ProviderProtocol::AnthropicNative,
     auth: AuthKind::Bearer,
     status: ProviderStatus::Implemented,
-    env_vars: &["ANTHROPIC_API_KEY"],
+    env_vars: &["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"],
     litellm_prefix: "anthropic/",
     capabilities: ProviderCapabilities {
         chat_completions: true,
@@ -514,6 +514,19 @@ pub const MODELS_ANTHROPIC: &[ModelDef] = &[
         provider_id: "anthropic",
         context_window: 1000000,
         max_output_tokens: 64000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "claude-fable-5",
+        provider_id: "anthropic",
+        context_window: 1000000,
+        max_output_tokens: 128000,
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
@@ -654,6 +667,19 @@ pub const MODELS_ANTHROPIC: &[ModelDef] = &[
     },
     ModelDef {
         id: "claude-opus-4-7-20260416",
+        provider_id: "anthropic",
+        context_window: 1000000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "claude-opus-4-8",
         provider_id: "anthropic",
         context_window: 1000000,
         max_output_tokens: 128000,
@@ -890,6 +916,54 @@ pub const MODELS_ANYSCALE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+];
+
+pub const PROVIDER_APISERPENT: ProviderDef = ProviderDef {
+    id: "apiserpent",
+    display_name: "Apiserpent",
+    default_base_url: "",
+    protocol: ProviderProtocol::OpenAICompat,
+    auth: AuthKind::Bearer,
+    status: ProviderStatus::Stub,
+    env_vars: &["APISERPENT_API_KEY"],
+    litellm_prefix: "apiserpent/",
+    capabilities: ProviderCapabilities {
+        chat_completions: false,
+        streaming: false,
+        tool_use: false,
+        embeddings: false,
+        vision: false,
+        batch: false,
+    },
+};
+
+pub const MODELS_APISERPENT: &[ModelDef] = &[
+    ModelDef {
+        id: "deep_search",
+        provider_id: "apiserpent",
+        context_window: 0,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: false,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "search",
+        provider_id: "apiserpent",
+        context_window: 0,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: false,
+            tool_use: false,
             vision: false,
             extended_thinking: false,
         },
@@ -3146,6 +3220,19 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         status: ModelStatus::Available,
     },
     ModelDef {
+        id: "speech/azure-stt",
+        provider_id: "azure",
+        context_window: 0,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: false,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
         id: "speech/azure-tts",
         provider_id: "azure",
         context_window: 0,
@@ -3974,6 +4061,19 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
         status: ModelStatus::Available,
     },
     ModelDef {
+        id: "claude-fable-5",
+        provider_id: "azure_ai",
+        context_window: 1000000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
         id: "claude-haiku-4-5",
         provider_id: "azure_ai",
         context_window: 200000,
@@ -4027,6 +4127,19 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
     },
     ModelDef {
         id: "claude-opus-4-7",
+        provider_id: "azure_ai",
+        context_window: 200000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "claude-opus-4-8",
         provider_id: "azure_ai",
         context_window: 200000,
         max_output_tokens: 128000,
@@ -4542,6 +4655,19 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
             tool_use: true,
             vision: true,
             extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "kimi-k2.6",
+        provider_id: "azure_ai",
+        context_window: 262144,
+        max_output_tokens: 262144,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: true,
         },
         status: ModelStatus::Available,
     },
@@ -8495,6 +8621,19 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         status: ModelStatus::Available,
     },
     ModelDef {
+        id: "anthropic.claude-fable-5",
+        provider_id: "bedrock_converse",
+        context_window: 1000000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
         id: "anthropic.claude-haiku-4-5-20251001-v1:0",
         provider_id: "bedrock_converse",
         context_window: 200000,
@@ -8574,6 +8713,19 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
     },
     ModelDef {
         id: "anthropic.claude-opus-4-7",
+        provider_id: "bedrock_converse",
+        context_window: 1000000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "anthropic.claude-opus-4-8",
         provider_id: "bedrock_converse",
         context_window: 1000000,
         max_output_tokens: 128000,
@@ -8755,6 +8907,19 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         status: ModelStatus::Available,
     },
     ModelDef {
+        id: "au.anthropic.claude-opus-4-8",
+        provider_id: "bedrock_converse",
+        context_window: 1000000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
         id: "au.anthropic.claude-sonnet-4-5-20250929-v1:0",
         provider_id: "bedrock_converse",
         context_window: 200000,
@@ -8872,6 +9037,19 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         status: ModelStatus::Available,
     },
     ModelDef {
+        id: "eu.anthropic.claude-fable-5",
+        provider_id: "bedrock_converse",
+        context_window: 1000000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
         id: "eu.anthropic.claude-haiku-4-5-20251001-v1:0",
         provider_id: "bedrock_converse",
         context_window: 200000,
@@ -8938,6 +9116,19 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
     },
     ModelDef {
         id: "eu.anthropic.claude-opus-4-7",
+        provider_id: "bedrock_converse",
+        context_window: 1000000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "eu.anthropic.claude-opus-4-8",
         provider_id: "bedrock_converse",
         context_window: 1000000,
         max_output_tokens: 128000,
@@ -9028,6 +9219,19 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         status: ModelStatus::Available,
     },
     ModelDef {
+        id: "global.anthropic.claude-fable-5",
+        provider_id: "bedrock_converse",
+        context_window: 1000000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
         id: "global.anthropic.claude-haiku-4-5-20251001-v1:0",
         provider_id: "bedrock_converse",
         context_window: 200000,
@@ -9068,6 +9272,19 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
     },
     ModelDef {
         id: "global.anthropic.claude-opus-4-7",
+        provider_id: "bedrock_converse",
+        context_window: 1000000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "global.anthropic.claude-opus-4-8",
         provider_id: "bedrock_converse",
         context_window: 1000000,
         max_output_tokens: 128000,
@@ -9162,6 +9379,19 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         provider_id: "bedrock_converse",
         context_window: 200000,
         max_output_tokens: 64000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "jp.anthropic.claude-opus-4-7",
+        provider_id: "bedrock_converse",
+        context_window: 1000000,
+        max_output_tokens: 128000,
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
@@ -9704,6 +9934,19 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         status: ModelStatus::Available,
     },
     ModelDef {
+        id: "us.anthropic.claude-fable-5",
+        provider_id: "bedrock_converse",
+        context_window: 1000000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
         id: "us.anthropic.claude-haiku-4-5-20251001-v1:0",
         provider_id: "bedrock_converse",
         context_window: 200000,
@@ -9770,6 +10013,19 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
     },
     ModelDef {
         id: "us.anthropic.claude-opus-4-7",
+        provider_id: "bedrock_converse",
+        context_window: 1000000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "us.anthropic.claude-opus-4-8",
         provider_id: "bedrock_converse",
         context_window: 1000000,
         max_output_tokens: 128000,
@@ -10005,12 +10261,38 @@ pub const PROVIDER_BEDROCK_MANTLE: ProviderDef = ProviderDef {
         streaming: true,
         tool_use: true,
         embeddings: false,
-        vision: false,
+        vision: true,
         batch: false,
     },
 };
 
 pub const MODELS_BEDROCK_MANTLE: &[ModelDef] = &[
+    ModelDef {
+        id: "openai.gpt-5.4",
+        provider_id: "bedrock_mantle",
+        context_window: 272000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "openai.gpt-5.5",
+        provider_id: "bedrock_mantle",
+        context_window: 272000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
     ModelDef {
         id: "openai.gpt-oss-120b",
         provider_id: "bedrock_mantle",
@@ -13626,6 +13908,19 @@ pub const MODELS_FAL_AI: &[ModelDef] = &[
         status: ModelStatus::Available,
     },
     ModelDef {
+        id: "fal-ai/gemini-25-flash-image",
+        provider_id: "fal_ai",
+        context_window: 0,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: false,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
         id: "fal-ai/ideogram/v3",
         provider_id: "fal_ai",
         context_window: 0,
@@ -13666,6 +13961,19 @@ pub const MODELS_FAL_AI: &[ModelDef] = &[
     },
     ModelDef {
         id: "fal-ai/imagen4/preview/ultra",
+        provider_id: "fal_ai",
+        context_window: 0,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: false,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "fal-ai/nano-banana",
         provider_id: "fal_ai",
         context_window: 0,
         max_output_tokens: 0,
@@ -19768,6 +20076,39 @@ pub const MODELS_HYPERBOLIC: &[ModelDef] = &[
     },
 ];
 
+pub const PROVIDER_INCEPTION: ProviderDef = ProviderDef {
+    id: "inception",
+    display_name: "Inception",
+    default_base_url: "",
+    protocol: ProviderProtocol::OpenAICompat,
+    auth: AuthKind::Bearer,
+    status: ProviderStatus::Stub,
+    env_vars: &["INCEPTION_API_KEY"],
+    litellm_prefix: "inception/",
+    capabilities: ProviderCapabilities {
+        chat_completions: true,
+        streaming: true,
+        tool_use: true,
+        embeddings: false,
+        vision: false,
+        batch: false,
+    },
+};
+
+pub const MODELS_INCEPTION: &[ModelDef] = &[ModelDef {
+    id: "mercury-2",
+    provider_id: "inception",
+    context_window: 128000,
+    max_output_tokens: 50000,
+    capabilities: ModelCapabilities {
+        streaming: true,
+        tool_use: true,
+        vision: false,
+        extended_thinking: false,
+    },
+    status: ModelStatus::Available,
+}];
+
 pub const PROVIDER_JINA_AI: ProviderDef = ProviderDef {
     id: "jina_ai",
     display_name: "Jina AI",
@@ -20536,7 +20877,7 @@ pub const PROVIDER_MINIMAX: ProviderDef = ProviderDef {
         streaming: true,
         tool_use: true,
         embeddings: false,
-        vision: false,
+        vision: true,
         batch: false,
     },
 };
@@ -20603,6 +20944,19 @@ pub const MODELS_MINIMAX: &[ModelDef] = &[
             streaming: true,
             tool_use: true,
             vision: false,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "MiniMax-M3",
+        provider_id: "minimax",
+        context_window: 512000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
             extended_thinking: true,
         },
         status: ModelStatus::Available,
@@ -21007,6 +21361,19 @@ pub const MODELS_MISTRAL: &[ModelDef] = &[
         status: ModelStatus::Available,
     },
     ModelDef {
+        id: "ministral-8b-latest",
+        provider_id: "mistral",
+        context_window: 262144,
+        max_output_tokens: 262144,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
         id: "mistral-embed",
         provider_id: "mistral",
         context_window: 8192,
@@ -21390,7 +21757,7 @@ pub const MODELS_MOONSHOT: &[ModelDef] = &[
             vision: false,
             extended_thinking: false,
         },
-        status: ModelStatus::Available,
+        status: ModelStatus::Deprecated,
     },
     ModelDef {
         id: "kimi-k2-0905-preview",
@@ -21403,7 +21770,7 @@ pub const MODELS_MOONSHOT: &[ModelDef] = &[
             vision: false,
             extended_thinking: false,
         },
-        status: ModelStatus::Available,
+        status: ModelStatus::Deprecated,
     },
     ModelDef {
         id: "kimi-k2-thinking",
@@ -21416,7 +21783,7 @@ pub const MODELS_MOONSHOT: &[ModelDef] = &[
             vision: false,
             extended_thinking: true,
         },
-        status: ModelStatus::Available,
+        status: ModelStatus::Deprecated,
     },
     ModelDef {
         id: "kimi-k2-thinking-turbo",
@@ -21429,7 +21796,7 @@ pub const MODELS_MOONSHOT: &[ModelDef] = &[
             vision: false,
             extended_thinking: true,
         },
-        status: ModelStatus::Available,
+        status: ModelStatus::Deprecated,
     },
     ModelDef {
         id: "kimi-k2-turbo-preview",
@@ -21442,7 +21809,7 @@ pub const MODELS_MOONSHOT: &[ModelDef] = &[
             vision: false,
             extended_thinking: false,
         },
-        status: ModelStatus::Available,
+        status: ModelStatus::Deprecated,
     },
     ModelDef {
         id: "kimi-k2.5",
@@ -21481,7 +21848,7 @@ pub const MODELS_MOONSHOT: &[ModelDef] = &[
             vision: true,
             extended_thinking: false,
         },
-        status: ModelStatus::Available,
+        status: ModelStatus::Deprecated,
     },
     ModelDef {
         id: "kimi-latest-128k",
@@ -21494,7 +21861,7 @@ pub const MODELS_MOONSHOT: &[ModelDef] = &[
             vision: true,
             extended_thinking: false,
         },
-        status: ModelStatus::Available,
+        status: ModelStatus::Deprecated,
     },
     ModelDef {
         id: "kimi-latest-32k",
@@ -21507,7 +21874,7 @@ pub const MODELS_MOONSHOT: &[ModelDef] = &[
             vision: true,
             extended_thinking: false,
         },
-        status: ModelStatus::Available,
+        status: ModelStatus::Deprecated,
     },
     ModelDef {
         id: "kimi-latest-8k",
@@ -21520,7 +21887,7 @@ pub const MODELS_MOONSHOT: &[ModelDef] = &[
             vision: true,
             extended_thinking: false,
         },
-        status: ModelStatus::Available,
+        status: ModelStatus::Deprecated,
     },
     ModelDef {
         id: "kimi-thinking-preview",
@@ -21533,7 +21900,7 @@ pub const MODELS_MOONSHOT: &[ModelDef] = &[
             vision: true,
             extended_thinking: false,
         },
-        status: ModelStatus::Available,
+        status: ModelStatus::Deprecated,
     },
     ModelDef {
         id: "moonshot-v1-128k",
@@ -21559,7 +21926,7 @@ pub const MODELS_MOONSHOT: &[ModelDef] = &[
             vision: false,
             extended_thinking: false,
         },
-        status: ModelStatus::Available,
+        status: ModelStatus::Deprecated,
     },
     ModelDef {
         id: "moonshot-v1-128k-vision-preview",
@@ -21598,7 +21965,7 @@ pub const MODELS_MOONSHOT: &[ModelDef] = &[
             vision: false,
             extended_thinking: false,
         },
-        status: ModelStatus::Available,
+        status: ModelStatus::Deprecated,
     },
     ModelDef {
         id: "moonshot-v1-32k-vision-preview",
@@ -21637,7 +22004,7 @@ pub const MODELS_MOONSHOT: &[ModelDef] = &[
             vision: false,
             extended_thinking: false,
         },
-        status: ModelStatus::Available,
+        status: ModelStatus::Deprecated,
     },
     ModelDef {
         id: "moonshot-v1-8k-vision-preview",
@@ -23627,6 +23994,19 @@ pub const MODELS_OCI: &[ModelDef] = &[
         status: ModelStatus::Available,
     },
     ModelDef {
+        id: "cohere.command-a-reasoning",
+        provider_id: "oci",
+        context_window: 256000,
+        max_output_tokens: 8192,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
         id: "cohere.command-a-reasoning-08-2025",
         provider_id: "oci",
         context_window: 256000,
@@ -23648,6 +24028,19 @@ pub const MODELS_OCI: &[ModelDef] = &[
             streaming: true,
             tool_use: false,
             vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "cohere.command-a-vision",
+        provider_id: "oci",
+        context_window: 256000,
+        max_output_tokens: 8192,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
             extended_thinking: false,
         },
         status: ModelStatus::Available,
@@ -23770,6 +24163,19 @@ pub const MODELS_OCI: &[ModelDef] = &[
         status: ModelStatus::Available,
     },
     ModelDef {
+        id: "cohere.embed-multilingual-image-v3.0",
+        provider_id: "oci",
+        context_window: 512,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: false,
+            tool_use: false,
+            vision: true,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
         id: "cohere.embed-multilingual-light-image-v3.0",
         provider_id: "oci",
         context_window: 512,
@@ -23887,6 +24293,19 @@ pub const MODELS_OCI: &[ModelDef] = &[
         status: ModelStatus::Available,
     },
     ModelDef {
+        id: "meta.llama-3.1-8b-instruct",
+        provider_id: "oci",
+        context_window: 128000,
+        max_output_tokens: 4000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
         id: "meta.llama-3.2-11b-vision-instruct",
         provider_id: "oci",
         context_window: 128000,
@@ -23941,8 +24360,21 @@ pub const MODELS_OCI: &[ModelDef] = &[
     ModelDef {
         id: "meta.llama-4-maverick-17b-128e-instruct-fp8",
         provider_id: "oci",
-        context_window: 512000,
-        max_output_tokens: 4000,
+        context_window: 1048576,
+        max_output_tokens: 8192,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "meta.llama-4-scout-17b-16e-instruct",
+        provider_id: "oci",
+        context_window: 10485760,
+        max_output_tokens: 8192,
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
@@ -23952,15 +24384,41 @@ pub const MODELS_OCI: &[ModelDef] = &[
         status: ModelStatus::Available,
     },
     ModelDef {
-        id: "meta.llama-4-scout-17b-16e-instruct",
+        id: "openai.gpt-5",
         provider_id: "oci",
-        context_window: 192000,
-        max_output_tokens: 4000,
+        context_window: 272000,
+        max_output_tokens: 128000,
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
-            vision: false,
-            extended_thinking: false,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "openai.gpt-5-mini",
+        provider_id: "oci",
+        context_window: 272000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "openai.gpt-5-nano",
+        provider_id: "oci",
+        context_window: 272000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: true,
         },
         status: ModelStatus::Available,
     },
@@ -30746,9 +31204,9 @@ pub const PROVIDER_SNOWFLAKE: ProviderDef = ProviderDef {
     capabilities: ProviderCapabilities {
         chat_completions: true,
         streaming: true,
-        tool_use: false,
-        embeddings: false,
-        vision: false,
+        tool_use: true,
+        embeddings: true,
+        vision: true,
         batch: false,
     },
 };
@@ -30757,12 +31215,90 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
     ModelDef {
         id: "claude-3-5-sonnet",
         provider_id: "snowflake",
-        context_window: 18000,
-        max_output_tokens: 8192,
+        context_window: 200000,
+        max_output_tokens: 16384,
         capabilities: ModelCapabilities {
             streaming: true,
-            tool_use: false,
-            vision: false,
+            tool_use: true,
+            vision: true,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "claude-3-7-sonnet",
+        provider_id: "snowflake",
+        context_window: 200000,
+        max_output_tokens: 16384,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "claude-4-opus",
+        provider_id: "snowflake",
+        context_window: 200000,
+        max_output_tokens: 16384,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "claude-4-sonnet",
+        provider_id: "snowflake",
+        context_window: 200000,
+        max_output_tokens: 16384,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "claude-haiku-4-5",
+        provider_id: "snowflake",
+        context_window: 200000,
+        max_output_tokens: 16384,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "claude-sonnet-4-5",
+        provider_id: "snowflake",
+        context_window: 200000,
+        max_output_tokens: 16384,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "claude-sonnet-4-6",
+        provider_id: "snowflake",
+        context_window: 200000,
+        max_output_tokens: 16384,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
             extended_thinking: false,
         },
         status: ModelStatus::Available,
@@ -30770,8 +31306,8 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
     ModelDef {
         id: "deepseek-r1",
         provider_id: "snowflake",
-        context_window: 32768,
-        max_output_tokens: 8192,
+        context_window: 128000,
+        max_output_tokens: 16384,
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
@@ -30875,10 +31411,10 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
         id: "llama3.1-405b",
         provider_id: "snowflake",
         context_window: 128000,
-        max_output_tokens: 8192,
+        max_output_tokens: 16384,
         capabilities: ModelCapabilities {
             streaming: true,
-            tool_use: false,
+            tool_use: true,
             vision: false,
             extended_thinking: false,
         },
@@ -30888,10 +31424,10 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
         id: "llama3.1-70b",
         provider_id: "snowflake",
         context_window: 128000,
-        max_output_tokens: 8192,
+        max_output_tokens: 16384,
         capabilities: ModelCapabilities {
             streaming: true,
-            tool_use: false,
+            tool_use: true,
             vision: false,
             extended_thinking: false,
         },
@@ -30901,7 +31437,7 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
         id: "llama3.1-8b",
         provider_id: "snowflake",
         context_window: 128000,
-        max_output_tokens: 8192,
+        max_output_tokens: 16384,
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
@@ -30940,10 +31476,23 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
         id: "llama3.3-70b",
         provider_id: "snowflake",
         context_window: 128000,
-        max_output_tokens: 8192,
+        max_output_tokens: 16384,
         capabilities: ModelCapabilities {
             streaming: true,
-            tool_use: false,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "llama4-maverick",
+        provider_id: "snowflake",
+        context_window: 128000,
+        max_output_tokens: 16384,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
             vision: false,
             extended_thinking: false,
         },
@@ -30979,10 +31528,10 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
         id: "mistral-large2",
         provider_id: "snowflake",
         context_window: 128000,
-        max_output_tokens: 8192,
+        max_output_tokens: 16384,
         capabilities: ModelCapabilities {
             streaming: true,
-            tool_use: false,
+            tool_use: true,
             vision: false,
             extended_thinking: false,
         },
@@ -30996,6 +31545,58 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "openai-gpt-4.1",
+        provider_id: "snowflake",
+        context_window: 300000,
+        max_output_tokens: 16384,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "openai-gpt-5",
+        provider_id: "snowflake",
+        context_window: 300000,
+        max_output_tokens: 16384,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "openai-gpt-5-mini",
+        provider_id: "snowflake",
+        context_window: 1000000,
+        max_output_tokens: 16384,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "openai-gpt-5-nano",
+        provider_id: "snowflake",
+        context_window: 5000000,
+        max_output_tokens: 16384,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
             vision: false,
             extended_thinking: false,
         },
@@ -31041,6 +31642,32 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
         status: ModelStatus::Available,
     },
     ModelDef {
+        id: "snowflake-arctic-embed-l-v2.0",
+        provider_id: "snowflake",
+        context_window: 8192,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: false,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "snowflake-arctic-embed-m-v2.0",
+        provider_id: "snowflake",
+        context_window: 8192,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: false,
+            tool_use: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
         id: "snowflake-llama-3.1-405b",
         provider_id: "snowflake",
         context_window: 8000,
@@ -31056,17 +31683,50 @@ pub const MODELS_SNOWFLAKE: &[ModelDef] = &[
     ModelDef {
         id: "snowflake-llama-3.3-70b",
         provider_id: "snowflake",
-        context_window: 8000,
-        max_output_tokens: 8192,
+        context_window: 128000,
+        max_output_tokens: 16384,
         capabilities: ModelCapabilities {
             streaming: true,
-            tool_use: false,
+            tool_use: true,
             vision: false,
             extended_thinking: false,
         },
         status: ModelStatus::Available,
     },
 ];
+
+pub const PROVIDER_SONIOX: ProviderDef = ProviderDef {
+    id: "soniox",
+    display_name: "Soniox",
+    default_base_url: "",
+    protocol: ProviderProtocol::OpenAICompat,
+    auth: AuthKind::Bearer,
+    status: ProviderStatus::Stub,
+    env_vars: &["SONIOX_API_KEY"],
+    litellm_prefix: "soniox/",
+    capabilities: ProviderCapabilities {
+        chat_completions: false,
+        streaming: false,
+        tool_use: false,
+        embeddings: false,
+        vision: false,
+        batch: false,
+    },
+};
+
+pub const MODELS_SONIOX: &[ModelDef] = &[ModelDef {
+    id: "stt-async-v4",
+    provider_id: "soniox",
+    context_window: 0,
+    max_output_tokens: 8000,
+    capabilities: ModelCapabilities {
+        streaming: false,
+        tool_use: false,
+        vision: false,
+        extended_thinking: false,
+    },
+    status: ModelStatus::Available,
+}];
 
 pub const PROVIDER_STABILITY: ProviderDef = ProviderDef {
     id: "stability",
@@ -31484,6 +32144,39 @@ pub const MODELS_TEXT_COMPLETION_CODESTRAL: &[ModelDef] = &[
         status: ModelStatus::Available,
     },
 ];
+
+pub const PROVIDER_TEXT_COMPLETION_INCEPTION: ProviderDef = ProviderDef {
+    id: "text-completion-inception",
+    display_name: "Text Completion Inception",
+    default_base_url: "",
+    protocol: ProviderProtocol::OpenAICompat,
+    auth: AuthKind::Bearer,
+    status: ProviderStatus::Stub,
+    env_vars: &["TEXT_COMPLETION_INCEPTION_API_KEY"],
+    litellm_prefix: "text-completion-inception/",
+    capabilities: ProviderCapabilities {
+        chat_completions: false,
+        streaming: true,
+        tool_use: false,
+        embeddings: false,
+        vision: false,
+        batch: false,
+    },
+};
+
+pub const MODELS_TEXT_COMPLETION_INCEPTION: &[ModelDef] = &[ModelDef {
+    id: "mercury-edit-2",
+    provider_id: "text-completion-inception",
+    context_window: 32000,
+    max_output_tokens: 8192,
+    capabilities: ModelCapabilities {
+        streaming: true,
+        tool_use: false,
+        vision: false,
+        extended_thinking: false,
+    },
+    status: ModelStatus::Available,
+}];
 
 pub const PROVIDER_TEXT_COMPLETION_OPENAI: ProviderDef = ProviderDef {
     id: "text-completion-openai",
@@ -34054,6 +34747,32 @@ pub const MODELS_VERTEX_AI_ANTHROPIC_MODELS: &[ModelDef] = &[
         status: ModelStatus::Available,
     },
     ModelDef {
+        id: "vertex_ai/claude-fable-5",
+        provider_id: "vertex_ai-anthropic_models",
+        context_window: 1000000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "vertex_ai/claude-fable-5@default",
+        provider_id: "vertex_ai-anthropic_models",
+        context_window: 1000000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
         id: "vertex_ai/claude-haiku-4-5",
         provider_id: "vertex_ai-anthropic_models",
         context_window: 200000,
@@ -34185,6 +34904,32 @@ pub const MODELS_VERTEX_AI_ANTHROPIC_MODELS: &[ModelDef] = &[
     },
     ModelDef {
         id: "vertex_ai/claude-opus-4-7@default",
+        provider_id: "vertex_ai-anthropic_models",
+        context_window: 1000000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "vertex_ai/claude-opus-4-8",
+        provider_id: "vertex_ai-anthropic_models",
+        context_window: 1000000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "vertex_ai/claude-opus-4-8@default",
         provider_id: "vertex_ai-anthropic_models",
         context_window: 1000000,
         max_output_tokens: 128000,
@@ -35676,14 +36421,27 @@ pub const PROVIDER_VERTEX_AI_OPENAI_MODELS: ProviderDef = ProviderDef {
     capabilities: ProviderCapabilities {
         chat_completions: true,
         streaming: true,
-        tool_use: false,
+        tool_use: true,
         embeddings: false,
-        vision: false,
+        vision: true,
         batch: true,
     },
 };
 
 pub const MODELS_VERTEX_AI_OPENAI_MODELS: &[ModelDef] = &[
+    ModelDef {
+        id: "vertex_ai/google/gemma-4-26b-a4b-it-maas",
+        provider_id: "vertex_ai-openai_models",
+        context_window: 256000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            vision: true,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
     ModelDef {
         id: "vertex_ai/openai/gpt-oss-120b-maas",
         provider_id: "vertex_ai-openai_models",
@@ -37220,7 +37978,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
             vision: false,
             extended_thinking: false,
         },
-        status: ModelStatus::Available,
+        status: ModelStatus::Deprecated,
     },
     ModelDef {
         id: "grok-3-beta",
@@ -37376,7 +38134,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
             vision: false,
             extended_thinking: false,
         },
-        status: ModelStatus::Available,
+        status: ModelStatus::Deprecated,
     },
     ModelDef {
         id: "grok-4-1-fast",
@@ -37402,7 +38160,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
             vision: true,
             extended_thinking: false,
         },
-        status: ModelStatus::Available,
+        status: ModelStatus::Deprecated,
     },
     ModelDef {
         id: "grok-4-1-fast-non-reasoning-latest",
@@ -37415,7 +38173,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
             vision: true,
             extended_thinking: false,
         },
-        status: ModelStatus::Available,
+        status: ModelStatus::Deprecated,
     },
     ModelDef {
         id: "grok-4-1-fast-reasoning",
@@ -37428,7 +38186,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
             vision: true,
             extended_thinking: true,
         },
-        status: ModelStatus::Available,
+        status: ModelStatus::Deprecated,
     },
     ModelDef {
         id: "grok-4-1-fast-reasoning-latest",
@@ -37441,7 +38199,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
             vision: true,
             extended_thinking: true,
         },
-        status: ModelStatus::Available,
+        status: ModelStatus::Deprecated,
     },
     ModelDef {
         id: "grok-4-fast-non-reasoning",
@@ -37454,7 +38212,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
             vision: false,
             extended_thinking: false,
         },
-        status: ModelStatus::Available,
+        status: ModelStatus::Deprecated,
     },
     ModelDef {
         id: "grok-4-fast-reasoning",
@@ -37467,7 +38225,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
             vision: false,
             extended_thinking: false,
         },
-        status: ModelStatus::Available,
+        status: ModelStatus::Deprecated,
     },
     ModelDef {
         id: "grok-4-latest",
@@ -37597,7 +38355,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
             vision: false,
             extended_thinking: true,
         },
-        status: ModelStatus::Available,
+        status: ModelStatus::Deprecated,
     },
     ModelDef {
         id: "grok-code-fast-1-0825",
@@ -37610,7 +38368,7 @@ pub const MODELS_XAI: &[ModelDef] = &[
             vision: false,
             extended_thinking: true,
         },
-        status: ModelStatus::Available,
+        status: ModelStatus::Deprecated,
     },
     ModelDef {
         id: "grok-vision-beta",
@@ -37626,6 +38384,39 @@ pub const MODELS_XAI: &[ModelDef] = &[
         status: ModelStatus::Available,
     },
 ];
+
+pub const PROVIDER_YOU_COM: ProviderDef = ProviderDef {
+    id: "you_com",
+    display_name: "YOU COM",
+    default_base_url: "",
+    protocol: ProviderProtocol::OpenAICompat,
+    auth: AuthKind::Bearer,
+    status: ProviderStatus::Stub,
+    env_vars: &["YOU_COM_API_KEY"],
+    litellm_prefix: "you_com/",
+    capabilities: ProviderCapabilities {
+        chat_completions: false,
+        streaming: false,
+        tool_use: false,
+        embeddings: false,
+        vision: false,
+        batch: false,
+    },
+};
+
+pub const MODELS_YOU_COM: &[ModelDef] = &[ModelDef {
+    id: "search",
+    provider_id: "you_com",
+    context_window: 0,
+    max_output_tokens: 0,
+    capabilities: ModelCapabilities {
+        streaming: false,
+        tool_use: false,
+        vision: false,
+        extended_thinking: false,
+    },
+    status: ModelStatus::Available,
+}];
 
 pub const PROVIDER_ZAI: ProviderDef = ProviderDef {
     id: "zai",
@@ -37792,12 +38583,40 @@ pub const MODELS_ZAI: &[ModelDef] = &[
     },
 ];
 
+pub static ANTHROPIC_ADAPTIVE_THINKING_MODELS: &[&str] = &[
+    "claude-fable-5",
+    "claude-opus-4-6",
+    "claude-opus-4-6-20260205",
+    "claude-opus-4-7",
+    "claude-opus-4-7-20260416",
+    "claude-opus-4-8",
+    "claude-sonnet-4-6",
+];
+
+pub static ANTHROPIC_MAX_REASONING_EFFORT_MODELS: &[&str] = &[
+    "claude-fable-5",
+    "claude-opus-4-6",
+    "claude-opus-4-6-20260205",
+    "claude-opus-4-7",
+    "claude-opus-4-7-20260416",
+    "claude-opus-4-8",
+    "claude-sonnet-4-6",
+];
+
+pub static ANTHROPIC_XHIGH_REASONING_EFFORT_MODELS: &[&str] = &[
+    "claude-fable-5",
+    "claude-opus-4-7",
+    "claude-opus-4-7-20260416",
+    "claude-opus-4-8",
+];
+
 pub static ALL_PROVIDERS: &[&ProviderDef] = &[
     &PROVIDER_AI21,
     &PROVIDER_AIML,
     &PROVIDER_AMAZON_NOVA,
     &PROVIDER_ANTHROPIC,
     &PROVIDER_ANYSCALE,
+    &PROVIDER_APISERPENT,
     &PROVIDER_ASSEMBLYAI,
     &PROVIDER_AWS_POLLY,
     &PROVIDER_AZURE,
@@ -37839,6 +38658,7 @@ pub static ALL_PROVIDERS: &[&ProviderDef] = &[
     &PROVIDER_GROQ,
     &PROVIDER_HEROKU,
     &PROVIDER_HYPERBOLIC,
+    &PROVIDER_INCEPTION,
     &PROVIDER_JINA_AI,
     &PROVIDER_LAMBDA_AI,
     &PROVIDER_LEMONADE,
@@ -37873,9 +38693,11 @@ pub static ALL_PROVIDERS: &[&ProviderDef] = &[
     &PROVIDER_SEARXNG,
     &PROVIDER_SERPER,
     &PROVIDER_SNOWFLAKE,
+    &PROVIDER_SONIOX,
     &PROVIDER_STABILITY,
     &PROVIDER_TAVILY,
     &PROVIDER_TEXT_COMPLETION_CODESTRAL,
+    &PROVIDER_TEXT_COMPLETION_INCEPTION,
     &PROVIDER_TEXT_COMPLETION_OPENAI,
     &PROVIDER_TOGETHER_AI,
     &PROVIDER_V0,
@@ -37901,6 +38723,7 @@ pub static ALL_PROVIDERS: &[&ProviderDef] = &[
     &PROVIDER_WANDB,
     &PROVIDER_WATSONX,
     &PROVIDER_XAI,
+    &PROVIDER_YOU_COM,
     &PROVIDER_ZAI,
 ];
 
@@ -37910,6 +38733,7 @@ pub static ALL_MODELS: &[(&str, &[ModelDef])] = &[
     ("amazon_nova", MODELS_AMAZON_NOVA),
     ("anthropic", MODELS_ANTHROPIC),
     ("anyscale", MODELS_ANYSCALE),
+    ("apiserpent", MODELS_APISERPENT),
     ("assemblyai", MODELS_ASSEMBLYAI),
     ("aws_polly", MODELS_AWS_POLLY),
     ("azure", MODELS_AZURE),
@@ -37954,6 +38778,7 @@ pub static ALL_MODELS: &[(&str, &[ModelDef])] = &[
     ("groq", MODELS_GROQ),
     ("heroku", MODELS_HEROKU),
     ("hyperbolic", MODELS_HYPERBOLIC),
+    ("inception", MODELS_INCEPTION),
     ("jina_ai", MODELS_JINA_AI),
     ("lambda_ai", MODELS_LAMBDA_AI),
     ("lemonade", MODELS_LEMONADE),
@@ -37988,11 +38813,16 @@ pub static ALL_MODELS: &[(&str, &[ModelDef])] = &[
     ("searxng", MODELS_SEARXNG),
     ("serper", MODELS_SERPER),
     ("snowflake", MODELS_SNOWFLAKE),
+    ("soniox", MODELS_SONIOX),
     ("stability", MODELS_STABILITY),
     ("tavily", MODELS_TAVILY),
     (
         "text-completion-codestral",
         MODELS_TEXT_COMPLETION_CODESTRAL,
+    ),
+    (
+        "text-completion-inception",
+        MODELS_TEXT_COMPLETION_INCEPTION,
     ),
     ("text-completion-openai", MODELS_TEXT_COMPLETION_OPENAI),
     ("together_ai", MODELS_TOGETHER_AI),
@@ -38034,5 +38864,6 @@ pub static ALL_MODELS: &[(&str, &[ModelDef])] = &[
     ("wandb", MODELS_WANDB),
     ("watsonx", MODELS_WATSONX),
     ("xai", MODELS_XAI),
+    ("you_com", MODELS_YOU_COM),
     ("zai", MODELS_ZAI),
 ];

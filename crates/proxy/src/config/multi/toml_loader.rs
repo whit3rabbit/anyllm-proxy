@@ -277,9 +277,7 @@ impl MultiConfig {
                 if let Err(e) = validate_base_url(&base_url) {
                     panic!("backend '{name}' base_url rejected: {e}");
                 }
-                // Anthropic uses x-api-key header, stored as BearerToken for simplicity
-                // (the AnthropicClient will apply it correctly)
-                let auth = BackendAuth::BearerToken(api_key.clone());
+                let auth = BackendAuth::anthropic_from_api_key_like(api_key.clone());
                 // No model mapping needed for passthrough
                 let mm = ModelMapping {
                     big_model: String::new(),

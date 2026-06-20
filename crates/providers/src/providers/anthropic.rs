@@ -10,7 +10,7 @@ pub const PROVIDER: ProviderDef = ProviderDef {
     protocol: ProviderProtocol::AnthropicNative,
     auth: AuthKind::Bearer,
     status: ProviderStatus::Implemented,
-    env_vars: &["ANTHROPIC_API_KEY"],
+    env_vars: &["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"],
     litellm_prefix: "anthropic/",
     capabilities: ProviderCapabilities {
         chat_completions: true,

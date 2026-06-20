@@ -91,6 +91,10 @@ pub fn row_to_backend_config(
     let api_key_str = row.api_key.clone().unwrap_or_default();
 
     let (backend_auth, bedrock_credentials) = match provider.auth {
+        AuthKind::Bearer if provider.protocol == ProviderProtocol::AnthropicNative => (
+            BackendAuth::anthropic_from_api_key_like(api_key_str.clone()),
+            None,
+        ),
         AuthKind::Bearer => (BackendAuth::BearerToken(api_key_str.clone()), None),
         AuthKind::GoogleApiKey => (BackendAuth::GoogleApiKey(api_key_str.clone()), None),
         AuthKind::AzureApiKey => (BackendAuth::AzureApiKey(api_key_str.clone()), None),
@@ -357,6 +361,19 @@ mod tests {
                 assert_eq!(key, "sk-test");
             }
             _ => panic!("Expected AzureApiKey auth"),
+        }
+    }
+
+    #[test]
+    fn anthropic_native_auth_maps_to_anthropic_api_key() {
+        let provider = make_provider(ProviderProtocol::AnthropicNative, AuthKind::Bearer);
+        let row = make_row();
+        let bc = row_to_backend_config(&row, &provider).unwrap();
+        match bc.backend_auth {
+            BackendAuth::AnthropicApiKey(key) => {
+                assert_eq!(key, "sk-test");
+            }
+            _ => panic!("Expected AnthropicApiKey auth"),
         }
     }
 

@@ -259,9 +259,22 @@ fn parse_kind(provider: &str) -> BackendKind {
 }
 
 fn default_api_key_for_provider(provider: &str, kind: &BackendKind) -> String {
+    if *kind == BackendKind::Anthropic {
+        return std::env::var("ANTHROPIC_API_KEY")
+            .or_else(|_| std::env::var("ANTHROPIC_AUTH_TOKEN"))
+            .unwrap_or_else(|_| {
+                tracing::warn!(
+                    provider = %provider,
+                    env_var = "ANTHROPIC_API_KEY",
+                    "provider API key env var not set; backend calls will likely fail"
+                );
+                String::new()
+            });
+    }
+
     let var = match kind {
         BackendKind::OpenAI => "OPENAI_API_KEY",
-        BackendKind::Anthropic => "ANTHROPIC_API_KEY",
+        BackendKind::Anthropic => unreachable!("handled before provider env-var match"),
         BackendKind::Gemini => "GEMINI_API_KEY",
         BackendKind::Vertex => {
             return std::env::var("VERTEX_API_KEY")
@@ -365,6 +378,7 @@ fn build_backend_config(
     let backend_auth = match kind {
         BackendKind::AzureOpenAI => BackendAuth::AzureApiKey(api_key.to_string()),
         BackendKind::Gemini | BackendKind::Vertex => BackendAuth::GoogleApiKey(api_key.to_string()),
+        BackendKind::Anthropic => BackendAuth::anthropic_from_api_key_like(api_key.to_string()),
         _ => BackendAuth::BearerToken(api_key.to_string()),
     };
 

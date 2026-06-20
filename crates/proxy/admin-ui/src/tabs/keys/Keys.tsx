@@ -110,7 +110,7 @@ export default function Keys() {
                     <td className="mono">{k.key_prefix}…</td>
                     <td className="dim">{k.description ?? '—'}</td>
                     <td><Badge variant={k.status} /></td>
-                    <td><BudgetBar spent={k.total_spend} limit={k.spend_limit} /></td>
+                    <td><BudgetBar spent={k.period_spend_usd} limit={k.max_budget_usd} /></td>
                     <td className="mono">{k.total_requests.toLocaleString()}</td>
                     <td className="mono dim">{k.created_at.slice(0, 10)}</td>
                   </tr>

@@ -309,6 +309,9 @@ def litellm_provider_rows(
             "extended_thinking": bool(
                 data.get("supports_reasoning") or data.get("supports_reasoning_content")
             ),
+            "supports_adaptive_thinking": bool(data.get("supports_adaptive_thinking")),
+            "supports_max_reasoning_effort": bool(data.get("supports_max_reasoning_effort")),
+            "supports_xhigh_reasoning_effort": bool(data.get("supports_xhigh_reasoning_effort")),
             "deprecated": bool(data.get("deprecation_date") or data.get("is_deprecated")),
         }
     return rows
@@ -765,6 +768,28 @@ def write_rust_snapshot(path: Path, raw: dict[str, Any], allowed_modes: set[str]
                     "    },",
                 ]
             )
+        lines.extend(["];", ""])
+
+    anthropic_rows = rows_by_provider.get("anthropic", {})
+    support_tables = [
+        (
+            "ANTHROPIC_ADAPTIVE_THINKING_MODELS",
+            "supports_adaptive_thinking",
+        ),
+        (
+            "ANTHROPIC_MAX_REASONING_EFFORT_MODELS",
+            "supports_max_reasoning_effort",
+        ),
+        (
+            "ANTHROPIC_XHIGH_REASONING_EFFORT_MODELS",
+            "supports_xhigh_reasoning_effort",
+        ),
+    ]
+    for const_name, flag in support_tables:
+        lines.append(f"pub static {const_name}: &[&str] = &[")
+        for model, row in sorted(anthropic_rows.items()):
+            if row[flag]:
+                lines.append(f"    {rust_string(model)},")
         lines.extend(["];", ""])
 
     lines.append("pub static ALL_PROVIDERS: &[&ProviderDef] = &[")

@@ -273,6 +273,11 @@ pub fn parse_litellm_yaml(yaml: &str) -> LiteLLMParsed {
                     // Fall back to the provider's own env vars when no api_key in YAML.
                     stub_provider
                         .and_then(|p| p.env_vars.iter().find_map(|v| std::env::var(v).ok()))
+                        .or_else(|| {
+                            (kind == BackendKind::Anthropic)
+                                .then(|| std::env::var("ANTHROPIC_AUTH_TOKEN").ok())
+                                .flatten()
+                        })
                         .unwrap_or_default()
                 }),
         );
@@ -472,6 +477,7 @@ fn build_backend_config(
     let backend_auth = match kind {
         BackendKind::AzureOpenAI => BackendAuth::AzureApiKey(api_key.to_string()),
         BackendKind::Gemini | BackendKind::Vertex => BackendAuth::GoogleApiKey(api_key.to_string()),
+        BackendKind::Anthropic => BackendAuth::anthropic_from_api_key_like(api_key.to_string()),
         _ => BackendAuth::BearerToken(api_key.to_string()),
     };
 

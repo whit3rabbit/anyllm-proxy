@@ -43,7 +43,7 @@ fn prune_stale_rate_limit_entries(
 
 /// Inner rate-limit check with an explicit rpm and bucket; avoids touching the global
 /// statics in tests.
-fn check_admin_rate_limit_with_rpm(
+pub(super) fn check_admin_rate_limit_with_rpm(
     ip: IpAddr,
     rpm: u32,
     bucket: &DashMap<IpAddr, std::collections::VecDeque<u64>>,
@@ -98,12 +98,9 @@ pub(super) async fn admin_rate_limit_middleware(
     req: axum::extract::Request,
     next: middleware::Next,
 ) -> Result<axum::response::Response, StatusCode> {
-    // Liveness checks and CSRF-token mints are preconditions called on every session
-    // and before every mutation respectively. Billing them against the shared per-IP
-    // bucket causes spurious 429s during normal SPA navigation. The frontend caches
-    // the CSRF token so flood risk stays low in practice.
+    // Liveness checks are intentionally cheap and unauthenticated.
     let path = req.uri().path();
-    if matches!(path, "/admin/health" | "/admin/csrf-token") {
+    if path == "/admin/health" {
         return Ok(next.run(req).await);
     }
 

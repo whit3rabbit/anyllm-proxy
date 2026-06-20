@@ -16,6 +16,9 @@ pub mod status;
 pub mod traffic;
 pub mod uptime;
 
+#[cfg(test)]
+mod tests;
+
 use crate::admin::auth::{generate_csrf_token, validate_admin_token};
 use crate::admin::state::SharedState;
 use crate::admin::ws::ws_handler;
@@ -38,18 +41,14 @@ use middleware::{admin_rate_limit_middleware, reject_cross_origin};
 /// Token is used for auth middleware on all routes except /admin/health.
 pub fn admin_router(shared: SharedState, token: Arc<zeroize::Zeroizing<String>>) -> Router {
     // Public routes (no auth).
-    // /admin/csrf-token is public so the SPA can fetch a token before and after login.
-    // The limiter layer is attached for uniformity, but /admin/health and
-    // /admin/csrf-token are explicitly exempted inside `admin_rate_limit_middleware`
-    // so normal SPA navigation doesn't burn through the per-IP read budget.
     let public = Router::new()
         .route("/admin/health", get(health))
-        .route("/admin/csrf-token", get(get_csrf_token))
         .with_state(shared.clone())
         .layer(axum_middleware::from_fn(admin_rate_limit_middleware));
 
     // Protected routes (require admin token + localhost origin check).
     let protected = Router::new()
+        .route("/admin/csrf-token", get(get_csrf_token))
         .route(
             "/admin/api/config",
             get(config::get_config).put(config::put_config),
@@ -164,7 +163,7 @@ pub fn admin_router(shared: SharedState, token: Arc<zeroize::Zeroizing<String>>)
         .with_state(ws_state)
         .layer(axum_middleware::from_fn(reject_cross_origin));
 
-    // SPA serving (no auth required, token passed via query param in browser).
+    // SPA serving (no auth required; the browser prompts for the admin token).
     let spa_route = Router::new()
         .route("/admin/", get(serve_spa))
         .route("/admin", get(serve_spa))
@@ -192,18 +191,8 @@ async fn health() -> Json<serde_json::Value> {
 /// POST/PUT/DELETE requests (double-submit cookie pattern).
 ///
 /// Security architecture note:
-/// This route is intentionally public (no Bearer auth required). The SPA must
-/// fetch a CSRF token to submit the login form itself, so requiring auth here
-/// would be circular. Protection comes from two middleware layers applied to all
-/// admin routes, including this one:
-///   1. `reject_cross_origin`: validates Origin/Host header; only requests
-///      from localhost can reach any admin endpoint.
-///   2. `SameSite=Strict` on the cookie: browsers do not attach the cookie on
-///      cross-site requests, preventing a cross-origin attacker from using a
-///      CSRF token they fetched independently.
-///
-/// Together these make unauthenticated CSRF token fetching safe: an attacker who
-/// can reach this endpoint is already on localhost and has other attack vectors.
+/// This route requires the admin Bearer token and localhost origin/host checks.
+/// CSRF protects authenticated mutations, not the login form itself.
 /// If TLS is ever added to the admin server, also add `Secure` to Set-Cookie.
 async fn get_csrf_token(State(shared): State<SharedState>) -> axum::response::Response {
     let token = generate_csrf_token();

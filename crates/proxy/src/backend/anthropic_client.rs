@@ -2,9 +2,41 @@
 // No translation: receives Anthropic-format request bytes, returns Anthropic-format response.
 
 use super::{build_http_client, RateLimitHeaders};
-use crate::config::{BackendConfig, TlsConfig};
+use crate::config::{BackendAuth, BackendConfig, TlsConfig};
 use reqwest::Client;
 use tokio::time::sleep;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum AnthropicAuth {
+    ApiKey(String),
+    AuthToken(String),
+}
+
+impl AnthropicAuth {
+    pub(crate) fn from_backend_auth(auth: &BackendAuth) -> Self {
+        match auth {
+            BackendAuth::AnthropicApiKey(key) => Self::ApiKey(key.clone()),
+            BackendAuth::AnthropicAuthToken(token) => Self::AuthToken(token.clone()),
+            BackendAuth::BearerToken(token) => {
+                match BackendAuth::anthropic_from_api_key_like(token.clone()) {
+                    BackendAuth::AnthropicApiKey(key) => Self::ApiKey(key),
+                    BackendAuth::AnthropicAuthToken(token) => Self::AuthToken(token),
+                    _ => unreachable!("anthropic_from_api_key_like only returns Anthropic auth"),
+                }
+            }
+            BackendAuth::GoogleApiKey(key) | BackendAuth::AzureApiKey(key) => {
+                Self::ApiKey(key.clone())
+            }
+        }
+    }
+
+    pub(crate) fn header(&self) -> (&'static str, String) {
+        match self {
+            Self::ApiKey(key) => ("x-api-key", key.clone()),
+            Self::AuthToken(token) => ("authorization", format!("Bearer {token}")),
+        }
+    }
+}
 
 /// HTTP client that forwards Anthropic requests as-is to the upstream Anthropic API.
 #[derive(Clone)]
@@ -12,7 +44,7 @@ pub struct AnthropicClient {
     client: Client,
     base_url: String,
     messages_url: String,
-    api_key: String,
+    auth: AnthropicAuth,
 }
 
 /// Error type for the Anthropic passthrough client.
@@ -42,27 +74,33 @@ impl AnthropicClient {
             client,
             base_url,
             messages_url,
-            api_key: bc.api_key.clone(),
+            auth: AnthropicAuth::from_backend_auth(&bc.backend_auth),
         }
     }
 
     /// Create from raw parts (used in legacy single-backend mode).
-    pub fn new(base_url: &str, api_key: &str, tls: &TlsConfig) -> Self {
+    pub fn new(base_url: &str, auth: &BackendAuth, tls: &TlsConfig) -> Self {
         let client = build_http_client(tls);
         let (base_url, messages_url) = anthropic_urls(base_url);
         Self {
             client,
             base_url,
             messages_url,
-            api_key: api_key.to_string(),
+            auth: AnthropicAuth::from_backend_auth(auth),
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn auth_header(&self) -> (&'static str, String) {
+        self.auth.header()
     }
 
     /// Apply required Anthropic authentication headers.
     /// x-api-key and anthropic-version are mandatory per the Anthropic API spec;
     /// without the version header, the API rejects requests.
     fn auth_request(&self, rb: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-        rb.header("x-api-key", &self.api_key)
+        let (name, value) = self.auth.header();
+        rb.header(name, value)
             .header("anthropic-version", "2023-06-01")
     }
 
@@ -218,7 +256,8 @@ fn anthropic_urls(base_url: &str) -> (String, String) {
 
 #[cfg(test)]
 mod tests {
-    use super::anthropic_urls;
+    use super::{anthropic_urls, AnthropicAuth};
+    use crate::config::BackendAuth;
     use std::sync::Mutex;
 
     static ENV_LOCK: Mutex<()> = Mutex::new(());
@@ -249,5 +288,25 @@ mod tests {
         assert_eq!(base, "https://proxy.example/custom/path");
         assert_eq!(messages, "https://proxy.example/custom/path");
         unsafe { std::env::remove_var("LITELLM_ANTHROPIC_DISABLE_URL_SUFFIX") };
+    }
+
+    #[test]
+    fn api_key_auth_uses_x_api_key_header() {
+        let auth = AnthropicAuth::from_backend_auth(&BackendAuth::AnthropicApiKey(
+            "sk-ant-api".to_string(),
+        ));
+        let (name, value) = auth.header();
+        assert_eq!(name, "x-api-key");
+        assert_eq!(value, "sk-ant-api");
+    }
+
+    #[test]
+    fn auth_token_uses_bearer_header() {
+        let auth = AnthropicAuth::from_backend_auth(&BackendAuth::AnthropicAuthToken(
+            "sk-ant-oat-test".to_string(),
+        ));
+        let (name, value) = auth.header();
+        assert_eq!(name, "authorization");
+        assert_eq!(value, "Bearer sk-ant-oat-test");
     }
 }

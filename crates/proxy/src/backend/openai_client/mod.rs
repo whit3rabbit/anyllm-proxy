@@ -115,6 +115,8 @@ impl OpenAIClient {
             BackendAuth::BearerToken(k) => k.clone(),
             BackendAuth::AzureApiKey(k) => k.clone(),
             BackendAuth::GoogleApiKey(k) => k.clone(),
+            BackendAuth::AnthropicApiKey(k) => k.clone(),
+            BackendAuth::AnthropicAuthToken(k) => k.clone(),
         }
     }
 
@@ -311,6 +313,8 @@ impl OpenAIClient {
             BackendAuth::BearerToken(token) => req.bearer_auth(token),
             BackendAuth::GoogleApiKey(key) => req.header("x-goog-api-key", key),
             BackendAuth::AzureApiKey(key) => req.header("api-key", key),
+            BackendAuth::AnthropicApiKey(key) => req.header("x-api-key", key),
+            BackendAuth::AnthropicAuthToken(token) => req.bearer_auth(token),
         };
 
         let response = req.send().await.map_err(OpenAIClientError::Request)?;
@@ -345,6 +349,8 @@ impl OpenAIClient {
             BackendAuth::BearerToken(token) => builder.bearer_auth(token),
             BackendAuth::GoogleApiKey(key) => builder.header("x-goog-api-key", key),
             BackendAuth::AzureApiKey(key) => builder.header("api-key", key),
+            BackendAuth::AnthropicApiKey(key) => builder.header("x-api-key", key),
+            BackendAuth::AnthropicAuthToken(token) => builder.bearer_auth(token),
         };
         builder.send().await.map_err(OpenAIClientError::Request)
     }

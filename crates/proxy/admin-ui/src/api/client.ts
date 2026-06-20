@@ -1,5 +1,6 @@
 import { useAuthStore } from '../store/auth'
 import { pushToast } from '../store/toast'
+import { enqueueCsrfMutation, runCsrfMutation, type MutationMethod } from './csrf'
 
 function getToken(): string {
   return useAuthStore.getState().token ?? ''
@@ -62,71 +63,27 @@ export async function apiFetch<T>(path: string, options?: RequestInit): Promise<
 }
 
 /**
- * CSRF tokens are short-lived but re-fetching one before every mutation doubles
- * admin API traffic (a save = 1 GET /csrf + 1 mutation). Cache the token in
- * memory with a safety margin below the server's TTL; on 403 the cache is
- * invalidated and we retry once with a fresh token.
- */
-const CSRF_TTL_MS = 5 * 60 * 1000
-let csrfCache: { token: string; expiresAt: number } | null = null
-
-async function fetchCsrfToken(): Promise<string> {
-  const csrfRes = await fetch('/admin/csrf-token', {
-    headers: { 'Authorization': `Bearer ${getToken()}` },
-  })
-  if (!csrfRes.ok) throw new Error('Failed to fetch CSRF token')
-  const { csrf_token: token } = await csrfRes.json() as { csrf_token: string }
-  csrfCache = { token, expiresAt: Date.now() + CSRF_TTL_MS }
-  return token
-}
-
-async function getCsrfToken(force = false): Promise<string> {
-  if (!force && csrfCache && csrfCache.expiresAt > Date.now()) {
-    return csrfCache.token
-  }
-  return fetchCsrfToken()
-}
-
-function invalidateCsrf() {
-  csrfCache = null
-}
-
-/**
  * Shared CSRF + response handling for all state-mutating requests.
  * Content-Type omitted when body is FormData so the browser can set the multipart boundary.
  * On 204 No Content, returns undefined.
  */
 async function withCsrf<T>(
-  method: 'POST' | 'PUT' | 'DELETE' | 'PATCH',
+  method: MutationMethod,
   path: string,
   body?: BodyInit,
   contentType?: string,
 ): Promise<T> {
-  const attempt = async (csrfToken: string): Promise<Response> => fetch(path, {
+  return enqueueCsrfMutation(() => runCsrfMutation<T, Response>(
     method,
-    headers: {
-      'Authorization': `Bearer ${getToken()}`,
-      'X-CSRF-Token': csrfToken,
-      ...(contentType ? { 'Content-Type': contentType } : {}),
-    },
+    path,
     body,
-  })
-
-  let csrfToken = await getCsrfToken()
-  let res = await attempt(csrfToken)
-
-  // Stale/rotated cached token: invalidate and retry once with a fresh one.
-  if (res.status === 403) {
-    invalidateCsrf()
-    csrfToken = await getCsrfToken(true)
-    res = await attempt(csrfToken)
-  }
-
-  await handleAuthAndErrors(res)
-  if (res.status === 204 || res.headers.get('content-length') === '0') {
-    return undefined as T
-  }
-  return res.json() as Promise<T>
+    contentType,
+    {
+      fetchImpl: (input, init) => fetch(input, init),
+      getToken,
+      handleAuthAndErrors,
+    },
+  ))
 }
 
 /**

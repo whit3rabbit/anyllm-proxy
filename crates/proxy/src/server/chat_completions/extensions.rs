@@ -79,7 +79,12 @@ pub(super) fn apply_anthropic_chat_extensions(
         output_config = serde_json::json!({});
     }
 
-    apply_reasoning_effort(openai_req, anthropic_req, caller_omitted_max_tokens)?;
+    apply_reasoning_effort(
+        openai_req,
+        anthropic_req,
+        &mut output_config,
+        caller_omitted_max_tokens,
+    )?;
 
     if let Some(response_format) = &openai_req.response_format {
         if response_format.format_type == "json_schema" {
@@ -142,6 +147,7 @@ pub(super) fn apply_anthropic_chat_extensions(
 fn apply_reasoning_effort(
     openai_req: &openai::ChatCompletionRequest,
     anthropic_req: &mut anthropic::MessageCreateRequest,
+    output_config: &mut serde_json::Value,
     caller_omitted_max_tokens: bool,
 ) -> Result<(), String> {
     let Some(effort) = reasoning_effort_value(openai_req) else {
@@ -152,6 +158,40 @@ fn apply_reasoning_effort(
         return Ok(());
     }
     if should_omit_thinking_for_tool_continuation(anthropic_req) {
+        return Ok(());
+    }
+
+    let output_effort = match effort {
+        "minimal" | "low" => "low",
+        "medium" => "medium",
+        "high" => "high",
+        "xhigh" => "xhigh",
+        "max" => "max",
+        other => {
+            return Err(format!(
+                "Invalid reasoning_effort: {other}. Expected one of minimal, low, medium, high, xhigh, max, none."
+            ));
+        }
+    };
+
+    if anyllm_providers::model_supports_anthropic_adaptive_thinking(
+        "anthropic",
+        &anthropic_req.model,
+    ) {
+        if !anyllm_providers::model_supports_anthropic_reasoning_effort(
+            "anthropic",
+            &anthropic_req.model,
+            effort,
+        ) {
+            return Err(format!(
+                "model {} does not support reasoning_effort {effort}",
+                anthropic_req.model
+            ));
+        }
+        anthropic_req.thinking = Some(anthropic::ThinkingConfig::Adaptive {
+            extra: serde_json::Map::new(),
+        });
+        output_config["effort"] = serde_json::Value::String(output_effort.to_string());
         return Ok(());
     }
 
@@ -396,126 +436,4 @@ fn add_context_management_beta_headers(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-
-    fn basic_anthropic_request() -> anthropic::MessageCreateRequest {
-        serde_json::from_value(json!({
-            "model": "claude-sonnet-4-20250514",
-            "max_tokens": 4096,
-            "messages": [{"role": "user", "content": "hi"}]
-        }))
-        .unwrap()
-    }
-
-    #[test]
-    fn web_search_options_injects_raw_hosted_tool() {
-        let openai_req: openai::ChatCompletionRequest = serde_json::from_value(json!({
-            "model": "claude-sonnet-4-20250514",
-            "messages": [{"role": "user", "content": "search"}],
-            "max_tokens": 100,
-            "web_search_options": {
-                "search_context_size": "high",
-                "user_location": {
-                    "approximate": {"city": "Chicago", "country": "US"}
-                }
-            }
-        }))
-        .unwrap();
-        let mut anthropic_req = basic_anthropic_request();
-        let mut warnings = TranslationWarnings::default();
-        let extensions =
-            apply_anthropic_chat_extensions(&openai_req, &mut anthropic_req, &mut warnings, false)
-                .unwrap();
-
-        assert_eq!(extensions.raw_tools.len(), 1);
-        assert_eq!(extensions.raw_tools[0]["type"], "web_search_20250305");
-        assert_eq!(extensions.raw_tools[0]["name"], "web_search");
-        assert_eq!(extensions.raw_tools[0]["max_uses"], 10);
-        assert_eq!(extensions.raw_tools[0]["user_location"]["city"], "Chicago");
-
-        let body =
-            serialize_anthropic_upstream_request(&anthropic_req, &extensions.raw_tools).unwrap();
-        let value: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        assert_eq!(value["tools"][0]["type"], "web_search_20250305");
-    }
-
-    #[test]
-    fn beta_headers_merge_without_duplicates() {
-        let mut headers = vec![(
-            "anthropic-beta".to_string(),
-            "existing-beta,fast-mode-2026-02-01".to_string(),
-        )];
-        merge_anthropic_beta_headers(
-            &mut headers,
-            &["fast-mode-2026-02-01", "compact-2026-01-12"],
-        );
-        assert_eq!(
-            headers[0].1,
-            "existing-beta,fast-mode-2026-02-01,compact-2026-01-12"
-        );
-    }
-
-    #[test]
-    fn reasoning_effort_sets_budget_and_adjusts_default_max_tokens() {
-        let openai_req: openai::ChatCompletionRequest = serde_json::from_value(json!({
-            "model": "claude-sonnet-4-20250514",
-            "messages": [{"role": "user", "content": "think"}],
-            "reasoning_effort": {"effort": "high"}
-        }))
-        .unwrap();
-        let mut anthropic_req = basic_anthropic_request();
-        let mut warnings = TranslationWarnings::default();
-        apply_anthropic_chat_extensions(&openai_req, &mut anthropic_req, &mut warnings, true)
-            .unwrap();
-        assert_eq!(anthropic_req.max_tokens, 8192);
-        assert!(matches!(
-            anthropic_req.thinking,
-            Some(anthropic::ThinkingConfig::Enabled {
-                budget_tokens: 4096
-            })
-        ));
-    }
-
-    #[test]
-    fn reasoning_effort_rejects_too_small_explicit_max_tokens() {
-        let openai_req: openai::ChatCompletionRequest = serde_json::from_value(json!({
-            "model": "claude-sonnet-4-20250514",
-            "messages": [{"role": "user", "content": "think"}],
-            "max_tokens": 1024,
-            "reasoning_effort": "low"
-        }))
-        .unwrap();
-        let mut anthropic_req = basic_anthropic_request();
-        anthropic_req.max_tokens = 1024;
-        let mut warnings = TranslationWarnings::default();
-        let err =
-            apply_anthropic_chat_extensions(&openai_req, &mut anthropic_req, &mut warnings, false)
-                .unwrap_err();
-        assert!(err.contains("max_tokens must be greater"));
-    }
-
-    #[test]
-    fn structured_output_schema_is_filtered() {
-        let schema = sanitize_anthropic_output_schema(json!({
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "minItems": 1,
-                    "items": {"type": "string", "minLength": 2}
-                }
-            }
-        }));
-        assert_eq!(schema["additionalProperties"], false);
-        assert!(schema["properties"]["items"].get("minItems").is_none());
-        assert!(schema["properties"]["items"]["items"]
-            .get("minLength")
-            .is_none());
-        assert!(schema["properties"]["items"]["description"]
-            .as_str()
-            .unwrap()
-            .contains("minimum number of items"));
-    }
-}
+mod tests;

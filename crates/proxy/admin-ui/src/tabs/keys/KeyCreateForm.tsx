@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useCreateKey } from '../../api/queries'
 import { AdminButton } from '../../components/shared/Performative'
+import { buildCreateKeyPayload } from './keyPayload'
 
 export default function KeyCreateForm({ onCreated }: { onCreated: (key: string) => void }) {
   const create = useCreateKey()
@@ -9,11 +10,11 @@ export default function KeyCreateForm({ onCreated }: { onCreated: (key: string) 
   const [rpmLimit, setRpmLimit] = useState('')
 
   function handleSubmit() {
-    create.mutate({
-      description: desc || null,
-      spend_limit: spendLimit ? Number(spendLimit) : null,
-      rpm_limit: rpmLimit ? Number(rpmLimit) : null,
-    }, {
+    create.mutate(buildCreateKeyPayload({
+      description: desc,
+      spendLimit,
+      rpmLimit,
+    }), {
       onSuccess: (res) => {
         setDesc(''); setSpendLimit(''); setRpmLimit('')
         onCreated(res.key)
@@ -27,7 +28,7 @@ export default function KeyCreateForm({ onCreated }: { onCreated: (key: string) 
       <form onSubmit={(e) => { e.preventDefault(); handleSubmit() }}>
         <div className="form-row" style={{ flexWrap: 'wrap' }}>
           <input name="description" placeholder="Description" value={desc} onChange={(e) => setDesc(e.target.value)} />
-          <input name="spend_limit" placeholder="Spend limit USD" type="number" value={spendLimit} onChange={(e) => setSpendLimit(e.target.value)} style={{ width: 120 }} />
+          <input name="max_budget_usd" placeholder="Spend limit USD" type="number" value={spendLimit} onChange={(e) => setSpendLimit(e.target.value)} style={{ width: 120 }} />
           <input name="rpm_limit" placeholder="RPM limit" type="number" value={rpmLimit} onChange={(e) => setRpmLimit(e.target.value)} style={{ width: 100 }} />
           <AdminButton type="submit" tone="primary" loading={create.isPending}>
             Create

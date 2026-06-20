@@ -158,6 +158,33 @@ pub fn get_model(provider_id: &str, model_id: &str) -> Option<&'static ModelDef>
     list_models(provider_id).iter().find(|m| m.id == model_id)
 }
 
+/// Whether a native Anthropic model supports LiteLLM's adaptive-thinking mode.
+pub fn model_supports_anthropic_adaptive_thinking(provider_id: &str, model_id: &str) -> bool {
+    canonical_provider_id(provider_id) == "anthropic"
+        && providers::litellm_snapshot::ANTHROPIC_ADAPTIVE_THINKING_MODELS.contains(&model_id)
+}
+
+/// Whether a native Anthropic model supports a LiteLLM output-config effort.
+pub fn model_supports_anthropic_reasoning_effort(
+    provider_id: &str,
+    model_id: &str,
+    effort: &str,
+) -> bool {
+    if !model_supports_anthropic_adaptive_thinking(provider_id, model_id) {
+        return false;
+    }
+    match effort {
+        "minimal" | "low" | "medium" | "high" => true,
+        "max" => {
+            providers::litellm_snapshot::ANTHROPIC_MAX_REASONING_EFFORT_MODELS.contains(&model_id)
+        }
+        "xhigh" => {
+            providers::litellm_snapshot::ANTHROPIC_XHIGH_REASONING_EFFORT_MODELS.contains(&model_id)
+        }
+        _ => false,
+    }
+}
+
 /// Resolve a provider id to the BackendKind string and a default base URL override.
 ///
 /// Returns `None` if the provider id is not recognized.
@@ -241,11 +268,13 @@ mod tests {
     #[test]
     fn anthropic_models_match_litellm_snapshot() {
         let models = list_models("anthropic");
-        assert_eq!(models.len(), 20);
+        assert_eq!(models.len(), 22);
 
         for id in [
+            "claude-fable-5",
             "claude-opus-4-7",
             "claude-opus-4-7-20260416",
+            "claude-opus-4-8",
             "claude-opus-4-6-20260205",
             "claude-haiku-4-5",
             "claude-opus-4-5",
@@ -264,6 +293,33 @@ mod tests {
         let sonnet_40 = get_model("anthropic", "claude-sonnet-4-20250514").unwrap();
         assert_eq!(sonnet_40.context_window, 1_000_000);
         assert_eq!(sonnet_40.status, crate::model::ModelStatus::Deprecated);
+    }
+
+    #[test]
+    fn anthropic_reasoning_support_tables_match_litellm_flags() {
+        assert!(model_supports_anthropic_adaptive_thinking(
+            "anthropic",
+            "claude-opus-4-8"
+        ));
+        assert!(model_supports_anthropic_reasoning_effort(
+            "anthropic",
+            "claude-opus-4-8",
+            "xhigh"
+        ));
+        assert!(model_supports_anthropic_reasoning_effort(
+            "anthropic",
+            "claude-sonnet-4-6",
+            "max"
+        ));
+        assert!(!model_supports_anthropic_reasoning_effort(
+            "anthropic",
+            "claude-sonnet-4-6",
+            "xhigh"
+        ));
+        assert!(!model_supports_anthropic_adaptive_thinking(
+            "openai",
+            "claude-opus-4-8"
+        ));
     }
 
     #[test]

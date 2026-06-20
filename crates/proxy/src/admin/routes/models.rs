@@ -1,4 +1,5 @@
 use crate::admin::state::SharedState;
+use anyllm_client::http::{build_http_client, HttpClientConfig};
 use axum::{
     extract::{ConnectInfo, Path, State},
     http::StatusCode,
@@ -8,14 +9,23 @@ use axum::{
 use std::net::SocketAddr;
 use std::sync::LazyLock;
 
-/// Shared HTTP client for model discovery (lightweight, short timeout).
+/// Shared HTTP client for model discovery with SSRF-safe DNS and short timeout.
 static DISCOVER_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
-    reqwest::Client::builder()
-        .connect_timeout(std::time::Duration::from_secs(10))
-        .timeout(std::time::Duration::from_secs(15))
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
-        .expect("failed to build discover HTTP client")
+    build_http_client(&HttpClientConfig {
+        connect_timeout: Some(std::time::Duration::from_secs(10)),
+        request_timeout: Some(std::time::Duration::from_secs(15)),
+        ..HttpClientConfig::new()
+    })
+});
+
+/// Local discovery is only for explicit local provider sources such as Ollama.
+static LOCAL_DISCOVER_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
+    build_http_client(&HttpClientConfig {
+        connect_timeout: Some(std::time::Duration::from_secs(10)),
+        request_timeout: Some(std::time::Duration::from_secs(15)),
+        ssrf_allow_loopback: true,
+        ..HttpClientConfig::new()
+    })
 });
 
 /// GET /admin/api/models -- list all routed model names and deployment counts.
@@ -269,7 +279,12 @@ pub(super) async fn discover_models(Json(body): Json<DiscoverRequest>) -> impl I
     };
 
     let auth_used = api_key.is_some();
-    let mut req = DISCOVER_CLIENT.get(&url);
+    let client = if body.source == "ollama" {
+        &*LOCAL_DISCOVER_CLIENT
+    } else {
+        &*DISCOVER_CLIENT
+    };
+    let mut req = client.get(&url);
     if let Some(ref key) = api_key {
         req = req.header("Authorization", format!("Bearer {key}"));
     }
@@ -377,20 +392,65 @@ fn resolve_discover_target(body: &DiscoverRequest) -> Result<(String, Option<Str
             let url = body
                 .url
                 .as_deref()
+                .map(str::trim)
                 .filter(|u| !u.is_empty())
                 .ok_or("url is required for custom source")?;
             let url = url.trim_end_matches('/');
+            crate::config::validate_base_url(url)?;
             // If the URL already ends with /models, use as-is; otherwise append.
             let url = if url.ends_with("/models") {
                 url.to_string()
             } else {
                 format!("{url}/v1/models")
             };
-            // Security: url is user-supplied (host + protocol fully controlled).
-            // SSRF risk is gated by: (a) admin Bearer token required, (b) admin server
-            // binds to 127.0.0.1 by default, (c) DISCOVER_CLIENT follows no redirects.
             Ok((url, None))
         }
         other => Err(format!("unknown source: {other}")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn custom_request(url: &str) -> DiscoverRequest {
+        DiscoverRequest {
+            source: "custom".to_string(),
+            url: Some(url.to_string()),
+        }
+    }
+
+    #[test]
+    fn custom_discover_rejects_loopback_url() {
+        let err = resolve_discover_target(&custom_request("http://127.0.0.1:11434"))
+            .expect_err("loopback custom discovery URL must be rejected");
+
+        assert!(err.contains("private/loopback"));
+    }
+
+    #[test]
+    fn custom_discover_rejects_file_scheme() {
+        let err = resolve_discover_target(&custom_request("file:///tmp/anyllm"))
+            .expect_err("non-http custom discovery URL must be rejected");
+
+        assert!(err.contains("scheme"));
+    }
+
+    #[test]
+    fn custom_discover_accepts_https_url_and_appends_models() {
+        let (url, api_key) = resolve_discover_target(&custom_request("https://1.1.1.1"))
+            .expect("public HTTPS custom discovery URL should be accepted");
+
+        assert_eq!(url, "https://1.1.1.1/v1/models");
+        assert_eq!(api_key, None);
+    }
+
+    #[test]
+    fn custom_discover_accepts_existing_models_suffix() {
+        let (url, api_key) = resolve_discover_target(&custom_request("https://1.1.1.1/v1/models"))
+            .expect("public HTTPS custom discovery URL should be accepted");
+
+        assert_eq!(url, "https://1.1.1.1/v1/models");
+        assert_eq!(api_key, None);
     }
 }

@@ -281,10 +281,15 @@ impl Config {
                 }
             }
             BackendKind::Anthropic => {
-                let api_key =
-                    sanitize_api_key(&std::env::var("ANTHROPIC_API_KEY").unwrap_or_else(|_| {
-                        panic!("ANTHROPIC_API_KEY is required when BACKEND=anthropic")
-                    }));
+                let backend_auth = if let Ok(api_key) = std::env::var("ANTHROPIC_API_KEY") {
+                    BackendAuth::anthropic_from_api_key_like(sanitize_api_key(&api_key))
+                } else if let Ok(token) = std::env::var("ANTHROPIC_AUTH_TOKEN") {
+                    BackendAuth::AnthropicAuthToken(sanitize_api_key(&token))
+                } else {
+                    panic!(
+                        "ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN is required when BACKEND=anthropic"
+                    )
+                };
 
                 let base_url = std::env::var("ANTHROPIC_BASE_URL")
                     .unwrap_or_else(|_| "https://api.anthropic.com".to_string());
@@ -302,7 +307,7 @@ impl Config {
                         small_model: String::new(),
                     },
                     tls,
-                    backend_auth: BackendAuth::BearerToken(api_key),
+                    backend_auth,
                     log_bodies,
                     redact_secrets,
                     expose_degradation_warnings,
@@ -363,4 +368,60 @@ pub(crate) fn bedrock_credentials_from_env() -> aws_credential_types::Credential
         None,
         "env",
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn clear_anthropic_env() {
+        unsafe {
+            std::env::remove_var("BACKEND");
+            std::env::remove_var("ANTHROPIC_API_KEY");
+            std::env::remove_var("ANTHROPIC_AUTH_TOKEN");
+            std::env::remove_var("ANTHROPIC_BASE_URL");
+            std::env::remove_var("PROXY_CONFIG");
+        }
+    }
+
+    #[test]
+    fn anthropic_auth_token_env_uses_bearer_auth() {
+        let _lock = crate::config::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        clear_anthropic_env();
+        unsafe {
+            std::env::set_var("BACKEND", "anthropic");
+            std::env::set_var("ANTHROPIC_AUTH_TOKEN", "sk-ant-oat-env");
+        }
+
+        let config = Config::from_env();
+        assert_eq!(
+            config.backend_auth,
+            BackendAuth::AnthropicAuthToken("sk-ant-oat-env".to_string())
+        );
+
+        clear_anthropic_env();
+    }
+
+    #[test]
+    fn anthropic_api_key_precedes_auth_token_env() {
+        let _lock = crate::config::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        clear_anthropic_env();
+        unsafe {
+            std::env::set_var("BACKEND", "anthropic");
+            std::env::set_var("ANTHROPIC_API_KEY", "sk-ant-api-env");
+            std::env::set_var("ANTHROPIC_AUTH_TOKEN", "sk-ant-oat-env");
+        }
+
+        let config = Config::from_env();
+        assert_eq!(
+            config.backend_auth,
+            BackendAuth::AnthropicApiKey("sk-ant-api-env".to_string())
+        );
+
+        clear_anthropic_env();
+    }
 }

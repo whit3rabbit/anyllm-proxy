@@ -6,6 +6,8 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint src",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test admin-ui.behavior.test.mjs vite.config.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

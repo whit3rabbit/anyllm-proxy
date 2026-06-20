@@ -62,6 +62,7 @@ export interface VirtualKey {
   allowed_models: string[] | null
   allowed_routes: string[] | null
   status: 'active' | 'revoked' | 'expired' | 'override'
+  period_spend_usd: number
 }
 
 export interface KeySpend {

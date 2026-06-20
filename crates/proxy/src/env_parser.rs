@@ -52,6 +52,7 @@ pub(crate) const KNOWN_KEYS: &[&str] = &[
     "AWS_SESSION_TOKEN",
     // Anthropic passthrough
     "ANTHROPIC_API_KEY",
+    "ANTHROPIC_AUTH_TOKEN",
     "ANTHROPIC_BASE_URL",
     // Auth / relay
     "PROXY_API_KEYS",

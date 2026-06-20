@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { HashRouter, Routes as RouterRoutes, Route, Navigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from './store/auth'
@@ -22,31 +22,9 @@ import RoutesTab from './tabs/routes/Routes'
 
 export default function App() {
   const token = useAuthStore((s) => s.token)
-  const login = useAuthStore((s) => s.login)
   const lastEvent = useWsStore((s) => s.lastEvent)
   const qc = useQueryClient()
-  const [bootstrapping, setBootstrapping] = useState(true)
   const { data: status } = useStatus(!!token)
-
-  useEffect(() => {
-    const params = new URLSearchParams(location.search)
-    const urlToken = params.get('token')
-    if (urlToken && !token) {
-      fetch('/admin/api/metrics', {
-        headers: { Authorization: `Bearer ${urlToken}` },
-      })
-        .then((res) => {
-          if (res.ok) {
-            login(urlToken)
-            history.replaceState(null, '', location.pathname)
-          }
-        })
-        .catch(() => {})
-        .finally(() => setBootstrapping(false))
-    } else {
-      setBootstrapping(false)
-    }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps -- intentionally runs once on mount
 
   useEffect(() => {
     if (token) {
@@ -70,7 +48,6 @@ export default function App() {
     }
   }, [lastEvent, qc])
 
-  if (bootstrapping) return null
   if (!token) {
     return (
       <>

@@ -15,5 +15,6 @@ pub use model::{ModelCapabilities, ModelDef, ModelStatus};
 pub use provider::{AuthKind, ProviderCapabilities, ProviderDef, ProviderProtocol, ProviderStatus};
 pub use registry::{
     all_providers, canonical_provider_id, find_by_litellm_prefix, get_model, get_provider,
-    list_models, resolve_backend,
+    list_models, model_supports_anthropic_adaptive_thinking,
+    model_supports_anthropic_reasoning_effort, resolve_backend,
 };

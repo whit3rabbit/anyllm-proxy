@@ -24,7 +24,7 @@ pub enum OpenAIApiFormat {
 }
 
 /// How the proxy authenticates to the upstream backend.
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum BackendAuth {
     /// `Authorization: Bearer {token}` (OpenAI, Vertex OAuth)
     BearerToken(String),
@@ -32,6 +32,22 @@ pub enum BackendAuth {
     GoogleApiKey(String),
     /// `api-key: {key}` (Azure OpenAI)
     AzureApiKey(String),
+    /// `x-api-key: {key}` (Anthropic API key)
+    AnthropicApiKey(String),
+    /// `Authorization: Bearer {token}` (Anthropic OAuth token)
+    AnthropicAuthToken(String),
+}
+
+impl BackendAuth {
+    /// Anthropic OAuth-style tokens are bearer tokens even when supplied in an
+    /// API-key shaped config field.
+    pub(crate) fn anthropic_from_api_key_like(secret: String) -> Self {
+        if secret.starts_with("sk-ant-oat") {
+            Self::AnthropicAuthToken(secret)
+        } else {
+            Self::AnthropicApiKey(secret)
+        }
+    }
 }
 
 impl fmt::Debug for BackendAuth {
@@ -40,6 +56,8 @@ impl fmt::Debug for BackendAuth {
             Self::BearerToken(_) => write!(f, "BearerToken([REDACTED])"),
             Self::GoogleApiKey(_) => write!(f, "GoogleApiKey([REDACTED])"),
             Self::AzureApiKey(_) => write!(f, "AzureApiKey([REDACTED])"),
+            Self::AnthropicApiKey(_) => write!(f, "AnthropicApiKey([REDACTED])"),
+            Self::AnthropicAuthToken(_) => write!(f, "AnthropicAuthToken([REDACTED])"),
         }
     }
 }

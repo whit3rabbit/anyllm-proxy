@@ -1,6 +1,10 @@
+use super::middleware::check_admin_rate_limit_with_rpm;
 use super::*;
 use axum::body::Body;
+use axum::extract::ConnectInfo;
 use axum::http::Request;
+use dashmap::DashMap;
+use std::net::{IpAddr, SocketAddr};
 use tower::ServiceExt;
 
 /// Build a minimal admin router for origin/host tests.
@@ -274,6 +278,8 @@ async fn delete_without_csrf_returns_403() {
 async fn get_csrf_token_sets_cookie() {
     let app = test_router();
     let req = Request::get("/admin/csrf-token")
+        .header("host", "localhost:9090")
+        .header("authorization", "Bearer test-token")
         .body(Body::empty())
         .unwrap();
     let resp = app.oneshot(req).await.unwrap();
@@ -304,6 +310,8 @@ async fn get_csrf_token_sets_cookie() {
 async fn get_csrf_token_returns_json() {
     let app = test_router();
     let req = Request::get("/admin/csrf-token")
+        .header("host", "localhost:9090")
+        .header("authorization", "Bearer test-token")
         .body(Body::empty())
         .unwrap();
     let resp = app.oneshot(req).await.unwrap();
@@ -315,6 +323,31 @@ async fn get_csrf_token_returns_json() {
     let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
     let token = body["csrf_token"].as_str().unwrap();
     assert_eq!(token.len(), 64);
+}
+
+/// GET /admin/csrf-token requires the admin token before minting a token.
+#[tokio::test]
+async fn get_csrf_token_without_auth_returns_401() {
+    let app = test_router();
+    let req = Request::get("/admin/csrf-token")
+        .header("host", "localhost:9090")
+        .body(Body::empty())
+        .unwrap();
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+}
+
+/// GET /admin/csrf-token is protected by the same origin policy as admin APIs.
+#[tokio::test]
+async fn get_csrf_token_cross_origin_returns_403() {
+    let app = test_router();
+    let req = Request::get("/admin/csrf-token")
+        .header("origin", "http://evil.com")
+        .header("authorization", "Bearer test-token")
+        .body(Body::empty())
+        .unwrap();
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::FORBIDDEN);
 }
 
 /// GET requests to protected routes do NOT require CSRF token.
@@ -359,7 +392,7 @@ fn google_access_token_uses_secret_pattern() {
 
 #[cfg(test)]
 mod timestamp_tests {
-    use super::is_valid_timestamp;
+    use crate::admin::routes::helpers::is_valid_timestamp;
 
     #[test]
     fn accepts_date_only() {
