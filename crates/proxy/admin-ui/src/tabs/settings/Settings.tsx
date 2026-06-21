@@ -237,7 +237,27 @@ PROXY_API_KEYS=my-key`}
             )}
           </div>
 
-          {cfg.entries.filter((entry) => entry.key !== 'redact_secrets').map((entry) => {
+          <div className="form-group">
+            <label className="form-label" htmlFor="cfg-log-bodies" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input
+                id="cfg-log-bodies"
+                type="checkbox"
+                checked={cfg.log_bodies}
+                disabled={save.isPending}
+                onChange={(e) => handleBooleanSave('log_bodies', e.target.checked)}
+              />
+              Log bodies
+            </label>
+            {cfg.overridden_keys.includes('log_bodies') && (
+              <div className="form-row">
+                <AdminButton size="sm" onClick={() => setPendingReset('log_bodies')}>
+                  Reset
+                </AdminButton>
+              </div>
+            )}
+          </div>
+
+          {cfg.entries.filter((entry) => !['redact_secrets', 'log_bodies'].includes(entry.key)).map((entry) => {
             const inputId = `cfg-${entry.key}`
             return (
               <div className="form-group" key={entry.key}>

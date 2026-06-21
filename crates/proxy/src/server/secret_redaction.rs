@@ -4,8 +4,10 @@ use axum::{
 };
 use bytes::Bytes;
 use serde::{de::DeserializeOwned, Serialize};
+#[cfg(feature = "secrets-scanner")]
 use serde_json::Value;
 
+#[cfg(feature = "secrets-scanner")]
 const REDACTED_SECRET: &str = "[REDACTED_SECRET]";
 
 #[derive(Debug)]

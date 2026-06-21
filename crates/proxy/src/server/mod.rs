@@ -47,6 +47,11 @@ mod streaming;
 /// Approximate token counting via tiktoken.
 mod token_counting;
 
+/// Verify that request secret redaction can run when the effective config enables it.
+pub fn ensure_secret_redaction_available(enabled: bool) -> Result<(), String> {
+    secret_redaction::ensure_available(enabled)
+}
+
 #[cfg(test)]
 mod secret_redaction_tests {
     use axum::http::header::CONTENT_TYPE;
@@ -56,6 +61,23 @@ mod secret_redaction_tests {
 
     const MEDIA_BASE64: &str =
         "QkNEMTIzNDU2Nzg5MEFCQ0RFRjEyMzQ1Njc4OTBBQkNERUYxMjM0NTY3ODkwQUJDREVGMTIzNDU2Nzg5MA==";
+
+    #[test]
+    fn ensure_secret_redaction_available_accepts_disabled() {
+        assert!(super::ensure_secret_redaction_available(false).is_ok());
+    }
+
+    #[cfg(feature = "secrets-scanner")]
+    #[test]
+    fn ensure_secret_redaction_available_accepts_enabled_with_scanner_feature() {
+        assert!(super::ensure_secret_redaction_available(true).is_ok());
+    }
+
+    #[cfg(not(feature = "secrets-scanner"))]
+    #[test]
+    fn ensure_secret_redaction_available_rejects_enabled_without_scanner_feature() {
+        assert!(super::ensure_secret_redaction_available(true).is_err());
+    }
 
     #[tokio::test]
     async fn redact_json_text_body_replaces_secret() {

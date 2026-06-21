@@ -18,9 +18,10 @@ pub async fn async_main(args: Vec<String>, data_dir: PathBuf) {
     let load_result = config::MultiConfig::load();
     let multi_config = load_result.multi_config;
 
-    #[cfg(not(feature = "secrets-scanner"))]
-    if multi_config.redact_secrets {
-        panic!("redact_secrets requires building anyllm_proxy with the `secrets-scanner` feature");
+    if let Err(message) =
+        anyllm_proxy::server::ensure_secret_redaction_available(multi_config.redact_secrets)
+    {
+        panic!("{}", message);
     }
 
     // Ensure a ModelRouter always exists (empty if no config file).

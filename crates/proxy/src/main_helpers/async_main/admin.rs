@@ -98,6 +98,8 @@ pub(crate) async fn init_admin(
         log_bodies: multi_config.log_bodies,
         redact_secrets: multi_config.redact_secrets,
     };
+    let mut log_bodies_enabled_by_override = false;
+    let mut redact_secrets_enabled_by_override = false;
 
     // Apply config overrides from SQLite (survive restarts).
     if let Ok(overrides) = admin::db::get_config_overrides(&conn) {
@@ -118,8 +120,16 @@ pub(crate) async fn init_admin(
                         );
                     }
                 }
-                "log_bodies" => runtime_config.log_bodies = value == "true",
-                "redact_secrets" => runtime_config.redact_secrets = value == "true",
+                "log_bodies" => {
+                    runtime_config.log_bodies = value == "true";
+                    log_bodies_enabled_by_override =
+                        runtime_config.log_bodies && !multi_config.log_bodies;
+                }
+                "redact_secrets" => {
+                    runtime_config.redact_secrets = value == "true";
+                    redact_secrets_enabled_by_override =
+                        runtime_config.redact_secrets && !multi_config.redact_secrets;
+                }
                 k if k.ends_with(".big_model") => {
                     let backend = k.strip_suffix(".big_model").unwrap();
                     if let Some(m) = runtime_config.model_mappings.get_mut(backend) {
@@ -145,13 +155,22 @@ pub(crate) async fn init_admin(
         }
     }
 
-    // Re-check after overrides: a persisted `redact_secrets=true` override can
-    // enable redaction even when multi_config did not, so the startup guard
-    // above (which only inspects multi_config) would miss it on a build
-    // without the scanner feature. Fail fast instead of 500-ing every request.
-    #[cfg(not(feature = "secrets-scanner"))]
-    if runtime_config.redact_secrets {
-        panic!("redact_secrets requires building anyllm_proxy with the `secrets-scanner` feature");
+    if log_bodies_enabled_by_override {
+        tracing::warn!(
+            "persisted admin override enabled LOG_BODIES: request and response bodies will be \
+             logged at debug level. This may expose sensitive data (prompts, API keys, PII)."
+        );
+    }
+    if redact_secrets_enabled_by_override {
+        tracing::warn!(
+            "persisted admin override enabled REDACT_SECRETS: upstream JSON/text request payloads \
+             will be scanned and detected secrets will be replaced before forwarding."
+        );
+    }
+    if let Err(message) =
+        anyllm_proxy::server::ensure_secret_redaction_available(runtime_config.redact_secrets)
+    {
+        panic!("{}", message);
     }
 
     let runtime_config = Arc::new(std::sync::RwLock::new(runtime_config));
