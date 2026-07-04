@@ -5,7 +5,9 @@ pub mod request_id;
 
 pub use anthropic_headers::log_anthropic_headers;
 pub use auth::{
-    set_hmac_secret, set_oidc_config, set_virtual_keys, validate_auth, AuthMode, VirtualKeyContext,
+    distinct_static_key_count, forward_client_auth_misconfigured, open_relay_active,
+    set_hmac_secret, set_oidc_config, set_virtual_keys, validate_auth, AuthMode, ClientAuthPath,
+    VirtualKeyContext,
 };
 pub use ip_allowlist::{check_ip_allowlist, ip_allowlist_active, is_ip_allowed};
 pub use request_id::add_request_id;

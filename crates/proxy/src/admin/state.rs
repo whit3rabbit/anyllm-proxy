@@ -108,6 +108,13 @@ pub struct RuntimeConfig {
     /// Whether Anthropic thinking-block record-and-restore repair is active
     /// (BACKEND=anthropic passthrough only; see `crate::thinking_repair`).
     pub anthropic_thinking_repair: bool,
+    /// Whether Anthropic passthrough forwards the client's own incoming
+    /// credential upstream instead of the operator's (BACKEND=anthropic
+    /// only; see `ANTHROPIC_FORWARD_CLIENT_AUTH` / `server::passthrough`).
+    /// Enabling this via `PUT /admin/api/config` is gated by
+    /// `server::middleware::forward_client_auth_misconfigured` -- see
+    /// `admin::routes::config::put_config`.
+    pub forward_client_auth: bool,
     /// Opt-in tool-call guardrail preset, stored as the stable string form of
     /// `crate::tools::ToolGuardrailMode` (see `ToolGuardrailMode::as_str`),
     /// e.g. "disabled" or "standard". Runtime-tunable like the other fields
@@ -123,6 +130,7 @@ pub struct RuntimeConfigDefaults {
     pub log_bodies: bool,
     pub redact_secrets: bool,
     pub anthropic_thinking_repair: bool,
+    pub forward_client_auth: bool,
     pub tool_guardrail_mode: String,
 }
 
@@ -198,6 +206,7 @@ impl SharedState {
                 log_bodies: false,
                 redact_secrets: false,
                 anthropic_thinking_repair: false,
+                forward_client_auth: false,
                 tool_guardrail_mode: crate::tools::ToolGuardrailMode::Disabled
                     .as_str()
                     .to_string(),
@@ -206,6 +215,7 @@ impl SharedState {
                 log_bodies: false,
                 redact_secrets: false,
                 anthropic_thinking_repair: false,
+                forward_client_auth: false,
                 tool_guardrail_mode: crate::tools::ToolGuardrailMode::Disabled
                     .as_str()
                     .to_string(),

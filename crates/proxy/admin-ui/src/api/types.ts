@@ -96,6 +96,7 @@ export interface ConfigResponse {
   log_bodies: boolean
   redact_secrets: boolean
   anthropic_thinking_repair: boolean
+  forward_client_auth: boolean
   tool_guardrail_mode: string
   backends: Record<string, { big_model: string; small_model: string }>
   overridden_keys: string[]

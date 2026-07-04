@@ -11,6 +11,20 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 ## [Unreleased]
 
 ### Added
+- Opt-in `ANTHROPIC_FORWARD_CLIENT_AUTH` for Anthropic passthrough: forwards the client's own
+  incoming `x-api-key`/`Authorization`/`x-goog-api-key` credential upstream (renamed to `x-api-key`
+  when it came in as `x-goog-api-key`, since Anthropic doesn't recognize that header name) instead
+  of the operator's configured credential, for single-key/BYOK deployments (e.g. using Claude
+  Code's own Pro/Max subscription OAuth token directly, no separate `claude setup-token` step).
+  Only applies when the request authenticated via a static `PROXY_API_KEYS` entry or
+  `PROXY_OPEN_RELAY`; virtual-key and OIDC-authenticated requests always use the operator's own
+  credential regardless of the toggle. Applies uniformly to every Anthropic-kind backend in a
+  multi-backend deployment (one shared runtime setting, like `ANTHROPIC_THINKING_REPAIR`) and is
+  live-toggleable from the admin UI (**Settings**) / `PUT /admin/api/config` with no restart.
+  Enabling it (at startup or live) is rejected when `PROXY_API_KEYS` has 2+ distinct entries and no
+  open relay, since that combination would let different callers each redirect the upstream
+  Anthropic credential.
+
 - Opt-in Forge-style tool-call guardrails: advisory nudges for `lsp_first`, `quiet_command`, and
   `write_payload_cap` policies, plus fingerprint-based dedup of repeated tool calls. Configure via
   the simple-YAML `tool_execution.guardrails` key or the `FORGE_TOOL_CALL_POLICY` env var (the env

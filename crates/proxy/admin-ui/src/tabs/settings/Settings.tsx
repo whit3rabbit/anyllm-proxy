@@ -283,6 +283,32 @@ PROXY_API_KEYS=my-key`}
           </div>
 
           <div className="form-group">
+            <label className="form-label" htmlFor="cfg-forward-client-auth" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input
+                id="cfg-forward-client-auth"
+                type="checkbox"
+                checked={cfg.forward_client_auth}
+                disabled={save.isPending}
+                onChange={(e) => handleBooleanSave('forward_client_auth', e.target.checked)}
+              />
+              Forward client credential (Anthropic passthrough)
+            </label>
+            <div className="dim" style={{ fontSize: 12 }}>
+              Forwards the client's own x-api-key/Authorization header upstream instead of the
+              operator's configured credential (BACKEND=anthropic passthrough only, single-key/BYOK
+              deployments). The proxy refuses to enable this with 2+ PROXY_API_KEYS entries and no
+              PROXY_OPEN_RELAY. Off by default.
+            </div>
+            {cfg.overridden_keys.includes('forward_client_auth') && (
+              <div className="form-row">
+                <AdminButton size="sm" onClick={() => setPendingReset('forward_client_auth')}>
+                  Reset
+                </AdminButton>
+              </div>
+            )}
+          </div>
+
+          <div className="form-group">
             <label className="form-label" htmlFor="cfg-tool-guardrail-mode">Tool guardrail mode</label>
             <div className="form-row">
               <select
@@ -305,7 +331,7 @@ PROXY_API_KEYS=my-key`}
             </div>
           </div>
 
-          {cfg.entries.filter((entry) => !['redact_secrets', 'log_bodies', 'anthropic_thinking_repair', 'tool_guardrail_mode'].includes(entry.key)).map((entry) => {
+          {cfg.entries.filter((entry) => !['redact_secrets', 'log_bodies', 'anthropic_thinking_repair', 'forward_client_auth', 'tool_guardrail_mode'].includes(entry.key)).map((entry) => {
             const inputId = `cfg-${entry.key}`
             return (
               <div className="form-group" key={entry.key}>

@@ -22,7 +22,7 @@ pub use url_validation::{is_private_ip, validate_base_url, warn_if_cloud_metadat
 pub(crate) static ENV_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 pub use helpers::{
-    extract_litellm_master_key, resolve_env_value, sanitize_api_key, strip_v1_suffix,
+    env_bool_flag, extract_litellm_master_key, resolve_env_value, sanitize_api_key, strip_v1_suffix,
 };
 pub use multi::{BackendConfig, LoadResult, MultiConfig};
 pub use single::Config;

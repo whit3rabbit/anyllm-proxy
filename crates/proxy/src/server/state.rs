@@ -267,6 +267,20 @@ impl AppState {
             .anthropic_thinking_repair
     }
 
+    /// Whether Anthropic passthrough forwards the client's own incoming
+    /// credential upstream instead of the operator's (`ANTHROPIC_FORWARD_CLIENT_AUTH`,
+    /// live-toggleable via `RuntimeConfig.forward_client_auth`). Read fresh on
+    /// every request -- unlike the old frozen `AppState` field this replaced,
+    /// this reflects an admin-UI change immediately without a restart, and
+    /// applies uniformly to every `BackendKind::Anthropic` backend since they
+    /// all share one `RuntimeConfig`.
+    pub(crate) fn forward_client_auth_enabled(&self) -> bool {
+        self.runtime_config
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .forward_client_auth
+    }
+
     /// The thinking-repair store, but only when the live admin-toggleable
     /// flag is actually on. `None` both when repair is entirely absent (non-
     /// Anthropic backend) and when it's present-but-disabled -- single

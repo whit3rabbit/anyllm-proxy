@@ -83,6 +83,7 @@ pub fn app_multi_with_shared(
             log_bodies: config.log_bodies,
             redact_secrets: config.redact_secrets,
             anthropic_thinking_repair: config.anthropic_thinking_repair,
+            forward_client_auth: config.forward_client_auth,
             // Derive from the static tool-engine preset (built from YAML/env
             // at startup) rather than hardcoding Disabled -- otherwise a
             // standalone deployment (no --webui/--admin, so `shared` is None)

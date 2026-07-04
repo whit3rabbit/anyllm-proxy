@@ -85,6 +85,7 @@ pub(super) async fn get_config(State(shared): State<SharedState>) -> Json<serde_
         log_bodies,
         redact_secrets,
         anthropic_thinking_repair,
+        forward_client_auth,
         tool_guardrail_mode,
         backends,
     ) = {
@@ -107,6 +108,7 @@ pub(super) async fn get_config(State(shared): State<SharedState>) -> Json<serde_
             config.log_bodies,
             config.redact_secrets,
             config.anthropic_thinking_repair,
+            config.forward_client_auth,
             config.tool_guardrail_mode.clone(),
             backends,
         )
@@ -125,6 +127,7 @@ pub(super) async fn get_config(State(shared): State<SharedState>) -> Json<serde_
         "log_bodies": log_bodies,
         "redact_secrets": redact_secrets,
         "anthropic_thinking_repair": anthropic_thinking_repair,
+        "forward_client_auth": forward_client_auth,
         "tool_guardrail_mode": tool_guardrail_mode,
         "backends": backends,
         "overridden_keys": override_keys,
@@ -193,6 +196,37 @@ pub(super) async fn put_config(
         .and_then(|v| v.as_bool())
     {
         db_writes.push(("anthropic_thinking_repair".to_string(), val.to_string()));
+    }
+    if let Some(val) = body.get("forward_client_auth").and_then(|v| v.as_bool()) {
+        // Same rule enforced at startup (main_helpers::async_main) for
+        // statically-configured backends: 2+ distinct PROXY_API_KEYS entries
+        // with no PROXY_OPEN_RELAY would let different callers each redirect
+        // the upstream Anthropic credential. This is the only path that can
+        // enable the toggle *after* boot (live, no restart), so it must be
+        // re-checked here -- otherwise this admin route would silently
+        // reopen exactly the misconfiguration the startup panic exists to
+        // block. Reads the same ALLOWED_KEY_HASHES/OPEN_RELAY statics
+        // validate_auth uses, not a re-parse of the env vars, so it can't
+        // diverge from what a request actually experiences.
+        if val
+            && crate::server::middleware::forward_client_auth_misconfigured(
+                crate::server::middleware::distinct_static_key_count(),
+                crate::server::middleware::open_relay_active(),
+            )
+        {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "error": "ANTHROPIC_FORWARD_CLIENT_AUTH cannot be enabled with 2+ \
+                              PROXY_API_KEYS entries and no PROXY_OPEN_RELAY: this would let \
+                              different callers each redirect the upstream Anthropic \
+                              credential. Use exactly one PROXY_API_KEYS entry or \
+                              PROXY_OPEN_RELAY=true for a single-operator/BYOK deployment."
+                })),
+            )
+                .into_response();
+        }
+        db_writes.push(("forward_client_auth".to_string(), val.to_string()));
     }
     if let Some(val) = body.get("tool_guardrail_mode").and_then(|v| v.as_str()) {
         match val.parse::<crate::tools::ToolGuardrailMode>() {
@@ -276,6 +310,7 @@ pub(super) async fn put_config(
                 "log_bodies" => config.log_bodies.to_string(),
                 "redact_secrets" => config.redact_secrets.to_string(),
                 "anthropic_thinking_repair" => config.anthropic_thinking_repair.to_string(),
+                "forward_client_auth" => config.forward_client_auth.to_string(),
                 "tool_guardrail_mode" => config.tool_guardrail_mode.clone(),
                 other => {
                     if let Some((backend, field)) = other.split_once('.') {
@@ -319,6 +354,9 @@ pub(super) async fn put_config(
                 }
                 "anthropic_thinking_repair" => {
                     config.anthropic_thinking_repair = value == "true";
+                }
+                "forward_client_auth" => {
+                    config.forward_client_auth = value == "true";
                 }
                 "tool_guardrail_mode" => {
                     config.tool_guardrail_mode = value.clone();
@@ -430,6 +468,13 @@ pub(super) async fn delete_config_override(
                     let env_default = shared.runtime_defaults.anthropic_thinking_repair;
                     if let Ok(mut config) = shared.runtime_config.write() {
                         config.anthropic_thinking_repair = env_default;
+                    }
+                    Some(env_default.to_string())
+                }
+                "forward_client_auth" => {
+                    let env_default = shared.runtime_defaults.forward_client_auth;
+                    if let Ok(mut config) = shared.runtime_config.write() {
+                        config.forward_client_auth = env_default;
                     }
                     Some(env_default.to_string())
                 }

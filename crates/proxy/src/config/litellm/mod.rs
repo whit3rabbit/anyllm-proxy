@@ -376,6 +376,7 @@ pub fn parse_litellm_yaml(yaml: &str) -> LiteLLMParsed {
         log_bodies,
         redact_secrets,
         anthropic_thinking_repair,
+        forward_client_auth: crate::config::env_bool_flag("ANTHROPIC_FORWARD_CLIENT_AUTH"),
         default_backend,
         backends,
         expose_degradation_warnings: false, // overridden in MultiConfig::load()

@@ -102,6 +102,42 @@ pub async fn async_main(args: Vec<String>, data_dir: PathBuf) {
         );
     }
 
+    // ANTHROPIC_FORWARD_CLIENT_AUTH safeguard: forwarding the client's own
+    // credential upstream only makes sense when that same credential IS the
+    // operator's Anthropic secret (single-key/BYOK). Reject at startup if it's
+    // enabled (now a global RuntimeConfig-backed toggle, live-editable via the
+    // admin UI -- see main_helpers/async_main/admin.rs) alongside multiple
+    // distinct static keys with no open relay. `distinct_static_key_count`/
+    // `open_relay_active` read the SAME `ALLOWED_KEY_HASHES`/`OPEN_RELAY`
+    // statics `validate_auth` uses for every request, so this can never
+    // diverge from the real runtime gate the way independently re-parsing
+    // PROXY_API_KEYS/PROXY_OPEN_RELAY here once did. The identical check also
+    // runs in admin::routes::config::put_config, so enabling this live via
+    // the admin API is gated the same way -- this startup check only covers
+    // the "already on at boot" case.
+    let any_anthropic_forwarding = multi_config.forward_client_auth
+        && multi_config
+            .backends
+            .values()
+            .any(|bc| bc.kind == config::BackendKind::Anthropic);
+    if any_anthropic_forwarding {
+        use anyllm_proxy::server::middleware::{
+            distinct_static_key_count, forward_client_auth_misconfigured, open_relay_active,
+        };
+        let key_count = distinct_static_key_count();
+        if forward_client_auth_misconfigured(key_count, open_relay_active()) {
+            panic!(
+                "ANTHROPIC_FORWARD_CLIENT_AUTH=true with {key_count} PROXY_API_KEYS entries and \
+                 PROXY_OPEN_RELAY not set: this forwards whichever credential gated a request \
+                 straight to Anthropic, so multiple distinct proxy keys would let different \
+                 callers each redirect the upstream Anthropic credential. Use exactly one \
+                 PROXY_API_KEYS entry (set it to your own Anthropic secret) or \
+                 PROXY_OPEN_RELAY=true for a single-operator/BYOK deployment, or disable \
+                 ANTHROPIC_FORWARD_CLIENT_AUTH."
+            );
+        }
+    }
+
     tracing::info!(
         backends = ?multi_config.backends.keys().collect::<Vec<_>>(),
         default = %multi_config.default_backend,

@@ -45,6 +45,19 @@ pub struct MultiConfig {
     pub redact_secrets: bool,
     /// Enable Anthropic thinking-block record-and-restore repair (BACKEND=anthropic passthrough only).
     pub anthropic_thinking_repair: bool,
+    /// Anthropic passthrough only: forward the CLIENT's own incoming
+    /// `Authorization`/`x-api-key` header upstream verbatim instead of the
+    /// operator's configured credential, for a single-key/BYOK deployment
+    /// (e.g. a Claude Pro/Max subscription's own OAuth token). Global (like
+    /// `anthropic_thinking_repair` above), not per-backend: every backend of
+    /// `BackendKind::Anthropic` shares one `RuntimeConfig`
+    /// (`AppState::forward_client_auth_enabled()`), live-toggleable from the
+    /// admin UI. See `server/passthrough.rs::client_auth_forwardable` for the
+    /// per-request safeguard that also gates this on how the request itself
+    /// authenticated, and `server/middleware/auth.rs::forward_client_auth_misconfigured`
+    /// for the multi-static-key safeguard enforced both at startup and on
+    /// every admin-API attempt to enable it live.
+    pub forward_client_auth: bool,
     /// Backend name used when no route prefix matches.
     pub default_backend: String,
     /// Ordered map: key = route prefix (e.g. "openai"), value = backend config.

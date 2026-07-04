@@ -166,6 +166,54 @@ anyllm_proxy
 BACKEND=anthropic ANTHROPIC_API_KEY=sk-ant-... anyllm_proxy
 ```
 
+**With tool-call guardrails, thinking-block repair, and body logging enabled** (one command):
+```bash
+BACKEND=anthropic ANTHROPIC_API_KEY=sk-ant-... \
+FORGE_TOOL_CALL_POLICY=standard ANTHROPIC_THINKING_REPAIR=true \
+LOG_BODIES=true RUST_LOG=info \
+anyllm_proxy
+```
+- `FORGE_TOOL_CALL_POLICY=standard` — opt-in tool-call guardrails (nudges Claude toward LSP tools over grep, quieter shell commands, and caps oversized write/edit payloads). Also toggleable live from the admin UI (`Settings` tab) with no restart.
+- `ANTHROPIC_THINKING_REPAIR=true` — records each response's thinking blocks as ground truth and repairs them if a client-side replay corrupts them, instead of erroring out. Also live-toggleable from the admin UI.
+- `LOG_BODIES=true RUST_LOG=info` — logs request/response bodies (admin UI **Request Log** tab); use `RUST_LOG=anyllm_proxy=debug` for more detail.
+
+### Claude Code with your Pro/Max subscription (not an API key)
+
+Passthrough mode forwards bytes to the real Anthropic API using **the proxy's own** credential — it does not forward whatever `Authorization`/`x-api-key` header Claude Code sends it. So pointing Claude Code at the proxy with nothing else configured (which normally falls back to your logged-in subscription session) won't authenticate upstream; the subscription credential has to live on the proxy process instead:
+
+```bash
+# 1. On a machine where you're logged into Claude Code (Pro/Max), mint a
+#    portable, ~1-year bearer token from your subscription:
+claude setup-token
+# copy the printed token
+
+# 2. Start the proxy with it as the server-side upstream credential:
+BACKEND=anthropic ANTHROPIC_AUTH_TOKEN=<token-from-setup-token> \
+FORGE_TOOL_CALL_POLICY=standard ANTHROPIC_THINKING_REPAIR=true \
+LOG_BODIES=true RUST_LOG=info \
+PROXY_OPEN_RELAY=true \
+anyllm_proxy
+
+# 3. Point Claude Code at the proxy (this credential is only checked by the
+#    proxy's own inbound gate above -- PROXY_OPEN_RELAY=true accepts any
+#    value here; use PROXY_API_KEYS=... instead for anything beyond local use):
+ANTHROPIC_BASE_URL=http://localhost:3000 ANTHROPIC_API_KEY=proxy-user claude
+```
+
+This keeps billing on your subscription (nothing pay-per-token) while still getting guardrails, thinking-block repair, and full request logging from the proxy.
+
+**Alternative: skip the token-minting step.** Set `ANTHROPIC_FORWARD_CLIENT_AUTH=true` and the proxy forwards whatever `Authorization`/`x-api-key` header Claude Code sends it straight upstream, verbatim, instead of substituting its own credential — no `claude setup-token` step needed:
+
+```bash
+BACKEND=anthropic ANTHROPIC_FORWARD_CLIENT_AUTH=true \
+FORGE_TOOL_CALL_POLICY=standard ANTHROPIC_THINKING_REPAIR=true \
+LOG_BODIES=true RUST_LOG=info \
+PROXY_OPEN_RELAY=true \
+anyllm_proxy
+```
+
+Since the credential that gets the request past the proxy's own gate becomes the literal credential sent to Anthropic, this is single-key/BYOK only: it's automatically skipped (falls back to the operator's own credential) for virtual-key or OIDC-authenticated requests, and the proxy refuses to start if it's on alongside 2+ `PROXY_API_KEYS` entries with no `PROXY_OPEN_RELAY`. See [docs/ENV.md](docs/ENV.md#forwarding-the-clients-own-credential-anthropic_forward_client_authtrue) for the safeguard details.
+
 See [docs/ENV.md](docs/ENV.md) for the full variable reference.
 
 ---

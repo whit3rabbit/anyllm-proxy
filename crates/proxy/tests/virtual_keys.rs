@@ -735,6 +735,7 @@ fn multi_config_with_backend_bases(allowed_base: &str, denied_base: &str) -> Mul
         log_bodies: false,
         redact_secrets: false,
         anthropic_thinking_repair: false,
+        forward_client_auth: false,
         default_backend: "allowed".to_string(),
         backends,
         expose_degradation_warnings: false,

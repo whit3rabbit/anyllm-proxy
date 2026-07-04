@@ -27,6 +27,15 @@ pub fn strip_v1_suffix(url: &str) -> &str {
         .unwrap_or(url)
 }
 
+/// Parse a boolean env var as `"true"` or `"1"`, defaulting to `false` if
+/// unset. Shared by every `BackendConfig` loader that reads
+/// `ANTHROPIC_FORWARD_CLIENT_AUTH` so the parsing rule lives in one place.
+pub fn env_bool_flag(name: &str) -> bool {
+    std::env::var(name)
+        .map(|v| v == "true" || v == "1")
+        .unwrap_or(false)
+}
+
 /// Resolve a config value that may reference an env var via `env:VAR_NAME` prefix.
 /// This allows TOML config files to reference secrets from the environment
 /// without hardcoding them, keeping credentials out of version control.

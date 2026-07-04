@@ -290,6 +290,43 @@ async fn put_config_updates_anthropic_thinking_repair_override() {
 }
 
 #[tokio::test]
+async fn put_config_updates_forward_client_auth_override() {
+    set_admin_rpm(10_000);
+    let shared = crate::admin::state::SharedState::new_for_test();
+    let token_str = "i".repeat(64);
+    shared.issued_csrf_tokens.insert(token_str.clone(), ());
+    let app = admin_router(
+        shared.clone(),
+        Arc::new(zeroize::Zeroizing::new("test-token".to_string())),
+    );
+    let req = Request::put("/admin/api/config")
+        .header("host", "localhost:9090")
+        .header("authorization", "Bearer test-token")
+        .header("content-type", "application/json")
+        .header("x-csrf-token", &token_str)
+        .header("cookie", format!("csrf_token={token_str}"))
+        .extension(ConnectInfo("127.0.0.1:9090".parse::<SocketAddr>().unwrap()))
+        .body(Body::from(r#"{"forward_client_auth":true}"#))
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body_bytes = axum::body::to_bytes(resp.into_body(), 1 << 16)
+        .await
+        .unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    assert_eq!(body["keys"], serde_json::json!(["forward_client_auth"]));
+    assert!(shared.runtime_config.read().unwrap().forward_client_auth);
+
+    let conn = shared.db.lock().unwrap();
+    let overrides = crate::admin::db::get_config_overrides(&conn).unwrap();
+    assert!(overrides
+        .iter()
+        .any(|(key, value, _)| key == "forward_client_auth" && value == "true"));
+}
+
+#[tokio::test]
 async fn put_config_tool_guardrail_mode_then_get_returns_new_value() {
     set_admin_rpm(10_000);
     let shared = crate::admin::state::SharedState::new_for_test();
@@ -415,6 +452,50 @@ async fn delete_config_anthropic_thinking_repair_override_restores_loaded_defaul
     assert!(!overrides
         .iter()
         .any(|(key, _, _)| key == "anthropic_thinking_repair"));
+}
+
+#[tokio::test]
+async fn delete_config_forward_client_auth_override_restores_loaded_default() {
+    set_admin_rpm(10_000);
+    let mut shared = crate::admin::state::SharedState::new_for_test();
+    shared.runtime_defaults.forward_client_auth = true;
+    {
+        let mut config = shared.runtime_config.write().unwrap();
+        config.forward_client_auth = false;
+    }
+    {
+        let conn = shared.db.lock().unwrap();
+        crate::admin::db::set_config_override(&conn, "forward_client_auth", "false").unwrap();
+    }
+
+    let token_str = "j".repeat(64);
+    shared.issued_csrf_tokens.insert(token_str.clone(), ());
+    let app = admin_router(
+        shared.clone(),
+        Arc::new(zeroize::Zeroizing::new("test-token".to_string())),
+    );
+    let req = Request::delete("/admin/api/config/overrides/forward_client_auth")
+        .header("host", "localhost:9090")
+        .header("authorization", "Bearer test-token")
+        .header("x-csrf-token", &token_str)
+        .header("cookie", format!("csrf_token={token_str}"))
+        .extension(ConnectInfo("127.0.0.1:9090".parse::<SocketAddr>().unwrap()))
+        .body(Body::empty())
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert!(
+        shared.runtime_config.read().unwrap().forward_client_auth,
+        "runtime config should return to the loaded forward_client_auth default"
+    );
+
+    let conn = shared.db.lock().unwrap();
+    let overrides = crate::admin::db::get_config_overrides(&conn).unwrap();
+    assert!(!overrides
+        .iter()
+        .any(|(key, _, _)| key == "forward_client_auth"));
 }
 
 /// POST with a CSRF token that was not server-issued is rejected even if header==cookie.

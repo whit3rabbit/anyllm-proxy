@@ -74,6 +74,27 @@ pub struct VirtualKeyContext {
     pub(crate) period_reset: Option<String>,
 }
 
+/// Which of `validate_auth`'s four success paths authenticated this request.
+/// Inserted into request extensions at every success branch so a handler can
+/// tell what kind of credential got it in -- used by `ANTHROPIC_FORWARD_CLIENT_AUTH`
+/// to decide whether it's safe to forward that same credential upstream as the
+/// real Anthropic auth: only `StaticKey`/`OpenRelay` mean "the credential that
+/// gated this request IS the operator's own secret" for a single-key/BYOK
+/// deployment. A virtual key is deliberately not a real Anthropic credential,
+/// and a JWT is a proxy-auth artifact, so those two paths must never be
+/// forwarded upstream regardless of the toggle.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClientAuthPath {
+    /// OIDC/JWT bearer token.
+    OidcJwt,
+    /// A single static key from `PROXY_API_KEYS`.
+    StaticKey,
+    /// A per-tenant virtual key (never a real upstream credential).
+    VirtualKey,
+    /// `PROXY_OPEN_RELAY=true`: any non-empty credential accepted.
+    OpenRelay,
+}
+
 /// Controls which authentication paths are active.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AuthMode {
@@ -164,6 +185,40 @@ static OPEN_RELAY: LazyLock<bool> = LazyLock::new(|| {
             .unwrap_or(false)
 });
 
+/// Whether open-relay mode is actually active for this process. This is the
+/// canonical answer -- PROXY_OPEN_RELAY=true alone is not enough once any
+/// PROXY_API_KEYS entry exists, see the `OPEN_RELAY` static above. Exposed so
+/// callers outside this module (the startup safeguard in
+/// `main_helpers::async_main`, the admin API's `PUT /admin/api/config`) can
+/// check the real gate instead of re-deriving it from env vars a second time.
+pub fn open_relay_active() -> bool {
+    *OPEN_RELAY
+}
+
+/// Number of distinct entries in `PROXY_API_KEYS`, deduplicated. Derived from
+/// the same hashed list `validate_auth`'s Check 1 uses, not a separate
+/// re-parse of the raw env var, so it can never diverge from what actually
+/// authenticates a request. An identical key string repeated in
+/// `PROXY_API_KEYS` (e.g. "keyA,keyA") hashes to the same digest and counts
+/// once.
+pub fn distinct_static_key_count() -> usize {
+    ALLOWED_KEY_HASHES
+        .iter()
+        .collect::<std::collections::HashSet<_>>()
+        .len()
+}
+
+/// True when forwarding the client's own credential upstream
+/// (`ANTHROPIC_FORWARD_CLIENT_AUTH`) could let different callers each
+/// redirect the real Anthropic credential: 2+ distinct static keys with no
+/// open relay. Pure/parameterized (not reading env or the `LazyLock` statics
+/// directly) so it stays deterministically testable; callers pass
+/// `distinct_static_key_count()`/`open_relay_active()` (this module) or,
+/// for the pre-request startup check, freshly-computed equivalents.
+pub fn forward_client_auth_misconfigured(key_count: usize, open_relay: bool) -> bool {
+    key_count > 1 && !open_relay
+}
+
 /// Validate that the request carries a valid API key.
 /// If `PROXY_API_KEYS` is set, the caller's key must be in the allowlist.
 /// Otherwise, any non-empty key is accepted (backward-compatible open mode).
@@ -215,6 +270,7 @@ pub async fn validate_auth(
                     Ok(claims) => {
                         tracing::debug!(sub = ?claims.sub, auth_path = "jwt", "authentication successful");
                         request.extensions_mut().insert(claims);
+                        request.extensions_mut().insert(ClientAuthPath::OidcJwt);
                         return Ok(next.run(request).await);
                     }
                     Err(e) => {
@@ -261,6 +317,7 @@ pub async fn validate_auth(
 
     if env_key_match {
         tracing::debug!(auth_path = "static_key", "authentication successful");
+        request.extensions_mut().insert(ClientAuthPath::StaticKey);
         return Ok(next.run(request).await);
     }
 
@@ -420,6 +477,7 @@ pub async fn validate_auth(
                 allowed_routes: meta.allowed_routes.clone(),
                 period_reset,
             });
+            request.extensions_mut().insert(ClientAuthPath::VirtualKey);
 
             tracing::debug!(
                 key_id = meta.id,
@@ -432,6 +490,7 @@ pub async fn validate_auth(
 
     // Check 3: open-relay mode (any non-empty key accepted)
     if *OPEN_RELAY {
+        request.extensions_mut().insert(ClientAuthPath::OpenRelay);
         return Ok(next.run(request).await);
     }
 
@@ -499,5 +558,29 @@ mod auth_mode_tests {
     fn auth_mode_from_env_defaults_to_both() {
         let mode = AuthMode::from_env_str("unrecognized_value");
         assert_eq!(mode, AuthMode::Both);
+    }
+
+    #[test]
+    fn forward_client_auth_rejects_multiple_static_keys_without_open_relay() {
+        assert!(forward_client_auth_misconfigured(2, false));
+    }
+
+    #[test]
+    fn forward_client_auth_allows_open_relay_even_with_multiple_keys() {
+        // Reflects that `open_relay_active()` can only be true when
+        // `distinct_static_key_count()` is 0 (see the OPEN_RELAY static) --
+        // this combination is unreachable via those two real accessors, but
+        // the pure decision function itself must still handle it sanely.
+        assert!(!forward_client_auth_misconfigured(2, true));
+    }
+
+    #[test]
+    fn forward_client_auth_allows_exactly_one_key() {
+        assert!(!forward_client_auth_misconfigured(1, false));
+    }
+
+    #[test]
+    fn forward_client_auth_allows_zero_keys() {
+        assert!(!forward_client_auth_misconfigured(0, false));
     }
 }

@@ -98,10 +98,27 @@ impl AnthropicClient {
     /// Apply required Anthropic authentication headers.
     /// x-api-key and anthropic-version are mandatory per the Anthropic API spec;
     /// without the version header, the API rejects requests.
-    fn auth_request(&self, rb: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-        let (name, value) = self.auth.header();
-        rb.header(name, value)
-            .header("anthropic-version", "2023-06-01")
+    ///
+    /// `override_auth`, when `Some`, is forwarded verbatim (exact name+value the
+    /// client sent) INSTEAD OF the operator's configured credential -- used by
+    /// `ANTHROPIC_FORWARD_CLIENT_AUTH`. Exactly one of the two branches ever calls
+    /// `.header()` for the credential, so no duplicate/conflicting credential
+    /// header can reach upstream (reqwest's `RequestBuilder::header` APPENDS
+    /// rather than replaces, so calling it twice for the same header name would
+    /// send two header lines, not an override).
+    fn auth_request(
+        &self,
+        rb: reqwest::RequestBuilder,
+        override_auth: Option<(&str, &str)>,
+    ) -> reqwest::RequestBuilder {
+        let rb = match override_auth {
+            Some((name, value)) => rb.header(name, value),
+            None => {
+                let (name, value) = self.auth.header();
+                rb.header(name, value)
+            }
+        };
+        rb.header("anthropic-version", "2023-06-01")
     }
 
     /// Forward a non-streaming request. Returns raw response body and rate limit headers.
@@ -110,8 +127,11 @@ impl AnthropicClient {
         &self,
         body: bytes::Bytes,
         extra_headers: &[(&str, &str)],
+        override_auth: Option<(&str, &str)>,
     ) -> Result<(bytes::Bytes, RateLimitHeaders), AnthropicClientError> {
-        let response = self.send_with_retry(body, false, extra_headers).await?;
+        let response = self
+            .send_with_retry(body, false, extra_headers, override_auth)
+            .await?;
         let rate_limits = RateLimitHeaders::from_anthropic_headers(response.headers());
         let resp_body = response
             .bytes()
@@ -126,8 +146,11 @@ impl AnthropicClient {
         &self,
         body: bytes::Bytes,
         extra_headers: &[(&str, &str)],
+        override_auth: Option<(&str, &str)>,
     ) -> Result<(reqwest::Response, RateLimitHeaders), AnthropicClientError> {
-        let response = self.send_with_retry(body, true, extra_headers).await?;
+        let response = self
+            .send_with_retry(body, true, extra_headers, override_auth)
+            .await?;
         let rate_limits = RateLimitHeaders::from_anthropic_headers(response.headers());
         Ok((response, rate_limits))
     }
@@ -142,6 +165,7 @@ impl AnthropicClient {
         path: &str,
         body: bytes::Bytes,
         extra_headers: &[(&str, &str)],
+        override_auth: Option<(&str, &str)>,
     ) -> Result<reqwest::Response, AnthropicClientError> {
         let url = format!("{}{}", self.base_url, path);
         let rb = self
@@ -149,7 +173,7 @@ impl AnthropicClient {
             .request(method, &url)
             .header("content-type", "application/json")
             .body(body);
-        let rb = self.auth_request(rb);
+        let rb = self.auth_request(rb, override_auth);
         let rb = extra_headers.iter().fold(rb, |rb, &(k, v)| rb.header(k, v));
         rb.send()
             .await
@@ -162,6 +186,7 @@ impl AnthropicClient {
         body: bytes::Bytes,
         stream: bool,
         extra_headers: &[(&str, &str)],
+        override_auth: Option<(&str, &str)>,
     ) -> Result<reqwest::Response, AnthropicClientError> {
         let content_type = "application/json";
         for attempt in 0..=super::MAX_RETRIES {
@@ -170,7 +195,7 @@ impl AnthropicClient {
                 .post(&self.messages_url)
                 .header("content-type", content_type)
                 .body(body.clone());
-            let rb = self.auth_request(rb);
+            let rb = self.auth_request(rb, override_auth);
             // Tell upstream we expect SSE format; the Anthropic routing layer
             // may use this hint to optimize response handling.
             let rb = if stream {
@@ -256,9 +281,89 @@ fn anthropic_urls(base_url: &str) -> (String, String) {
 
 #[cfg(test)]
 mod tests {
-    use super::{anthropic_urls, AnthropicAuth};
-    use crate::config::BackendAuth;
+    use super::{anthropic_urls, AnthropicAuth, AnthropicClient};
+    use crate::config::{BackendAuth, TlsConfig};
     use std::sync::Mutex;
+
+    fn credential_headers(rb: reqwest::RequestBuilder) -> Vec<(String, String)> {
+        let req = rb.build().expect("request builds");
+        req.headers()
+            .iter()
+            .filter(|(name, _)| {
+                let n = name.as_str();
+                n == "x-api-key" || n == "authorization"
+            })
+            .map(|(name, value)| {
+                (
+                    name.as_str().to_string(),
+                    value.to_str().unwrap_or_default().to_string(),
+                )
+            })
+            .collect()
+    }
+
+    fn test_client() -> AnthropicClient {
+        AnthropicClient::new(
+            "https://api.anthropic.com",
+            &BackendAuth::AnthropicApiKey("operator-key".to_string()),
+            &TlsConfig::default(),
+        )
+    }
+
+    #[test]
+    fn auth_request_without_override_uses_operator_credential() {
+        let client = test_client();
+        let rb = client.client.post(&client.messages_url);
+        let rb = client.auth_request(rb, None);
+        let headers = credential_headers(rb);
+        assert_eq!(
+            headers,
+            vec![("x-api-key".to_string(), "operator-key".to_string())]
+        );
+    }
+
+    #[test]
+    fn auth_request_with_x_api_key_override_replaces_operator_credential() {
+        let client = test_client();
+        let rb = client.client.post(&client.messages_url);
+        let rb = client.auth_request(rb, Some(("x-api-key", "client-key")));
+        let headers = credential_headers(rb);
+        assert_eq!(
+            headers,
+            vec![("x-api-key".to_string(), "client-key".to_string())],
+            "operator credential must not appear anywhere in the built request"
+        );
+    }
+
+    #[test]
+    fn auth_request_with_bearer_override_is_forwarded_unmodified() {
+        let client = test_client();
+        let rb = client.client.post(&client.messages_url);
+        let rb = client.auth_request(rb, Some(("authorization", "Bearer sk-ant-oat-abc123")));
+        let headers = credential_headers(rb);
+        assert_eq!(
+            headers,
+            vec![(
+                "authorization".to_string(),
+                "Bearer sk-ant-oat-abc123".to_string()
+            )],
+            "must forward the Bearer token as-is, not convert it to x-api-key"
+        );
+    }
+
+    #[test]
+    fn auth_request_never_sends_duplicate_credential_headers() {
+        // Regression guard: reqwest's RequestBuilder::header() appends rather
+        // than replaces, so auth_request must never call it twice for the
+        // credential (once for the operator's, once for an override) or two
+        // conflicting header lines would reach upstream.
+        let client = test_client();
+        for override_auth in [None, Some(("x-api-key", "client-key"))] {
+            let rb = client.client.post(&client.messages_url);
+            let rb = client.auth_request(rb, override_auth);
+            assert_eq!(credential_headers(rb).len(), 1);
+        }
+    }
 
     static ENV_LOCK: Mutex<()> = Mutex::new(());
 

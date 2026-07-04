@@ -171,6 +171,7 @@ impl MultiConfig {
             log_bodies: config.log_bodies,
             redact_secrets: config.redact_secrets,
             anthropic_thinking_repair: config.anthropic_thinking_repair,
+            forward_client_auth: crate::config::env_bool_flag("ANTHROPIC_FORWARD_CLIENT_AUTH"),
             default_backend: name.to_string(),
             backends,
             expose_degradation_warnings: config.expose_degradation_warnings,

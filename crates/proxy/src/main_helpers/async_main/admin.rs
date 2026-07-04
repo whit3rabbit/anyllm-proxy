@@ -106,12 +106,14 @@ pub(crate) async fn init_admin(
         log_bodies: multi_config.log_bodies,
         redact_secrets: multi_config.redact_secrets,
         anthropic_thinking_repair: multi_config.anthropic_thinking_repair,
+        forward_client_auth: multi_config.forward_client_auth,
         tool_guardrail_mode: tool_guardrail_default.clone(),
     };
     let runtime_defaults = admin::state::RuntimeConfigDefaults {
         log_bodies: multi_config.log_bodies,
         redact_secrets: multi_config.redact_secrets,
         anthropic_thinking_repair: multi_config.anthropic_thinking_repair,
+        forward_client_auth: multi_config.forward_client_auth,
         tool_guardrail_mode: tool_guardrail_default,
     };
     let mut log_bodies_enabled_by_override = false;
@@ -148,6 +150,30 @@ pub(crate) async fn init_admin(
                 }
                 "anthropic_thinking_repair" => {
                     runtime_config.anthropic_thinking_repair = value == "true";
+                }
+                "forward_client_auth" => {
+                    // Defensively re-validate against the same rule
+                    // enforced by put_config (a tampered/hand-edited SQLite
+                    // row could otherwise re-enable a misconfigured toggle
+                    // that would let multiple distinct PROXY_API_KEYS
+                    // entries each redirect the upstream Anthropic
+                    // credential -- see
+                    // server/middleware/auth.rs::forward_client_auth_misconfigured).
+                    let wants_enabled = value == "true";
+                    if wants_enabled
+                        && anyllm_proxy::server::middleware::forward_client_auth_misconfigured(
+                            anyllm_proxy::server::middleware::distinct_static_key_count(),
+                            anyllm_proxy::server::middleware::open_relay_active(),
+                        )
+                    {
+                        tracing::warn!(
+                            "ignoring persisted forward_client_auth=true override: 2+ \
+                             PROXY_API_KEYS entries with no PROXY_OPEN_RELAY would let \
+                             different callers each redirect the upstream Anthropic credential"
+                        );
+                    } else {
+                        runtime_config.forward_client_auth = wants_enabled;
+                    }
                 }
                 "tool_guardrail_mode" => {
                     if value

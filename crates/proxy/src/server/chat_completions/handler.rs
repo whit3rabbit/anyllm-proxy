@@ -559,7 +559,7 @@ pub(crate) async fn chat_completions(
             };
             let refs = header_refs(&safe_headers);
 
-            match client.forward(body, &refs).await {
+            match client.forward(body, &refs, None).await {
                 Ok((resp_body, rate_limits)) => {
                     if let Some(ref d) = deployment {
                         d.record_finish(backend_start.elapsed().as_millis() as u64);

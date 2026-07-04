@@ -204,6 +204,7 @@ Set `BACKEND=anthropic` to forward Anthropic Messages API requests directly to t
 | `ANTHROPIC_API_KEY` | (required) | Anthropic API key. |
 | `ANTHROPIC_BASE_URL` | `https://api.anthropic.com` | Base URL for the Anthropic API. |
 | `ANTHROPIC_THINKING_REPAIR` | `false` | Repair corrupted `thinking`/`redacted_thinking` blocks in the last assistant message of `/v1/messages` requests before forwarding upstream. See below. |
+| `ANTHROPIC_FORWARD_CLIENT_AUTH` | `false` | Forward the client's own `x-api-key`/`Authorization` header upstream verbatim instead of `ANTHROPIC_API_KEY`/`ANTHROPIC_AUTH_TOKEN`. See below. |
 
 ### Example
 
@@ -241,6 +242,51 @@ This can also be toggled live from the admin UI (Settings tab) or via
 restart required. The env var only sets the value at startup; an admin-UI
 change takes effect immediately and persists across restarts via SQLite until
 reset.
+
+### Forwarding the client's own credential (`ANTHROPIC_FORWARD_CLIENT_AUTH=true`)
+
+By default the proxy always sends **its own** `ANTHROPIC_API_KEY`/
+`ANTHROPIC_AUTH_TOKEN` to the real Anthropic API — the client's incoming
+`x-api-key`/`Authorization` header is only ever checked against the proxy's
+own inbound auth (`PROXY_API_KEYS`/`PROXY_OPEN_RELAY`) and then discarded.
+Setting this flag instead forwards that exact header — same name, same
+value, byte-for-byte, no re-shaping — upstream in place of the operator's
+configured credential. This lets Claude Code use its own Pro/Max
+subscription OAuth session directly through the proxy, without a separate
+`claude setup-token` step.
+
+Since the credential that authenticates a request into the proxy becomes the
+literal credential sent to Anthropic, this only makes sense for a
+single-key/BYOK deployment where those two are meant to be the same thing.
+It is automatically skipped (the operator's own credential is used instead,
+regardless of the flag) for any request authenticated via a virtual key or
+OIDC/JWT — a virtual key is deliberately not a real Anthropic credential, and
+forwarding a JWT upstream would never work. A client that authenticated via
+the Gemini-CLI-compatible `x-goog-api-key` header has its value forwarded
+renamed to `x-api-key` (the only credential header name Anthropic itself
+understands), not literally as `x-goog-api-key`.
+
+At startup, the proxy refuses to start with this flag on if `PROXY_API_KEYS`
+has 2+ distinct entries and `PROXY_OPEN_RELAY` is not set, since that
+combination would let different callers each redirect the upstream Anthropic
+credential. The same rule is enforced live: this flag is toggleable from the
+admin UI (**Settings**) or `PUT /admin/api/config` with no restart, and that
+route rejects the same misconfigured combination with a 400 rather than
+silently accepting it.
+
+```bash
+BACKEND=anthropic \
+ANTHROPIC_AUTH_TOKEN=$(claude setup-token) \
+ANTHROPIC_FORWARD_CLIENT_AUTH=true \
+PROXY_OPEN_RELAY=true \
+anyllm_proxy
+```
+
+Only active for `BACKEND=anthropic` passthrough (`/v1/messages` and the
+generic Anthropic-native catch-all route). Off by default. Applies uniformly
+to every `BackendKind::Anthropic` backend in a multi-backend deployment (one
+shared runtime setting, like `ANTHROPIC_THINKING_REPAIR`) rather than being
+configurable per backend.
 
 ---
 

@@ -72,7 +72,7 @@ pub(super) async fn anthropic_chat_completions_stream(
     };
     let refs = header_refs(&safe_headers);
 
-    let (response, rate_limits) = match client.forward_stream(body, &refs).await {
+    let (response, rate_limits) = match client.forward_stream(body, &refs, None).await {
         Ok(result) => result,
         Err(e) => {
             state.metrics.record_error();

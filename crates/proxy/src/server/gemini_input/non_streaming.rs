@@ -96,7 +96,7 @@ pub(super) async fn call_backend_non_streaming(
             let body = serde_json::to_vec(req).map_err(|e| {
                 BackendError::Anthropic(AnthropicClientError::Transport(e.to_string()))
             })?;
-            let (resp_bytes, _rate_limits) = client.forward(body.into(), &[]).await?;
+            let (resp_bytes, _rate_limits) = client.forward(body.into(), &[], None).await?;
             let resp: anthropic::MessageResponse =
                 serde_json::from_slice(&resp_bytes).map_err(|e| {
                     BackendError::Anthropic(AnthropicClientError::Transport(e.to_string()))

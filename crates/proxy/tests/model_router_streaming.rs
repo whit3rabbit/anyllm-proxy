@@ -89,6 +89,7 @@ async fn spawn_proxy(backend_base_url: String, deployment: Arc<Deployment>) -> S
         log_bodies: false,
         redact_secrets: false,
         anthropic_thinking_repair: false,
+        forward_client_auth: false,
         default_backend: "openai".to_string(),
         backends,
         expose_degradation_warnings: false,
