@@ -381,6 +381,7 @@ fn make_engine(max_iterations: usize) -> ToolEngineState {
             total_timeout: Duration::from_secs(30),
             max_tool_calls_per_turn: 16,
         },
+        guardrails: anyllm_proxy::tools::ToolGuardrailConfig::disabled(),
         mcp_manager: None,
     }
 }
@@ -463,6 +464,7 @@ async fn maybe_execute_no_tool_calls_returns_original() {
         &req,
         &advertised_tools,
         initial.clone(),
+        &engine.guardrails,
         |_| async {
             panic!("backend should not be called when no tool calls");
         },
@@ -490,6 +492,7 @@ async fn maybe_execute_unregistered_tool_passes_through() {
         &req,
         &advertised_tools,
         initial.clone(),
+        &engine.guardrails,
         |_| async {
             panic!("backend should not be called for pass-through tools");
         },
@@ -516,6 +519,7 @@ async fn maybe_execute_unadvertised_registered_tool_passes_through() {
         &req,
         &advertised_tools,
         initial.clone(),
+        &engine.guardrails,
         |_| async {
             panic!("backend should not be called for unadvertised server tools");
         },
@@ -542,6 +546,7 @@ async fn maybe_execute_one_iteration_success() {
         &req,
         &advertised_tools,
         initial,
+        &engine.guardrails,
         |_follow_up| async {
             // The follow-up response has no tool calls, so the loop stops.
             Ok(text_response("HELLO"))
@@ -572,18 +577,25 @@ async fn maybe_execute_duplicate_detection_stops_loop() {
     let call_count_clone = call_count.clone();
     let advertised_tools = advertised(&["upper"]);
 
-    let (resp, trace) = maybe_execute_tools(&engine, &req, &advertised_tools, initial, move |_| {
-        let cc = call_count_clone.clone();
-        async move {
-            cc.fetch_add(1, Ordering::SeqCst);
-            // Always return same tool call, triggering duplicate detection on 2nd iteration.
-            Ok(tool_use_response(
-                "tu_2",
-                "upper",
-                serde_json::json!({"text": "hello"}),
-            ))
-        }
-    })
+    let (resp, trace) = maybe_execute_tools(
+        &engine,
+        &req,
+        &advertised_tools,
+        initial,
+        &engine.guardrails,
+        move |_| {
+            let cc = call_count_clone.clone();
+            async move {
+                cc.fetch_add(1, Ordering::SeqCst);
+                // Always return same tool call, triggering duplicate detection on 2nd iteration.
+                Ok(tool_use_response(
+                    "tu_2",
+                    "upper",
+                    serde_json::json!({"text": "hello"}),
+                ))
+            }
+        },
+    )
     .await;
 
     // Should have called backend once, then detected duplicate on 2nd iteration.
@@ -609,8 +621,13 @@ async fn maybe_execute_max_iterations_honored() {
     let call_count_clone = call_count.clone();
     let advertised_tools = advertised(&["upper"]);
 
-    let (_resp, trace) =
-        maybe_execute_tools(&engine, &req, &advertised_tools, initial, move |_| {
+    let (_resp, trace) = maybe_execute_tools(
+        &engine,
+        &req,
+        &advertised_tools,
+        initial,
+        &engine.guardrails,
+        move |_| {
             let cc = call_count_clone.clone();
             async move {
                 let n = cc.fetch_add(1, Ordering::SeqCst);
@@ -621,8 +638,9 @@ async fn maybe_execute_max_iterations_honored() {
                     serde_json::json!({"text": format!("iter_{}", n)}),
                 ))
             }
-        })
-        .await;
+        },
+    )
+    .await;
 
     assert_eq!(call_count.load(Ordering::SeqCst), 2);
     assert_eq!(trace.iterations.len(), 2);
@@ -644,6 +662,7 @@ async fn maybe_execute_backend_error_returns_last_response() {
         &req,
         &advertised_tools,
         initial.clone(),
+        &engine.guardrails,
         |_| async { Err("backend unavailable".to_string()) },
     )
     .await;

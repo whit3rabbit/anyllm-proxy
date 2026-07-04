@@ -43,6 +43,8 @@ pub struct MultiConfig {
     pub log_bodies: bool,
     /// Redact detected secrets from upstream JSON/text request payloads.
     pub redact_secrets: bool,
+    /// Enable Anthropic thinking-block record-and-restore repair (BACKEND=anthropic passthrough only).
+    pub anthropic_thinking_repair: bool,
     /// Backend name used when no route prefix matches.
     pub default_backend: String,
     /// Ordered map: key = route prefix (e.g. "openai"), value = backend config.

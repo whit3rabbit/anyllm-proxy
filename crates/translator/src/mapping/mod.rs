@@ -30,3 +30,27 @@ pub mod warnings;
 pub(crate) fn format_refusal(refusal: &str) -> String {
     format!("[Refusal: {}]", refusal)
 }
+
+/// Convert a LiteLLM-style OpenAI `ThinkingBlock` back to an Anthropic content
+/// block. Returns `None` for unrecognized blocks (forward-compat `Unknown`),
+/// which the caller should treat as "produced no thinking content".
+///
+/// Shared by the response and reverse-message mapping paths so they cannot drift.
+pub(crate) fn openai_thinking_block_to_anthropic(
+    block: &crate::openai::ThinkingBlock,
+) -> Option<crate::anthropic::ContentBlock> {
+    use crate::{anthropic, openai};
+    match block {
+        openai::ThinkingBlock::Thinking {
+            thinking,
+            signature,
+        } => Some(anthropic::ContentBlock::Thinking {
+            thinking: thinking.clone(),
+            signature: signature.clone(),
+        }),
+        openai::ThinkingBlock::RedactedThinking { data } => {
+            Some(anthropic::ContentBlock::RedactedThinking { data: data.clone() })
+        }
+        openai::ThinkingBlock::Unknown => None,
+    }
+}

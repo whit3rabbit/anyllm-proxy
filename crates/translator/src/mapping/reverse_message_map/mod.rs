@@ -167,7 +167,7 @@ fn openai_to_anthropic_request_inner(
                 });
             }
             openai::ChatRole::Assistant => {
-                let content = convert_assistant_to_anthropic(msg, context);
+                let content = convert_assistant_to_anthropic(msg, context, warnings);
                 messages.push(anthropic::InputMessage {
                     role: anthropic::Role::Assistant,
                     content,
@@ -309,6 +309,7 @@ pub fn anthropic_to_openai_response_with_context(
     let mut text_parts = Vec::new();
     let mut tool_calls = Vec::new();
     let mut reasoning_content: Option<String> = None;
+    let mut thinking_blocks = Vec::new();
 
     for block in &resp.content {
         match block {
@@ -326,14 +327,27 @@ pub fn anthropic_to_openai_response_with_context(
                     },
                 });
             }
-            anthropic::ContentBlock::Thinking { thinking, .. } => match &mut reasoning_content {
-                Some(existing) => {
-                    existing.push_str(thinking);
+            anthropic::ContentBlock::Thinking {
+                thinking,
+                signature,
+            } => {
+                thinking_blocks.push(openai::ThinkingBlock::Thinking {
+                    thinking: thinking.clone(),
+                    signature: signature.clone(),
+                });
+                match &mut reasoning_content {
+                    Some(existing) => {
+                        existing.push_str(thinking);
+                    }
+                    None => {
+                        reasoning_content = Some(thinking.clone());
+                    }
                 }
-                None => {
-                    reasoning_content = Some(thinking.clone());
-                }
-            },
+            }
+            anthropic::ContentBlock::RedactedThinking { data } => {
+                thinking_blocks
+                    .push(openai::ThinkingBlock::RedactedThinking { data: data.clone() });
+            }
             _ => {}
         }
     }
@@ -371,6 +385,11 @@ pub fn anthropic_to_openai_response_with_context(
                 tool_call_id: None,
                 refusal: None,
                 reasoning_content,
+                thinking_blocks: if thinking_blocks.is_empty() {
+                    None
+                } else {
+                    Some(thinking_blocks)
+                },
             },
             finish_reason,
             logprobs: None,
@@ -468,20 +487,46 @@ fn convert_openai_content_to_anthropic(
 fn convert_assistant_to_anthropic(
     msg: &openai::ChatMessage,
     context: &AnthropicTranslationContext,
+    warnings: &mut TranslationWarnings,
 ) -> anthropic::Content {
     let mut blocks = Vec::new();
 
-    // Map reasoning_content to thinking block.
-    // signature is always None because OpenAI does not emit Anthropic-style
-    // cryptographic signatures. Anthropic will reject thinking blocks passed
-    // back in tool-result continuations without a valid signature — callers
-    // must strip thinking blocks from history when using the reverse path.
-    if let Some(ref reasoning) = msg.reasoning_content {
-        if !reasoning.is_empty() {
-            blocks.push(anthropic::ContentBlock::Thinking {
-                thinking: reasoning.clone(),
-                signature: None,
-            });
+    // Prefer exact LiteLLM/Anthropic blocks because they preserve signatures and
+    // redacted state needed for tool-result continuations. Only treat them as
+    // authoritative when they yield at least one block; an empty or all-`Unknown`
+    // array must not suppress the reasoning_content fallback.
+    let mut pushed_thinking = false;
+    if let Some(ref thinking_blocks) = msg.thinking_blocks {
+        for block in thinking_blocks {
+            if let Some(block) = crate::mapping::openai_thinking_block_to_anthropic(block) {
+                blocks.push(block);
+                pushed_thinking = true;
+            }
+        }
+    }
+    if !pushed_thinking {
+        if msg
+            .tool_calls
+            .as_ref()
+            .is_some_and(|calls| !calls.is_empty())
+        {
+            // Text-only reasoning_content cannot carry Anthropic signatures. Do not
+            // synthesize unsigned thinking next to tool_use blocks; record that the
+            // reasoning text itself was dropped rather than losing it silently.
+            if msg
+                .reasoning_content
+                .as_ref()
+                .is_some_and(|r| !r.is_empty())
+            {
+                warnings.add("reasoning_content_dropped_with_tool_calls");
+            }
+        } else if let Some(ref reasoning) = msg.reasoning_content {
+            if !reasoning.is_empty() {
+                blocks.push(anthropic::ContentBlock::Thinking {
+                    thinking: reasoning.clone(),
+                    signature: None,
+                });
+            }
         }
     }
 

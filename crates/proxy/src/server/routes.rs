@@ -82,12 +82,36 @@ pub fn app_multi_with_shared(
             log_level: "info".to_string(),
             log_bodies: config.log_bodies,
             redact_secrets: config.redact_secrets,
+            anthropic_thinking_repair: config.anthropic_thinking_repair,
+            // Derive from the static tool-engine preset (built from YAML/env
+            // at startup) rather than hardcoding Disabled -- otherwise a
+            // standalone deployment (no --webui/--admin, so `shared` is None)
+            // silently disables guardrails on the non-streaming path while
+            // the streaming path still honors `engine.guardrails`. Mirrors
+            // the derivation in main_helpers/async_main/admin.rs.
+            tool_guardrail_mode: tool_engine
+                .as_ref()
+                .map(|e| e.guardrails.mode)
+                .unwrap_or(crate::tools::ToolGuardrailMode::Disabled)
+                .as_str()
+                .to_string(),
         }))
     };
 
     // Build a shared cache instance for all backends.
     let cache_config = crate::cache::CacheConfig::from_env();
     let response_cache = Arc::new(crate::cache::memory::MemoryCache::new(&cache_config));
+
+    // Anthropic thinking-block repair store (Anthropic-passthrough only).
+    // Shared across all Anthropic-mode backends, same pattern as
+    // `response_cache` above. Always constructed for Anthropic-mode backends
+    // (cheap: empty moka caches, see ThinkingRepairStore::new()) regardless of
+    // whether the feature is enabled -- actual repair/record/commit behavior
+    // is gated live per-request via RuntimeConfig.anthropic_thinking_repair
+    // (AppState::thinking_repair_enabled()), so it's toggleable from the
+    // admin UI without restart. Non-Anthropic backends still get `None` below.
+    let thinking_repair_store = Some(Arc::new(crate::thinking_repair::ThinkingRepairStore::new()));
+
     let provider_catalog = shared
         .as_ref()
         .map(|s| s.provider_catalog.clone())
@@ -120,6 +144,11 @@ pub fn app_multi_with_shared(
             stream_timeout_secs: bc.stream_timeout_secs,
             expose_degradation_warnings: config.expose_degradation_warnings,
             cache: Some(response_cache.clone()),
+            thinking_repair: if matches!(mode, HandlerMode::Anthropic) {
+                thinking_repair_store.clone()
+            } else {
+                None
+            },
             model_router: model_router.clone(),
             provider_catalog: provider_catalog.clone(),
             // all_backends is set after the loop (needs all states built first).

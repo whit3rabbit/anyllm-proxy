@@ -35,6 +35,28 @@ impl crate::tools::registry::Tool for EchoTool {
     }
 }
 
+/// Registered under the name a guardrail heuristic (`is_grep_tool`) matches,
+/// so tests can prove nudges only apply to calls this proxy actually owns.
+struct GrepStubTool;
+
+impl crate::tools::registry::Tool for GrepStubTool {
+    fn name(&self) -> &str {
+        "grep"
+    }
+    fn description(&self) -> &str {
+        "Stub grep tool for guardrail tests."
+    }
+    fn input_schema(&self) -> Value {
+        json!({"type": "object", "properties": {"pattern": {"type": "string"}}})
+    }
+    fn execute<'a>(
+        &'a self,
+        _input: Value,
+    ) -> Pin<Box<dyn Future<Output = Result<Value, String>> + Send + 'a>> {
+        Box::pin(async move { Ok(json!({"matches": []})) })
+    }
+}
+
 struct FailTool;
 
 impl crate::tools::registry::Tool for FailTool {
@@ -311,4 +333,205 @@ fn extract_tool_calls_empty_when_no_tool_use() {
 
     let calls = extract_tool_calls(&resp);
     assert!(calls.is_empty());
+}
+
+fn message_response_with_tool(
+    name: &str,
+    input: Value,
+) -> anyllm_translate::anthropic::MessageResponse {
+    use anyllm_translate::anthropic::{ContentBlock, MessageResponse, Role, StopReason, Usage};
+
+    MessageResponse {
+        id: format!("msg_{name}"),
+        response_type: "message".into(),
+        role: Role::Assistant,
+        content: vec![ContentBlock::ToolUse {
+            id: format!("toolu_{name}"),
+            name: name.to_string(),
+            input,
+        }],
+        model: "test".into(),
+        stop_reason: Some(StopReason::ToolUse),
+        stop_sequence: None,
+        usage: Usage {
+            input_tokens: 10,
+            output_tokens: 20,
+            cache_creation_input_tokens: None,
+            cache_read_input_tokens: None,
+            ..Default::default()
+        },
+        created: None,
+    }
+}
+
+fn request_with_tools() -> anyllm_translate::anthropic::MessageCreateRequest {
+    use anyllm_translate::anthropic::{Content, InputMessage, MessageCreateRequest, Role, Tool};
+
+    MessageCreateRequest {
+        model: "test".into(),
+        max_tokens: 128,
+        messages: vec![InputMessage {
+            role: Role::User,
+            content: Content::Text("find UserService".into()),
+        }],
+        system: None,
+        temperature: None,
+        top_p: None,
+        top_k: None,
+        stop_sequences: None,
+        tools: Some(vec![
+            Tool {
+                name: "grep".into(),
+                description: None,
+                input_schema: json!({"type": "object"}),
+            },
+            Tool {
+                name: "find_definition".into(),
+                description: None,
+                input_schema: json!({"type": "object"}),
+            },
+        ]),
+        tool_choice: None,
+        metadata: None,
+        thinking: None,
+        stream: None,
+        extra: Default::default(),
+    }
+}
+
+// Guardrail nudges must only ever apply to a tool call this proxy actually
+// owns (registered + server-advertised + policy Allow) -- i.e. one that
+// would otherwise land in `auto_exec`. "grep" here is registered, advertised,
+// and Allow-policied, so it IS proxy-owned, and the nudge legitimately
+// intercepts it before execution.
+#[tokio::test]
+async fn maybe_execute_tools_retries_after_guardrail_nudge() {
+    use anyllm_translate::anthropic::{Content, ContentBlock, ToolResultContent};
+    use std::sync::Mutex;
+
+    let mut registry = ToolRegistry::new();
+    registry.register(Box::new(GrepStubTool));
+    let engine = ToolEngineState {
+        registry: Arc::new(registry),
+        policy: Arc::new(allow_policy("grep")),
+        loop_config: LoopConfig {
+            max_iterations: 2,
+            ..LoopConfig::default()
+        },
+        guardrails: crate::tools::ToolGuardrailConfig {
+            lsp_first: true,
+            ..crate::tools::ToolGuardrailConfig::disabled()
+        },
+        mcp_manager: None,
+    };
+    let original_req = request_with_tools();
+    let initial_response = message_response_with_tool("grep", json!({"pattern": "UserService"}));
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let seen_for_call = seen.clone();
+
+    let (final_response, trace) = maybe_execute_tools(
+        &engine,
+        &original_req,
+        &advertised(&["grep"]),
+        initial_response,
+        &engine.guardrails,
+        move |follow_up_req| {
+            let seen = seen_for_call.clone();
+            async move {
+                seen.lock().unwrap().push(follow_up_req.clone());
+                Ok(message_response_with_tool(
+                    "find_definition",
+                    json!({"symbol": "UserService"}),
+                ))
+            }
+        },
+    )
+    .await;
+
+    assert_eq!(trace.iterations.len(), 1);
+    assert_eq!(seen.lock().unwrap().len(), 1);
+    let follow_up = seen.lock().unwrap()[0].clone();
+    assert_eq!(follow_up.messages.len(), 3);
+    match &follow_up.messages[1].content {
+        Content::Blocks(blocks) => {
+            assert!(matches!(
+                blocks.first(),
+                Some(ContentBlock::ToolUse { name, .. }) if name == "grep"
+            ));
+        }
+        other => panic!("expected assistant tool_use blocks, got {:?}", other),
+    }
+    match &follow_up.messages[2].content {
+        Content::Blocks(blocks) => match blocks.first() {
+            Some(ContentBlock::ToolResult {
+                content: Some(ToolResultContent::Text(text)),
+                is_error,
+                ..
+            }) => {
+                assert_eq!(*is_error, Some(true));
+                assert!(text.contains("[ToolCallPolicyNudge]"));
+                assert!(text.contains("find_definition"));
+            }
+            other => panic!("expected nudge tool_result, got {:?}", other),
+        },
+        other => panic!("expected user tool_result blocks, got {:?}", other),
+    }
+
+    let calls = extract_tool_calls(&final_response);
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].name, "find_definition");
+    assert_eq!(calls[0].input["symbol"], "UserService");
+}
+
+// The proxy must never nudge a pass-through tool call: an unregistered
+// (client-owned) "grep" call that matches the same guardrail heuristic must
+// come back untouched, with the model's real tool_use response returned
+// immediately -- never swallowed into a synthetic nudge + follow-up call.
+#[tokio::test]
+async fn maybe_execute_tools_never_nudges_a_pass_through_call() {
+    use std::sync::Mutex;
+
+    let engine = ToolEngineState {
+        registry: Arc::new(ToolRegistry::new()), // "grep" not registered
+        policy: Arc::new(ToolExecutionPolicy::default()),
+        loop_config: LoopConfig::default(),
+        guardrails: crate::tools::ToolGuardrailConfig {
+            lsp_first: true,
+            ..crate::tools::ToolGuardrailConfig::disabled()
+        },
+        mcp_manager: None,
+    };
+    let original_req = request_with_tools();
+    let initial_response = message_response_with_tool("grep", json!({"pattern": "UserService"}));
+    let called = Arc::new(Mutex::new(false));
+    let called_for_call = called.clone();
+
+    // "grep" is not registered and not server-advertised (empty set below),
+    // so it is pass-through: the proxy does not own it and must not answer
+    // on its behalf, regardless of the lsp_first guardrail matching its name.
+    let (final_response, trace) = maybe_execute_tools(
+        &engine,
+        &original_req,
+        &HashSet::new(),
+        initial_response,
+        &engine.guardrails,
+        move |_follow_up_req| {
+            let called = called_for_call.clone();
+            async move {
+                *called.lock().unwrap() = true;
+                panic!("backend_call must not be invoked for a pass-through-only turn");
+            }
+        },
+    )
+    .await;
+
+    assert!(
+        !*called.lock().unwrap(),
+        "must not make a follow-up backend call for a pass-through tool call"
+    );
+    assert_eq!(trace.iterations.len(), 0);
+    let calls = extract_tool_calls(&final_response);
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].name, "grep");
+    assert_eq!(calls[0].input["pattern"], "UserService");
 }

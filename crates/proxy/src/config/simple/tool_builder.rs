@@ -75,4 +75,31 @@ impl SimpleConfig {
 
         (policy, loop_config)
     }
+
+    /// Convert optional YAML tool guardrails into request-time guardrail config.
+    pub fn build_tool_guardrail_config(&self) -> crate::tools::ToolGuardrailConfig {
+        let Some(ref te) = self.tool_execution else {
+            return crate::tools::ToolGuardrailConfig::disabled();
+        };
+
+        let mode = te
+            .guardrails
+            .as_deref()
+            .map(|value| {
+                value
+                    .parse::<crate::tools::ToolGuardrailMode>()
+                    .unwrap_or_else(|err| {
+                        tracing::warn!(
+                            "invalid tool_execution.guardrails value: {err}; defaulting to disabled"
+                        );
+                        crate::tools::ToolGuardrailMode::Disabled
+                    })
+            })
+            .unwrap_or(crate::tools::ToolGuardrailMode::Disabled);
+        let mut config = crate::tools::ToolGuardrailConfig::from_mode(mode);
+        if let Some(max_bytes) = te.max_write_payload_bytes {
+            config.max_write_payload_bytes = max_bytes;
+        }
+        config
+    }
 }

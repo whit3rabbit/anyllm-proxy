@@ -17,6 +17,8 @@ pub struct Config {
     pub log_bodies: bool,
     /// Redact detected secrets from upstream JSON/text request payloads.
     pub redact_secrets: bool,
+    /// Enable Anthropic thinking-block record-and-restore repair (BACKEND=anthropic passthrough only).
+    pub anthropic_thinking_repair: bool,
     /// Expose `x-anyllm-degradation` response header when features are silently dropped.
     /// Defaults to false (simple mode). Enable with ANYLLM_DEGRADATION_WARNINGS=true
     /// or automatically when PROXY_CONFIG is set.
@@ -103,6 +105,9 @@ impl Config {
         let redact_secrets = std::env::var("REDACT_SECRETS")
             .map(|v| v == "true" || v == "1")
             .unwrap_or(false);
+        let anthropic_thinking_repair = std::env::var("ANTHROPIC_THINKING_REPAIR")
+            .map(|v| v == "true" || v == "1")
+            .unwrap_or(false);
         let expose_degradation_warnings = std::env::var("ANYLLM_DEGRADATION_WARNINGS")
             .map(|v| v == "true" || v == "1")
             .unwrap_or(false);
@@ -159,6 +164,7 @@ impl Config {
                     backend_auth,
                     log_bodies,
                     redact_secrets,
+                    anthropic_thinking_repair,
                     expose_degradation_warnings,
                     openai_api_format,
                     provider_id: stub_provider.map(|p| p.id.to_string()),
@@ -200,6 +206,7 @@ impl Config {
                     backend_auth: BackendAuth::AzureApiKey(api_key),
                     log_bodies,
                     redact_secrets,
+                    anthropic_thinking_repair,
                     expose_degradation_warnings,
                     openai_api_format: OpenAIApiFormat::Chat,
                     provider_id: None,
@@ -241,6 +248,7 @@ impl Config {
                     backend_auth,
                     log_bodies,
                     redact_secrets,
+                    anthropic_thinking_repair,
                     expose_degradation_warnings,
                     openai_api_format: OpenAIApiFormat::Chat,
                     provider_id: None,
@@ -274,6 +282,7 @@ impl Config {
                     backend_auth,
                     log_bodies,
                     redact_secrets,
+                    anthropic_thinking_repair,
                     expose_degradation_warnings,
                     openai_api_format: OpenAIApiFormat::Chat,
                     provider_id: None,
@@ -309,6 +318,7 @@ impl Config {
                     backend_auth,
                     log_bodies,
                     redact_secrets,
+                    anthropic_thinking_repair,
                     expose_degradation_warnings,
                     openai_api_format: OpenAIApiFormat::Chat,
                     provider_id: None,
@@ -344,6 +354,7 @@ impl Config {
                     backend_auth: BackendAuth::BearerToken(String::new()),
                     log_bodies,
                     redact_secrets,
+                    anthropic_thinking_repair,
                     expose_degradation_warnings,
                     openai_api_format: OpenAIApiFormat::Chat,
                     provider_id: None,

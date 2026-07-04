@@ -27,6 +27,7 @@ pub fn anthropic_to_openai_request(
             tool_call_id: None,
             refusal: None,
             reasoning_content: None,
+            thinking_blocks: None,
         });
     }
 
@@ -248,6 +249,7 @@ fn convert_anthropic_message(msg: &anthropic::InputMessage, out: &mut Vec<openai
                 tool_call_id: None,
                 refusal: None,
                 reasoning_content: None,
+                thinking_blocks: None,
             });
         }
         anthropic::Content::Blocks(blocks) => {
@@ -268,6 +270,7 @@ fn convert_assistant_blocks(
     let mut text_parts = Vec::new();
     let mut tool_calls = Vec::new();
     let mut thinking_parts = Vec::new();
+    let mut thinking_blocks = Vec::new();
 
     for block in blocks {
         match block {
@@ -284,10 +287,20 @@ fn convert_assistant_blocks(
                     },
                 });
             }
-            anthropic::ContentBlock::Thinking { thinking, .. } => {
+            anthropic::ContentBlock::Thinking {
+                thinking,
+                signature,
+            } => {
                 thinking_parts.push(thinking.clone());
+                thinking_blocks.push(openai::ThinkingBlock::Thinking {
+                    thinking: thinking.clone(),
+                    signature: signature.clone(),
+                });
             }
-            // RedactedThinking has no meaningful content to forward
+            anthropic::ContentBlock::RedactedThinking { data } => {
+                thinking_blocks
+                    .push(openai::ThinkingBlock::RedactedThinking { data: data.clone() });
+            }
             _ => {}
         }
     }
@@ -316,6 +329,11 @@ fn convert_assistant_blocks(
         tool_call_id: None,
         refusal: None,
         reasoning_content,
+        thinking_blocks: if thinking_blocks.is_empty() {
+            None
+        } else {
+            Some(thinking_blocks)
+        },
     });
 }
 
@@ -462,6 +480,7 @@ fn convert_user_blocks(blocks: &[anthropic::ContentBlock], out: &mut Vec<openai:
             tool_call_id: Some(tool_call_id),
             refusal: None,
             reasoning_content: None,
+            thinking_blocks: None,
         });
     }
 
@@ -476,6 +495,7 @@ fn convert_user_blocks(blocks: &[anthropic::ContentBlock], out: &mut Vec<openai:
             tool_call_id: None,
             refusal: None,
             reasoning_content: None,
+            thinking_blocks: None,
         });
     }
 }

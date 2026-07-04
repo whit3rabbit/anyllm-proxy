@@ -32,6 +32,21 @@ pub(super) async fn run_tool_loop_for_stream(
     let loop_start = std::time::Instant::now();
     let mut current_messages = anthropic_req_for_tools.messages.clone();
     let server_advertised_tool_names = std::collections::HashSet::new();
+    let mut guardrail_state = crate::tools::ToolGuardrailRequestState::new();
+    // Runtime-tunable override (`RuntimeConfig.tool_guardrail_mode`, no
+    // restart required) applied on top of `engine.guardrails`, the static
+    // preset built from YAML/env at startup. `_log_shared` is `None` only in
+    // tests that don't wire up admin state, in which case the static preset
+    // is used unchanged.
+    let guardrails = _log_shared
+        .as_ref()
+        .map(|shared| {
+            crate::tools::resolve_runtime_guardrails_locked(
+                &shared.runtime_config,
+                &engine.guardrails,
+            )
+        })
+        .unwrap_or_else(|| engine.guardrails.clone());
 
     'tool_loop: for _iteration in 0..engine.loop_config.max_iterations {
         if loop_start.elapsed() > engine.loop_config.total_timeout {
@@ -49,15 +64,23 @@ pub(super) async fn run_tool_loop_for_stream(
             })
             .collect();
 
-        let (auto_exec, _pass_through, denied) = crate::tools::execution::partition_tool_calls(
-            &tool_calls,
-            &engine.registry,
-            &engine.policy,
-            &server_advertised_tool_names,
-        );
-        let denied_results = crate::tools::execution::denied_tool_results(&denied);
+        // Advisory guardrails: each nudge targets one offending call. Nudged
+        // calls are skipped this turn; everything else is partitioned/executed.
+        // Nudges only ever apply to calls this proxy would actually execute --
+        // see `partition_and_nudge`'s doc comment (never to pass-through calls
+        // the caller owns, e.g. a client's own Bash/Grep/Edit/Write tool).
+        let (auto_exec, nudge_results, denied_results) =
+            crate::tools::execution::partition_and_nudge(
+                &tool_calls,
+                anthropic_req_for_tools.tools.as_deref().unwrap_or(&[]),
+                &engine.registry,
+                &engine.policy,
+                &server_advertised_tool_names,
+                &guardrails,
+                &mut guardrail_state,
+            );
 
-        if auto_exec.is_empty() && denied_results.is_empty() {
+        if auto_exec.is_empty() && denied_results.is_empty() && nudge_results.is_empty() {
             break 'tool_loop;
         }
 
@@ -69,7 +92,8 @@ pub(super) async fn run_tool_loop_for_stream(
         )
         .await;
 
-        // Include denied-tool errors in the follow-up so the LLM sees them.
+        // Include nudge + denied-tool errors in the follow-up so the LLM sees them.
+        results.extend(nudge_results);
         results.extend(denied_results);
 
         // Build the assistant message from accumulated tool calls.

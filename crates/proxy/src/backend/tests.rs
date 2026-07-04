@@ -63,6 +63,7 @@ fn single_backend_anthropic_uses_backend_auth_token() {
         backend_auth: BackendAuth::AnthropicApiKey("sk-ant-configured".to_string()),
         log_bodies: false,
         redact_secrets: true,
+        anthropic_thinking_repair: false,
         expose_degradation_warnings: false,
         openai_api_format: OpenAIApiFormat::Chat,
         provider_id: None,

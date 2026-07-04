@@ -243,6 +243,180 @@ async fn delete_config_redact_secrets_override_restores_loaded_default() {
     assert!(!overrides.iter().any(|(key, _, _)| key == "redact_secrets"));
 }
 
+#[tokio::test]
+async fn put_config_updates_anthropic_thinking_repair_override() {
+    set_admin_rpm(10_000);
+    let shared = crate::admin::state::SharedState::new_for_test();
+    let token_str = "e".repeat(64);
+    shared.issued_csrf_tokens.insert(token_str.clone(), ());
+    let app = admin_router(
+        shared.clone(),
+        Arc::new(zeroize::Zeroizing::new("test-token".to_string())),
+    );
+    let req = Request::put("/admin/api/config")
+        .header("host", "localhost:9090")
+        .header("authorization", "Bearer test-token")
+        .header("content-type", "application/json")
+        .header("x-csrf-token", &token_str)
+        .header("cookie", format!("csrf_token={token_str}"))
+        .extension(ConnectInfo("127.0.0.1:9090".parse::<SocketAddr>().unwrap()))
+        .body(Body::from(r#"{"anthropic_thinking_repair":true}"#))
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body_bytes = axum::body::to_bytes(resp.into_body(), 1 << 16)
+        .await
+        .unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    assert_eq!(
+        body["keys"],
+        serde_json::json!(["anthropic_thinking_repair"])
+    );
+    assert!(
+        shared
+            .runtime_config
+            .read()
+            .unwrap()
+            .anthropic_thinking_repair
+    );
+
+    let conn = shared.db.lock().unwrap();
+    let overrides = crate::admin::db::get_config_overrides(&conn).unwrap();
+    assert!(overrides
+        .iter()
+        .any(|(key, value, _)| key == "anthropic_thinking_repair" && value == "true"));
+}
+
+#[tokio::test]
+async fn put_config_tool_guardrail_mode_then_get_returns_new_value() {
+    set_admin_rpm(10_000);
+    let shared = crate::admin::state::SharedState::new_for_test();
+    let token_str = "g".repeat(64);
+    shared.issued_csrf_tokens.insert(token_str.clone(), ());
+    let app = admin_router(
+        shared.clone(),
+        Arc::new(zeroize::Zeroizing::new("test-token".to_string())),
+    );
+    let put_req = Request::put("/admin/api/config")
+        .header("host", "localhost:9090")
+        .header("authorization", "Bearer test-token")
+        .header("content-type", "application/json")
+        .header("x-csrf-token", &token_str)
+        .header("cookie", format!("csrf_token={token_str}"))
+        .extension(ConnectInfo("127.0.0.1:9090".parse::<SocketAddr>().unwrap()))
+        .body(Body::from(r#"{"tool_guardrail_mode":"standard"}"#))
+        .unwrap();
+
+    let put_resp = app.clone().oneshot(put_req).await.unwrap();
+    assert_eq!(put_resp.status(), StatusCode::OK);
+    let put_body_bytes = axum::body::to_bytes(put_resp.into_body(), 1 << 16)
+        .await
+        .unwrap();
+    let put_body: serde_json::Value = serde_json::from_slice(&put_body_bytes).unwrap();
+    assert_eq!(put_body["keys"], serde_json::json!(["tool_guardrail_mode"]));
+    assert_eq!(
+        shared.runtime_config.read().unwrap().tool_guardrail_mode,
+        "standard"
+    );
+
+    let get_req = Request::get("/admin/api/config")
+        .header("host", "localhost:9090")
+        .header("authorization", "Bearer test-token")
+        .body(Body::empty())
+        .unwrap();
+    let get_resp = app.oneshot(get_req).await.unwrap();
+    assert_eq!(get_resp.status(), StatusCode::OK);
+    let get_body_bytes = axum::body::to_bytes(get_resp.into_body(), 1 << 16)
+        .await
+        .unwrap();
+    let get_body: serde_json::Value = serde_json::from_slice(&get_body_bytes).unwrap();
+    assert_eq!(get_body["tool_guardrail_mode"], "standard");
+    assert!(get_body["overridden_keys"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("tool_guardrail_mode")));
+}
+
+#[tokio::test]
+async fn put_config_rejects_invalid_tool_guardrail_mode() {
+    set_admin_rpm(10_000);
+    let shared = crate::admin::state::SharedState::new_for_test();
+    let token_str = "h".repeat(64);
+    shared.issued_csrf_tokens.insert(token_str.clone(), ());
+    let app = admin_router(
+        shared.clone(),
+        Arc::new(zeroize::Zeroizing::new("test-token".to_string())),
+    );
+    let req = Request::put("/admin/api/config")
+        .header("host", "localhost:9090")
+        .header("authorization", "Bearer test-token")
+        .header("content-type", "application/json")
+        .header("x-csrf-token", &token_str)
+        .header("cookie", format!("csrf_token={token_str}"))
+        .extension(ConnectInfo("127.0.0.1:9090".parse::<SocketAddr>().unwrap()))
+        .body(Body::from(r#"{"tool_guardrail_mode":"not-a-mode"}"#))
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    // Must not have been persisted as an override.
+    let conn = shared.db.lock().unwrap();
+    let overrides = crate::admin::db::get_config_overrides(&conn).unwrap();
+    assert!(!overrides
+        .iter()
+        .any(|(key, _, _)| key == "tool_guardrail_mode"));
+}
+
+#[tokio::test]
+async fn delete_config_anthropic_thinking_repair_override_restores_loaded_default() {
+    set_admin_rpm(10_000);
+    let mut shared = crate::admin::state::SharedState::new_for_test();
+    shared.runtime_defaults.anthropic_thinking_repair = true;
+    {
+        let mut config = shared.runtime_config.write().unwrap();
+        config.anthropic_thinking_repair = false;
+    }
+    {
+        let conn = shared.db.lock().unwrap();
+        crate::admin::db::set_config_override(&conn, "anthropic_thinking_repair", "false").unwrap();
+    }
+
+    let token_str = "f".repeat(64);
+    shared.issued_csrf_tokens.insert(token_str.clone(), ());
+    let app = admin_router(
+        shared.clone(),
+        Arc::new(zeroize::Zeroizing::new("test-token".to_string())),
+    );
+    let req = Request::delete("/admin/api/config/overrides/anthropic_thinking_repair")
+        .header("host", "localhost:9090")
+        .header("authorization", "Bearer test-token")
+        .header("x-csrf-token", &token_str)
+        .header("cookie", format!("csrf_token={token_str}"))
+        .extension(ConnectInfo("127.0.0.1:9090".parse::<SocketAddr>().unwrap()))
+        .body(Body::empty())
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert!(
+        shared
+            .runtime_config
+            .read()
+            .unwrap()
+            .anthropic_thinking_repair,
+        "runtime config should return to the loaded anthropic_thinking_repair default"
+    );
+
+    let conn = shared.db.lock().unwrap();
+    let overrides = crate::admin::db::get_config_overrides(&conn).unwrap();
+    assert!(!overrides
+        .iter()
+        .any(|(key, _, _)| key == "anthropic_thinking_repair"));
+}
+
 /// POST with a CSRF token that was not server-issued is rejected even if header==cookie.
 #[tokio::test]
 async fn post_with_unissued_csrf_returns_403() {

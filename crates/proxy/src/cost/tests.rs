@@ -181,10 +181,18 @@ fn record_cost_with_shared_state_persists_spend() {
             log_level: "info".to_string(),
             log_bodies: false,
             redact_secrets: false,
+            anthropic_thinking_repair: false,
+            tool_guardrail_mode: crate::tools::ToolGuardrailMode::Disabled
+                .as_str()
+                .to_string(),
         })),
         runtime_defaults: crate::admin::state::RuntimeConfigDefaults {
             log_bodies: false,
             redact_secrets: false,
+            anthropic_thinking_repair: false,
+            tool_guardrail_mode: crate::tools::ToolGuardrailMode::Disabled
+                .as_str()
+                .to_string(),
         },
         backend_metrics: Arc::new(std::collections::HashMap::new()),
         log_tx,

@@ -29,6 +29,7 @@ fn openai_config_with_base(base_url: &str) -> Config {
         backend_auth: BackendAuth::BearerToken("test-key".into()),
         log_bodies: false,
         redact_secrets: false,
+        anthropic_thinking_repair: false,
         expose_degradation_warnings: false,
         openai_api_format: OpenAIApiFormat::Chat,
         provider_id: None,

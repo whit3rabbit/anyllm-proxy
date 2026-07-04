@@ -8,6 +8,7 @@ use tokio::task::JoinSet;
 use crate::tools::policy::{PolicyAction, ToolExecutionPolicy};
 use crate::tools::registry::ToolRegistry;
 use crate::tools::trace::ToolOutcome;
+use crate::tools::{evaluate_tool_guardrails, ToolGuardrailNudge, ToolGuardrailRequestState};
 
 /// A tool call extracted from an LLM response.
 #[derive(Debug, Clone)]
@@ -94,6 +95,75 @@ pub fn denied_tool_results(denied: &[&ToolCall]) -> Vec<ToolResult> {
             },
         })
         .collect()
+}
+
+/// Build retryable ToolResults for guardrail nudges.
+///
+/// Only the tool calls a nudge targets get a result; every other call in the
+/// batch is left for normal execution/pass-through. `calls` supplies the tool
+/// name for each nudged `call_id`.
+pub fn guardrail_nudge_results(
+    calls: &[ToolCall],
+    nudges: &[ToolGuardrailNudge],
+) -> Vec<ToolResult> {
+    nudges
+        .iter()
+        .filter_map(|nudge| {
+            let call = calls.iter().find(|c| c.id == nudge.call_id)?;
+            Some(ToolResult {
+                tool_use_id: call.id.clone(),
+                tool_name: call.name.clone(),
+                outcome: ToolOutcome::Error {
+                    message: format!("[ToolCallPolicyNudge] {}", nudge.content),
+                    retryable: true,
+                },
+            })
+        })
+        .collect()
+}
+
+/// Partition `tool_calls`, then evaluate guardrail nudges only against the
+/// calls that would otherwise be auto-executed by this proxy.
+///
+/// A nudge target must be something the proxy actually owns: guardrails are
+/// an advisory retry mechanism that answers the model on the proxy's behalf
+/// (a synthetic tool_result + a follow-up backend call), so applying it to a
+/// pass-through call (not in the registry / not proxy-advertised, meaning the
+/// *caller* owns and expects to execute it — e.g. a Claude-Code-style client's
+/// own Bash/Grep/Edit/Write tool) would silently swallow that call's real
+/// tool_use turn instead of returning it to the caller. Restricting
+/// `evaluate_tool_guardrails` to the post-partition `auto_exec` set keeps
+/// nudges impossible to apply to anything the proxy doesn't own, and
+/// `denied` never needs nudge-filtering since nudges only ever originate
+/// from `auto_exec` now (the two sets are disjoint by construction).
+///
+/// Shared by the streaming and non-streaming tool loops so a fix here can't
+/// drift between the two copies.
+pub fn partition_and_nudge<'a>(
+    tool_calls: &'a [ToolCall],
+    tool_specs: &[anyllm_translate::anthropic::Tool],
+    registry: &ToolRegistry,
+    policy: &ToolExecutionPolicy,
+    server_advertised_tool_names: &HashSet<String>,
+    guardrails: &crate::tools::ToolGuardrailConfig,
+    guardrail_state: &mut ToolGuardrailRequestState,
+) -> (Vec<&'a ToolCall>, Vec<ToolResult>, Vec<ToolResult>) {
+    let (auto_exec, _pass_through, denied) =
+        partition_tool_calls(tool_calls, registry, policy, server_advertised_tool_names);
+
+    let auto_exec_owned: Vec<ToolCall> = auto_exec.iter().map(|c| (*c).clone()).collect();
+    let nudges =
+        evaluate_tool_guardrails(&auto_exec_owned, tool_specs, guardrails, guardrail_state);
+    let nudged_ids: HashSet<&str> = nudges.iter().map(|n| n.call_id.as_str()).collect();
+    let nudge_results = guardrail_nudge_results(&auto_exec_owned, &nudges);
+
+    let auto_exec: Vec<&ToolCall> = auto_exec
+        .into_iter()
+        .filter(|c| !nudged_ids.contains(c.id.as_str()))
+        .collect();
+    let denied_results = denied_tool_results(&denied);
+
+    (auto_exec, nudge_results, denied_results)
 }
 
 /// Execute tool calls in parallel, respecting per-tool timeouts.
@@ -293,11 +363,18 @@ pub use crate::server::state::ToolEngineState;
 /// `MessageCreateRequest` and returns the translated `MessageResponse`.
 /// This keeps the loop backend-agnostic: the handler knows how to translate
 /// and call its specific backend; this function only knows about Anthropic types.
+///
+/// `guardrails` is the effective guardrail config for this request (the
+/// runtime-tunable override applied on top of `engine.guardrails`, the
+/// static per-process preset -- see `crate::tools::resolve_runtime_guardrails`
+/// and `AppState::effective_tool_guardrails`). Callers that don't need the
+/// runtime override can pass `&engine.guardrails` directly.
 pub async fn maybe_execute_tools<F, Fut>(
     engine: &ToolEngineState,
     original_req: &anyllm_translate::anthropic::MessageCreateRequest,
     server_advertised_tool_names: &HashSet<String>,
     initial_response: anyllm_translate::anthropic::MessageResponse,
+    guardrails: &crate::tools::ToolGuardrailConfig,
     backend_call: F,
 ) -> (anyllm_translate::anthropic::MessageResponse, LoopTrace)
 where
@@ -309,6 +386,7 @@ where
     let mut current_response = initial_response;
     let mut current_messages = original_req.messages.clone();
     let mut prev_tool_calls: Option<Vec<ToolCall>> = None;
+    let mut guardrail_state = ToolGuardrailRequestState::new();
 
     for _iteration in 0..engine.loop_config.max_iterations {
         // Guard: total timeout
@@ -324,17 +402,26 @@ where
         }
 
         let tool_calls = extract_tool_calls(&current_response);
-        let (auto_exec, _pass_through, denied) = partition_tool_calls(
+
+        // Advisory guardrails: each nudge targets one offending call and comes
+        // back as a retryable error result. Nudged calls are skipped this turn;
+        // every other call is partitioned and executed as usual. Each distinct
+        // decision nudges only once per request (across iterations), so a
+        // model that ignores a nudge and repeats the call lets it proceed
+        // instead of spinning the loop to max_iterations. Nudges only ever
+        // apply to calls this proxy would actually execute -- see
+        // `partition_and_nudge`'s doc comment.
+        let (auto_exec, nudge_results, denied_results) = partition_and_nudge(
             &tool_calls,
+            original_req.tools.as_deref().unwrap_or(&[]),
             &engine.registry,
             &engine.policy,
             server_advertised_tool_names,
+            guardrails,
+            &mut guardrail_state,
         );
 
-        // Generate error results for denied tools so the LLM sees them.
-        let denied_results = denied_tool_results(&denied);
-
-        if auto_exec.is_empty() && denied_results.is_empty() {
+        if auto_exec.is_empty() && denied_results.is_empty() && nudge_results.is_empty() {
             return (
                 current_response,
                 LoopTrace {
@@ -345,14 +432,17 @@ where
             );
         }
 
-        // If only denials (no auto-execute), send error results back to LLM immediately.
+        // If there is nothing to execute (only nudges and/or denials), send the
+        // advisory/error results back to the LLM immediately without running a tool.
         if auto_exec.is_empty() {
+            let mut results = nudge_results;
+            results.extend(denied_results);
             current_messages.push(response_to_assistant_message(&current_response));
-            current_messages.push(tool_results_to_user_message(&denied_results));
+            current_messages.push(tool_results_to_user_message(&results));
             let mut follow_up_req = original_req.clone();
             follow_up_req.messages = current_messages.clone();
             let llm_start = Instant::now();
-            let deny_traces: Vec<ToolCallTrace> = denied_results
+            let traces: Vec<ToolCallTrace> = results
                 .iter()
                 .map(|r| ToolCallTrace {
                     tool_name: r.tool_name.clone(),
@@ -361,7 +451,7 @@ where
                 })
                 .collect();
             iterations.push(IterationTrace {
-                tool_calls: deny_traces,
+                tool_calls: traces,
                 llm_latency: Duration::ZERO,
             });
             match backend_call(follow_up_req).await {
@@ -374,7 +464,7 @@ where
                     continue;
                 }
                 Err(e) => {
-                    tracing::warn!(error = %e, "follow-up backend call failed after deny");
+                    tracing::warn!(error = %e, "follow-up backend call failed after nudge/deny");
                     if let Some(last) = iterations.last_mut() {
                         last.llm_latency = llm_start.elapsed();
                     }
@@ -416,7 +506,8 @@ where
         .await;
         let exec_duration = exec_start.elapsed();
 
-        // Append denied-tool error results so the LLM sees all outcomes.
+        // Append nudge + denied-tool error results so the LLM sees all outcomes.
+        results.extend(nudge_results);
         results.extend(denied_results);
 
         // Build per-tool traces

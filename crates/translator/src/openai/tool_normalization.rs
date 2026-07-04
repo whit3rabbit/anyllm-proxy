@@ -425,6 +425,7 @@ mod tests {
                     tool_call_id: None,
                     refusal: None,
                     reasoning_content: None,
+                    thinking_blocks: None,
                 },
                 ChatMessage {
                     role: ChatRole::Tool,
@@ -434,6 +435,7 @@ mod tests {
                     tool_call_id: Some("call_000000000".into()),
                     refusal: None,
                     reasoning_content: None,
+                    thinking_blocks: None,
                 },
             ],
             max_tokens: None,

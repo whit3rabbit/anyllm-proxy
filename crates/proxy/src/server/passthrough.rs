@@ -29,11 +29,26 @@ pub(crate) async fn anthropic_passthrough(
     permit: Option<axum::Extension<ConcurrencyPermit>>,
     vk_ctx: Option<axum::Extension<super::middleware::VirtualKeyContext>>,
     headers: axum::http::HeaderMap,
-    body: Bytes,
+    mut body: Bytes,
 ) -> Response {
     let permit = permit.map(|axum::Extension(p)| p);
     let vk_ctx = vk_ctx.map(|axum::Extension(c)| c);
     state.metrics.record_request();
+
+    // Scopes every thinking-repair store lookup/commit to this backend and
+    // virtual key: `state.thinking_repair` is one store shared across every
+    // Anthropic-mode backend (see server/routes.rs), so without this a
+    // colliding message id / thinking signature / tool_use id from a
+    // different backend or tenant could resolve to this request's repair.
+    // NUL, not `:`, joins the two parts: `state.backend_name` is an
+    // operator-configured string whose validated charset (`is_safe_model_name`)
+    // allows `:` but not NUL, so a backend literally named e.g. "anthropic:5"
+    // can no longer produce the same namespace as backend "anthropic" + key
+    // id 5 -- `:` let those collide onto one shared cache-record namespace.
+    let thinking_repair_namespace = match &vk_ctx {
+        Some(ctx) => format!("{}\u{0}{}", state.backend_name, ctx.key_id),
+        None => state.backend_name.clone(),
+    };
 
     let client = match &state.backend {
         BackendClient::Anthropic(c) => c,
@@ -113,7 +128,7 @@ pub(crate) async fn anthropic_passthrough(
         }
     }
 
-    if let Ok(parsed_req) = serde_json::from_slice::<anthropic::MessageCreateRequest>(&body) {
+    if let Ok(mut parsed_req) = serde_json::from_slice::<anthropic::MessageCreateRequest>(&body) {
         if let Err(err) = validate_anthropic_tool_request(
             &parsed_req,
             OpenAiToolPolicyContext {
@@ -129,6 +144,42 @@ pub(crate) async fn anthropic_passthrough(
                 None,
             );
             return (StatusCode::BAD_REQUEST, Json(err)).into_response();
+        }
+
+        // Repair the last assistant message's thinking blocks against
+        // recorded ground truth (opt-in, see crate::thinking_repair). Only
+        // rewrites `body` when something actually changed; on a byte-exact
+        // replay (the common case) this is a no-op past the store lookups.
+        if let Some(store) = state.active_thinking_repair() {
+            if let Some(what) = crate::thinking_repair::repair_request(
+                &store,
+                &thinking_repair_namespace,
+                &mut parsed_req,
+            )
+            .await
+            {
+                // Patch only the repaired message's `content` into the
+                // ORIGINAL raw JSON instead of re-serializing the whole
+                // typed request: ContentBlock/Tool have no cache_control or
+                // flatten catch-all, so a full-struct round-trip would
+                // silently drop cache_control breakpoints and any block/tool
+                // type this crate doesn't model yet, on every OTHER message
+                // too.
+                match crate::thinking_repair::patch_repaired_body(&body, &parsed_req) {
+                    Ok(bytes) => {
+                        tracing::info!(repair = %what, "anthropic thinking-block repair applied");
+                        body = bytes;
+                    }
+                    Err(e) => {
+                        // Fail open: forward the original (unrepaired) bytes
+                        // rather than drop the request.
+                        tracing::warn!(
+                            error = %e,
+                            "failed to patch repaired anthropic request; forwarding original body"
+                        );
+                    }
+                }
+            }
         }
     }
 
@@ -151,6 +202,10 @@ pub(crate) async fn anthropic_passthrough(
                 let log_shared = state.shared.clone();
                 let log_backend_name = state.backend_name.clone();
                 let cost_model = peek.model.clone().unwrap_or_else(|| "unknown".to_string());
+                // Captured once, before the stream starts: a toggle mid-stream
+                // must not half-record ground truth.
+                let thinking_repair = state.active_thinking_repair();
+                let thinking_repair_namespace = thinking_repair_namespace.clone();
 
                 tokio::spawn(async move {
                     let _permit = permit;
@@ -160,6 +215,11 @@ pub(crate) async fn anthropic_passthrough(
                     let mut search_from = 0;
                     let mut usage = AnthropicStreamUsage::default();
                     let mut outcome = StreamOutcome::Completed;
+                    let mut recorder = thinking_repair
+                        .is_some()
+                        .then(crate::thinking_repair::ThinkingRecorder::new);
+                    let mut ready_to_commit: Vec<(String, Vec<anthropic::ContentBlock>)> =
+                        Vec::new();
 
                     while let Some(chunk_result) = byte_stream.next().await {
                         let bytes = match chunk_result {
@@ -187,7 +247,21 @@ pub(crate) async fn anthropic_passthrough(
                             break;
                         }
                         buffer.extend_from_slice(&bytes);
-                        observe_anthropic_sse_frames(&mut buffer, &mut search_from, &mut usage);
+                        observe_anthropic_sse_frames(
+                            &mut buffer,
+                            &mut search_from,
+                            &mut usage,
+                            recorder.as_mut(),
+                            &mut ready_to_commit,
+                        );
+                    }
+
+                    if let Some(store) = &thinking_repair {
+                        for (msg_id, blocks) in ready_to_commit {
+                            store
+                                .commit(&thinking_repair_namespace, &msg_id, blocks)
+                                .await;
+                        }
                     }
 
                     let tokens = usage.tokens();
@@ -247,9 +321,28 @@ pub(crate) async fn anthropic_passthrough(
     } else {
         match client.forward(body, &extra_headers).await {
             Ok((resp_body, rate_limits)) => {
+                // Parsed once and shared between thinking-repair recording
+                // and virtual-key accounting below (previously each parsed
+                // the same bytes independently, and recording additionally
+                // cloned the whole content Vec instead of moving it out).
+                let mut parsed_resp =
+                    serde_json::from_slice::<anthropic::MessageResponse>(&resp_body);
+
+                if let Some(store) = state.active_thinking_repair() {
+                    if let Ok(resp) = parsed_resp.as_mut() {
+                        let content = std::mem::take(&mut resp.content);
+                        let msg_id = resp.id.clone();
+                        crate::thinking_repair::record_response(
+                            &store,
+                            &thinking_repair_namespace,
+                            &msg_id,
+                            content,
+                        )
+                        .await;
+                    }
+                }
                 if vk_ctx.is_some() {
-                    let parsed = serde_json::from_slice::<anthropic::MessageResponse>(&resp_body);
-                    let anthropic_resp = match parsed {
+                    let anthropic_resp = match parsed_resp {
                         Ok(resp) => resp,
                         Err(e) => {
                             state.metrics.record_error();

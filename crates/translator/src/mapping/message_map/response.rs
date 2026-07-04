@@ -29,14 +29,36 @@ pub fn openai_to_anthropic_response(
             .as_ref()
             .map(streaming_map::map_finish_reason);
 
-        // Map reasoning_content (DeepSeek/Qwen thinking) to Anthropic thinking block.
-        // Thinking blocks precede text content in Anthropic responses.
-        if let Some(ref reasoning) = choice.message.reasoning_content {
-            if !reasoning.is_empty() {
-                content.push(anthropic::ContentBlock::Thinking {
-                    thinking: reasoning.clone(),
-                    signature: None,
-                });
+        // Prefer exact LiteLLM/Anthropic thinking blocks when present. The text-only
+        // fallback has no signature and is unsafe for tool-result continuations.
+        // Only treat thinking_blocks as authoritative if they actually yield a
+        // block; an empty or all-`Unknown` array must not suppress reasoning_content.
+        let mut pushed_thinking = false;
+        if let Some(ref thinking_blocks) = choice.message.thinking_blocks {
+            for block in thinking_blocks {
+                if let Some(block) = super::super::openai_thinking_block_to_anthropic(block) {
+                    content.push(block);
+                    pushed_thinking = true;
+                }
+            }
+        }
+        // NOTE: reverse_message_map::convert_assistant_to_anthropic has a
+        // similar-looking fallback but additionally suppresses unsigned
+        // reasoning_content when tool_calls are present -- that guard exists
+        // because that function's output gets REPLAYED to a real Anthropic
+        // backend, which rejects unsigned thinking blocks in tool-result
+        // continuations. This function instead builds a response handed TO
+        // the client from a non-Anthropic backend; nothing here re-validates
+        // a signature, so there is no unsafe replay to guard against, and
+        // suppressing it would just silently drop the model's reasoning.
+        if !pushed_thinking {
+            if let Some(ref reasoning) = choice.message.reasoning_content {
+                if !reasoning.is_empty() {
+                    content.push(anthropic::ContentBlock::Thinking {
+                        thinking: reasoning.clone(),
+                        signature: None,
+                    });
+                }
             }
         }
 

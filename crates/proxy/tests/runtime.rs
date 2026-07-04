@@ -132,6 +132,7 @@ fn multi_config(backends: IndexMap<String, BackendConfig>, default_backend: &str
         listen_port: 0,
         log_bodies: false,
         redact_secrets: false,
+        anthropic_thinking_repair: false,
         default_backend: default_backend.to_string(),
         backends,
         expose_degradation_warnings: false,

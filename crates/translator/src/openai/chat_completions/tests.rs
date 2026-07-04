@@ -161,6 +161,7 @@ fn serialize_deserialize_roundtrip() {
             tool_call_id: None,
             refusal: None,
             reasoning_content: None,
+            thinking_blocks: None,
         }],
         max_tokens: Some(100),
         max_completion_tokens: None,
@@ -362,6 +363,32 @@ fn reasoning_content_deserialized_from_response() {
 }
 
 #[test]
+fn thinking_blocks_deserialized_from_response() {
+    let raw = json!({
+        "role": "assistant",
+        "content": "The answer is 4.",
+        "reasoning_content": "Let me think... 2+2=4",
+        "thinking_blocks": [
+            {"type": "thinking", "thinking": "Let me think... 2+2=4", "signature": "sig_abc"},
+            {"type": "redacted_thinking", "data": "encrypted"}
+        ]
+    });
+    let msg: ChatMessage = serde_json::from_value(raw).unwrap();
+    assert_eq!(
+        msg.thinking_blocks.as_ref(),
+        Some(&vec![
+            ThinkingBlock::Thinking {
+                thinking: "Let me think... 2+2=4".into(),
+                signature: Some("sig_abc".into()),
+            },
+            ThinkingBlock::RedactedThinking {
+                data: "encrypted".into(),
+            },
+        ])
+    );
+}
+
+#[test]
 fn reasoning_content_absent_is_none() {
     let raw = json!({
         "role": "assistant",
@@ -383,6 +410,7 @@ fn effective_text_plain_string() {
         tool_call_id: None,
         refusal: None,
         reasoning_content: None,
+        thinking_blocks: None,
     };
     assert_eq!(msg.effective_text(), Some("hello".into()));
 }
@@ -406,6 +434,7 @@ fn effective_text_parts_concatenated() {
         tool_call_id: None,
         refusal: None,
         reasoning_content: None,
+        thinking_blocks: None,
     };
     // Image part is skipped; text parts joined with "\n".
     assert_eq!(msg.effective_text(), Some("foo\nbar".into()));
@@ -421,6 +450,7 @@ fn effective_text_content_empty_falls_back_to_reasoning() {
         tool_call_id: None,
         refusal: None,
         reasoning_content: Some("I thought about it".into()),
+        thinking_blocks: None,
     };
     assert_eq!(msg.effective_text(), Some("I thought about it".into()));
 }
@@ -435,6 +465,7 @@ fn effective_text_content_none_returns_reasoning() {
         tool_call_id: None,
         refusal: None,
         reasoning_content: Some("reasoning here".into()),
+        thinking_blocks: None,
     };
     assert_eq!(msg.effective_text(), Some("reasoning here".into()));
 }
@@ -449,6 +480,7 @@ fn effective_text_all_empty_returns_none() {
         tool_call_id: None,
         refusal: None,
         reasoning_content: Some(String::new()),
+        thinking_blocks: None,
     };
     assert_eq!(msg.effective_text(), None);
 }
@@ -463,6 +495,7 @@ fn effective_text_all_absent_returns_none() {
         tool_call_id: None,
         refusal: None,
         reasoning_content: None,
+        thinking_blocks: None,
     };
     assert_eq!(msg.effective_text(), None);
 }
@@ -478,6 +511,7 @@ fn effective_text_whitespace_only_not_trimmed() {
         tool_call_id: None,
         refusal: None,
         reasoning_content: Some("reasoning".into()),
+        thinking_blocks: None,
     };
     // "   " is non-empty so content wins.
     assert_eq!(msg.effective_text(), Some("   ".into()));

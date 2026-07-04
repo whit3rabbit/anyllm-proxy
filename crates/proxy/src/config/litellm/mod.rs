@@ -281,6 +281,9 @@ pub fn parse_litellm_yaml(yaml: &str) -> LiteLLMParsed {
     let redact_secrets = std::env::var("REDACT_SECRETS")
         .map(|v| v == "true" || v == "1")
         .unwrap_or(false);
+    let anthropic_thinking_repair = std::env::var("ANTHROPIC_THINKING_REPAIR")
+        .map(|v| v == "true" || v == "1")
+        .unwrap_or(false);
 
     let tls = TlsConfig::from_env();
 
@@ -372,6 +375,7 @@ pub fn parse_litellm_yaml(yaml: &str) -> LiteLLMParsed {
         listen_port,
         log_bodies,
         redact_secrets,
+        anthropic_thinking_repair,
         default_backend,
         backends,
         expose_degradation_warnings: false, // overridden in MultiConfig::load()

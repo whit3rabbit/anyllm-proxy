@@ -105,6 +105,15 @@ pub struct RuntimeConfig {
     pub log_bodies: bool,
     /// Whether to redact detected secrets from upstream JSON/text request payloads.
     pub redact_secrets: bool,
+    /// Whether Anthropic thinking-block record-and-restore repair is active
+    /// (BACKEND=anthropic passthrough only; see `crate::thinking_repair`).
+    pub anthropic_thinking_repair: bool,
+    /// Opt-in tool-call guardrail preset, stored as the stable string form of
+    /// `crate::tools::ToolGuardrailMode` (see `ToolGuardrailMode::as_str`),
+    /// e.g. "disabled" or "standard". Runtime-tunable like the other fields
+    /// above; the startup-time `ToolEngineState.guardrails` config is a
+    /// separate, static value built from YAML/env at process start.
+    pub tool_guardrail_mode: String,
 }
 
 /// Runtime config defaults before SQLite overrides are applied. Used to restore
@@ -113,6 +122,8 @@ pub struct RuntimeConfig {
 pub struct RuntimeConfigDefaults {
     pub log_bodies: bool,
     pub redact_secrets: bool,
+    pub anthropic_thinking_repair: bool,
+    pub tool_guardrail_mode: String,
 }
 
 /// Events broadcast to WebSocket clients for live dashboard updates.
@@ -186,10 +197,18 @@ impl SharedState {
                 log_level: "info".to_string(),
                 log_bodies: false,
                 redact_secrets: false,
+                anthropic_thinking_repair: false,
+                tool_guardrail_mode: crate::tools::ToolGuardrailMode::Disabled
+                    .as_str()
+                    .to_string(),
             })),
             runtime_defaults: RuntimeConfigDefaults {
                 log_bodies: false,
                 redact_secrets: false,
+                anthropic_thinking_repair: false,
+                tool_guardrail_mode: crate::tools::ToolGuardrailMode::Disabled
+                    .as_str()
+                    .to_string(),
             },
             backend_metrics: Arc::new(HashMap::new()),
             log_tx,

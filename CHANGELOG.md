@@ -10,6 +10,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ## [Unreleased]
 
+### Added
+- Opt-in Forge-style tool-call guardrails: advisory nudges for `lsp_first`, `quiet_command`, and
+  `write_payload_cap` policies, plus fingerprint-based dedup of repeated tool calls. Configure via
+  the simple-YAML `tool_execution.guardrails` key or the `FORGE_TOOL_CALL_POLICY` env var (the env
+  var is ignored when `tool_execution.guardrails` is already set in YAML). Not available when using
+  the LiteLLM-format config loader, which does not parse the `guardrails` key.
+
 - Refreshed the LiteLLM provider/model catalog: added 7 new providers (`darkbloom`, `libertai`,
   `pinstripes`, `scaleway`, `tencent`, `tensormesh`, `tinyfish`) and corrected model/pricing drift
   across ~28 existing providers (missing models, stale `max_output_tokens`, capability flags).

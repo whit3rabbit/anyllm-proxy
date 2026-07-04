@@ -12,7 +12,7 @@ pub mod tool_normalization;
 pub use chat_completions::{
     ChatCompletionRequest, ChatCompletionResponse, ChatContent, ChatContentPart, ChatMessage,
     ChatRole, ChatTool, ChatToolChoice, ChatUsage, Choice, FinishReason, FunctionCall, FunctionDef,
-    Stop, StreamOptions, ToolCall,
+    Stop, StreamOptions, ThinkingBlock, ToolCall,
 };
 pub use errors::{ErrorDetail, ErrorResponse};
 pub use streaming::{

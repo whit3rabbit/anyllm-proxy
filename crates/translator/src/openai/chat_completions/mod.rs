@@ -90,6 +90,10 @@ pub struct ChatMessage {
     /// DeepSeek/Qwen thinking model output. Maps to/from Anthropic thinking blocks.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning_content: Option<String>,
+    /// LiteLLM-compatible Anthropic thinking blocks. These preserve signatures
+    /// and redacted thinking for tool-result continuations.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thinking_blocks: Option<Vec<ThinkingBlock>>,
 }
 
 impl ChatMessage {
@@ -135,6 +139,25 @@ impl ChatMessage {
                 .cloned()
         })
     }
+}
+
+/// LiteLLM-compatible copy of Anthropic thinking blocks on OpenAI messages.
+///
+/// `reasoning_content` is only text. These blocks preserve the exact signed or
+/// redacted Anthropic state needed when a later tool result continues the turn.
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+#[serde(tag = "type")]
+pub enum ThinkingBlock {
+    #[serde(rename = "thinking")]
+    Thinking {
+        thinking: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        signature: Option<String>,
+    },
+    #[serde(rename = "redacted_thinking")]
+    RedactedThinking { data: String },
+    #[serde(other)]
+    Unknown,
 }
 
 /// Message role: system, developer, user, assistant, or tool.

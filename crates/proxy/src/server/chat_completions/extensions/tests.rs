@@ -157,6 +157,82 @@ fn reasoning_effort_rejects_too_small_explicit_max_tokens() {
 }
 
 #[test]
+fn native_thinking_rejects_too_small_explicit_max_tokens() {
+    let openai_req: openai::ChatCompletionRequest = serde_json::from_value(json!({
+        "model": "claude-sonnet-4-20250514",
+        "messages": [{"role": "user", "content": "think"}],
+        "max_tokens": 4096,
+        "thinking": {"type": "enabled", "budget_tokens": 16000}
+    }))
+    .unwrap();
+    let mut anthropic_req = basic_anthropic_request();
+    anthropic_req.max_tokens = 4096;
+    let mut warnings = TranslationWarnings::default();
+    let err =
+        apply_anthropic_chat_extensions(&openai_req, &mut anthropic_req, &mut warnings, false)
+            .unwrap_err();
+    assert!(err.contains("max_tokens must be greater"));
+}
+
+#[test]
+fn native_thinking_rejects_budget_tokens_on_adaptive_only_model() {
+    let openai_req: openai::ChatCompletionRequest = serde_json::from_value(json!({
+        "model": "claude-opus-4-8",
+        "messages": [{"role": "user", "content": "think"}],
+        "max_tokens": 16000,
+        "thinking": {"type": "enabled", "budget_tokens": 4096}
+    }))
+    .unwrap();
+    let mut anthropic_req = basic_anthropic_request();
+    anthropic_req.model = "claude-opus-4-8".to_string();
+    anthropic_req.max_tokens = 16000;
+    let mut warnings = TranslationWarnings::default();
+    let err =
+        apply_anthropic_chat_extensions(&openai_req, &mut anthropic_req, &mut warnings, false)
+            .unwrap_err();
+    assert!(err.contains("only supports adaptive thinking"));
+}
+
+#[test]
+fn native_thinking_rejects_explicit_disabled_on_fable_5() {
+    let openai_req: openai::ChatCompletionRequest = serde_json::from_value(json!({
+        "model": "claude-fable-5",
+        "messages": [{"role": "user", "content": "hi"}],
+        "max_tokens": 16000,
+        "thinking": {"type": "disabled"}
+    }))
+    .unwrap();
+    let mut anthropic_req = basic_anthropic_request();
+    anthropic_req.model = "claude-fable-5".to_string();
+    let mut warnings = TranslationWarnings::default();
+    let err =
+        apply_anthropic_chat_extensions(&openai_req, &mut anthropic_req, &mut warnings, false)
+            .unwrap_err();
+    assert!(err.contains("rejects an explicit thinking"));
+}
+
+#[test]
+fn native_thinking_null_reasoning_effort_is_not_a_conflict() {
+    let openai_req: openai::ChatCompletionRequest = serde_json::from_value(json!({
+        "model": "claude-sonnet-4-20250514",
+        "messages": [{"role": "user", "content": "think"}],
+        "thinking": {"type": "enabled", "budget_tokens": 1024},
+        "reasoning_effort": null
+    }))
+    .unwrap();
+    let mut anthropic_req = basic_anthropic_request();
+    let mut warnings = TranslationWarnings::default();
+    apply_anthropic_chat_extensions(&openai_req, &mut anthropic_req, &mut warnings, false)
+        .expect("an explicit null reasoning_effort must not conflict with native thinking");
+    assert!(matches!(
+        anthropic_req.thinking,
+        Some(anthropic::ThinkingConfig::Enabled {
+            budget_tokens: 1024
+        })
+    ));
+}
+
+#[test]
 fn structured_output_schema_is_filtered() {
     let schema = sanitize_anthropic_output_schema(json!({
         "type": "object",

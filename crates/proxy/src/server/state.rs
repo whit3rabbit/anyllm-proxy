@@ -65,6 +65,7 @@ pub struct ToolEngineState {
     pub registry: Arc<crate::tools::ToolRegistry>,
     pub policy: Arc<crate::tools::ToolExecutionPolicy>,
     pub loop_config: crate::tools::LoopConfig,
+    pub guardrails: crate::tools::ToolGuardrailConfig,
     pub mcp_manager: Option<Arc<crate::tools::McpServerManager>>,
 }
 
@@ -99,6 +100,12 @@ pub struct AppState {
     pub expose_degradation_warnings: bool,
     /// Optional response cache for non-streaming requests.
     pub cache: Option<Arc<crate::cache::memory::MemoryCache>>,
+    /// Anthropic thinking-block record-and-restore repair store. `None`
+    /// unless `backend` is `BackendClient::Anthropic`; only consulted by
+    /// `anthropic_passthrough`. Always `Some` for Anthropic backends
+    /// regardless of whether the feature is enabled -- use
+    /// `thinking_repair_enabled()` to check the live toggle before using it.
+    pub thinking_repair: Option<Arc<crate::thinking_repair::ThinkingRepairStore>>,
     /// Model-level router for LiteLLM model_list configs. None for TOML/env configs.
     /// Wrapped in RwLock for dynamic model management via admin API.
     pub model_router: Option<Arc<RwLock<crate::config::model_router::ModelRouter>>>,
@@ -235,6 +242,45 @@ impl AppState {
             .read()
             .unwrap_or_else(|e| e.into_inner())
             .redact_secrets
+    }
+
+    /// Effective tool-call guardrail config for this request: the runtime,
+    /// admin-tunable override (`RuntimeConfig.tool_guardrail_mode`, no
+    /// restart required) applied on top of `engine.guardrails` (the static
+    /// preset built from YAML/env at startup). See
+    /// `crate::tools::resolve_runtime_guardrails`.
+    pub(crate) fn effective_tool_guardrails(
+        &self,
+        engine: &ToolEngineState,
+    ) -> crate::tools::ToolGuardrailConfig {
+        crate::tools::resolve_runtime_guardrails_locked(&self.runtime_config, &engine.guardrails)
+    }
+
+    /// Whether Anthropic thinking-block repair (record + restore) is active.
+    /// `self.thinking_repair` may be `Some` even when this is `false` -- the
+    /// store is always constructed for Anthropic backends; only this flag
+    /// gates whether it's actually used.
+    pub(crate) fn thinking_repair_enabled(&self) -> bool {
+        self.runtime_config
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .anthropic_thinking_repair
+    }
+
+    /// The thinking-repair store, but only when the live admin-toggleable
+    /// flag is actually on. `None` both when repair is entirely absent (non-
+    /// Anthropic backend) and when it's present-but-disabled -- single
+    /// accessor so call sites collapse to `if let Some(store) = ...` instead
+    /// of separately checking `thinking_repair_enabled()` and
+    /// `thinking_repair.is_some()`.
+    pub(crate) fn active_thinking_repair(
+        &self,
+    ) -> Option<Arc<crate::thinking_repair::ThinkingRepairStore>> {
+        if self.thinking_repair_enabled() {
+            self.thinking_repair.clone()
+        } else {
+            None
+        }
     }
 }
 

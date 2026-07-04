@@ -88,7 +88,11 @@ impl MultiConfig {
                     multi_config: mc,
                     model_router: Some(Arc::new(std::sync::RwLock::new(parsed.router))),
                     litellm_master_key: parsed.master_key,
-                    tool_config: None, // LiteLLM format has no tool sections
+                    // LiteLLM format has no tool sections. This is intentional, not a
+                    // TODO: tool_execution/guardrails are documented as simple-YAML-only
+                    // (see docs/CONFIG.md and docs/codedocs/configuration-and-modes.md);
+                    // LiteLLM users must use FORGE_TOOL_CALL_POLICY instead.
+                    tool_config: None,
                 };
             }
             LoadResult {
@@ -166,6 +170,7 @@ impl MultiConfig {
             listen_port: config.listen_port,
             log_bodies: config.log_bodies,
             redact_secrets: config.redact_secrets,
+            anthropic_thinking_repair: config.anthropic_thinking_repair,
             default_backend: name.to_string(),
             backends,
             expose_degradation_warnings: config.expose_degradation_warnings,

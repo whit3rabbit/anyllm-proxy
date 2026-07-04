@@ -223,6 +223,14 @@ pub fn model_supports_anthropic_adaptive_thinking(provider_id: &str, model_id: &
         && providers::litellm_snapshot::ANTHROPIC_ADAPTIVE_THINKING_MODELS.contains(&model_id)
 }
 
+/// Whether a native Anthropic model has fully removed
+/// `thinking: {"type": "enabled", "budget_tokens": N}` (400s on it), as
+/// opposed to merely deprecating it (Opus 4.6 / Sonnet 4.6 still accept it).
+pub fn model_requires_anthropic_adaptive_thinking(provider_id: &str, model_id: &str) -> bool {
+    canonical_provider_id(provider_id) == "anthropic"
+        && providers::litellm_snapshot::ANTHROPIC_ADAPTIVE_ONLY_THINKING_MODELS.contains(&model_id)
+}
+
 /// Whether a native Anthropic model supports a LiteLLM output-config effort.
 pub fn model_supports_anthropic_reasoning_effort(
     provider_id: &str,
@@ -437,6 +445,28 @@ mod tests {
         assert!(!model_supports_anthropic_adaptive_thinking(
             "openai",
             "claude-opus-4-8"
+        ));
+    }
+
+    #[test]
+    fn anthropic_adaptive_only_models_reject_budget_tokens_but_46_family_does_not() {
+        assert!(model_requires_anthropic_adaptive_thinking(
+            "anthropic",
+            "claude-opus-4-8"
+        ));
+        assert!(model_requires_anthropic_adaptive_thinking(
+            "anthropic",
+            "claude-fable-5"
+        ));
+        // Opus 4.6 / Sonnet 4.6 support adaptive thinking but still accept
+        // budget_tokens as a deprecated transitional escape hatch.
+        assert!(!model_requires_anthropic_adaptive_thinking(
+            "anthropic",
+            "claude-opus-4-6"
+        ));
+        assert!(!model_requires_anthropic_adaptive_thinking(
+            "anthropic",
+            "claude-sonnet-4-6"
         ));
     }
 

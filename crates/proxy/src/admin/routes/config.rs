@@ -80,7 +80,14 @@ pub(super) async fn get_env() -> Json<serde_json::Value> {
 pub(super) async fn get_config(State(shared): State<SharedState>) -> Json<serde_json::Value> {
     // Clone config snapshot and drop the read guard before any .await points.
     // std::sync::RwLockReadGuard is !Send, cannot be held across awaits.
-    let (log_level, log_bodies, redact_secrets, backends) = {
+    let (
+        log_level,
+        log_bodies,
+        redact_secrets,
+        anthropic_thinking_repair,
+        tool_guardrail_mode,
+        backends,
+    ) = {
         let config = shared
             .runtime_config
             .read()
@@ -99,6 +106,8 @@ pub(super) async fn get_config(State(shared): State<SharedState>) -> Json<serde_
             config.log_level.clone(),
             config.log_bodies,
             config.redact_secrets,
+            config.anthropic_thinking_repair,
+            config.tool_guardrail_mode.clone(),
             backends,
         )
     };
@@ -115,6 +124,8 @@ pub(super) async fn get_config(State(shared): State<SharedState>) -> Json<serde_
         "log_level": log_level,
         "log_bodies": log_bodies,
         "redact_secrets": redact_secrets,
+        "anthropic_thinking_repair": anthropic_thinking_repair,
+        "tool_guardrail_mode": tool_guardrail_mode,
         "backends": backends,
         "overridden_keys": override_keys,
     }))
@@ -176,6 +187,26 @@ pub(super) async fn put_config(
             );
         }
         db_writes.push(("redact_secrets".to_string(), val.to_string()));
+    }
+    if let Some(val) = body
+        .get("anthropic_thinking_repair")
+        .and_then(|v| v.as_bool())
+    {
+        db_writes.push(("anthropic_thinking_repair".to_string(), val.to_string()));
+    }
+    if let Some(val) = body.get("tool_guardrail_mode").and_then(|v| v.as_str()) {
+        match val.parse::<crate::tools::ToolGuardrailMode>() {
+            Ok(mode) => {
+                db_writes.push(("tool_guardrail_mode".to_string(), mode.as_str().to_string()))
+            }
+            Err(message) => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(serde_json::json!({ "error": message })),
+                )
+                    .into_response();
+            }
+        }
     }
     if let Some(backends) = body.get("backends").and_then(|v| v.as_object()) {
         // Read current config to validate backend names exist
@@ -244,6 +275,8 @@ pub(super) async fn put_config(
                 "log_level" => config.log_level.clone(),
                 "log_bodies" => config.log_bodies.to_string(),
                 "redact_secrets" => config.redact_secrets.to_string(),
+                "anthropic_thinking_repair" => config.anthropic_thinking_repair.to_string(),
+                "tool_guardrail_mode" => config.tool_guardrail_mode.clone(),
                 other => {
                     if let Some((backend, field)) = other.split_once('.') {
                         config
@@ -283,6 +316,12 @@ pub(super) async fn put_config(
                 }
                 "redact_secrets" => {
                     config.redact_secrets = value == "true";
+                }
+                "anthropic_thinking_repair" => {
+                    config.anthropic_thinking_repair = value == "true";
+                }
+                "tool_guardrail_mode" => {
+                    config.tool_guardrail_mode = value.clone();
                 }
                 _ => {
                     if let Some((backend, field)) = key.split_once('.') {
@@ -378,12 +417,26 @@ pub(super) async fn delete_config_override(
                     if let Ok(mut config) = shared.runtime_config.write() {
                         config.redact_secrets = env_default;
                     }
-                    Some(env_default)
+                    Some(env_default.to_string())
                 }
                 "log_bodies" => {
                     let env_default = shared.runtime_defaults.log_bodies;
                     if let Ok(mut config) = shared.runtime_config.write() {
                         config.log_bodies = env_default;
+                    }
+                    Some(env_default.to_string())
+                }
+                "anthropic_thinking_repair" => {
+                    let env_default = shared.runtime_defaults.anthropic_thinking_repair;
+                    if let Ok(mut config) = shared.runtime_config.write() {
+                        config.anthropic_thinking_repair = env_default;
+                    }
+                    Some(env_default.to_string())
+                }
+                "tool_guardrail_mode" => {
+                    let env_default = shared.runtime_defaults.tool_guardrail_mode.clone();
+                    if let Ok(mut config) = shared.runtime_config.write() {
+                        config.tool_guardrail_mode = env_default.clone();
                     }
                     Some(env_default)
                 }
@@ -394,7 +447,7 @@ pub(super) async fn delete_config_override(
                     .events_tx
                     .send(crate::admin::state::AdminEvent::ConfigChanged {
                         key: key.clone(),
-                        value: value.to_string(),
+                        value,
                     });
             }
             super::emit_audit(

@@ -73,6 +73,9 @@ impl MultiConfig {
                 .map(|v| v == "true" || v == "1")
                 .unwrap_or(false)
         });
+        let anthropic_thinking_repair = std::env::var("ANTHROPIC_THINKING_REPAIR")
+            .map(|v| v == "true" || v == "1")
+            .unwrap_or(false);
         let default_backend = raw
             .default_backend
             .unwrap_or_else(|| raw.backends.keys().next().unwrap().clone());
@@ -103,6 +106,7 @@ impl MultiConfig {
             listen_port,
             log_bodies,
             redact_secrets,
+            anthropic_thinking_repair,
             default_backend,
             backends,
             expose_degradation_warnings,

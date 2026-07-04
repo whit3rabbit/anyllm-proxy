@@ -144,10 +144,17 @@ impl AnthropicStreamUsage {
     }
 }
 
+/// Parse buffered SSE frames, updating token usage and (when `recorder` is
+/// `Some`) accumulating content blocks for the thinking-block repair store.
+/// Completed messages (from `message_stop`) are pushed onto `ready` for the
+/// caller to commit — accumulation here is synchronous, but committing to
+/// the store is async, so it can't happen inline in this loop.
 pub(crate) fn observe_anthropic_sse_frames(
     buffer: &mut BytesMut,
     search_from: &mut usize,
     usage: &mut AnthropicStreamUsage,
+    mut recorder: Option<&mut crate::thinking_repair::ThinkingRecorder>,
+    ready: &mut Vec<(String, Vec<anthropic::ContentBlock>)>,
 ) {
     while let Some((pos, delim_len)) = find_double_newline(buffer, *search_from) {
         if let Ok(frame_str) = std::str::from_utf8(&buffer[..pos]) {
@@ -155,6 +162,11 @@ pub(crate) fn observe_anthropic_sse_frames(
                 let line = line.trim();
                 if let Some(json_str) = line.strip_prefix("data: ") {
                     usage.observe_data(json_str);
+                    if let Some(rec) = recorder.as_deref_mut() {
+                        if let Some(done) = rec.observe_json(json_str) {
+                            ready.push(done);
+                        }
+                    }
                 }
             }
         }

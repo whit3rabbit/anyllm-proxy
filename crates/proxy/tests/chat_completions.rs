@@ -31,6 +31,7 @@ fn openai_config_with_base(base_url: &str) -> Config {
         backend_auth: BackendAuth::BearerToken("test-key".into()),
         log_bodies: false,
         redact_secrets: false,
+        anthropic_thinking_repair: false,
         expose_degradation_warnings: false,
         openai_api_format: OpenAIApiFormat::Chat,
         provider_id: None,
@@ -58,6 +59,7 @@ fn anthropic_config_with_base(base_url: &str) -> Config {
         backend_auth: BackendAuth::BearerToken("anthropic-backend-key".into()),
         log_bodies: false,
         redact_secrets: false,
+        anthropic_thinking_repair: false,
         expose_degradation_warnings: true,
         openai_api_format: OpenAIApiFormat::Chat,
         provider_id: None,
@@ -294,6 +296,7 @@ fn tool_engine_with_counting_tool(executions: Arc<AtomicUsize>) -> Arc<ToolEngin
             }],
         }),
         loop_config: LoopConfig::default(),
+        guardrails: anyllm_proxy::tools::ToolGuardrailConfig::disabled(),
         mcp_manager: None,
     })
 }

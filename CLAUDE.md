@@ -118,7 +118,9 @@ Five-crate Cargo workspace: `providers` (metadata catalog), `client` (Anthropic 
 - **SSE byte-framing is owned by `SseFrameBuffer` (`client/src/sse.rs`): `push(&bytes) -> Vec<Bytes>`, caps size before append.** All proxy stream loops use it EXCEPT `server/streaming.rs::observe_anthropic_sse_frames`, still on the raw `BytesMut` + `find_double_newline` path. Per-frame `data:` line parsing is NOT shared (duplicated ~7x).
 - **Avoid `.clone()` before serialization when only one field changes.** Use `serde_json::to_value(req)` + field patch instead. `MessageCreateRequest` holds `Vec<Message>` + `serde_json::Map` — clone is O(content size).
 - **Env-var tests must share `crate::config::ENV_TEST_LOCK`.** Tests that read/mutate process env (`ANTHROPIC_BASE_URL`, `OPENAI_API_KEY`, `*_API_KEY`, etc.) serialize on the crate-wide lock in `config/mod.rs` (poison-safe via `unwrap_or_else(|e| e.into_inner())`). A per-module `static Mutex<()>` does NOT serialize across modules within one `--lib` test binary, so cross-module env tests race and flake. Acquire the lock at the top of each such test.
-- **Adding a `RuntimeConfig` field touches 6 sites; 2 are not compiler-caught.** Struct + `RuntimeConfigDefaults` (`admin/state.rs`) and 3 constructors (`SharedState::new_for_test`, `cost/mod.rs` test, `main.rs`) fail to compile if missed — but the SQLite override-apply `match` (`main.rs`) and the `delete_config_override` reset (`admin/routes/config.rs`) do NOT, so a new field silently won't persist or reset across restart unless added there too.
+- **Adding a `RuntimeConfig` field touches 6 sites; 2 are not compiler-caught.** Struct + `RuntimeConfigDefaults` (`admin/state.rs`) and 3 constructors (`SharedState::new_for_test`, `cost/mod.rs` test, `main_helpers/async_main/admin.rs`) fail to compile if missed — but the SQLite override-apply `match` (`main_helpers/async_main/admin.rs`) and the `delete_config_override` reset (`admin/routes/config.rs`) do NOT, so a new field silently won't persist or reset across restart unless added there too. (`main.rs` itself is now a thin bootstrap entry point post-refactor and holds neither site.)
+- **`anthropic::ContentBlock`/`Tool` have no `cache_control` field and no `#[serde(flatten)] extra`.** An unrecognized block `"type"` collapses to a bare `#[serde(other)] Unknown` unit variant that loses every other field on deserialize, and re-serializes as just `{"type":"Unknown"}`. Never deserialize-then-reserialize a whole `MessageCreateRequest` when only one field changed (e.g. a repair/patch pass) — it silently drops `cache_control` prompt-cache breakpoints and any block/tool type the struct doesn't model yet, on every message, not just the one touched. Patch the raw `serde_json::Value` subtree instead.
+- **Bulk edits that touch many struct-literal fields (e.g. adding a field to every call site of a struct) reliably break `cargo fmt --check`.** Run `cargo fmt` after any such edit, before considering the change done — CI's fmt gate fails even when `cargo build`/`clippy` are clean.
 
 ## Release Process
 
@@ -127,8 +129,9 @@ Publishing is fully automated via CI. There is no separate release script.
 **To cut a release:**
 1. Update `CHANGELOG.md`: move bullet points from `[Unreleased]` into a new `## [X.Y.Z] - YYYY-MM-DD` section.
 2. Bump the version: `Cargo.toml` (workspace), `crates/client/Cargo.toml` (pinned directly), and inter-crate `version = "X.Y.Z"` refs in `crates/batch_engine/Cargo.toml` and `crates/proxy/Cargo.toml`.
-3. Commit and push to main.
-4. Push a tag: `git tag vX.Y.Z && git push origin vX.Y.Z`
+3. Run `act -j test` locally before pushing — it runs the same `cargo audit` step as CI (fresh advisory-db pull), catching new RUSTSEC advisories before they show up as a CI failure post-push.
+4. Commit and push to main.
+5. Push a tag: `git tag vX.Y.Z && git push origin vX.Y.Z`
 
 CI does the rest on tag push: builds binaries (Linux/macOS/Windows), packages debs, runs deb install tests, creates the GitHub Release using the CHANGELOG section for that version as the release body, uploads release assets, publishes all crates to crates.io in dependency order, and updates the Homebrew tap.
 
@@ -185,3 +188,27 @@ A **synrepo** MCP server is configured (`.mcp.json`) for structured codebase con
 
 - OpenAI API spec: https://github.com/openai/openai-openapi/blob/manual_spec/openapi.yaml (very large, ~70k+ lines). Reference specific sections, do not load full spec.
 - Endpoint inventory: [docs/ENDPOINTS.md](docs/ENDPOINTS.md)
+
+## 2026-07-04: forge-guardrails integration finish (Eatahorse run)
+
+Goal: finish integrating forge-guardrails (opt-in tool-call guardrails for local LLMs — lsp_first/quiet_command/write_payload_cap nudges, fingerprint dedup) into anyllm-proxy. The backend port itself (`crates/proxy/src/tools/guardrails.rs`, wiring into both tool loops, `SimpleConfig.build_tool_guardrail_config`, `FORGE_TOOL_CALL_POLICY` env fallback) was already done before this run; the run closed the verified gaps around it.
+
+Completed (board cleared, 5 done / 1 dropped, 0 blocked, 11 iterations):
+- **EH-0001**: Fixed `init_tool_engine` (`main_helpers/async_main/tools.rs`) so `FORGE_TOOL_CALL_POLICY` alone (no YAML `tool_execution` block, no `PROXY_CONFIG`) now initializes the guardrail engine — previously `tool_config.filter(|tc| tc.has_any())?` short-circuited to `None` before the env var was ever consulted, so the target local-LLM-env-var-only use case was silently dead. Env resolution now runs before the `has_any()` gate; YAML precedence over env is preserved.
+- **EH-0002**: Documented (docs/CONFIG.md, docs/codedocs/configuration-and-modes.md) that the LiteLLM `model_list:` YAML format has no `tool_config` path at all — `tool_execution`/guardrails are silently ignored on that format; only simple-YAML `tool_execution.guardrails` or `FORGE_TOOL_CALL_POLICY` work. No LiteLLM parsing support was added (by design).
+- **EH-0003**: Added the `[Unreleased]` CHANGELOG.md bullet for the guardrails feature.
+- **EH-0005**: Added `tool_guardrail_mode` as a full `RuntimeConfig` field (struct + `RuntimeConfigDefaults` in `admin/state.rs`, all 3 constructors, SQLite override-apply arm, `delete_config_override` reset, GET/PUT config-route support), wired into `tools::resolve_runtime_guardrails` / `AppState::effective_tool_guardrails`, consumed by `handler.rs`, `routes/messages.rs`, and the streaming `tool_loop.rs`.
+- **EH-0006**: Added the guardrail-mode `<select>` control to `admin-ui/src/tabs/settings/Settings.tsx`, wired to the existing config GET/PUT route.
+
+Dropped: **EH-0004** ("optional admin UI + RuntimeConfig toggle") was split into EH-0005 (backend) + EH-0006 (UI) and dropped as a standalone card once superseded — not a dead end, just a decomposition artifact. No re-run action needed.
+
+No cards were blocked this run.
+
+Board invariants a rerun should keep honoring:
+- Backend-then-UI split for RuntimeConfig-touching work (EH-0005 before EH-0006) so the UI card has a real field to bind to.
+- Docs-only changes for format limitations (EH-0002) — explicitly do not build LiteLLM `tool_config` parsing support; that's an accepted gap, not a TODO.
+- Env-var precedence rule: YAML-set guardrails config always wins over `FORGE_TOOL_CALL_POLICY`; do not invert this.
+- Env var is the existing convention for backend toggles here — no second (e.g. CLI flag) mechanism was added for guardrail mode.
+- New `RuntimeConfig` fields must touch the 6-site checklist (struct + defaults, 3 constructors, SQLite override-apply match in `main_helpers/async_main/admin.rs`, `delete_config_override` reset in `admin/routes/config.rs`) — note the checklist's override-apply site is `main_helpers/async_main/admin.rs`, NOT `main.rs` (main.rs is now a thin 167-line bootstrap entry point post-refactor; an earlier acceptance-check wording referencing `main.rs` for this was stale and was corrected in EH-0005's notes).
+
+No manual-verification residuals were left behind: no card's `## Notes` contains a literal `residual:` line. (EH-0006's manual/browser acceptance item was itself discharged headlessly during the run — by driving the admin API directly, since no browser was available — rather than deferred; see its Notes for the exact curl sequence if a human wants to re-confirm via an actual browser click in `--webui`.)

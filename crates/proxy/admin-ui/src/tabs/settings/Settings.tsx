@@ -257,7 +257,55 @@ PROXY_API_KEYS=my-key`}
             )}
           </div>
 
-          {cfg.entries.filter((entry) => !['redact_secrets', 'log_bodies'].includes(entry.key)).map((entry) => {
+          <div className="form-group">
+            <label className="form-label" htmlFor="cfg-thinking-repair" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input
+                id="cfg-thinking-repair"
+                type="checkbox"
+                checked={cfg.anthropic_thinking_repair}
+                disabled={save.isPending}
+                onChange={(e) => handleBooleanSave('anthropic_thinking_repair', e.target.checked)}
+              />
+              Anthropic thinking-block repair
+            </label>
+            <div className="dim" style={{ fontSize: 12 }}>
+              Repairs corrupted thinking/redacted_thinking blocks in Anthropic passthrough
+              requests (applies to any backend running in BACKEND=anthropic passthrough mode,
+              including a named backend in a multi-backend config). Off by default.
+            </div>
+            {cfg.overridden_keys.includes('anthropic_thinking_repair') && (
+              <div className="form-row">
+                <AdminButton size="sm" onClick={() => setPendingReset('anthropic_thinking_repair')}>
+                  Reset
+                </AdminButton>
+              </div>
+            )}
+          </div>
+
+          <div className="form-group">
+            <label className="form-label" htmlFor="cfg-tool-guardrail-mode">Tool guardrail mode</label>
+            <div className="form-row">
+              <select
+                id="cfg-tool-guardrail-mode"
+                value={cfg.tool_guardrail_mode}
+                disabled={save.isPending}
+                onChange={(e) => save.mutate({ tool_guardrail_mode: e.target.value })}
+              >
+                <option value="disabled">Disabled</option>
+                <option value="standard">Standard</option>
+              </select>
+              {cfg.overridden_keys.includes('tool_guardrail_mode') && (
+                <AdminButton size="sm" onClick={() => setPendingReset('tool_guardrail_mode')}>
+                  Reset
+                </AdminButton>
+              )}
+            </div>
+            <div className="dim" style={{ fontSize: 12 }}>
+              Applies advisory guardrails to tool calls the proxy auto-executes. Disabled by default.
+            </div>
+          </div>
+
+          {cfg.entries.filter((entry) => !['redact_secrets', 'log_bodies', 'anthropic_thinking_repair', 'tool_guardrail_mode'].includes(entry.key)).map((entry) => {
             const inputId = `cfg-${entry.key}`
             return (
               <div className="form-group" key={entry.key}>

@@ -194,6 +194,8 @@ tool_execution:
   max_iterations: 3
   tool_timeout_secs: 60
   total_timeout_secs: 600
+  guardrails: standard
+  max_write_payload_bytes: 4096
 
 builtin_tools:
   execute_bash:
@@ -212,6 +214,8 @@ mcp_servers:
     assert_eq!(te.max_iterations, Some(3));
     assert_eq!(te.tool_timeout_secs, Some(60));
     assert_eq!(te.total_timeout_secs, Some(600));
+    assert_eq!(te.guardrails.as_deref(), Some("standard"));
+    assert_eq!(te.max_write_payload_bytes, Some(4096));
 
     let builtins = config.builtin_tools.unwrap();
     let bash = builtins.get("execute_bash").unwrap();
@@ -297,4 +301,37 @@ tool_execution:
         loop_config.total_timeout,
         std::time::Duration::from_secs(300)
     );
+}
+
+#[test]
+fn build_tool_guardrail_config_from_tool_execution() {
+    let yaml = r#"
+models:
+  - gpt-4o
+
+tool_execution:
+  guardrails: standard
+  max_write_payload_bytes: 12
+"#;
+    let config: SimpleConfig = serde_yaml::from_str(yaml).unwrap();
+    let guardrails = config.build_tool_guardrail_config();
+
+    assert_eq!(guardrails.mode, crate::tools::ToolGuardrailMode::Standard);
+    assert!(guardrails.lsp_first);
+    assert!(guardrails.quiet_commands);
+    assert!(guardrails.write_payload_caps);
+    assert_eq!(guardrails.max_write_payload_bytes, 12);
+}
+
+#[test]
+fn tool_guardrails_default_to_disabled() {
+    let yaml = r#"
+models:
+  - gpt-4o
+"#;
+    let config: SimpleConfig = serde_yaml::from_str(yaml).unwrap();
+    let guardrails = config.build_tool_guardrail_config();
+
+    assert_eq!(guardrails.mode, crate::tools::ToolGuardrailMode::Disabled);
+    assert!(!guardrails.enabled());
 }

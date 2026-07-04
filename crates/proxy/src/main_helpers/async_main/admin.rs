@@ -88,15 +88,31 @@ pub(crate) async fn init_admin(
         model_mappings.insert(name.clone(), bc.model_mapping.clone());
     }
     let log_level = std::env::var("RUST_LOG").unwrap_or_else(|_| "info".into());
+    // The runtime default tracks the static per-process guardrail preset
+    // (built from YAML/env at startup, see `ToolEngineState.guardrails`) so
+    // an admin "reset to default" restores that mode rather than always
+    // falling back to disabled.
+    let tool_guardrail_default = tool_engine_state
+        .as_ref()
+        .map(|engine| engine.guardrails.mode.as_str().to_string())
+        .unwrap_or_else(|| {
+            anyllm_proxy::tools::ToolGuardrailMode::Disabled
+                .as_str()
+                .to_string()
+        });
     let mut runtime_config = admin::state::RuntimeConfig {
         model_mappings,
         log_level,
         log_bodies: multi_config.log_bodies,
         redact_secrets: multi_config.redact_secrets,
+        anthropic_thinking_repair: multi_config.anthropic_thinking_repair,
+        tool_guardrail_mode: tool_guardrail_default.clone(),
     };
     let runtime_defaults = admin::state::RuntimeConfigDefaults {
         log_bodies: multi_config.log_bodies,
         redact_secrets: multi_config.redact_secrets,
+        anthropic_thinking_repair: multi_config.anthropic_thinking_repair,
+        tool_guardrail_mode: tool_guardrail_default,
     };
     let mut log_bodies_enabled_by_override = false;
     let mut redact_secrets_enabled_by_override = false;
@@ -129,6 +145,22 @@ pub(crate) async fn init_admin(
                     runtime_config.redact_secrets = value == "true";
                     redact_secrets_enabled_by_override =
                         runtime_config.redact_secrets && !multi_config.redact_secrets;
+                }
+                "anthropic_thinking_repair" => {
+                    runtime_config.anthropic_thinking_repair = value == "true";
+                }
+                "tool_guardrail_mode" => {
+                    if value
+                        .parse::<anyllm_proxy::tools::ToolGuardrailMode>()
+                        .is_ok()
+                    {
+                        runtime_config.tool_guardrail_mode = value.clone();
+                    } else {
+                        tracing::warn!(
+                            value = %value,
+                            "ignoring invalid tool_guardrail_mode override from database"
+                        );
+                    }
                 }
                 k if k.ends_with(".big_model") => {
                     let backend = k.strip_suffix(".big_model").unwrap();

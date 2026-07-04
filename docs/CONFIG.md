@@ -49,8 +49,23 @@ The `PROXY_CONFIG` variable (or auto-detected `~/.anyllm/config.yaml`) supports 
 
 Top-level runtime booleans:
 - TOML: `redact_secrets = true`
-- Simple YAML: `redact_secrets: true`
+- Simple YAML: `redact_secrets: true` and `anthropic_thinking_repair: true`
 - `log_bodies` remains separate and still logs full bodies when enabled.
+- `redact_secrets`, `log_bodies`, and `anthropic_thinking_repair` are all
+  live-toggleable from the admin UI (Settings tab) or `PUT /admin/api/config`
+  without a restart; the config file / env var only sets the startup default.
+
+Simple YAML tool execution also supports opt-in Forge-style tool-call guardrails:
+set `tool_execution.guardrails: standard` to nudge noisy shell commands, oversized
+write/edit payloads, and grep/glob symbol lookups when an LSP-style tool is available.
+If a tool engine is configured, `FORGE_TOOL_CALL_POLICY=standard` can enable the same preset.
+
+**`tool_execution` / `guardrails` are only read from the simple native YAML format**
+(top-level `models:` key) or the `FORGE_TOOL_CALL_POLICY` env var. The LiteLLM-compatible
+`model_list:` format has no tool sections and silently ignores any `tool_execution`/
+`guardrails` block placed in it — `MultiConfig::load()` hard-codes `tool_config: None`
+for that branch (`crates/proxy/src/config/multi/loader.rs`). Users on LiteLLM YAML who
+need guardrails must use `FORGE_TOOL_CALL_POLICY` instead.
 
 ## Model Persistence
 

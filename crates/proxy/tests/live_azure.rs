@@ -45,6 +45,7 @@ fn azure_test_config() -> Config {
         backend_auth: config::BackendAuth::AzureApiKey(api_key),
         log_bodies: true,
         redact_secrets: false,
+        anthropic_thinking_repair: false,
         expose_degradation_warnings: false,
         openai_api_format: config::OpenAIApiFormat::Chat,
         provider_id: None,

@@ -317,11 +317,13 @@ pub(crate) async fn chat_completions(
                         let provider_id_for_tools = effective.provider_id.clone();
                         let provider_catalog_for_tools = effective.provider_catalog.clone();
                         let server_advertised_tool_names = std::collections::HashSet::new();
+                        let guardrails_for_tools = state.effective_tool_guardrails(engine);
                         let (resp, _trace) = crate::tools::execution::maybe_execute_tools(
                             engine,
                             &anthropic_req,
                             &server_advertised_tool_names,
                             anthropic_resp,
+                            &guardrails_for_tools,
                             |follow_up_req| {
                                 let c = client_for_tools.clone();
                                 let m = model_for_tools.clone();

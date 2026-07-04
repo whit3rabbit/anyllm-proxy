@@ -42,6 +42,7 @@ fn basic_openai_response() -> openai::ChatCompletionResponse {
                 tool_call_id: None,
                 refusal: None,
                 reasoning_content: None,
+                thinking_blocks: None,
             },
             finish_reason: Some(openai::FinishReason::Stop),
             logprobs: None,
@@ -512,6 +513,7 @@ fn openai_tool_calls_response_to_anthropic() {
                 tool_call_id: None,
                 refusal: None,
                 reasoning_content: None,
+                thinking_blocks: None,
             },
             finish_reason: Some(openai::FinishReason::ToolCalls),
             logprobs: None,
@@ -579,6 +581,7 @@ fn stop_reason_mapping() {
                     tool_call_id: None,
                     refusal: None,
                     reasoning_content: None,
+                    thinking_blocks: None,
                 },
                 finish_reason: Some(oai_reason),
                 logprobs: None,
@@ -609,6 +612,7 @@ fn empty_content_response() {
                 tool_call_id: None,
                 refusal: None,
                 reasoning_content: None,
+                thinking_blocks: None,
             },
             finish_reason: Some(openai::FinishReason::Stop),
             logprobs: None,
@@ -799,6 +803,7 @@ fn openai_response_with_text_and_tool_calls() {
                 tool_call_id: None,
                 refusal: None,
                 reasoning_content: None,
+                thinking_blocks: None,
             },
             finish_reason: Some(openai::FinishReason::ToolCalls),
             logprobs: None,
@@ -852,6 +857,7 @@ fn malformed_tool_arguments_handled() {
                 tool_call_id: None,
                 refusal: None,
                 reasoning_content: None,
+                thinking_blocks: None,
             },
             finish_reason: Some(openai::FinishReason::ToolCalls),
             logprobs: None,
@@ -979,6 +985,13 @@ fn thinking_block_mapped_to_reasoning_content_in_assistant_translation() {
         oai.messages[0].reasoning_content.as_deref(),
         Some("Let me reason...")
     );
+    assert_eq!(
+        oai.messages[0].thinking_blocks.as_ref(),
+        Some(&vec![openai::ThinkingBlock::Thinking {
+            thinking: "Let me reason...".into(),
+            signature: Some("sig_abc".into()),
+        }])
+    );
     assert!(matches!(
         &oai.messages[0].content,
         Some(openai::ChatContent::Text(t)) if t == "Here is my answer."
@@ -986,7 +999,7 @@ fn thinking_block_mapped_to_reasoning_content_in_assistant_translation() {
 }
 
 #[test]
-fn redacted_thinking_block_dropped_in_assistant_translation() {
+fn redacted_thinking_block_preserved_in_assistant_translation() {
     let mut req = basic_request();
     req.messages = vec![anthropic::InputMessage {
         role: anthropic::Role::Assistant,
@@ -1002,8 +1015,14 @@ fn redacted_thinking_block_dropped_in_assistant_translation() {
 
     let oai = anthropic_to_openai_request(&req);
 
-    // RedactedThinking block dropped, text block preserved
     assert_eq!(oai.messages.len(), 1);
+    assert_eq!(oai.messages[0].reasoning_content, None);
+    assert_eq!(
+        oai.messages[0].thinking_blocks.as_ref(),
+        Some(&vec![openai::ThinkingBlock::RedactedThinking {
+            data: "encrypted_data".into(),
+        }])
+    );
     assert!(matches!(
         &oai.messages[0].content,
         Some(openai::ChatContent::Text(t)) if t == "My answer."
@@ -1157,6 +1176,7 @@ fn claude_code_tool_response_roundtrip() {
                 tool_call_id: None,
                 refusal: None,
                 reasoning_content: None,
+                thinking_blocks: None,
             },
             finish_reason: Some(openai::FinishReason::ToolCalls),
             logprobs: None,
@@ -1224,6 +1244,7 @@ fn tool_call_empty_id_gets_synthetic_id() {
                 tool_call_id: None,
                 refusal: None,
                 reasoning_content: None,
+                thinking_blocks: None,
             },
             finish_reason: Some(openai::FinishReason::ToolCalls),
             logprobs: None,
@@ -1271,6 +1292,7 @@ fn tool_call_empty_arguments_becomes_empty_object() {
                 tool_call_id: None,
                 refusal: None,
                 reasoning_content: None,
+                thinking_blocks: None,
             },
             finish_reason: Some(openai::FinishReason::ToolCalls),
             logprobs: None,
@@ -1323,6 +1345,7 @@ fn tool_call_missing_name_skipped() {
                 tool_call_id: None,
                 refusal: None,
                 reasoning_content: None,
+                thinking_blocks: None,
             },
             finish_reason: Some(openai::FinishReason::ToolCalls),
             logprobs: None,
@@ -1362,6 +1385,7 @@ fn refusal_mapped_to_text_block() {
                 tool_call_id: None,
                 refusal: Some("I cannot help with that request.".into()),
                 reasoning_content: None,
+                thinking_blocks: None,
             },
             finish_reason: Some(openai::FinishReason::ContentFilter),
             logprobs: None,
@@ -1430,6 +1454,7 @@ fn reasoning_content_mapped_to_thinking_block_in_response() {
                 tool_call_id: None,
                 refusal: None,
                 reasoning_content: Some("Let me think... 2+2=4".into()),
+                thinking_blocks: None,
             },
             finish_reason: Some(openai::FinishReason::Stop),
             logprobs: None,
@@ -1467,6 +1492,67 @@ fn reasoning_content_mapped_to_thinking_block_in_response() {
 }
 
 #[test]
+fn thinking_blocks_preferred_over_reasoning_content_in_response() {
+    let oai_resp = openai::ChatCompletionResponse {
+        id: "chatcmpl-1".into(),
+        object: "chat.completion".into(),
+        model: "claude-sonnet-4-20250514".into(),
+        choices: vec![openai::Choice {
+            index: 0,
+            message: openai::ChatMessage {
+                role: openai::ChatRole::Assistant,
+                content: Some(openai::ChatContent::Text("Use the tool.".into())),
+                name: None,
+                tool_calls: Some(vec![openai::ToolCall {
+                    id: "call_1".into(),
+                    call_type: "function".into(),
+                    function: openai::FunctionCall {
+                        name: "get_weather".into(),
+                        arguments: "{\"location\":\"NYC\"}".into(),
+                    },
+                }]),
+                tool_call_id: None,
+                refusal: None,
+                reasoning_content: Some("lossy text".into()),
+                thinking_blocks: Some(vec![
+                    openai::ThinkingBlock::Thinking {
+                        thinking: "signed thought".into(),
+                        signature: Some("sig_123".into()),
+                    },
+                    openai::ThinkingBlock::RedactedThinking {
+                        data: "encrypted".into(),
+                    },
+                ]),
+            },
+            finish_reason: Some(openai::FinishReason::ToolCalls),
+            logprobs: None,
+        }],
+        usage: None,
+        created: None,
+        system_fingerprint: None,
+        service_tier: None,
+    };
+
+    let resp = openai_to_anthropic_response(&oai_resp, "claude-sonnet-4-20250514");
+
+    assert!(matches!(
+        &resp.content[0],
+        anthropic::ContentBlock::Thinking {
+            thinking,
+            signature: Some(signature),
+        } if thinking == "signed thought" && signature == "sig_123"
+    ));
+    assert!(matches!(
+        &resp.content[1],
+        anthropic::ContentBlock::RedactedThinking { data } if data == "encrypted"
+    ));
+    assert!(matches!(
+        &resp.content[3],
+        anthropic::ContentBlock::ToolUse { id, .. } if id == "call_1"
+    ));
+}
+
+#[test]
 fn thinking_block_mapped_to_reasoning_content_in_request() {
     let mut req = basic_request();
     req.messages = vec![anthropic::InputMessage {
@@ -1487,6 +1573,13 @@ fn thinking_block_mapped_to_reasoning_content_in_request() {
     assert_eq!(
         oai.messages[0].reasoning_content.as_deref(),
         Some("Let me reason...")
+    );
+    assert_eq!(
+        oai.messages[0].thinking_blocks.as_ref(),
+        Some(&vec![openai::ThinkingBlock::Thinking {
+            thinking: "Let me reason...".into(),
+            signature: Some("sig_abc".into()),
+        }])
     );
     assert!(matches!(
         &oai.messages[0].content,
@@ -1510,6 +1603,7 @@ fn unknown_finish_reason_maps_to_end_turn() {
                 tool_call_id: None,
                 refusal: None,
                 reasoning_content: None,
+                thinking_blocks: None,
             },
             finish_reason: Some(openai::FinishReason::Unknown),
             logprobs: None,

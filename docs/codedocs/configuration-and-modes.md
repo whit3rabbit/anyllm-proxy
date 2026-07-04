@@ -75,9 +75,15 @@ models:
 tool_execution:
   max_iterations: 6
   tool_timeout_secs: 30
+  guardrails: standard
+  max_write_payload_bytes: 65536
 ```
 
 `parse_simple_yaml` turns that file into a `MultiConfig`, a `ModelRouter`, and a `ToolStartupConfig`. The server can then build named backends, route by virtual model name, and optionally initialize server-side tool execution from the same document.
+
+`tool_execution.guardrails: standard` enables Forge-style advisory tool-call guardrails inside the tool loop. The proxy can nudge noisy shell commands, oversized write/edit payloads, and grep/glob symbol lookups when an LSP-style tool is available. `FORGE_TOOL_CALL_POLICY=standard` can also enable the same preset when a tool engine is already configured.
+
+`tool_execution` and `guardrails` are only read from this simple native YAML format (the `models:` root key) or from `FORGE_TOOL_CALL_POLICY`. The LiteLLM-compatible `model_list:` format has no tool sections at all: `MultiConfig::load()` hard-codes `tool_config: None` for that branch, so a `tool_execution`/`guardrails` block written into a LiteLLM YAML file is silently ignored. This is intentional (not a bug) — see `crates/proxy/src/config/multi/loader.rs`.
 
 <Callout type="warn">Config precedence is easy to misunderstand. Shell env vars still win over `.anyllm.env`, `.anyllm.env` wins over admin-imported env vars from SQLite, and `PROXY_CONFIG` changes the runtime mode entirely. If a global `OPENAI_API_KEY` is set in your shell, it can override the provider-specific key fallback for stub backends like Groq or OpenRouter.</Callout>
 

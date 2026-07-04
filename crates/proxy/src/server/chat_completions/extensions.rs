@@ -79,12 +79,26 @@ pub(super) fn apply_anthropic_chat_extensions(
         output_config = serde_json::json!({});
     }
 
-    apply_reasoning_effort(
-        openai_req,
-        anthropic_req,
-        &mut output_config,
-        caller_omitted_max_tokens,
-    )?;
+    match apply_native_thinking(openai_req, anthropic_req, caller_omitted_max_tokens)? {
+        NativeThinkingOutcome::Applied => {
+            if reasoning_effort_value(openai_req).is_some() {
+                return Err("thinking and reasoning_effort cannot both be set".to_string());
+            }
+        }
+        NativeThinkingOutcome::OmittedForToolContinuation => {
+            // Thinking was deliberately dropped for a tool-result continuation;
+            // reasoning_effort would also be a no-op here, so skip it without
+            // rejecting the request.
+        }
+        NativeThinkingOutcome::Absent => {
+            apply_reasoning_effort(
+                openai_req,
+                anthropic_req,
+                &mut output_config,
+                caller_omitted_max_tokens,
+            )?;
+        }
+    }
 
     if let Some(response_format) = &openai_req.response_format {
         if response_format.format_type == "json_schema" {
@@ -142,6 +156,75 @@ pub(super) fn apply_anthropic_chat_extensions(
             .insert("output_config".to_string(), output_config);
     }
     Ok(extensions)
+}
+
+/// Result of attempting to apply a caller-supplied native `thinking` config.
+enum NativeThinkingOutcome {
+    /// No `thinking` field was present; fall back to `reasoning_effort`.
+    Absent,
+    /// A `thinking` config was parsed and applied to the request.
+    Applied,
+    /// `thinking` was present but intentionally dropped for a tool-result
+    /// continuation; neither thinking nor reasoning_effort should be applied.
+    OmittedForToolContinuation,
+}
+
+fn apply_native_thinking(
+    openai_req: &openai::ChatCompletionRequest,
+    anthropic_req: &mut anthropic::MessageCreateRequest,
+    caller_omitted_max_tokens: bool,
+) -> Result<NativeThinkingOutcome, String> {
+    let Some(value) = openai_req.extra.get("thinking") else {
+        return Ok(NativeThinkingOutcome::Absent);
+    };
+    let thinking = serde_json::from_value::<anthropic::ThinkingConfig>(value.clone())
+        .map_err(|err| format!("Invalid thinking: {err}"))?;
+    if should_omit_thinking_for_tool_continuation(anthropic_req) {
+        return Ok(NativeThinkingOutcome::OmittedForToolContinuation);
+    }
+    // Reject configs the target model rejects outright, so the caller gets a
+    // clear proxy-level 400 instead of an opaque upstream one (mirrors
+    // apply_reasoning_effort's model-capability checks below).
+    if matches!(thinking, anthropic::ThinkingConfig::Enabled { .. })
+        && anyllm_providers::model_requires_anthropic_adaptive_thinking(
+            "anthropic",
+            &anthropic_req.model,
+        )
+    {
+        return Err(format!(
+            "model {} only supports adaptive thinking; use thinking: {{\"type\": \"adaptive\"}} instead of budget_tokens",
+            anthropic_req.model
+        ));
+    }
+    if matches!(thinking, anthropic::ThinkingConfig::Disabled)
+        && matches!(
+            anthropic_req.model.as_str(),
+            "claude-fable-5" | "claude-mythos-5"
+        )
+    {
+        return Err(format!(
+            "model {} rejects an explicit thinking: {{\"type\": \"disabled\"}}; omit the thinking field instead",
+            anthropic_req.model
+        ));
+    }
+    // Same max_tokens/budget_tokens relationship Anthropic enforces, checked
+    // here so an invalid combination gets a clear proxy-level 400 instead of
+    // an opaque upstream error (mirrors apply_reasoning_effort below).
+    if let anthropic::ThinkingConfig::Enabled { budget_tokens } = &thinking {
+        if caller_omitted_max_tokens {
+            // budget_tokens is client-controlled (deserialized straight from
+            // the request body) and unbounded; a plain `+` overflows u32 at
+            // the top of its range (panics in debug/test, silently wraps to
+            // a tiny max_tokens in release).
+            anthropic_req.max_tokens = budget_tokens.saturating_add(4096);
+        } else if anthropic_req.max_tokens <= *budget_tokens {
+            return Err(format!(
+                "max_tokens must be greater than Anthropic thinking budget_tokens ({budget_tokens})"
+            ));
+        }
+    }
+    anthropic_req.thinking = Some(thinking);
+    Ok(NativeThinkingOutcome::Applied)
 }
 
 fn apply_reasoning_effort(

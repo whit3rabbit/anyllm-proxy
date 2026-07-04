@@ -121,6 +121,85 @@ fn tool_call_conversion() {
 }
 
 #[test]
+fn thinking_blocks_with_tool_calls_convert_to_signed_anthropic_blocks() {
+    let req: openai::ChatCompletionRequest = serde_json::from_value(json!({
+        "model": "claude-sonnet-4-20250514",
+        "messages": [{
+            "role": "assistant",
+            "content": "I will check.",
+            "reasoning_content": "lossy text",
+            "thinking_blocks": [
+                {"type": "thinking", "thinking": "signed thought", "signature": "sig_123"},
+                {"type": "redacted_thinking", "data": "encrypted"}
+            ],
+            "tool_calls": [{
+                "id": "call_1",
+                "type": "function",
+                "function": {"name": "get_weather", "arguments": "{\"loc\":\"NYC\"}"}
+            }]
+        }],
+        "max_tokens": 100
+    }))
+    .unwrap();
+    let mut w = TranslationWarnings::default();
+    let result = openai_to_anthropic_request(&req, &mut w).unwrap();
+
+    let anthropic::Content::Blocks(blocks) = &result.messages[0].content else {
+        panic!("expected assistant blocks");
+    };
+    assert!(matches!(
+        &blocks[0],
+        anthropic::ContentBlock::Thinking {
+            thinking,
+            signature: Some(signature),
+        } if thinking == "signed thought" && signature == "sig_123"
+    ));
+    assert!(matches!(
+        &blocks[1],
+        anthropic::ContentBlock::RedactedThinking { data } if data == "encrypted"
+    ));
+    assert!(matches!(
+        &blocks[2],
+        anthropic::ContentBlock::Text { text } if text == "I will check."
+    ));
+    assert!(matches!(
+        &blocks[3],
+        anthropic::ContentBlock::ToolUse { id, .. } if id == "call_1"
+    ));
+}
+
+#[test]
+fn reasoning_content_with_tool_calls_does_not_synthesize_unsigned_thinking() {
+    let req: openai::ChatCompletionRequest = serde_json::from_value(json!({
+        "model": "claude-sonnet-4-20250514",
+        "messages": [{
+            "role": "assistant",
+            "reasoning_content": "unsigned thought",
+            "tool_calls": [{
+                "id": "call_1",
+                "type": "function",
+                "function": {"name": "get_weather", "arguments": "{}"}
+            }]
+        }],
+        "max_tokens": 100
+    }))
+    .unwrap();
+    let mut w = TranslationWarnings::default();
+    let result = openai_to_anthropic_request(&req, &mut w).unwrap();
+
+    let anthropic::Content::Blocks(blocks) = &result.messages[0].content else {
+        panic!("expected assistant blocks");
+    };
+    assert!(!blocks
+        .iter()
+        .any(|block| matches!(block, anthropic::ContentBlock::Thinking { .. })));
+    assert!(matches!(
+        &blocks[0],
+        anthropic::ContentBlock::ToolUse { id, .. } if id == "call_1"
+    ));
+}
+
+#[test]
 fn context_translation_sanitizes_tool_names_and_restores_response_names() {
     let long_name = format!("{}!", "x".repeat(130));
     let req: openai::ChatCompletionRequest = serde_json::from_value(json!({

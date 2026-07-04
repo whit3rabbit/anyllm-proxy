@@ -70,6 +70,14 @@ These are the variables most users need.
 | `REQUEST_TIMEOUT_SECS` | `900` | Wall-clock cap (seconds) for streaming responses. 0 = disabled. |
 | `OMIT_STREAM_OPTIONS` | `false` | Strip `stream_options` from streaming requests. Needed for local LLMs (older Ollama, text-generation-webui, LM Studio) that reject unknown fields with HTTP 400. |
 
+## Tool Guardrails
+
+These apply only when a config file initializes the tool engine through `tool_execution`, `builtin_tools`, or `mcp_servers`.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `FORGE_TOOL_CALL_POLICY` | `disabled` | Set to `standard` to enable Forge-style advisory guardrails for model-produced tool calls. YAML `tool_execution.guardrails` takes precedence. |
+
 ## OIDC / JWT Authentication (optional)
 
 When `OIDC_ISSUER_URL` is set, the proxy discovers the OIDC configuration and loads JWKS. Tokens that look like JWTs are validated against the JWKS before falling through to key-based auth.
@@ -195,6 +203,7 @@ Set `BACKEND=anthropic` to forward Anthropic Messages API requests directly to t
 |----------|---------|-------------|
 | `ANTHROPIC_API_KEY` | (required) | Anthropic API key. |
 | `ANTHROPIC_BASE_URL` | `https://api.anthropic.com` | Base URL for the Anthropic API. |
+| `ANTHROPIC_THINKING_REPAIR` | `false` | Repair corrupted `thinking`/`redacted_thinking` blocks in the last assistant message of `/v1/messages` requests before forwarding upstream. See below. |
 
 ### Example
 
@@ -203,6 +212,35 @@ BACKEND=anthropic \
 ANTHROPIC_API_KEY=sk-ant-... \
 cargo run -p anyllm_proxy
 ```
+
+### Thinking-block repair (`ANTHROPIC_THINKING_REPAIR=true`)
+
+Clients that replay conversation history (e.g. Claude Code) can corrupt the
+`thinking`/`redacted_thinking` blocks in the last assistant message — merged
+text from interleaved streams, dropped `redacted_thinking` blocks that never
+get persisted to disk, reordered blocks. The Anthropic API validates those
+blocks byte-exactly against their signatures, so any mutation produces a
+repeating 400 until the client's context is cleared.
+
+With this flag set, the proxy records every response's content blocks
+(text, signatures, `redacted_thinking` data, `tool_use` ownership) as ground
+truth, then on each outgoing request verifies and repairs only the *last*
+assistant message against it: byte-identical blocks pass through untouched,
+blocks with a known signature but mutated text are restored to the recorded
+original, and blocks belonging to a different recorded message ("intruder"
+blocks) are dropped. Messages before the last assistant one are never
+touched, so prompt-cache prefixes are preserved.
+
+The ground-truth store is in-memory only (bounded, no persistence). On
+proxy restart it starts empty; requests are forwarded unrepaired until a
+fresh response is recorded, then repair resumes on the next turn. Off by
+default; only takes effect for `BACKEND=anthropic` passthrough (`/v1/messages`).
+
+This can also be toggled live from the admin UI (Settings tab) or via
+`PUT /admin/api/config` with `{"anthropic_thinking_repair": true|false}` — no
+restart required. The env var only sets the value at startup; an admin-UI
+change takes effect immediately and persists across restarts via SQLite until
+reset.
 
 ---
 

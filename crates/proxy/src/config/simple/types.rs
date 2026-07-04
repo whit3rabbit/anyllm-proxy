@@ -18,6 +18,9 @@ pub struct SimpleConfig {
     /// Redact detected secrets from upstream JSON/text request payloads.
     #[serde(default)]
     pub redact_secrets: Option<bool>,
+    /// Enable Anthropic thinking-block record-and-restore repair (BACKEND=anthropic passthrough only).
+    #[serde(default)]
+    pub anthropic_thinking_repair: Option<bool>,
     /// List of model deployments.
     #[serde(default)]
     pub models: Vec<SimpleModelEntry>,
@@ -95,6 +98,13 @@ pub struct ToolExecutionConfig {
     pub total_timeout_secs: Option<u64>,
     #[serde(default)]
     pub max_tool_calls_per_turn: Option<usize>,
+    /// Optional Forge-style advisory guardrails for model-produced tool calls.
+    /// Accepted values: disabled, standard, off, on, false, true, 0, 1.
+    #[serde(default)]
+    pub guardrails: Option<String>,
+    /// Maximum string payload size before write/edit guardrails nudge.
+    #[serde(default)]
+    pub max_write_payload_bytes: Option<usize>,
 }
 
 /// Configuration for a single builtin tool.

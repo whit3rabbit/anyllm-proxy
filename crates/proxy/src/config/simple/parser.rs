@@ -41,6 +41,11 @@ pub fn parse_simple_yaml(yaml: &str) -> SimpleParsed {
             .map(|v| v == "true" || v == "1")
             .unwrap_or(false)
     });
+    let anthropic_thinking_repair = config.anthropic_thinking_repair.unwrap_or_else(|| {
+        std::env::var("ANTHROPIC_THINKING_REPAIR")
+            .map(|v| v == "true" || v == "1")
+            .unwrap_or(false)
+    });
 
     let tls = TlsConfig::from_env();
 
@@ -138,6 +143,7 @@ pub fn parse_simple_yaml(yaml: &str) -> SimpleParsed {
         listen_port,
         log_bodies,
         redact_secrets,
+        anthropic_thinking_repair,
         default_backend,
         backends,
         expose_degradation_warnings: false,

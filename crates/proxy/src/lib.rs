@@ -31,5 +31,7 @@ pub mod ratelimit;
 pub mod runtime;
 /// Axum HTTP server: routes, middleware (auth, request ID, size/concurrency limits), SSE streaming.
 pub mod server;
+/// Anthropic thinking-block record-and-restore repair (Anthropic-passthrough only).
+pub mod thinking_repair;
 /// Optional built-in server-side tools and registry.
 pub mod tools;
