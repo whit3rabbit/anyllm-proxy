@@ -10,6 +10,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ## [Unreleased]
 
+---
+
+## [0.11.0] - 2026-07-04
+
 ### Added
 - Opt-in `ANTHROPIC_FORWARD_CLIENT_AUTH` for Anthropic passthrough: forwards the client's own
   incoming `x-api-key`/`Authorization`/`x-goog-api-key` credential upstream (renamed to `x-api-key`
@@ -146,7 +150,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 ### Changed
 - Dependency bumps (rand 0.8.5 → 0.8.6).
 
-[Unreleased]: https://github.com/whit3rabbit/anyllm-proxy/compare/v0.10.1...HEAD
+[Unreleased]: https://github.com/whit3rabbit/anyllm-proxy/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/whit3rabbit/anyllm-proxy/compare/v0.10.1...v0.11.0
 [0.10.1]: https://github.com/whit3rabbit/anyllm-proxy/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/whit3rabbit/anyllm-proxy/compare/v0.9.9...v0.10.0
 [0.9.9]: https://github.com/whit3rabbit/anyllm-proxy/compare/v0.9.8...v0.9.9
