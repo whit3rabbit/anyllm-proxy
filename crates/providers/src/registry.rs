@@ -54,7 +54,6 @@ static LEGACY_ONLY_PROVIDERS: &[&ProviderDef] = &[
     &providers::playht::PROVIDER,
     &providers::pollinations::PROVIDER,
     &providers::predibase::PROVIDER,
-    &providers::scaleway::PROVIDER,
     &providers::siliconflow::PROVIDER,
     &providers::triton::PROVIDER,
     &providers::vllm::PROVIDER,
@@ -87,7 +86,6 @@ static LEGACY_ONLY_MODELS: &[(&str, &[ModelDef])] = &[
     ("playht", providers::playht::MODELS),
     ("pollinations", providers::pollinations::MODELS),
     ("predibase", providers::predibase::MODELS),
-    ("scaleway", providers::scaleway::MODELS),
     ("siliconflow", providers::siliconflow::MODELS),
     ("triton", providers::triton::MODELS),
     ("hosted_vllm", providers::vllm::MODELS),
@@ -388,7 +386,7 @@ mod tests {
     #[test]
     fn anthropic_models_match_litellm_snapshot() {
         let models = list_models("anthropic");
-        assert_eq!(models.len(), 22);
+        assert_eq!(models.len(), 23);
 
         for id in [
             "claude-fable-5",

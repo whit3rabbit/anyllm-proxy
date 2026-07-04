@@ -10,6 +10,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ## [Unreleased]
 
+- Refreshed the LiteLLM provider/model catalog: added 7 new providers (`darkbloom`, `libertai`,
+  `pinstripes`, `scaleway`, `tencent`, `tensormesh`, `tinyfish`) and corrected model/pricing drift
+  across ~28 existing providers (missing models, stale `max_output_tokens`, capability flags).
+  Removed the now-redundant hand-maintained `scaleway` legacy stub in favor of the generated
+  snapshot entry. Refreshed `assets/model_pricing.json` to add `claude-sonnet-5`.
+
 ---
 
 ## [0.10.1] - 2026-06-20

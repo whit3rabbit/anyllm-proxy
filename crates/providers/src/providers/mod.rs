@@ -71,7 +71,6 @@ pub mod public_ai;
 pub mod replicate;
 pub mod sagemaker;
 pub mod sambanova;
-pub mod scaleway;
 pub mod serper;
 pub mod siliconflow;
 pub mod snowflake;
