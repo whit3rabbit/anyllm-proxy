@@ -15,6 +15,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
   across ~28 existing providers (missing models, stale `max_output_tokens`, capability flags).
   Removed the now-redundant hand-maintained `scaleway` legacy stub in favor of the generated
   snapshot entry. Refreshed `assets/model_pricing.json` to add `claude-sonnet-5`.
+- Security: bumped `opentelemetry`/`opentelemetry_sdk`/`opentelemetry-otlp` (0.31 -> 0.32) and
+  `tracing-opentelemetry` (0.32 -> 0.33) behind the optional `otel` feature, fixing a Dependabot
+  advisory in `opentelemetry_sdk` (unbounded memory allocation in W3C Baggage propagation,
+  patched upstream in 0.32.1).
 
 ---
 
