@@ -45,6 +45,8 @@ pub struct MultiConfig {
     pub redact_secrets: bool,
     /// Enable Anthropic thinking-block record-and-restore repair (BACKEND=anthropic passthrough only).
     pub anthropic_thinking_repair: bool,
+    /// Enable text-to-image context compression (pxpipe; BACKEND=anthropic passthrough only).
+    pub pxpipe_compress: bool,
     /// Anthropic passthrough only: forward the CLIENT's own incoming
     /// `Authorization`/`x-api-key` header upstream verbatim instead of the
     /// operator's configured credential, for a single-key/BYOK deployment

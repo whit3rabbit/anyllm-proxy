@@ -83,6 +83,8 @@ pub fn app_multi_with_shared(
             log_bodies: config.log_bodies,
             redact_secrets: config.redact_secrets,
             anthropic_thinking_repair: config.anthropic_thinking_repair,
+            pxpipe_compress: config.pxpipe_compress,
+            pxpipe_models: crate::pxpipe::resolve_default_models_csv(),
             forward_client_auth: config.forward_client_auth,
             // Derive from the static tool-engine preset (built from YAML/env
             // at startup) rather than hardcoding Disabled -- otherwise a
@@ -112,6 +114,13 @@ pub fn app_multi_with_shared(
     // (AppState::thinking_repair_enabled()), so it's toggleable from the
     // admin UI without restart. Non-Anthropic backends still get `None` below.
     let thinking_repair_store = Some(Arc::new(crate::thinking_repair::ThinkingRepairStore::new()));
+
+    // pxpipe compression engine (Anthropic-passthrough only). Same construction
+    // shape as the thinking-repair store: built once here, attached only to
+    // Anthropic-mode backends, and gated live per-request via
+    // RuntimeConfig.pxpipe_compress (AppState::active_pxpipe()). Scope
+    // (PXPIPE_MODELS) is resolved from env at build time.
+    let pxpipe_engine = Some(Arc::new(crate::pxpipe::PxpipeEngine::new()));
 
     let provider_catalog = shared
         .as_ref()
@@ -147,6 +156,14 @@ pub fn app_multi_with_shared(
             cache: Some(response_cache.clone()),
             thinking_repair: if matches!(mode, HandlerMode::Anthropic) {
                 thinking_repair_store.clone()
+            } else {
+                None
+            },
+            // Anthropic passthrough images the raw body; Translate images the
+            // post-mapping OpenAI request. Both gate per-request on enable +
+            // scope + target-model vision via pxpipe_engine_for.
+            pxpipe: if matches!(mode, HandlerMode::Anthropic | HandlerMode::Translate) {
+                pxpipe_engine.clone()
             } else {
                 None
             },

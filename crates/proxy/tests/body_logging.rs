@@ -16,6 +16,7 @@ fn test_config_with_logging() -> Config {
         log_bodies: true,
         redact_secrets: false,
         anthropic_thinking_repair: false,
+        pxpipe_compress: false,
         expose_degradation_warnings: false,
         openai_api_format: config::OpenAIApiFormat::Chat,
         provider_id: None,

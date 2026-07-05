@@ -182,6 +182,8 @@ fn record_cost_with_shared_state_persists_spend() {
             log_bodies: false,
             redact_secrets: false,
             anthropic_thinking_repair: false,
+            pxpipe_compress: false,
+            pxpipe_models: String::new(),
             forward_client_auth: false,
             tool_guardrail_mode: crate::tools::ToolGuardrailMode::Disabled
                 .as_str()
@@ -191,6 +193,8 @@ fn record_cost_with_shared_state_persists_spend() {
             log_bodies: false,
             redact_secrets: false,
             anthropic_thinking_repair: false,
+            pxpipe_compress: false,
+            pxpipe_models: String::new(),
             forward_client_auth: false,
             tool_guardrail_mode: crate::tools::ToolGuardrailMode::Disabled
                 .as_str()

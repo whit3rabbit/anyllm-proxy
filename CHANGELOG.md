@@ -10,6 +10,33 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ## [Unreleased]
 
+### Added
+- Opt-in text-to-image context compression (pxpipe port), `PXPIPE_COMPRESS=true`. On the Anthropic
+  passthrough path (`BACKEND=anthropic`), renders the stable system-prompt + tool-definition slab
+  into a deterministic PNG glyph image and swaps it into the first user message, moving the caller's
+  `cache_control` breakpoint onto the image so the imaged prefix still prompt-caches. Also images
+  large `<system-reminder>` blocks and `tool_result` output (with a verbatim fact-sheet of paths/ids
+  alongside, and paging that truncates oversized results under Anthropic's 100-image cap; `is_error`
+  results are left as text). Optionally (`PXPIPE_HISTORY=true`, default off — highest cache-stability
+  risk) collapses the old closed-tool-call conversation prefix into history image(s), keeping the recent
+  tail as text; the collapse boundary is snapped to a message grid so the rendered PNG stays byte-stable
+  across turns and keeps prompt-caching. Also covers the **translate path** (`BACKEND=openai`/`azure`/
+  `vertex`/`gemini`-OpenAI): after the Anthropic→OpenAI mapping, images the static system/developer +
+  tool-definition slab of the OpenAI Chat request for vision-capable, in-scope target models (gated by
+  the same enable flag + scope + catalog vision check; GPT models are not in the default scope, so this
+  is off unless the operator adds them). Saves input tokens on vision models that read imaged text reliably.
+  Compression is observable via `GET /metrics` (`pxpipe_compressed_total` / `pxpipe_images_total` /
+  `pxpipe_imaged_chars_total`), the admin dashboard (a compression stats row appears once it fires), and
+  per-request `tracing` logs; the actual token savings surface in the upstream `usage.input_tokens`. Scope is a model allow-list (`PXPIPE_MODELS`
+  CSV, default `claude-fable-5`); out-of-scope or non-vision models pass through untouched, and the
+  transform fails open on any error. New IO-free `anyllm_pxpipe` crate holds the renderer + transform.
+  The enable switch is opt-in via YAML (`pxpipe_compress: true` in simple config) or `PXPIPE_COMPRESS=true`
+  env, and is live-toggleable from the admin UI/config API (`RuntimeConfig.pxpipe_compress`) without a
+  restart — same cascade as `anthropic_thinking_repair`. Model scope (`RuntimeConfig.pxpipe_models`) is
+  also runtime-editable: the admin Settings tab shows per-model checkboxes for the vision-capable Claude
+  models and writes the scope CSV; `PXPIPE_MODELS` env seeds the default (`claude-fable-5`). Non-vision
+  or out-of-scope models pass through untouched.
+
 ---
 
 ## [0.11.0] - 2026-07-04

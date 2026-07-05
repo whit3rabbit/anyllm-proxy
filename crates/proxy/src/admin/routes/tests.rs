@@ -290,6 +290,80 @@ async fn put_config_updates_anthropic_thinking_repair_override() {
 }
 
 #[tokio::test]
+async fn put_config_updates_pxpipe_compress_override() {
+    set_admin_rpm(10_000);
+    let shared = crate::admin::state::SharedState::new_for_test();
+    let token_str = "e".repeat(64);
+    shared.issued_csrf_tokens.insert(token_str.clone(), ());
+    let app = admin_router(
+        shared.clone(),
+        Arc::new(zeroize::Zeroizing::new("test-token".to_string())),
+    );
+    let req = Request::put("/admin/api/config")
+        .header("host", "localhost:9090")
+        .header("authorization", "Bearer test-token")
+        .header("content-type", "application/json")
+        .header("x-csrf-token", &token_str)
+        .header("cookie", format!("csrf_token={token_str}"))
+        .extension(ConnectInfo("127.0.0.1:9090".parse::<SocketAddr>().unwrap()))
+        .body(Body::from(r#"{"pxpipe_compress":true}"#))
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert!(shared.runtime_config.read().unwrap().pxpipe_compress);
+
+    let conn = shared.db.lock().unwrap();
+    let overrides = crate::admin::db::get_config_overrides(&conn).unwrap();
+    assert!(overrides
+        .iter()
+        .any(|(key, value, _)| key == "pxpipe_compress" && value == "true"));
+}
+
+#[tokio::test]
+async fn delete_config_pxpipe_compress_override_restores_loaded_default() {
+    set_admin_rpm(10_000);
+    let mut shared = crate::admin::state::SharedState::new_for_test();
+    // Loaded default = on; an override then turned it off; deleting the override
+    // must restore the loaded default (guards the delete_config_override reset arm).
+    shared.runtime_defaults.pxpipe_compress = true;
+    {
+        let mut config = shared.runtime_config.write().unwrap();
+        config.pxpipe_compress = false;
+    }
+    {
+        let conn = shared.db.lock().unwrap();
+        crate::admin::db::set_config_override(&conn, "pxpipe_compress", "false").unwrap();
+    }
+    let token_str = "f".repeat(64);
+    shared.issued_csrf_tokens.insert(token_str.clone(), ());
+    let app = admin_router(
+        shared.clone(),
+        Arc::new(zeroize::Zeroizing::new("test-token".to_string())),
+    );
+    let req = Request::delete("/admin/api/config/overrides/pxpipe_compress")
+        .header("host", "localhost:9090")
+        .header("authorization", "Bearer test-token")
+        .header("x-csrf-token", &token_str)
+        .header("cookie", format!("csrf_token={token_str}"))
+        .extension(ConnectInfo("127.0.0.1:9090".parse::<SocketAddr>().unwrap()))
+        .body(Body::empty())
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert!(
+        shared.runtime_config.read().unwrap().pxpipe_compress,
+        "runtime config should return to the loaded pxpipe_compress default"
+    );
+
+    let conn = shared.db.lock().unwrap();
+    let overrides = crate::admin::db::get_config_overrides(&conn).unwrap();
+    assert!(!overrides.iter().any(|(key, _, _)| key == "pxpipe_compress"));
+}
+
+#[tokio::test]
 async fn put_config_updates_forward_client_auth_override() {
     set_admin_rpm(10_000);
     let shared = crate::admin::state::SharedState::new_for_test();

@@ -17,6 +17,12 @@ export interface Metrics {
   streams_completed: number
   streams_failed: number
   streams_client_disconnected: number
+  /** Requests where pxpipe text-to-image compression fired. */
+  pxpipe_compressed_total: number
+  /** Total PNG image blocks pxpipe emitted. */
+  pxpipe_images_total: number
+  /** Total source chars pxpipe replaced with images. */
+  pxpipe_imaged_chars_total: number
 }
 
 export interface RequestLogEntry {
@@ -96,6 +102,11 @@ export interface ConfigResponse {
   log_bodies: boolean
   redact_secrets: boolean
   anthropic_thinking_repair: boolean
+  pxpipe_compress: boolean
+  /** CSV of model bases in pxpipe compression scope. */
+  pxpipe_models: string
+  /** Vision-capable Claude models offered as per-model scope toggles. */
+  pxpipe_available_models: string[]
   forward_client_auth: boolean
   tool_guardrail_mode: string
   backends: Record<string, { big_model: string; small_model: string }>

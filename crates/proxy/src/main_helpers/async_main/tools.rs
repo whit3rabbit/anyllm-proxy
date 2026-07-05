@@ -25,6 +25,7 @@ pub(crate) async fn init_tool_engine(
         log_bodies: None,
         redact_secrets: None,
         anthropic_thinking_repair: None,
+        pxpipe_compress: None,
         models: vec![],
         tool_execution: tc.tool_execution,
         builtin_tools: tc.builtin_tools,

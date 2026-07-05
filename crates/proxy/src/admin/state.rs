@@ -108,6 +108,13 @@ pub struct RuntimeConfig {
     /// Whether Anthropic thinking-block record-and-restore repair is active
     /// (BACKEND=anthropic passthrough only; see `crate::thinking_repair`).
     pub anthropic_thinking_repair: bool,
+    /// Whether text-to-image context compression is active (BACKEND=anthropic
+    /// passthrough only; see `crate::pxpipe`). Live-toggleable via the admin UI.
+    pub pxpipe_compress: bool,
+    /// CSV of model bases in pxpipe compression scope (substring match). Editable
+    /// per-model from the admin UI, which offers only vision-capable models.
+    /// Seeded from `PXPIPE_MODELS` env / `crate::pxpipe::resolve_default_models_csv`.
+    pub pxpipe_models: String,
     /// Whether Anthropic passthrough forwards the client's own incoming
     /// credential upstream instead of the operator's (BACKEND=anthropic
     /// only; see `ANTHROPIC_FORWARD_CLIENT_AUTH` / `server::passthrough`).
@@ -130,6 +137,8 @@ pub struct RuntimeConfigDefaults {
     pub log_bodies: bool,
     pub redact_secrets: bool,
     pub anthropic_thinking_repair: bool,
+    pub pxpipe_compress: bool,
+    pub pxpipe_models: String,
     pub forward_client_auth: bool,
     pub tool_guardrail_mode: String,
 }
@@ -206,6 +215,8 @@ impl SharedState {
                 log_bodies: false,
                 redact_secrets: false,
                 anthropic_thinking_repair: false,
+                pxpipe_compress: false,
+                pxpipe_models: String::new(),
                 forward_client_auth: false,
                 tool_guardrail_mode: crate::tools::ToolGuardrailMode::Disabled
                     .as_str()
@@ -215,6 +226,8 @@ impl SharedState {
                 log_bodies: false,
                 redact_secrets: false,
                 anthropic_thinking_repair: false,
+                pxpipe_compress: false,
+                pxpipe_models: String::new(),
                 forward_client_auth: false,
                 tool_guardrail_mode: crate::tools::ToolGuardrailMode::Disabled
                     .as_str()

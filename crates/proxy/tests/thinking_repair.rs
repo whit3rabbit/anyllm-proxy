@@ -38,6 +38,7 @@ fn anthropic_config_with_base_and_repair(
         log_bodies: false,
         redact_secrets: false,
         anthropic_thinking_repair,
+        pxpipe_compress: false,
         expose_degradation_warnings: false,
         openai_api_format: OpenAIApiFormat::Chat,
         provider_id: None,

@@ -85,6 +85,8 @@ pub(super) async fn get_config(State(shared): State<SharedState>) -> Json<serde_
         log_bodies,
         redact_secrets,
         anthropic_thinking_repair,
+        pxpipe_compress,
+        pxpipe_models,
         forward_client_auth,
         tool_guardrail_mode,
         backends,
@@ -108,6 +110,8 @@ pub(super) async fn get_config(State(shared): State<SharedState>) -> Json<serde_
             config.log_bodies,
             config.redact_secrets,
             config.anthropic_thinking_repair,
+            config.pxpipe_compress,
+            config.pxpipe_models.clone(),
             config.forward_client_auth,
             config.tool_guardrail_mode.clone(),
             backends,
@@ -122,11 +126,20 @@ pub(super) async fn get_config(State(shared): State<SharedState>) -> Json<serde_
     .unwrap_or_default();
     let override_keys: Vec<String> = overrides.iter().map(|(k, _, _)| k.clone()).collect();
 
+    // Computed before the json! macro consumes `pxpipe_models` by move.
+    let pxpipe_available_models =
+        crate::pxpipe::available_vision_models(&shared.provider_catalog, &pxpipe_models);
+
     Json(serde_json::json!({
         "log_level": log_level,
         "log_bodies": log_bodies,
         "redact_secrets": redact_secrets,
         "anthropic_thinking_repair": anthropic_thinking_repair,
+        "pxpipe_compress": pxpipe_compress,
+        "pxpipe_models": pxpipe_models,
+        // Vision-capable Claude models (+ current out-of-list scope entries) the
+        // UI offers as per-model scope toggles.
+        "pxpipe_available_models": pxpipe_available_models,
         "forward_client_auth": forward_client_auth,
         "tool_guardrail_mode": tool_guardrail_mode,
         "backends": backends,
@@ -196,6 +209,19 @@ pub(super) async fn put_config(
         .and_then(|v| v.as_bool())
     {
         db_writes.push(("anthropic_thinking_repair".to_string(), val.to_string()));
+    }
+    if let Some(val) = body.get("pxpipe_compress").and_then(|v| v.as_bool()) {
+        db_writes.push(("pxpipe_compress".to_string(), val.to_string()));
+    }
+    if let Some(val) = body.get("pxpipe_models").and_then(|v| v.as_str()) {
+        // Normalize the CSV (trim entries, drop empties); scope match is substring.
+        let normalized = val
+            .split(',')
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>()
+            .join(",");
+        db_writes.push(("pxpipe_models".to_string(), normalized));
     }
     if let Some(val) = body.get("forward_client_auth").and_then(|v| v.as_bool()) {
         // Same rule enforced at startup (main_helpers::async_main) for
@@ -310,6 +336,8 @@ pub(super) async fn put_config(
                 "log_bodies" => config.log_bodies.to_string(),
                 "redact_secrets" => config.redact_secrets.to_string(),
                 "anthropic_thinking_repair" => config.anthropic_thinking_repair.to_string(),
+                "pxpipe_compress" => config.pxpipe_compress.to_string(),
+                "pxpipe_models" => config.pxpipe_models.clone(),
                 "forward_client_auth" => config.forward_client_auth.to_string(),
                 "tool_guardrail_mode" => config.tool_guardrail_mode.clone(),
                 other => {
@@ -354,6 +382,12 @@ pub(super) async fn put_config(
                 }
                 "anthropic_thinking_repair" => {
                     config.anthropic_thinking_repair = value == "true";
+                }
+                "pxpipe_compress" => {
+                    config.pxpipe_compress = value == "true";
+                }
+                "pxpipe_models" => {
+                    config.pxpipe_models = value.clone();
                 }
                 "forward_client_auth" => {
                     config.forward_client_auth = value == "true";
@@ -470,6 +504,20 @@ pub(super) async fn delete_config_override(
                         config.anthropic_thinking_repair = env_default;
                     }
                     Some(env_default.to_string())
+                }
+                "pxpipe_compress" => {
+                    let env_default = shared.runtime_defaults.pxpipe_compress;
+                    if let Ok(mut config) = shared.runtime_config.write() {
+                        config.pxpipe_compress = env_default;
+                    }
+                    Some(env_default.to_string())
+                }
+                "pxpipe_models" => {
+                    let env_default = shared.runtime_defaults.pxpipe_models.clone();
+                    if let Ok(mut config) = shared.runtime_config.write() {
+                        config.pxpipe_models = env_default.clone();
+                    }
+                    Some(env_default)
                 }
                 "forward_client_auth" => {
                     let env_default = shared.runtime_defaults.forward_client_auth;

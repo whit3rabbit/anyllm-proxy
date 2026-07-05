@@ -284,6 +284,9 @@ pub fn parse_litellm_yaml(yaml: &str) -> LiteLLMParsed {
     let anthropic_thinking_repair = std::env::var("ANTHROPIC_THINKING_REPAIR")
         .map(|v| v == "true" || v == "1")
         .unwrap_or(false);
+    let pxpipe_compress = std::env::var("PXPIPE_COMPRESS")
+        .map(|v| v == "true" || v == "1")
+        .unwrap_or(false);
 
     let tls = TlsConfig::from_env();
 
@@ -376,6 +379,7 @@ pub fn parse_litellm_yaml(yaml: &str) -> LiteLLMParsed {
         log_bodies,
         redact_secrets,
         anthropic_thinking_repair,
+        pxpipe_compress,
         forward_client_auth: crate::config::env_bool_flag("ANTHROPIC_FORWARD_CLIENT_AUTH"),
         default_backend,
         backends,

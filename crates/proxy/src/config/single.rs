@@ -19,6 +19,8 @@ pub struct Config {
     pub redact_secrets: bool,
     /// Enable Anthropic thinking-block record-and-restore repair (BACKEND=anthropic passthrough only).
     pub anthropic_thinking_repair: bool,
+    /// Enable text-to-image context compression (pxpipe; BACKEND=anthropic passthrough only).
+    pub pxpipe_compress: bool,
     /// Expose `x-anyllm-degradation` response header when features are silently dropped.
     /// Defaults to false (simple mode). Enable with ANYLLM_DEGRADATION_WARNINGS=true
     /// or automatically when PROXY_CONFIG is set.
@@ -108,6 +110,9 @@ impl Config {
         let anthropic_thinking_repair = std::env::var("ANTHROPIC_THINKING_REPAIR")
             .map(|v| v == "true" || v == "1")
             .unwrap_or(false);
+        let pxpipe_compress = std::env::var("PXPIPE_COMPRESS")
+            .map(|v| v == "true" || v == "1")
+            .unwrap_or(false);
         let expose_degradation_warnings = std::env::var("ANYLLM_DEGRADATION_WARNINGS")
             .map(|v| v == "true" || v == "1")
             .unwrap_or(false);
@@ -165,6 +170,7 @@ impl Config {
                     log_bodies,
                     redact_secrets,
                     anthropic_thinking_repair,
+                    pxpipe_compress,
                     expose_degradation_warnings,
                     openai_api_format,
                     provider_id: stub_provider.map(|p| p.id.to_string()),
@@ -207,6 +213,7 @@ impl Config {
                     log_bodies,
                     redact_secrets,
                     anthropic_thinking_repair,
+                    pxpipe_compress,
                     expose_degradation_warnings,
                     openai_api_format: OpenAIApiFormat::Chat,
                     provider_id: None,
@@ -249,6 +256,7 @@ impl Config {
                     log_bodies,
                     redact_secrets,
                     anthropic_thinking_repair,
+                    pxpipe_compress,
                     expose_degradation_warnings,
                     openai_api_format: OpenAIApiFormat::Chat,
                     provider_id: None,
@@ -283,6 +291,7 @@ impl Config {
                     log_bodies,
                     redact_secrets,
                     anthropic_thinking_repair,
+                    pxpipe_compress,
                     expose_degradation_warnings,
                     openai_api_format: OpenAIApiFormat::Chat,
                     provider_id: None,
@@ -319,6 +328,7 @@ impl Config {
                     log_bodies,
                     redact_secrets,
                     anthropic_thinking_repair,
+                    pxpipe_compress,
                     expose_degradation_warnings,
                     openai_api_format: OpenAIApiFormat::Chat,
                     provider_id: None,
@@ -355,6 +365,7 @@ impl Config {
                     log_bodies,
                     redact_secrets,
                     anthropic_thinking_repair,
+                    pxpipe_compress,
                     expose_degradation_warnings,
                     openai_api_format: OpenAIApiFormat::Chat,
                     provider_id: None,

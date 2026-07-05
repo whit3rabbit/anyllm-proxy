@@ -1,0 +1,28 @@
+[package]
+name = "anyllm_pxpipe"
+description = "Text-to-image context compression for the anyllm proxy (pxpipe port)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+categories = ["compression", "web-programming"]
+keywords = ["anthropic", "llm", "vision", "compression", "prompt-cache"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Deterministic PNG output: hand-rolled chunk assembly + raw zlib deflate at a
+# fixed level. miniz_oxide is pure-Rust and its output is stable for a given
+# (input, level), which is what keeps the Anthropic prompt cache warm across
+# turns. Golden test pins the exact bytes.
+miniz_oxide = "0.8"
+# Embedded public-domain 8x8 bitmap glyph data (no rendering, just the byte
+# tables) — same "vendor the atlas" approach as pxpipe's atlas.ts, minus the
+# hand-transcription. Deterministic by construction.
+font8x8 = { version = "0.3", features = ["unicode"] }
+# Image blocks are base64 in the Anthropic wire format. Same crate/version the
+# proxy already uses (crates/proxy/Cargo.toml), so no new transitive surface.
+base64 = "0.22"
+
+[dev-dependencies]
+sha2 = "0.10"

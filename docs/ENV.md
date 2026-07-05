@@ -205,6 +205,9 @@ Set `BACKEND=anthropic` to forward Anthropic Messages API requests directly to t
 | `ANTHROPIC_BASE_URL` | `https://api.anthropic.com` | Base URL for the Anthropic API. |
 | `ANTHROPIC_THINKING_REPAIR` | `false` | Repair corrupted `thinking`/`redacted_thinking` blocks in the last assistant message of `/v1/messages` requests before forwarding upstream. See below. |
 | `ANTHROPIC_FORWARD_CLIENT_AUTH` | `false` | Forward the client's own `x-api-key`/`Authorization` header upstream verbatim instead of `ANTHROPIC_API_KEY`/`ANTHROPIC_AUTH_TOKEN`. See below. |
+| `PXPIPE_COMPRESS` | `false` | Enable text-to-image context compression on `/v1/messages` (`BACKEND=anthropic` passthrough): render the stable system+tools slab to a PNG and swap it in to save input tokens on vision models. Also settable via `pxpipe_compress: true` in simple YAML config, and live-toggleable from the admin config API. See below. |
+| `PXPIPE_HISTORY` | `false` | Additionally collapse the OLD closed-tool-call conversation prefix into history image(s) (keeping the recent tail as text). Off by default: highest cache-stability risk of the feature. Only meaningful when `PXPIPE_COMPRESS=true`. |
+| `PXPIPE_MODELS` | `claude-fable-5` | CSV of model bases in scope for `PXPIPE_COMPRESS` (substring match). **Seeds** the default scope; the runtime scope is then editable per-model from the admin UI (Settings tab shows the vision-capable models as checkboxes). Out-of-scope or non-vision models pass through untouched. Default is conservative because weaker readers (e.g. Opus 4.8) degrade on imaged content. |
 
 ### Example
 

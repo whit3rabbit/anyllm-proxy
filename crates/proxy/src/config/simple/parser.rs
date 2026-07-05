@@ -46,6 +46,11 @@ pub fn parse_simple_yaml(yaml: &str) -> SimpleParsed {
             .map(|v| v == "true" || v == "1")
             .unwrap_or(false)
     });
+    let pxpipe_compress = config.pxpipe_compress.unwrap_or_else(|| {
+        std::env::var("PXPIPE_COMPRESS")
+            .map(|v| v == "true" || v == "1")
+            .unwrap_or(false)
+    });
 
     let tls = TlsConfig::from_env();
 
@@ -144,6 +149,7 @@ pub fn parse_simple_yaml(yaml: &str) -> SimpleParsed {
         log_bodies,
         redact_secrets,
         anthropic_thinking_repair,
+        pxpipe_compress,
         forward_client_auth: crate::config::env_bool_flag("ANTHROPIC_FORWARD_CLIENT_AUTH"),
         default_backend,
         backends,

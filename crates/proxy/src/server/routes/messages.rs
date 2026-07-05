@@ -220,6 +220,37 @@ pub(crate) async fn messages(
                 openai_req.stream_options = None;
             }
             openai_req.model = mapped_model.clone();
+
+            // Opt-in text-to-image compression on the translate path (pxpipe).
+            // Images the static system/tools slab of the post-mapping OpenAI
+            // request for vision-capable, in-scope target models. Round-trips
+            // through a Value (ChatCompletionRequest has `#[serde(flatten)] extra`
+            // and OpenAI has no cache_control, so this is lossless). Fails open.
+            if let Some(engine) = effective.pxpipe_engine_for(&mapped_model) {
+                if let Ok(mut v) = serde_json::to_value(&openai_req) {
+                    if let Some((images, chars)) =
+                        engine.compress_openai_chat(&mut v, &mapped_model)
+                    {
+                        match serde_json::from_value::<
+                            anyllm_translate::openai::ChatCompletionRequest,
+                        >(v)
+                        {
+                            // Count the compression only after the typed round-trip
+                            // succeeds — a failed re-deserialize forwards the
+                            // original, uncompressed request.
+                            Ok(patched) => {
+                                openai_req = patched;
+                                effective.metrics.record_pxpipe_compression(images, chars);
+                            }
+                            Err(e) => tracing::warn!(
+                                error = %e,
+                                "pxpipe: failed to re-deserialize compressed OpenAI request; forwarding original"
+                            ),
+                        }
+                    }
+                }
+            }
+
             if let Err(err) = prepare_openai_tool_request(
                 &mut openai_req,
                 OpenAiToolPolicyContext {

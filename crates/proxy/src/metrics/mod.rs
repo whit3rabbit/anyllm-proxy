@@ -19,6 +19,9 @@ struct MetricsInner {
     streams_completed: AtomicU64,
     streams_failed: AtomicU64,
     streams_client_disconnected: AtomicU64,
+    pxpipe_compressed_total: AtomicU64,
+    pxpipe_images_total: AtomicU64,
+    pxpipe_imaged_chars_total: AtomicU64,
 }
 
 impl Metrics {
@@ -67,6 +70,21 @@ impl Metrics {
             .fetch_add(1, Ordering::Relaxed);
     }
 
+    /// Record one pxpipe text-to-image compression: `images` PNG blocks emitted
+    /// standing in for `imaged_chars` source chars. Called on the compressed path
+    /// only (both Anthropic passthrough and translate).
+    pub fn record_pxpipe_compression(&self, images: u64, imaged_chars: u64) {
+        self.inner
+            .pxpipe_compressed_total
+            .fetch_add(1, Ordering::Relaxed);
+        self.inner
+            .pxpipe_images_total
+            .fetch_add(images, Ordering::Relaxed);
+        self.inner
+            .pxpipe_imaged_chars_total
+            .fetch_add(imaged_chars, Ordering::Relaxed);
+    }
+
     /// Take a point-in-time snapshot of all counters for the GET /metrics endpoint.
     pub fn snapshot(&self) -> MetricsSnapshot {
         MetricsSnapshot {
@@ -80,6 +98,9 @@ impl Metrics {
                 .inner
                 .streams_client_disconnected
                 .load(Ordering::Relaxed),
+            pxpipe_compressed_total: self.inner.pxpipe_compressed_total.load(Ordering::Relaxed),
+            pxpipe_images_total: self.inner.pxpipe_images_total.load(Ordering::Relaxed),
+            pxpipe_imaged_chars_total: self.inner.pxpipe_imaged_chars_total.load(Ordering::Relaxed),
         }
     }
 }
@@ -101,6 +122,12 @@ pub struct MetricsSnapshot {
     pub streams_failed: u64,
     /// SSE streams where the client disconnected early.
     pub streams_client_disconnected: u64,
+    /// Requests where pxpipe text-to-image compression fired.
+    pub pxpipe_compressed_total: u64,
+    /// Total PNG image blocks pxpipe emitted across all compressed requests.
+    pub pxpipe_images_total: u64,
+    /// Total source chars pxpipe replaced with images.
+    pub pxpipe_imaged_chars_total: u64,
 }
 
 impl MetricsSnapshot {
@@ -147,6 +174,17 @@ mod tests {
         assert_eq!(s.streams_completed, 1);
         assert_eq!(s.streams_failed, 1);
         assert_eq!(s.streams_client_disconnected, 1);
+    }
+
+    #[test]
+    fn pxpipe_metrics_counting() {
+        let m = Metrics::new();
+        m.record_pxpipe_compression(3, 12_000);
+        m.record_pxpipe_compression(2, 8_000);
+        let s = m.snapshot();
+        assert_eq!(s.pxpipe_compressed_total, 2);
+        assert_eq!(s.pxpipe_images_total, 5);
+        assert_eq!(s.pxpipe_imaged_chars_total, 20_000);
     }
 
     #[test]

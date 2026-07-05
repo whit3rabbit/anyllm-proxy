@@ -58,6 +58,22 @@ export default function Dashboard() {
           <div className="stat-value" style={{ color: 'var(--warn)' }}><AnimatedMetric value={m?.streams_client_disconnected ?? 0} /></div>
         </AdminSurface>
       </div>
+      {(m?.pxpipe_compressed_total ?? 0) > 0 && (
+        <div className="stats-row" style={{ marginBottom: 16 }}>
+          <AdminSurface className="stat">
+            <div className="stat-label">Image-Compressed Requests</div>
+            <div className="stat-value"><AnimatedMetric value={m?.pxpipe_compressed_total ?? 0} /></div>
+          </AdminSurface>
+          <AdminSurface className="stat">
+            <div className="stat-label">Images Emitted</div>
+            <div className="stat-value"><AnimatedMetric value={m?.pxpipe_images_total ?? 0} /></div>
+          </AdminSurface>
+          <AdminSurface className="stat">
+            <div className="stat-label">Chars Imaged</div>
+            <div className="stat-value"><AnimatedMetric value={m?.pxpipe_imaged_chars_total ?? 0} /></div>
+          </AdminSurface>
+        </div>
+      )}
       <ObservabilityPanel />
       <div style={{ marginTop: 16 }}>
         <LiveFeed />

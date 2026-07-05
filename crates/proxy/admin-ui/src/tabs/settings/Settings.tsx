@@ -44,6 +44,23 @@ export default function Settings({ configured = true }: { configured?: boolean }
     save.mutate({ [key]: value })
   }
 
+  // pxpipe model scope is a CSV of model bases; a model is "in scope" when any
+  // base is a substring of its id (mirrors the backend's model_in_scope).
+  function pxpipeScope(): string[] {
+    return (cfg?.pxpipe_models ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+  }
+  function pxpipeModelChecked(model: string): boolean {
+    const m = model.toLowerCase()
+    return pxpipeScope().some((base) => m.includes(base.toLowerCase()))
+  }
+  function togglePxpipeModel(model: string, on: boolean) {
+    const cur = pxpipeScope()
+    const next = on
+      ? (pxpipeModelChecked(model) ? cur : [...cur, model])
+      : cur.filter((base) => !model.toLowerCase().includes(base.toLowerCase()))
+    save.mutate({ pxpipe_models: next.join(',') })
+  }
+
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -283,6 +300,60 @@ PROXY_API_KEYS=my-key`}
           </div>
 
           <div className="form-group">
+            <label className="form-label" htmlFor="cfg-pxpipe-compress" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input
+                id="cfg-pxpipe-compress"
+                type="checkbox"
+                checked={cfg.pxpipe_compress}
+                disabled={save.isPending}
+                onChange={(e) => handleBooleanSave('pxpipe_compress', e.target.checked)}
+              />
+              Image context compression (pxpipe)
+            </label>
+            <div className="dim" style={{ fontSize: 12 }}>
+              Renders the stable system + tool-definition slab of Anthropic passthrough requests to a
+              PNG image block to save input tokens on vision models. Off by default. Enable per-model
+              below — only models that read imaged text reliably are offered.
+            </div>
+            {cfg.overridden_keys.includes('pxpipe_compress') && (
+              <div className="form-row">
+                <AdminButton size="sm" onClick={() => setPendingReset('pxpipe_compress')}>
+                  Reset
+                </AdminButton>
+              </div>
+            )}
+            {cfg.pxpipe_compress && (
+              <div style={{ marginTop: 8 }}>
+                <div className="form-label" style={{ fontSize: 13 }}>Models in scope (vision-capable)</div>
+                {cfg.pxpipe_available_models.length === 0 ? (
+                  <div className="dim" style={{ fontSize: 12 }}>No vision-capable models in the catalog.</div>
+                ) : (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 16px' }}>
+                    {cfg.pxpipe_available_models.map((model) => (
+                      <label key={model} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+                        <input
+                          type="checkbox"
+                          checked={pxpipeModelChecked(model)}
+                          disabled={save.isPending}
+                          onChange={(e) => togglePxpipeModel(model, e.target.checked)}
+                        />
+                        {model}
+                      </label>
+                    ))}
+                  </div>
+                )}
+                {cfg.overridden_keys.includes('pxpipe_models') && (
+                  <div className="form-row" style={{ marginTop: 6 }}>
+                    <AdminButton size="sm" onClick={() => setPendingReset('pxpipe_models')}>
+                      Reset scope
+                    </AdminButton>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="form-group">
             <label className="form-label" htmlFor="cfg-forward-client-auth" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <input
                 id="cfg-forward-client-auth"
@@ -331,7 +402,7 @@ PROXY_API_KEYS=my-key`}
             </div>
           </div>
 
-          {cfg.entries.filter((entry) => !['redact_secrets', 'log_bodies', 'anthropic_thinking_repair', 'forward_client_auth', 'tool_guardrail_mode'].includes(entry.key)).map((entry) => {
+          {cfg.entries.filter((entry) => !['redact_secrets', 'log_bodies', 'anthropic_thinking_repair', 'pxpipe_compress', 'pxpipe_models', 'forward_client_auth', 'tool_guardrail_mode'].includes(entry.key)).map((entry) => {
             const inputId = `cfg-${entry.key}`
             return (
               <div className="form-group" key={entry.key}>

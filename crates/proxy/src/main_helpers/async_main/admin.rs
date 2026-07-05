@@ -106,6 +106,8 @@ pub(crate) async fn init_admin(
         log_bodies: multi_config.log_bodies,
         redact_secrets: multi_config.redact_secrets,
         anthropic_thinking_repair: multi_config.anthropic_thinking_repair,
+        pxpipe_compress: multi_config.pxpipe_compress,
+        pxpipe_models: anyllm_proxy::pxpipe::resolve_default_models_csv(),
         forward_client_auth: multi_config.forward_client_auth,
         tool_guardrail_mode: tool_guardrail_default.clone(),
     };
@@ -113,6 +115,8 @@ pub(crate) async fn init_admin(
         log_bodies: multi_config.log_bodies,
         redact_secrets: multi_config.redact_secrets,
         anthropic_thinking_repair: multi_config.anthropic_thinking_repair,
+        pxpipe_compress: multi_config.pxpipe_compress,
+        pxpipe_models: anyllm_proxy::pxpipe::resolve_default_models_csv(),
         forward_client_auth: multi_config.forward_client_auth,
         tool_guardrail_mode: tool_guardrail_default,
     };
@@ -150,6 +154,12 @@ pub(crate) async fn init_admin(
                 }
                 "anthropic_thinking_repair" => {
                     runtime_config.anthropic_thinking_repair = value == "true";
+                }
+                "pxpipe_compress" => {
+                    runtime_config.pxpipe_compress = value == "true";
+                }
+                "pxpipe_models" => {
+                    runtime_config.pxpipe_models = value.clone();
                 }
                 "forward_client_auth" => {
                     // Defensively re-validate against the same rule

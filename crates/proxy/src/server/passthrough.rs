@@ -221,6 +221,10 @@ pub(crate) async fn anthropic_passthrough(
         }
     }
 
+    // pxpipe compression is decided here but APPLIED after secret redaction
+    // below: imaging bakes the system/tool_result text into PNG pixels, which the
+    // text-based redactor cannot see, so redaction must run on the raw text first.
+    let mut pxpipe_apply: Option<(std::sync::Arc<crate::pxpipe::PxpipeEngine>, String)> = None;
     if let Ok(mut parsed_req) = serde_json::from_slice::<anthropic::MessageCreateRequest>(&body) {
         if let Err(err) = validate_anthropic_tool_request(
             &parsed_req,
@@ -274,9 +278,18 @@ pub(crate) async fn anthropic_passthrough(
                 }
             }
         }
+
+        // Opt-in text-to-image context compression (pxpipe). Decided here (needs
+        // the parsed model for scope/vision gating) but deferred to after
+        // redaction — see the `pxpipe_apply` capture note above. The transform
+        // works on the raw `body` bytes (Value-level) so it can RELOCATE the
+        // caller's cache_control anchor onto the image; it fails open on any error.
+        if let Some(engine) = state.pxpipe_engine_for(&parsed_req.model) {
+            pxpipe_apply = Some((engine, parsed_req.model.clone()));
+        }
     }
 
-    let body = match super::secret_redaction::redact_body_with_content_type(
+    let mut body = match super::secret_redaction::redact_body_with_content_type(
         state.redact_secrets(),
         Some("application/json"),
         body,
@@ -286,6 +299,12 @@ pub(crate) async fn anthropic_passthrough(
         Ok(body) => body,
         Err(err) => return super::secret_redaction::error_response(err),
     };
+
+    // Now that secrets are redacted from the raw text, image the static slab /
+    // large live regions (see the capture note above).
+    if let Some((engine, model)) = pxpipe_apply {
+        body = engine.compress_anthropic(body, &model, &state.metrics);
+    }
 
     if is_stream {
         match client

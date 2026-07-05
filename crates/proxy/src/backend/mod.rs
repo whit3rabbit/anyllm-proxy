@@ -361,6 +361,7 @@ impl BackendClient {
             log_bodies: bc.log_bodies,
             redact_secrets: false,
             anthropic_thinking_repair: false, // not used by BackendClient constructors
+            pxpipe_compress: false,           // not used by BackendClient constructors
             expose_degradation_warnings: false, // not used by BackendClient constructors
             openai_api_format: bc.api_format.clone(),
             provider_id: bc.provider_id.clone(),

@@ -64,6 +64,7 @@ fn single_backend_anthropic_uses_backend_auth_token() {
         log_bodies: false,
         redact_secrets: true,
         anthropic_thinking_repair: false,
+        pxpipe_compress: false,
         expose_degradation_warnings: false,
         openai_api_format: OpenAIApiFormat::Chat,
         provider_id: None,

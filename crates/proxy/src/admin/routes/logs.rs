@@ -19,6 +19,9 @@ pub(super) async fn get_metrics(State(shared): State<SharedState>) -> Json<serde
         aggregate.streams_completed += snap.streams_completed;
         aggregate.streams_failed += snap.streams_failed;
         aggregate.streams_client_disconnected += snap.streams_client_disconnected;
+        aggregate.pxpipe_compressed_total += snap.pxpipe_compressed_total;
+        aggregate.pxpipe_images_total += snap.pxpipe_images_total;
+        aggregate.pxpipe_imaged_chars_total += snap.pxpipe_imaged_chars_total;
     }
 
     let now_secs = std::time::SystemTime::now()
@@ -49,6 +52,9 @@ pub(super) async fn get_metrics(State(shared): State<SharedState>) -> Json<serde
         "streams_completed": aggregate.streams_completed,
         "streams_failed": aggregate.streams_failed,
         "streams_client_disconnected": aggregate.streams_client_disconnected,
+        "pxpipe_compressed_total": aggregate.pxpipe_compressed_total,
+        "pxpipe_images_total": aggregate.pxpipe_images_total,
+        "pxpipe_imaged_chars_total": aggregate.pxpipe_imaged_chars_total,
     }))
 }
 

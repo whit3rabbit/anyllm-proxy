@@ -25,6 +25,8 @@ pub mod openai_tool_policy;
 /// Optional OpenTelemetry OTLP trace export (requires `otel` feature).
 #[cfg(feature = "otel")]
 pub mod otel;
+/// Opt-in text-to-image context compression (Anthropic-passthrough only).
+pub mod pxpipe;
 /// Distributed rate limiting via Redis sorted sets (requires `redis` feature).
 pub mod ratelimit;
 /// In-process chat completion runtime without HTTP route ownership.

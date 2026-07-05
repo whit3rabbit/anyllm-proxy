@@ -106,6 +106,12 @@ pub struct AppState {
     /// regardless of whether the feature is enabled -- use
     /// `thinking_repair_enabled()` to check the live toggle before using it.
     pub thinking_repair: Option<Arc<crate::thinking_repair::ThinkingRepairStore>>,
+    /// Text-to-image context compression engine (pxpipe). `None` unless
+    /// `backend` is `BackendClient::Anthropic`; only consulted by
+    /// `anthropic_passthrough`. Always `Some` for Anthropic backends regardless
+    /// of the live toggle -- use `active_pxpipe()`, which checks
+    /// `RuntimeConfig.pxpipe_compress`, before using it.
+    pub pxpipe: Option<Arc<crate::pxpipe::PxpipeEngine>>,
     /// Model-level router for LiteLLM model_list configs. None for TOML/env configs.
     /// Wrapped in RwLock for dynamic model management via admin API.
     pub model_router: Option<Arc<RwLock<crate::config::model_router::ModelRouter>>>,
@@ -292,6 +298,65 @@ impl AppState {
     ) -> Option<Arc<crate::thinking_repair::ThinkingRepairStore>> {
         if self.thinking_repair_enabled() {
             self.thinking_repair.clone()
+        } else {
+            None
+        }
+    }
+
+    /// The pxpipe compression engine, but only when the live admin-toggleable
+    /// flag (`RuntimeConfig.pxpipe_compress`) is on. `None` both when the engine
+    /// is absent (non-Anthropic backend) and when present-but-disabled.
+    pub(crate) fn active_pxpipe(&self) -> Option<Arc<crate::pxpipe::PxpipeEngine>> {
+        let enabled = self
+            .runtime_config
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .pxpipe_compress;
+        if enabled {
+            self.pxpipe.clone()
+        } else {
+            None
+        }
+    }
+
+    /// Live model-scope CSV for pxpipe (`RuntimeConfig.pxpipe_models`).
+    pub(crate) fn pxpipe_models(&self) -> String {
+        self.runtime_config
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .pxpipe_models
+            .clone()
+    }
+
+    /// Vision gate: if the catalog knows this model and says it is NOT
+    /// vision-capable, refuse (fail-closed). Unknown models fall back to the
+    /// scope list only — a Claude passthrough model is vision-capable in
+    /// practice, and the scope list is the operator's explicit control.
+    fn pxpipe_vision_ok(&self, model: &str) -> bool {
+        match self
+            .provider_id
+            .as_deref()
+            .and_then(|pid| self.provider_catalog.get_model(pid, model))
+        {
+            Some(def) => def.capabilities.vision,
+            None => true,
+        }
+    }
+
+    /// The pxpipe engine for `model`, or `None` if compression shouldn't run:
+    /// the master toggle is off, the engine is absent (non-Anthropic backend),
+    /// the model is out of the live scope CSV, or it isn't vision-capable.
+    /// Single accessor so `passthrough` collapses to
+    /// `if let Some(engine) = state.pxpipe_engine_for(model)`.
+    pub(crate) fn pxpipe_engine_for(
+        &self,
+        model: &str,
+    ) -> Option<Arc<crate::pxpipe::PxpipeEngine>> {
+        let engine = self.active_pxpipe()?;
+        if crate::pxpipe::model_in_scope(model, &self.pxpipe_models())
+            && self.pxpipe_vision_ok(model)
+        {
+            Some(engine)
         } else {
             None
         }

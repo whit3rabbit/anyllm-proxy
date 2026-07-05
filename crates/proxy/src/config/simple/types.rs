@@ -21,6 +21,9 @@ pub struct SimpleConfig {
     /// Enable Anthropic thinking-block record-and-restore repair (BACKEND=anthropic passthrough only).
     #[serde(default)]
     pub anthropic_thinking_repair: Option<bool>,
+    /// Enable text-to-image context compression (pxpipe; BACKEND=anthropic passthrough only).
+    #[serde(default)]
+    pub pxpipe_compress: Option<bool>,
     /// List of model deployments.
     #[serde(default)]
     pub models: Vec<SimpleModelEntry>,
