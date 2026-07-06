@@ -10,8 +10,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ## [Unreleased]
 
+---
+
+## [0.12.0] - 2026-07-05
+
 ### Added
-- Opt-in text-to-image context compression (pxpipe port), `PXPIPE_COMPRESS=true`. On the Anthropic
+- Opt-in text-to-image context compression (**experimental**), `PXPIPE_COMPRESS=true`. On the Anthropic
   passthrough path (`BACKEND=anthropic`), renders the stable system-prompt + tool-definition slab
   into a deterministic PNG glyph image and swaps it into the first user message, moving the caller's
   `cache_control` breakpoint onto the image so the imaged prefix still prompt-caches. Also images
@@ -37,7 +41,37 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
   models and writes the scope CSV; `PXPIPE_MODELS` env seeds the default (`claude-fable-5`). Non-vision
   or out-of-scope models pass through untouched.
 
----
+- Opt-in `ANTHROPIC_FORWARD_CLIENT_AUTH` for Anthropic passthrough: forwards the client's own
+  incoming `x-api-key`/`Authorization`/`x-goog-api-key` credential upstream (renamed to `x-api-key`
+  when it came in as `x-goog-api-key`, since Anthropic doesn't recognize that header name) instead
+  of the operator's configured credential, for single-key/BYOK deployments (e.g. using Claude
+  Code's own Pro/Max subscription OAuth token directly, no separate `claude setup-token` step).
+  Only applies when the request authenticated via a static `PROXY_API_KEYS` entry or
+  `PROXY_OPEN_RELAY`; virtual-key and OIDC-authenticated requests always use the operator's own
+  credential regardless of the toggle. Applies uniformly to every Anthropic-kind backend in a
+  multi-backend deployment (one shared runtime setting, like `ANTHROPIC_THINKING_REPAIR`) and is
+  live-toggleable from the admin UI (**Settings**) / `PUT /admin/api/config` with no restart.
+  Enabling it (at startup or live) is rejected when `PROXY_API_KEYS` has 2+ distinct entries and no
+  open relay, since that combination would let different callers each redirect the upstream
+  Anthropic credential.
+
+- Opt-in Forge-style tool-call guardrails: advisory nudges for `lsp_first`, `quiet_command`, and
+  `write_payload_cap` policies, plus fingerprint-based dedup of repeated tool calls. Configure via
+  the simple-YAML `tool_execution.guardrails` key or the `FORGE_TOOL_CALL_POLICY` env var (the env
+  var is ignored when `tool_execution.guardrails` is already set in YAML). Not available when using
+  the LiteLLM-format config loader, which does not parse the `guardrails` key.
+
+- Refreshed the LiteLLM provider/model catalog: added 7 new providers (`darkbloom`, `libertai`,
+  `pinstripes`, `scaleway`, `tencent`, `tensormesh`, `tinyfish`) and corrected model/pricing drift
+  across ~28 existing providers (missing models, stale `max_output_tokens`, capability flags).
+  Removed the now-redundant hand-maintained `scaleway` legacy stub in favor of the generated
+  snapshot entry. Refreshed `assets/model_pricing.json` to add `claude-sonnet-5`.
+
+### Security
+- Bumped `opentelemetry`/`opentelemetry_sdk`/`opentelemetry-otlp` (0.31 -> 0.32) and
+  `tracing-opentelemetry` (0.32 -> 0.33) behind the optional `otel` feature, fixing a Dependabot
+  advisory in `opentelemetry_sdk` (unbounded memory allocation in W3C Baggage propagation,
+  patched upstream in 0.32.1).
 
 ## [0.11.0] - 2026-07-04
 
