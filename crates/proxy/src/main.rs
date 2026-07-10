@@ -12,10 +12,18 @@ fn main() {
     // inherited from the parent process; skip env file loading to avoid duplicate messages.
     let is_run_child = std::env::var("_ANYLLM_RUN_CHILD").is_ok();
 
+    // Admin mode is on when --webui/--admin is passed and not force-disabled;
+    // mirrors init_admin's gate. Used to keep startup output quiet in that mode.
+    let admin_mode = (args.iter().any(|a| a == "--webui" || a == "--admin"))
+        && !matches!(
+            std::env::var("DISABLE_ADMIN").as_deref(),
+            Ok("1") | Ok("true") | Ok("yes")
+        );
+
     // Resolve the data directory early so all path defaults can use it.
     let data_dir = main_helpers::bootstrap::resolve_data_dir();
     if !is_run_child {
-        eprintln!("anyllm_proxy: data directory: {}", data_dir.display());
+        eprintln!("anyllm-proxy: data directory: {}", data_dir.display());
         let data_dir_env = data_dir.join(".anyllm.env");
         let env_file_path = args
             .windows(2)
@@ -43,7 +51,7 @@ fn main() {
         }
         if !env_file_vars.is_empty() {
             eprintln!(
-                "anyllm_proxy: loaded {} variable(s) from env file",
+                "anyllm-proxy: loaded {} variable(s) from env file",
                 env_file_vars.len()
             );
         }
@@ -70,7 +78,7 @@ fn main() {
                 }
             }
             eprintln!(
-                "anyllm_proxy: applied {} variable(s) from admin DB env import",
+                "anyllm-proxy: applied {} variable(s) from admin DB env import",
                 db_vars.len()
             );
         }
@@ -82,13 +90,13 @@ fn main() {
         if data_config.exists() {
             let path_str = data_config.to_string_lossy().into_owned();
             unsafe { std::env::set_var("PROXY_CONFIG", &path_str) };
-            eprintln!("anyllm_proxy: auto-detected config: {path_str}");
+            eprintln!("anyllm-proxy: auto-detected config: {path_str}");
         }
     }
 
     if args.iter().any(|arg| arg == "--redact-secrets") {
         unsafe { std::env::set_var("REDACT_SECRETS", "true") };
-        eprintln!("anyllm_proxy: REDACT_SECRETS enabled by --redact-secrets");
+        eprintln!("anyllm-proxy: REDACT_SECRETS enabled by --redact-secrets");
     }
 
     // Extract litellm master_key before the runtime starts (still single-threaded).
@@ -97,7 +105,7 @@ fn main() {
             if let Some(mk) = config::extract_litellm_master_key(config_path) {
                 // SAFETY: genuinely single-threaded here (no tokio runtime yet).
                 unsafe { std::env::set_var("PROXY_API_KEYS", &mk) };
-                eprintln!("anyllm_proxy: applied general_settings.master_key as PROXY_API_KEYS");
+                eprintln!("anyllm-proxy: applied general_settings.master_key as PROXY_API_KEYS");
             }
         }
     }
@@ -105,8 +113,15 @@ fn main() {
     // Warn when no backend is configured so users aren't left guessing why
     // requests fail. Skip when spawned as a child of the "run" subcommand.
     if !is_run_child && !anyllm_proxy::admin::routes::status::is_backend_configured() {
-        eprintln!(
-            "\n\
+        // In admin mode the UI shows a getting-started guide, so keep the CLI
+        // quiet — one line instead of the full backend cheat-sheet.
+        if admin_mode {
+            eprintln!(
+                "\nanyllm-proxy: no backend configured yet — open the admin UI to set one up.\n"
+            );
+        } else {
+            eprintln!(
+                "\n\
 anyllm-proxy: no backend configured. The proxy has nothing to forward requests to.\n\
 \n\
 The proxy needs an endpoint to forward to (backend) and a port to listen on (front).\n\
@@ -130,16 +145,17 @@ Save to ~/.anyllm/.anyllm.env or load explicitly:\n\
   anyllm-proxy --env-file /path/to/.anyllm.env\n\
 \n\
 Configure via UI:  anyllm-proxy --webui\n"
-        );
+            );
+        }
     }
 
-    // Detect "run" subcommand: anyllm_proxy [proxy_opts...] run <command> [args...]
+    // Detect "run" subcommand: anyllm-proxy [proxy_opts...] run <command> [args...]
     // Starts the proxy in the background and launches <command> with the proxy's
     // ANTHROPIC_* env vars pre-configured, then exits when <command> exits.
     if let Some(run_idx) = args.iter().position(|a| a == "run") {
         let tool_argv: Vec<String> = args[run_idx + 1..].to_vec();
         if tool_argv.is_empty() {
-            eprintln!("usage: anyllm_proxy [--env-file FILE] run <command> [args...]");
+            eprintln!("usage: anyllm-proxy [--env-file FILE] run <command> [args...]");
             std::process::exit(1);
         }
         // Proxy args: everything between the binary name and "run".

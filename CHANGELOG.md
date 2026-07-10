@@ -10,6 +10,24 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ## [Unreleased]
 
+### Changed
+- The compiled binary is now named `anyllm-proxy` (hyphen) directly, matching the installed
+  name across Homebrew/deb/release archives. The crate/package name stays `anyllm_proxy`
+  (`cargo install anyllm_proxy`, `cargo run -p anyllm_proxy` unchanged). README run commands
+  updated to `anyllm-proxy`.
+- Terminal logs default to human-readable format when stdout is a TTY, and JSON when piped
+  (Docker/systemd) — previously always JSON. Override with `LOG_FORMAT=json` or `LOG_FORMAT=text`.
+- `--webui`/`--admin` with no backend now prints a one-line hint pointing to the admin UI instead
+  of the full backend cheat-sheet (which the UI already shows).
+
+### Added
+- On loopback admin binds (the default), the startup banner prints a ready-to-click admin URL with
+  the token (`.../admin/?token=...`), so you no longer need to `cat ~/.anyllm/.admin_token`. Omitted
+  on non-loopback binds (`ADMIN_BIND=0.0.0.0`) to avoid leaking the token into aggregated logs.
+  The admin UI now reads `?token=` from that URL to log in automatically, then strips it from the
+  address bar (previously the SPA ignored the query param and still showed the login prompt).
+  The banner also prints the bare token on its own `Token` line for easy copy/paste (loopback only).
+
 ---
 
 ## [0.12.0] - 2026-07-05

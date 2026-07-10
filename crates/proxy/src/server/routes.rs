@@ -194,7 +194,7 @@ pub fn app_multi_with_shared(
         // the old states (all_backends=None), this only affects the default backend
         // and cross-backend routing lookups via effective_state(). The sub-router
         // states don't need all_backends because they are only reached by prefix.
-        for (_, (state, _)) in backend_states.iter_mut() {
+        for (state, _) in backend_states.values_mut() {
             state.all_backends = Some(all_map.clone());
         }
     }

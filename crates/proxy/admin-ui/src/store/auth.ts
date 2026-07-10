@@ -8,7 +8,30 @@ interface AuthState {
 
 const STORAGE_KEY = 'anyllm_admin_token'
 
+// Pull a `?token=` value out of the URL (the ready-to-click admin URL printed
+// at startup on loopback binds), then strip it so it doesn't linger in
+// scrollback / bookmarks / history. Returns null when absent.
+function takeTokenFromUrl(): string | null {
+  try {
+    const params = new URLSearchParams(window.location.search)
+    const token = params.get('token')
+    if (!token) return null
+    params.delete('token')
+    const search = params.toString()
+    const url = window.location.pathname + (search ? `?${search}` : '') + window.location.hash
+    window.history.replaceState(null, '', url)
+    return token
+  } catch {
+    return null
+  }
+}
+
 function getStoredToken(): string | null {
+  const fromUrl = takeTokenFromUrl()
+  if (fromUrl) {
+    setStoredToken(fromUrl)
+    return fromUrl
+  }
   try {
     return window.sessionStorage.getItem(STORAGE_KEY)
   } catch {

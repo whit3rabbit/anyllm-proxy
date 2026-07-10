@@ -61,8 +61,8 @@ SMALL_MODEL=qwen2.5-coder:32b
 Run the proxy (auto-loads `.anyllm.env` from `~/.anyllm/` or the current directory):
 
 ```bash
-anyllm_proxy
-# or: anyllm_proxy --env-file ~/configs/ollama.env
+anyllm-proxy
+# or: anyllm-proxy --env-file ~/configs/ollama.env
 ```
 
 Point Claude Code at the proxy:
@@ -78,7 +78,7 @@ claude
 Or use the `run` subcommand to do the same in one step:
 
 ```bash
-anyllm_proxy run claude
+anyllm-proxy run claude
 ```
 
 ### Simple mode vs. advanced mode
@@ -105,7 +105,7 @@ OPENAI_API_KEY=unused \
 OPENAI_BASE_URL=http://localhost:11434/v1 \
 BIG_MODEL=qwen2.5-coder:32b \
 SMALL_MODEL=qwen2.5-coder:32b \
-anyllm_proxy
+anyllm-proxy
 ```
 
 Use the same pattern for **LM Studio** (port `1234`) or **vLLM** (port `8000`) by substituting `OPENAI_BASE_URL`.
@@ -116,7 +116,7 @@ If your local LLM rejects `stream_options`, set `OMIT_STREAM_OPTIONS=true`.
 
 **OpenAI:**
 ```bash
-OPENAI_API_KEY=sk-... BIG_MODEL=gpt-4o SMALL_MODEL=gpt-4o-mini anyllm_proxy
+OPENAI_API_KEY=sk-... BIG_MODEL=gpt-4o SMALL_MODEL=gpt-4o-mini anyllm-proxy
 ```
 
 **OpenRouter:**
@@ -126,19 +126,19 @@ BACKEND=openrouter \
 OPENROUTER_API_KEY=sk-or-... \
 BIG_MODEL=anthropic/claude-3.5-sonnet \
 SMALL_MODEL=anthropic/claude-3-haiku \
-anyllm_proxy
+anyllm-proxy
 
 # Or via the generic OpenAI-compat path:
 OPENAI_API_KEY=sk-or-... \
 OPENAI_BASE_URL=https://openrouter.ai/api/v1 \
 BIG_MODEL=anthropic/claude-3.5-sonnet \
 SMALL_MODEL=anthropic/claude-3-haiku \
-anyllm_proxy
+anyllm-proxy
 ```
 
 **Google Gemini:**
 ```bash
-BACKEND=gemini GEMINI_API_KEY=AIza... anyllm_proxy
+BACKEND=gemini GEMINI_API_KEY=AIza... anyllm-proxy
 ```
 
 **Azure OpenAI:**
@@ -147,7 +147,7 @@ BACKEND=azure \
 AZURE_OPENAI_ENDPOINT=https://myresource.openai.azure.com \
 AZURE_OPENAI_DEPLOYMENT=my-gpt4o \
 AZURE_OPENAI_API_KEY=... \
-anyllm_proxy
+anyllm-proxy
 ```
 
 **AWS Bedrock:**
@@ -158,12 +158,12 @@ AWS_ACCESS_KEY_ID=AKIA... \
 AWS_SECRET_ACCESS_KEY=... \
 BIG_MODEL=anthropic.claude-3-5-sonnet-20241022-v2:0 \
 SMALL_MODEL=anthropic.claude-3-5-haiku-20241022-v1:0 \
-anyllm_proxy
+anyllm-proxy
 ```
 
 **Anthropic Passthrough** (no translation, for auth/routing/rate-limiting only):
 ```bash
-BACKEND=anthropic ANTHROPIC_API_KEY=sk-ant-... anyllm_proxy
+BACKEND=anthropic ANTHROPIC_API_KEY=sk-ant-... anyllm-proxy
 ```
 
 **With tool-call guardrails, thinking-block repair, and body logging enabled** (one command):
@@ -171,7 +171,7 @@ BACKEND=anthropic ANTHROPIC_API_KEY=sk-ant-... anyllm_proxy
 BACKEND=anthropic ANTHROPIC_API_KEY=sk-ant-... \
 FORGE_TOOL_CALL_POLICY=standard ANTHROPIC_THINKING_REPAIR=true \
 LOG_BODIES=true RUST_LOG=info \
-anyllm_proxy
+anyllm-proxy
 ```
 - `FORGE_TOOL_CALL_POLICY=standard` — opt-in tool-call guardrails (nudges Claude toward LSP tools over grep, quieter shell commands, and caps oversized write/edit payloads). Also toggleable live from the admin UI (`Settings` tab) with no restart.
 - `ANTHROPIC_THINKING_REPAIR=true` — records each response's thinking blocks as ground truth and repairs them if a client-side replay corrupts them, instead of erroring out. Also live-toggleable from the admin UI.
@@ -192,7 +192,7 @@ BACKEND=anthropic ANTHROPIC_AUTH_TOKEN=<token-from-setup-token> \
 FORGE_TOOL_CALL_POLICY=standard ANTHROPIC_THINKING_REPAIR=true \
 LOG_BODIES=true RUST_LOG=info \
 PROXY_OPEN_RELAY=true \
-anyllm_proxy
+anyllm-proxy
 
 # 3. Point Claude Code at the proxy (this credential is only checked by the
 #    proxy's own inbound gate above -- PROXY_OPEN_RELAY=true accepts any
@@ -209,7 +209,7 @@ BACKEND=anthropic ANTHROPIC_FORWARD_CLIENT_AUTH=true \
 FORGE_TOOL_CALL_POLICY=standard ANTHROPIC_THINKING_REPAIR=true \
 LOG_BODIES=true RUST_LOG=info \
 PROXY_OPEN_RELAY=true \
-anyllm_proxy
+anyllm-proxy
 ```
 
 Since the credential that gets the request past the proxy's own gate becomes the literal credential sent to Anthropic, this is single-key/BYOK only: it's automatically skipped (falls back to the operator's own credential) for virtual-key or OIDC-authenticated requests, and the proxy refuses to start if it's on alongside 2+ `PROXY_API_KEYS` entries with no `PROXY_OPEN_RELAY`. See [docs/ENV.md](docs/ENV.md#forwarding-the-clients-own-credential-anthropic_forward_client_authtrue) for the safeguard details.
@@ -223,7 +223,7 @@ See [docs/ENV.md](docs/ENV.md) for the full variable reference.
 Pass `--webui` (or `--admin`) to start the admin dashboard alongside the proxy:
 
 ```bash
-anyllm_proxy --webui
+anyllm-proxy --webui
 # Proxy:     http://localhost:3000
 # Admin UI:  http://127.0.0.1:3001/admin/?token=$(cat ~/.anyllm/.admin_token)
 ```
@@ -243,7 +243,7 @@ The admin server binds to `127.0.0.1:3001` by default (localhost only). Dashboar
 **Token:** On first start an admin token is auto-generated and written to `~/.anyllm/.admin_token`. Pass it as `?token=` in the URL or `Authorization: Bearer` for API calls. To set a fixed token:
 
 ```bash
-ADMIN_TOKEN=mysecret anyllm_proxy --webui
+ADMIN_TOKEN=mysecret anyllm-proxy --webui
 # Generate a strong token: openssl rand -hex 32
 ```
 
@@ -265,8 +265,8 @@ ADMIN_TOKEN=mysecret anyllm_proxy --webui
 **Custom port / disable:**
 
 ```bash
-ADMIN_PORT=4000 anyllm_proxy --webui          # change port
-DISABLE_ADMIN=1 anyllm_proxy --webui          # do not start admin even when flag is present
+ADMIN_PORT=4000 anyllm-proxy --webui          # change port
+DISABLE_ADMIN=1 anyllm-proxy --webui          # do not start admin even when flag is present
 ```
 
 **Docker:** The admin server must be reachable from outside the container. Set `ADMIN_BIND=0.0.0.0` and expose the port:
@@ -375,7 +375,7 @@ small_model = "deepseek-chat"
 ```
 
 ```bash
-PROXY_CONFIG=config.toml anyllm_proxy --webui
+PROXY_CONFIG=config.toml anyllm-proxy --webui
 ```
 
 All three backends are live at once:
@@ -395,7 +395,7 @@ Additional per-backend fields: `api_format = "chat"` (OpenAI only; `chat` or `re
 anyllm-proxy accepts LiteLLM `config.yaml` files directly:
 
 ```bash
-PROXY_CONFIG=config.yaml anyllm_proxy --webui
+PROXY_CONFIG=config.yaml anyllm-proxy --webui
 ```
 
 ```yaml
@@ -440,7 +440,7 @@ See [docs/COMPARISON_LITELLM.md](docs/COMPARISON_LITELLM.md) for a full feature 
 For completely separate proxy processes (different ports, machines, or containers), keep one `.env` file per deployment:
 
 ```bash
-anyllm_proxy --env-file ~/proxies/deepseek.env
+anyllm-proxy --env-file ~/proxies/deepseek.env
 # Docker-compatible:
 docker run --env-file ~/proxies/openai-prod.env -p 3000:3000 anyllm-proxy
 ```

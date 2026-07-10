@@ -185,20 +185,28 @@ pub async fn async_main(args: Vec<String>, data_dir: PathBuf) {
 
     let mut admin_redirect_port: Option<u16> = None;
     let mut admin_startup_info: Option<String> = None;
+    // Bare token printed on its own banner line for easy copy/paste. Only set on
+    // loopback binds — same leak-avoidance rule as the tokenized URL.
+    let mut admin_token_display: Option<String> = None;
     let enable_admin = admin_parts.is_some();
 
-    if let Some((_, _, _, admin_port)) = &admin_parts {
+    if let Some((_, _, _, admin_port, admin_token)) = &admin_parts {
         admin_redirect_port = Some(*admin_port);
         let admin_bind = std::env::var("ADMIN_BIND").unwrap_or_else(|_| "127.0.0.1".into());
+        let is_loopback = admin_bind
+            .parse::<std::net::IpAddr>()
+            .map(|ip| ip.is_loopback())
+            .unwrap_or(false);
         let admin_display_host = if admin_bind == "0.0.0.0" {
             "localhost"
         } else {
             &admin_bind
         };
-        admin_startup_info = Some(format!(
-            "http://{}:{}/admin/",
-            admin_display_host, admin_port
-        ));
+        let base = format!("http://{}:{}/admin/", admin_display_host, admin_port);
+        admin_startup_info = Some(admin_url_with_token(&base, &admin_bind, admin_token));
+        if is_loopback {
+            admin_token_display = Some(admin_token.to_string());
+        }
     }
 
     // Initialize batch engine with its own connection to the same DB file.
@@ -256,7 +264,7 @@ pub async fn async_main(args: Vec<String>, data_dir: PathBuf) {
     // Build proxy router with optional shared admin state and tool engine.
     let app = routes::app_multi_with_shared(
         multi_config,
-        admin_parts.as_ref().map(|(s, _, _, _)| s.clone()),
+        admin_parts.as_ref().map(|(s, _, _, _, _)| s.clone()),
         model_router,
         tool_engine_state,
         batch_engine,
@@ -272,7 +280,10 @@ pub async fn async_main(args: Vec<String>, data_dir: PathBuf) {
 
     // Print non-secret startup details once both servers are bound.
     if let Some(admin_url) = &admin_startup_info {
-        println!("{}", format_startup_banner(&proxy_addr, admin_url));
+        println!(
+            "{}",
+            format_startup_banner(&proxy_addr, admin_url, admin_token_display.as_deref())
+        );
     }
 
     // Warn if API keys are configured and listener is on a non-loopback address.
@@ -283,7 +294,7 @@ pub async fn async_main(args: Vec<String>, data_dir: PathBuf) {
     let has_proxy_keys = std::env::var("PROXY_API_KEYS").is_ok();
     let has_virtual_keys = admin_parts
         .as_ref()
-        .map(|(shared, _, _, _)| !shared.virtual_keys.is_empty())
+        .map(|(shared, _, _, _, _)| !shared.virtual_keys.is_empty())
         .unwrap_or(false);
 
     if (has_proxy_keys || has_virtual_keys) && !listen_addr.ip().is_loopback() {
@@ -321,7 +332,7 @@ pub async fn async_main(args: Vec<String>, data_dir: PathBuf) {
     });
 
     let admin_handle: Option<tokio::task::JoinHandle<()>> =
-        if let Some((_, admin_app, admin_listener, _)) = admin_parts {
+        if let Some((_, admin_app, admin_listener, _, _)) = admin_parts {
             let mut shutdown_rx2 = shutdown_tx.subscribe();
             Some(tokio::spawn(async move {
                 axum::serve(
@@ -348,10 +359,31 @@ pub async fn async_main(args: Vec<String>, data_dir: PathBuf) {
     tracing::info!("server shut down gracefully");
 }
 
-fn format_startup_banner(proxy_addr: &str, admin_url: &str) -> String {
+fn format_startup_banner(proxy_addr: &str, admin_url: &str, admin_token: Option<&str>) -> String {
     let proxy_display = proxy_addr.replace("0.0.0.0", "localhost");
     let border = "─".repeat(56);
-    format!("{border}\n  Proxy API  http://{proxy_display}\n  Admin UI   {admin_url}\n{border}")
+    let token_line = match admin_token {
+        Some(token) => format!("\n  Token      {token}"),
+        None => String::new(),
+    };
+    format!(
+        "{border}\n  Proxy API  http://{proxy_display}\n  Admin UI   {admin_url}{token_line}\n{border}"
+    )
+}
+
+/// Append `?token=<token>` to the admin URL only when the bind address is
+/// loopback (local dev). On non-loopback binds (0.0.0.0/remote) the token is
+/// omitted to avoid leaking it into aggregated logs / terminal scrollback.
+fn admin_url_with_token(base: &str, admin_bind: &str, token: &str) -> String {
+    let is_loopback = admin_bind
+        .parse::<std::net::IpAddr>()
+        .map(|ip| ip.is_loopback())
+        .unwrap_or(false);
+    if is_loopback {
+        format!("{base}?token={token}")
+    } else {
+        base.to_string()
+    }
 }
 
 async fn shutdown_signal() {
@@ -378,14 +410,39 @@ mod tests {
     use super::*;
 
     #[test]
-    fn startup_banner_does_not_include_admin_token() {
+    fn admin_url_appends_token_on_loopback_only() {
         let token = "sentinel-admin-token-0123456789abcdef";
-        let banner = format_startup_banner("0.0.0.0:3000", "http://127.0.0.1:3001/admin/");
+        let base = "http://127.0.0.1:3001/admin/";
 
+        // Loopback binds get the ready-to-click tokenized URL.
+        for bind in ["127.0.0.1", "::1"] {
+            let url = admin_url_with_token(base, bind, token);
+            assert_eq!(url, format!("{base}?token={token}"), "bind {bind}");
+        }
+
+        // Non-loopback binds omit the token.
+        for bind in ["0.0.0.0", "192.168.1.10", "not-an-ip"] {
+            let url = admin_url_with_token(base, bind, token);
+            assert_eq!(url, base, "bind {bind}");
+            assert!(!url.contains(token), "bind {bind} leaked token");
+        }
+    }
+
+    #[test]
+    fn startup_banner_formats_url_verbatim() {
+        let banner = format_startup_banner("0.0.0.0:3000", "http://127.0.0.1:3001/admin/", None);
         assert!(banner.contains("Proxy API  http://localhost:3000"));
         assert!(banner.contains("Admin UI   http://127.0.0.1:3001/admin/"));
-        assert!(!banner.contains(token));
-        assert!(!banner.contains("Admin token:"));
-        assert!(!banner.contains("Token      "));
+        assert!(!banner.contains("Token"), "no token line when None");
+    }
+
+    #[test]
+    fn startup_banner_includes_token_line_when_present() {
+        let banner = format_startup_banner(
+            "0.0.0.0:3000",
+            "http://127.0.0.1:3001/admin/?token=abc",
+            Some("abc"),
+        );
+        assert!(banner.contains("Token      abc"));
     }
 }

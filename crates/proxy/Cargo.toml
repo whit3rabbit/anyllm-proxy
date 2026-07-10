@@ -6,6 +6,12 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 
+# Package name stays anyllm_proxy (crates.io / `-p` selector), but emit the
+# binary as anyllm-proxy so one hyphenated name flows through deb/brew/release.
+[[bin]]
+name = "anyllm-proxy"
+path = "src/main.rs"
+
 [dependencies]
 anyllm_translate = { path = "../translator", version = "0.12.0" }
 anyllm_client = { path = "../client", version = "0.12.0" }
@@ -110,7 +116,7 @@ HTTP proxy that accepts Anthropic Messages API and OpenAI Chat Completions \
 requests, translates between formats, and forwards to any supported backend. \
 Supports streaming SSE, tool calling, virtual key management, and cost tracking."""
 assets = [
-    ["target/release/anyllm_proxy", "/usr/bin/anyllm-proxy", "755"],
+    ["target/release/anyllm-proxy", "/usr/bin/anyllm-proxy", "755"],
     ["../../packaging/anyllm-proxy.service", "/lib/systemd/system/anyllm-proxy.service", "644"],
     ["../../packaging/anyllm-proxy.default", "/etc/default/anyllm-proxy", "640"],
 ]

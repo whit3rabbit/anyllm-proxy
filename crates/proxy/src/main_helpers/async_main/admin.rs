@@ -20,6 +20,9 @@ pub(crate) async fn init_admin(
     axum::Router,
     tokio::net::TcpListener,
     u16,
+    // Plaintext admin token, returned so the caller can print a ready-to-click
+    // tokenized URL on loopback binds. Dropped right after the startup banner.
+    String,
 )> {
     let flag_set = args.iter().any(|a| a == "--webui" || a == "--admin");
     let force_disabled = matches!(
@@ -400,12 +403,15 @@ pub(crate) async fn init_admin(
             } else {
                 tracing::info!(
                     path = %token_path_str,
-                    "admin token written to file — retrieve with: cat {token_path_str} | set ADMIN_TOKEN env var to use a fixed token across restarts"
+                    "admin token written to {token_path_str}; set ADMIN_TOKEN for a fixed token across restarts"
                 );
             }
             token
         }
     };
+    // Keep a plaintext copy to return for the loopback startup URL before the
+    // token is wrapped/zeroized and moved into the router.
+    let admin_token_plain = admin_token.clone();
     let admin_token = Arc::new(zeroize::Zeroizing::new(admin_token));
 
     let shared = admin::state::SharedState {
@@ -579,7 +585,7 @@ pub(crate) async fn init_admin(
                 continue;
             }
             let mut aggregate = anyllm_proxy::metrics::MetricsSnapshot::default();
-            for (_, m) in snapshot_shared.backend_metrics.iter() {
+            for m in snapshot_shared.backend_metrics.values() {
                 let snap = m.snapshot();
                 aggregate.requests_total += snap.requests_total;
                 aggregate.requests_error += snap.requests_error;
@@ -636,5 +642,11 @@ pub(crate) async fn init_admin(
         .unwrap_or_else(|e| panic!("failed to bind admin to {admin_addr}: {e}"));
     tracing::info!("admin listening on {admin_addr}");
 
-    Some((shared, admin_app, admin_listener, admin_port))
+    Some((
+        shared,
+        admin_app,
+        admin_listener,
+        admin_port,
+        admin_token_plain,
+    ))
 }

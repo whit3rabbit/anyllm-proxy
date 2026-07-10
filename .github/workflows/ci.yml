@@ -76,25 +76,25 @@ jobs:
           # Linux x86_64
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            binary: anyllm_proxy
+            binary: anyllm-proxy
             deb_arch: amd64
           # Linux ARM64 (native GitHub runner)
           - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
-            binary: anyllm_proxy
+            binary: anyllm-proxy
             deb_arch: arm64
           # macOS Apple Silicon
           - os: macos-latest
             target: aarch64-apple-darwin
-            binary: anyllm_proxy
+            binary: anyllm-proxy
           # macOS Intel
           - os: macos-latest
             target: x86_64-apple-darwin
-            binary: anyllm_proxy
+            binary: anyllm-proxy
           # Windows x86_64
           - os: windows-2025
             target: x86_64-pc-windows-msvc
-            binary: anyllm_proxy.exe
+            binary: anyllm-proxy.exe
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
@@ -305,11 +305,8 @@ jobs:
           VERSION="${{ github.ref_name }}"
           VERSION="${VERSION#v}"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          chmod +x ./macos/arm64/anyllm_proxy ./macos/x86_64/anyllm_proxy
+          chmod +x ./macos/arm64/anyllm-proxy ./macos/x86_64/anyllm-proxy
           mkdir -p dist
-          # rename binary to anyllm-proxy inside the archive (hyphen, not underscore)
-          cp ./macos/arm64/anyllm_proxy  ./macos/arm64/anyllm-proxy
-          cp ./macos/x86_64/anyllm_proxy ./macos/x86_64/anyllm-proxy
           tar -czf "dist/anyllm-proxy-${VERSION}-macos-arm64.tar.gz"   -C ./macos/arm64  anyllm-proxy
           tar -czf "dist/anyllm-proxy-${VERSION}-macos-x86_64.tar.gz"  -C ./macos/x86_64 anyllm-proxy
       - name: Upload macOS tarballs to GitHub Release

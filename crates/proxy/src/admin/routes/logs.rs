@@ -10,7 +10,7 @@ use axum::{
 /// Response shape matches the TypeScript `Metrics` interface in admin-ui/src/api/types.ts.
 pub(super) async fn get_metrics(State(shared): State<SharedState>) -> Json<serde_json::Value> {
     let mut aggregate = crate::metrics::MetricsSnapshot::default();
-    for (_, m) in shared.backend_metrics.iter() {
+    for m in shared.backend_metrics.values() {
         let snap = m.snapshot();
         aggregate.requests_total += snap.requests_total;
         aggregate.requests_success += snap.requests_success;
