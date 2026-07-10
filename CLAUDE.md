@@ -129,9 +129,10 @@ Publishing is fully automated via CI. There is no separate release script.
 **To cut a release:**
 1. Update `CHANGELOG.md`: move bullet points from `[Unreleased]` into a new `## [X.Y.Z] - YYYY-MM-DD` section.
 2. Bump the version: `Cargo.toml` (workspace), `crates/client/Cargo.toml` (pinned directly), and inter-crate `version = "X.Y.Z"` refs in `crates/batch_engine/Cargo.toml` and `crates/proxy/Cargo.toml`.
-3. Run `act -j test` locally before pushing — it runs the same `cargo audit` step as CI (fresh advisory-db pull), catching new RUSTSEC advisories before they show up as a CI failure post-push.
-4. Commit and push to main.
-5. Push a tag: `git tag vX.Y.Z && git push origin vX.Y.Z`
+3. Update `README.md`: the deb filename in the Linux install snippet is pinned (`anyllm-proxy_X.Y.Z-1_amd64.deb`). The `/releases/latest/download/` URL resolves to the latest release but still needs the exact current filename, so bump the version there.
+4. Run `act -j test` locally before pushing — it runs the same `cargo audit` step as CI (fresh advisory-db pull), catching new RUSTSEC advisories before they show up as a CI failure post-push.
+5. Commit and push to main.
+6. Push a tag: `git tag vX.Y.Z && git push origin vX.Y.Z`
 
 CI does the rest on tag push: builds binaries (Linux/macOS/Windows), packages debs, runs deb install tests, creates the GitHub Release using the CHANGELOG section for that version as the release body, uploads release assets, publishes all crates to crates.io in dependency order, and updates the Homebrew tap.
 
