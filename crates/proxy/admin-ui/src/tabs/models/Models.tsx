@@ -31,6 +31,10 @@ export default function Models() {
   const { data: backends } = useBackends()
   const { data: managedBackends } = useManagedBackends()
   const [name, setName] = useState('')
+  // Last value we auto-filled into Virtual Name from a discovered model. Lets us
+  // re-prefill when the user picks a different model, without clobbering a name
+  // they typed by hand (name !== autoName => they edited it, leave it alone).
+  const [autoName, setAutoName] = useState('')
   const [model, setModel] = useState('')
   const [backendName, setBackendName] = useState('')
   const [discoverSource, setDiscoverSource] = useState('openrouter')
@@ -45,6 +49,13 @@ export default function Models() {
       source: discoverSource,
       ...(discoverSource === 'custom' ? { url: customUrl } : {}),
     })
+  }
+
+  function handleAdd() {
+    add.mutate(
+      { model_name: name, actual_model: model, backend_name: backendName },
+      { onSuccess: () => { setName(''); setAutoName(''); setModel(''); setBackendName('') } },
+    )
   }
 
   function doRemove() {
@@ -109,7 +120,17 @@ export default function Models() {
               {discover.data.models.map((m) => (
                 <div
                   key={m.id}
-                  onClick={() => setModel(m.id)}
+                  onClick={() => {
+                    setModel(m.id)
+                    // Prefill Virtual Name from the catalog display name (still editable).
+                    // Overwrite only if empty or still holding a prior auto-fill; keep a
+                    // hand-typed name.
+                    if (!name || name === autoName) {
+                      const next = m.name && m.name !== m.id ? m.name : m.id
+                      setName(next)
+                      setAutoName(next)
+                    }
+                  }}
                   className={`models-discover-item${model === m.id ? ' is-selected' : ''}`}
                 >
                   <span className="mono">{m.id}</span>
@@ -125,38 +146,35 @@ export default function Models() {
         )}
       </div>
 
-      {/* Datalist for backend name suggestions */}
-      <datalist id="backends-list">
-        {backends?.map(b => (
-          <option key={b.name} value={b.name}>{b.name}</option>
-        ))}
-        {managedBackends?.backends.map(b => (
-          <option key={`managed-${b.name}`} value={b.name}>{b.name} (managed)</option>
-        ))}
-      </datalist>
-
       {/* Manual add model form */}
       <div className="form-group">
         <div className="form-label">Add Model</div>
         <div className="form-row" style={{ flexWrap: 'wrap' }}>
           <input name="model-name" placeholder="Virtual name" value={name} onChange={(e) => setName(e.target.value)} />
           <input name="model-id" placeholder="Model ID" value={model} onChange={(e) => setModel(e.target.value)} />
-          <input
+          <select
             name="backend"
-            placeholder="Backend"
             value={backendName}
             onChange={(e) => setBackendName(e.target.value)}
-            list="backends-list"
-          />
+          >
+            <option value="">Backend…</option>
+            {backends?.map(b => (
+              <option key={b.name} value={b.name}>{b.name}</option>
+            ))}
+            {managedBackends?.backends.map(b => (
+              <option key={`managed-${b.name}`} value={b.name}>{b.name} (managed)</option>
+            ))}
+          </select>
           <AdminButton
             tone="primary"
-            onClick={() => add.mutate({ model_name: name, actual_model: model, backend_name: backendName })}
+            onClick={handleAdd}
             disabled={!name || !model || !backendName || add.isPending}
             loading={add.isPending}
           >
             Add
           </AdminButton>
         </div>
+        {add.isError && <div className="inline-error">{add.error.message}</div>}
       </div>
 
       <div className="toolbar">

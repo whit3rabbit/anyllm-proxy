@@ -7,7 +7,6 @@ import EmptyState from '../../components/shared/EmptyState'
 import ConfirmDialog from '../../components/shared/ConfirmDialog'
 import { AdminButton, AdminSurface } from '../../components/shared/Performative'
 import type { EnvImportResponse, EnvImportError } from '../../api/types'
-import { ManagedBackendsSection } from './ManagedBackendsSection'
 
 const RESTART_KEY = 'env_import_pending_restart'
 
@@ -108,14 +107,13 @@ export default function Settings({ configured = true }: { configured?: boolean }
 
   return (
     <div>
-      {/* Managed backends — always shown first */}
-      <ManagedBackendsSection />
-
-      {/* Getting-started notice — shown when no backend is configured */}
+      {/* Getting-started notice — shown when no backend is configured (no env/config-file
+          signal and no managed backend). Manage backends on the Backends tab. */}
       {!configured && (
         <div style={{ marginBottom: 20, padding: '12px 16px', border: '1px solid var(--border)', borderLeft: '3px solid var(--warn)', borderRadius: 'var(--r)', fontSize: 13 }}>
-          <div style={{ fontWeight: 600, marginBottom: 8 }}>No proxy configuration found — nothing to forward requests to.</div>
+          <div style={{ fontWeight: 600, marginBottom: 8 }}>No backend configured — nothing to forward requests to.</div>
           <div style={{ marginBottom: 10 }}>
+            Add a backend on the <span className="mono">Backends</span> tab, or configure one via env.
             The proxy needs a backend endpoint (where to forward) and a listen port (where to accept).
             LISTEN_PORT defaults to 3000. Create a <span className="mono">.anyllm.env</span> and import it below,
             or pass it at startup: <span className="mono">anyllm-proxy --webui --env-file .anyllm.env</span>

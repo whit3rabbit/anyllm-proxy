@@ -156,7 +156,7 @@ export function BackendForm({ initial, onSuccess, onCancel }: BackendFormProps) 
             return (
               <optgroup key={status} label={status.charAt(0).toUpperCase() + status.slice(1)}>
                 {group.map(p => (
-                  <option key={p.id} value={p.id}>{p.display_name}</option>
+                  <option key={p.id} value={p.id}>{p.display_name} ({p.id})</option>
                 ))}
               </optgroup>
             )

@@ -3,6 +3,7 @@ import { useObservability, useBackends } from '../../api/queries'
 import LineChart from '../../components/shared/LineChart'
 import EmptyState from '../../components/shared/EmptyState'
 import { AdminSurface, AnimatedMetric } from '../../components/shared/Performative'
+import InfoTip from '../../components/shared/InfoTip'
 
 export default function ObservabilityPanel() {
   const [windowHours, setWindowHours] = useState(6)
@@ -58,11 +59,11 @@ export default function ObservabilityPanel() {
             <div className="stat-value"><AnimatedMetric value={data.total_output_tokens} /></div>
           </AdminSurface>
           <AdminSurface className="stat">
-            <div className="stat-label">Window Failures</div>
+            <div className="stat-label">Window Failures<InfoTip text="Failed (error) requests within the selected time window and backend filter." /></div>
             <div className="stat-value"><AnimatedMetric value={data.total_errors} /></div>
           </AdminSurface>
           <AdminSurface className="stat">
-            <div className="stat-label">Window Cost</div>
+            <div className="stat-label">Window Cost<InfoTip text="Estimated USD spend within the selected time window and backend filter, from model pricing." /></div>
             <div className="stat-value"><AnimatedMetric value={data.total_cost_usd} precision={2} format={(n) => `$${n.toFixed(2)}`} /></div>
           </AdminSurface>
         </div>

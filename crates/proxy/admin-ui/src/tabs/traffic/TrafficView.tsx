@@ -48,7 +48,11 @@ export default function TrafficView() {
                   <div className="chart-subtitle">Stacked over time window</div>
                 </div>
               </div>
-              <LineChart series={series} />
+              {routes.length === 0 ? (
+                <div className="empty">No routes</div>
+              ) : (
+                <LineChart series={series} />
+              )}
             </AdminSurface>
             <AdminSurface className="chart-card">
               <div className="chart-header">

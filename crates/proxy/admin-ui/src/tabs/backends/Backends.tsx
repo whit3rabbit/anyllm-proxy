@@ -4,6 +4,7 @@ import type { BackendUptimeInfo } from '../../api/types'
 import EmptyState from '../../components/shared/EmptyState'
 import StatusDot from '../../components/shared/StatusDot'
 import { AdminSurface } from '../../components/shared/Performative'
+import { ManagedBackendsSection } from '../settings/ManagedBackendsSection'
 
 export default function Backends() {
   const { data, isLoading, error } = useBackends()
@@ -19,13 +20,17 @@ export default function Backends() {
 
   return (
     <div>
+      {/* Add/Edit/Delete lives here so backends are configured and monitored in one place. */}
+      <ManagedBackendsSection />
+
+      <div className="section-label" style={{ marginTop: 8 }}>Backend Status</div>
       <EmptyState loading={isLoading} error={error?.message} empty={data?.length === 0} />
       <div className="backend-cards">
         {data?.map((b) => {
           const health = healthMap.get(b.name)
           const dot = health?.status === 'up' ? 'ok' : health?.status === 'down' ? 'err' : 'dim'
           return (
-            <AdminSurface className="card" key={b.name} glowOnHover>
+            <AdminSurface className="card" key={b.name}>
               <div className="card-header">
                 <span className="card-name">{b.name}</span>
                 <StatusDot status={dot} pulse={dot === 'ok'} />

@@ -11,6 +11,7 @@ import { getProviderFields } from '../../utils/providerFields'
 import { groupByTier } from '../../utils/providerTiers'
 import AsyncBoundary from '../../components/shared/AsyncBoundary'
 import ConfirmDialog from '../../components/shared/ConfirmDialog'
+import Modal from '../../components/shared/Modal'
 import StatusDot from '../../components/shared/StatusDot'
 import ProviderIcon from '../../components/shared/ProviderIcon'
 import { AdminButton, AdminSurface } from '../../components/shared/Performative'
@@ -34,6 +35,7 @@ function ProviderTile({
     >
       <ProviderIcon id={provider.id} size={28} />
       <span className="provider-tile-name">{provider.display_name}</span>
+      <span className="provider-tile-id">{provider.id}</span>
       {backendCount > 0 && (
         <span className="provider-tile-count">
           {backendCount} key{backendCount !== 1 ? 's' : ''}
@@ -196,22 +198,6 @@ function ProviderDetailPanel({
   onClose: () => void
   onDeleteBackend: (b: ManagedBackend) => void
 }) {
-  // ESC to close
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose()
-    }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
-
-  // Lock body scroll
-  useEffect(() => {
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => { document.body.style.overflow = prev }
-  }, [])
-
   const caps = provider.capabilities
   const capList: [string, boolean][] = [
     ['chat', caps.chat_completions],
@@ -223,73 +209,61 @@ function ProviderDetailPanel({
   ]
 
   return (
-    <>
-      <div className="provider-scrim" onClick={onClose} />
-      <AdminSurface className="provider-panel" role="dialog" aria-modal="true" aria-label={provider.display_name}>
-        {/* Header */}
-        <div className="provider-panel-header">
-          <ProviderIcon id={provider.id} size={36} />
-          <h3>{provider.display_name}</h3>
-          <button type="button" className="provider-panel-close" onClick={onClose} aria-label="Close">
-            &times;
-          </button>
-        </div>
+    <Modal open onClose={onClose} title={`${provider.display_name} (${provider.id})`} size="md">
+      {/* Capabilities */}
+      <div className="provider-panel-caps">
+        {capList.map(([label, active]) => (
+          <span key={label} className={`badge-cap${active ? ' active' : ''}`}>
+            {label}
+          </span>
+        ))}
+        <span style={{ marginLeft: 'auto' }} className="badge-cap active">
+          {provider.model_count} models
+        </span>
+      </div>
 
-        {/* Capabilities */}
-        <div className="provider-panel-caps">
-          {capList.map(([label, active]) => (
-            <span key={label} className={`badge-cap${active ? ' active' : ''}`}>
-              {label}
-            </span>
-          ))}
-          <span style={{ marginLeft: 'auto' }} className="badge-cap active">
-            {provider.model_count} models
+      {/* Meta */}
+      <div className="provider-panel-meta">
+        <span>
+          Protocol: <span className="mono">{provider.protocol.replace(/_/g, ' ')}</span>
+        </span>
+        <span>
+          Auth: <span className="mono">{provider.auth.replace(/_/g, ' ')}</span>
+        </span>
+        <span>
+          Status: <span className="mono">{provider.status}</span>
+        </span>
+        {provider.env_vars.length > 0 && (
+          <span>
+            Env: <span className="mono">{provider.env_vars[0]}</span>
           </span>
-        </div>
+        )}
+      </div>
 
-        {/* Meta */}
-        <div className="provider-panel-meta">
-          <span>
-            Protocol: <span className="mono">{provider.protocol.replace(/_/g, ' ')}</span>
-          </span>
-          <span>
-            Auth: <span className="mono">{provider.auth.replace(/_/g, ' ')}</span>
-          </span>
-          <span>
-            Status: <span className="mono">{provider.status}</span>
-          </span>
-          {provider.env_vars.length > 0 && (
-            <span>
-              Env: <span className="mono">{provider.env_vars[0]}</span>
-            </span>
-          )}
+      {/* Configured keys */}
+      <div className="provider-panel-section">
+        <div className="provider-panel-section-label">
+          Configured keys ({backends.length})
         </div>
-
-        {/* Configured keys */}
-        <div className="provider-panel-section">
-          <div className="provider-panel-section-label">
-            Configured keys ({backends.length})
+        {backends.length === 0 && (
+          <div className="provider-empty-hint">
+            No keys configured. Add one below to start forwarding requests.
           </div>
-          {backends.length === 0 && (
-            <div className="provider-empty-hint">
-              No keys configured. Add one below to start forwarding requests.
-            </div>
-          )}
-          {backends.map((b) => (
-            <BackendRow
-              key={b.id}
-              backend={b}
-              healthStatus={healthMap.get(b.name)}
-              onDelete={() => onDeleteBackend(b)}
-            />
-          ))}
-          <AddBackendForm
-            provider={provider}
-            existingCount={backends.length}
+        )}
+        {backends.map((b) => (
+          <BackendRow
+            key={b.id}
+            backend={b}
+            healthStatus={healthMap.get(b.name)}
+            onDelete={() => onDeleteBackend(b)}
           />
-        </div>
-      </AdminSurface>
-    </>
+        ))}
+        <AddBackendForm
+          provider={provider}
+          existingCount={backends.length}
+        />
+      </div>
+    </Modal>
   )
 }
 

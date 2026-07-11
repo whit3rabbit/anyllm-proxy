@@ -1,6 +1,7 @@
 import { useMetrics } from '../../api/queries'
 import LiveFeed from '../../components/feed/LiveFeed'
 import { AdminSurface, AnimatedMetric } from '../../components/shared/Performative'
+import InfoTip from '../../components/shared/InfoTip'
 import ObservabilityPanel from './ObservabilityPanel'
 
 export default function Dashboard() {
@@ -22,13 +23,13 @@ export default function Dashboard() {
           </div>
         </AdminSurface>
         <AdminSurface className="stat">
-          <div className="stat-label">P50 Latency</div>
+          <div className="stat-label">P50 Latency<InfoTip text="Median response latency — half of requests were faster than this." /></div>
           <div className="stat-value">
             {m ? <AnimatedMetric value={m.p50_latency_ms ?? 0} format={(n) => `${Math.round(n)}ms`} /> : '—'}
           </div>
         </AdminSurface>
         <AdminSurface className="stat">
-          <div className="stat-label">P95 Latency</div>
+          <div className="stat-label">P95 Latency<InfoTip text="95th-percentile latency — 95% of requests were faster than this. Captures tail slowness." /></div>
           <div className="stat-value">
             {m ? <AnimatedMetric value={m.p95_latency_ms ?? 0} format={(n) => `${Math.round(n)}ms`} /> : '—'}
           </div>

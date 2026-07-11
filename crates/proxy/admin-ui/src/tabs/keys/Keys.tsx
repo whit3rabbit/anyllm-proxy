@@ -6,6 +6,9 @@ import Badge from '../../components/shared/Badge'
 import BudgetBar from '../../components/shared/BudgetBar'
 import KeyCreateForm from './KeyCreateForm'
 import KeyEditModal from './KeyEditModal'
+import { AdminButton } from '../../components/shared/Performative'
+import { pushToast } from '../../store/toast'
+import { copyToClipboard } from '../../utils/clipboard'
 import type { VirtualKey } from '../../api/types'
 
 export default function Keys() {
@@ -60,7 +63,30 @@ export default function Keys() {
       {newKey && (
         <div className="key-result">
           <div className="key-result-label">New key (copy now — not shown again)</div>
-          {newKey}
+          <div className="key-result-value">
+            <span className="mono">{newKey}</span>
+            <div className="key-result-actions">
+              <AdminButton
+                size="sm"
+                onClick={async () => {
+                  const ok = await copyToClipboard(newKey)
+                  pushToast(ok
+                    ? { variant: 'success', message: 'Key copied to clipboard' }
+                    : { variant: 'error', message: 'Copy failed — select and copy manually' })
+                }}
+              >
+                Copy
+              </AdminButton>
+              <button
+                type="button"
+                className="key-result-dismiss"
+                aria-label="Dismiss"
+                onClick={() => setNewKey(null)}
+              >
+                ×
+              </button>
+            </div>
+          </div>
         </div>
       )}
       <div className="toolbar">

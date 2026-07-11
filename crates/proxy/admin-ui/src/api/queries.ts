@@ -298,7 +298,11 @@ export function useCreateManagedBackend() {
   return useMutation<ManagedBackend, Error, CreateManagedBackendRequest>({
     mutationFn: (data) =>
       mutatingFetch<ManagedBackend>('POST', '/admin/api/backends/managed', data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['managed-backends'] }) },
+    // Adding the first managed backend flips /admin/api/status configured -> true.
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['managed-backends'] })
+      qc.invalidateQueries({ queryKey: ['status'] })
+    },
   })
 }
 
@@ -316,7 +320,11 @@ export function useDeleteManagedBackend() {
   return useMutation<void, Error, string>({
     mutationFn: (name) =>
       mutatingFetch<void>('DELETE', `/admin/api/backends/managed/${name}`),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['managed-backends'] }) },
+    // Deleting the last managed backend can flip configured -> false.
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['managed-backends'] })
+      qc.invalidateQueries({ queryKey: ['status'] })
+    },
   })
 }
 
