@@ -10,6 +10,21 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ## [Unreleased]
 
+### Fixed
+- Admin UI: the provider detail popup (add API keys per provider) now uses the shared centered modal
+  with an internal scroll region, so the "Add key" form and its Create button can no longer render
+  off-screen. Provider cards and the Add-Backend dropdown now show the provider id, so same-named
+  providers (e.g. the several "AWS Bedrock" / "Google Vertex AI" entries) are distinguishable.
+- Admin UI: Add Model's Backend field is now a dropdown of configured backends (no more free-text
+  typos that wedged the button), and add failures surface an inline error instead of an endless
+  spinner. Selecting a discovered model now also fills the Virtual Name.
+- Admin UI: backend add/edit/delete now lives on the Backends page alongside live status (removed the
+  duplicate "Managed Backends" section from Settings). The Settings "no backend configured" warning
+  no longer fires when a managed backend exists — `/admin/api/status` now counts managed backends.
+- Admin UI: created key value now has Copy and dismiss controls; Traffic's requests-by-route panel
+  shows an empty state; the spend-limit field no longer clips its label; creating an unrestricted key
+  (no spend/RPM limit) shows a warning; P50/P95/Window-failures/Window-cost metrics have help tooltips.
+
 ### Changed
 - The compiled binary is now named `anyllm-proxy` (hyphen) directly, matching the installed
   name across Homebrew/deb/release archives. The crate/package name stays `anyllm_proxy`
