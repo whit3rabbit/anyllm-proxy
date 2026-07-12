@@ -44,7 +44,7 @@ RUN apk add --no-cache ca-certificates tzdata
 RUN addgroup -S -g 1001 anyllm && adduser -S -u 1001 -G anyllm anyllm
 WORKDIR /app
 RUN chown anyllm:anyllm /app
-COPY --from=builder /app/target/release/anyllm_proxy /usr/local/bin/anyllm_proxy
+COPY --from=builder /app/target/release/anyllm-proxy /usr/local/bin/anyllm-proxy
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 RUN mkdir /data && chown anyllm:anyllm /data

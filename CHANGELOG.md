@@ -12,6 +12,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ## [0.13.0] - 2026-07-12
 
+### Fixed
+- Docker image build: the runtime stage copied and the entrypoint exec'd
+  `anyllm_proxy` (underscore), but the binary was renamed to `anyllm-proxy`
+  (hyphen) in 0.12.0, so the image build failed with "not found". Both now use
+  the hyphenated name.
+
 ### Added
 - Admin UI: enabled routes now show a ready-to-run `curl` snippet (proxy endpoint URL built from
   the new `proxy_port` in `/admin/api/status`, plus the route name as the `model`) with a one-click

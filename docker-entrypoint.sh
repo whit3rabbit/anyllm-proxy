@@ -7,4 +7,4 @@ if [ "${WEBUI:-0}" = "1" ] || [ "${ADMIN:-0}" = "1" ]; then
     set -- --webui "$@"
 fi
 
-exec /usr/local/bin/anyllm_proxy "$@"
+exec /usr/local/bin/anyllm-proxy "$@"
