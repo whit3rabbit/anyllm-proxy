@@ -31,7 +31,13 @@ impl OpenAIClient {
     /// Create a new client from proxy configuration.
     /// Configures mTLS identity and custom CA cert if present in config.
     pub fn new(config: &Config) -> Self {
-        let client = build_http_client(&config.tls);
+        Self::with_ssrf(config, false)
+    }
+
+    /// Like `new`, but `allow_local` relaxes SSRF protection to permit loopback +
+    /// private IPs. Only used by managed backends whose provider is a local LLM server.
+    pub fn with_ssrf(config: &Config, allow_local: bool) -> Self {
+        let client = build_http_client(&config.tls, allow_local);
 
         // Each provider uses a different URL structure for the same API:
         // - OpenAI: {base}/v1/chat/completions (base has no path)

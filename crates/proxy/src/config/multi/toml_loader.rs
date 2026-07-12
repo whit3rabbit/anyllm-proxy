@@ -372,6 +372,7 @@ impl MultiConfig {
                     .unwrap_or(900u64)
             }),
             bedrock_credentials,
+            allow_local_ssrf: false,
         }
     }
 }

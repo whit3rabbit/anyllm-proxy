@@ -57,3 +57,5 @@ crates/proxy/admin-ui/node_modules/
 # crates/proxy/admin-ui/dist/
 .synrepo/
 .eatahorse*/
+# Security scanner (gate/3gate) scratch artifacts
+.gate/

@@ -50,6 +50,9 @@ pub(crate) enum ResolvedModel {
         model: String,
         /// The deployment Arc for recording in-flight/latency stats.
         deployment: Arc<crate::config::model_router::Deployment>,
+        /// Per-route option overrides when routed via a DB route; `None` when
+        /// routed via the LiteLLM model_router (inherit global config).
+        options: Option<Arc<crate::config::route_router::RouteOptions>>,
     },
     /// Model is known but all deployments are at their RPM limit.
     AllAtLimit,
@@ -82,6 +85,12 @@ pub struct AppState {
     pub runtime_config: Arc<RwLock<RuntimeConfig>>,
     /// Shared admin state for request logging and live updates. None in tests.
     pub shared: Option<SharedState>,
+    /// Per-route option overrides for the request that produced this (cloned)
+    /// state, set by `resolve_model_and_state` when a DB route was selected.
+    /// `None` means "no route override; use the global RuntimeConfig value".
+    /// Read by the option accessors (`redact_secrets`, `effective_tool_guardrails`,
+    /// `active_pxpipe`, `pxpipe_models`).
+    pub route_options: Option<Arc<crate::config::route_router::RouteOptions>>,
     /// Backend name for logging purposes.
     pub backend_name: String,
     /// Canonical provider id used for provider/model policy decisions.
@@ -146,8 +155,33 @@ impl AppState {
         }
     }
 
-    /// Resolve a model name through the model router (if set) or fall back to ModelMapping.
+    /// Resolve a model name to a backend.
+    ///
+    /// Precedence: (1) admin-DB routes (`RouteRouter`), (2) LiteLLM model_router,
+    /// (3) legacy ModelMapping. An empty route router falls straight through so
+    /// installs without routes behave exactly as before.
     pub(crate) fn resolve_model(&self, model: &str) -> ResolvedModel {
+        if let Some(shared) = self.shared.as_ref() {
+            if let Some(ref rr_lock) = shared.route_router {
+                use crate::config::route_router::RouteResolution;
+                let rr = rr_lock.read().unwrap_or_else(|e| e.into_inner());
+                if !rr.is_empty() {
+                    match rr.resolve(model) {
+                        RouteResolution::Routed(res) => {
+                            return ResolvedModel::Routed {
+                                backend_name: res.backend_name,
+                                model: res.model,
+                                deployment: res.deployment,
+                                options: Some(res.options),
+                            };
+                        }
+                        RouteResolution::AllAtLimit => return ResolvedModel::AllAtLimit,
+                        // No route serves this model: fall through to the layers below.
+                        RouteResolution::NoRoute => {}
+                    }
+                }
+            }
+        }
         if let Some(ref router_lock) = self.model_router {
             let router = router_lock.read().unwrap_or_else(|e| e.into_inner());
             if let Some(routed) = router.route(model) {
@@ -155,6 +189,7 @@ impl AppState {
                     backend_name: routed.backend_name.to_string(),
                     model: routed.actual_model.to_string(),
                     deployment: routed.deployment.clone(),
+                    options: None,
                 };
             }
             if router.has_model(model) {
@@ -186,8 +221,9 @@ impl AppState {
                 backend_name,
                 model: mapped,
                 deployment,
+                options,
             } => {
-                let effective = self
+                let mut effective = self
                     .all_backends
                     .as_ref()
                     .and_then(|m| m.get(&backend_name))
@@ -212,6 +248,9 @@ impl AppState {
                         })
                     })
                     .unwrap_or_else(|| self.clone());
+                // Carry the per-route option overrides onto the effective state so
+                // the option accessors resolve route-first, global-fallback.
+                effective.route_options = options;
                 Ok((mapped, effective, Some(deployment)))
             }
             ResolvedModel::AllAtLimit => {
@@ -243,7 +282,11 @@ impl AppState {
     }
 
     /// Whether upstream JSON/text request payloads should be redacted.
+    /// Route override (if set) wins over the global RuntimeConfig value.
     pub(crate) fn redact_secrets(&self) -> bool {
+        if let Some(v) = self.route_options.as_ref().and_then(|o| o.redact_secrets) {
+            return v;
+        }
         self.runtime_config
             .read()
             .unwrap_or_else(|e| e.into_inner())
@@ -259,6 +302,14 @@ impl AppState {
         &self,
         engine: &ToolEngineState,
     ) -> crate::tools::ToolGuardrailConfig {
+        // Route override (if set) wins over the live global RuntimeConfig mode.
+        if let Some(mode) = self
+            .route_options
+            .as_ref()
+            .and_then(|o| o.guardrail_mode.as_deref())
+        {
+            return crate::tools::resolve_runtime_guardrails(&engine.guardrails, mode);
+        }
         crate::tools::resolve_runtime_guardrails_locked(&self.runtime_config, &engine.guardrails)
     }
 
@@ -307,11 +358,15 @@ impl AppState {
     /// flag (`RuntimeConfig.pxpipe_compress`) is on. `None` both when the engine
     /// is absent (non-Anthropic backend) and when present-but-disabled.
     pub(crate) fn active_pxpipe(&self) -> Option<Arc<crate::pxpipe::PxpipeEngine>> {
-        let enabled = self
-            .runtime_config
-            .read()
-            .unwrap_or_else(|e| e.into_inner())
-            .pxpipe_compress;
+        let enabled = match self.route_options.as_ref().and_then(|o| o.pxpipe_compress) {
+            Some(v) => v,
+            None => {
+                self.runtime_config
+                    .read()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .pxpipe_compress
+            }
+        };
         if enabled {
             self.pxpipe.clone()
         } else {
@@ -319,8 +374,16 @@ impl AppState {
         }
     }
 
-    /// Live model-scope CSV for pxpipe (`RuntimeConfig.pxpipe_models`).
+    /// Live model-scope CSV for pxpipe. Route override wins over the global
+    /// `RuntimeConfig.pxpipe_models` value.
     pub(crate) fn pxpipe_models(&self) -> String {
+        if let Some(csv) = self
+            .route_options
+            .as_ref()
+            .and_then(|o| o.pxpipe_models.clone())
+        {
+            return csv;
+        }
         self.runtime_config
             .read()
             .unwrap_or_else(|e| e.into_inner())

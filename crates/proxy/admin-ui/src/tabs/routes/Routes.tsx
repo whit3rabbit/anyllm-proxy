@@ -2,6 +2,7 @@ import { useState } from 'react'
 import {
   useRoutes,
   useCreateRoute,
+  useUpdateRoute,
   useDeleteRoute,
   useRouteProviders,
   useAddRouteProvider,
@@ -9,14 +10,44 @@ import {
   useRemoveRouteProvider,
   useReorderRouteProviders,
   useManagedBackends,
+  useUpdateManagedBackend,
+  useStatus,
 } from '../../api/queries'
 import type { Route } from '../../api/types'
 import AsyncBoundary from '../../components/shared/AsyncBoundary'
 import Modal from '../../components/shared/Modal'
 import ConfirmDialog from '../../components/shared/ConfirmDialog'
 import { AdminButton, AdminLoading, AdminSurface } from '../../components/shared/Performative'
+import { copyToClipboard } from '../../utils/clipboard'
+import { pushToast } from '../../store/toast'
 
 // ── Route Detail (expanded inline) ────────────────────────────────────────────
+
+const STRATEGIES = ['failover', 'round-robin', 'least-busy', 'latency', 'weighted', 'cost']
+
+/** inherit (null) / on (true) / off (false) selector for a nullable bool override. */
+function TriStateSelect({
+  value,
+  onChange,
+}: {
+  value: boolean | null
+  onChange: (v: boolean | null) => void
+}) {
+  const str = value === null ? 'inherit' : value ? 'on' : 'off'
+  return (
+    <select
+      value={str}
+      onChange={(e) => {
+        const v = e.target.value
+        onChange(v === 'inherit' ? null : v === 'on')
+      }}
+    >
+      <option value="inherit">inherit (global)</option>
+      <option value="on">on</option>
+      <option value="off">off</option>
+    </select>
+  )
+}
 
 function RouteDetail({ route, onClose }: { route: Route; onClose: () => void }) {
   const { data: providersData, isLoading } = useRouteProviders(route.id)
@@ -24,13 +55,36 @@ function RouteDetail({ route, onClose }: { route: Route; onClose: () => void }) 
   const updateProvider = useUpdateRouteProvider()
   const removeProvider = useRemoveRouteProvider()
   const reorder = useReorderRouteProviders()
+  const updateRoute = useUpdateRoute()
+  const updateBackend = useUpdateManagedBackend()
   const { data: managedData } = useManagedBackends()
+  const { data: status } = useStatus()
   const [showAdd, setShowAdd] = useState(false)
   const [selectedBackend, setSelectedBackend] = useState('')
   const [modelInput, setModelInput] = useState('*')
 
   const providers = providersData?.providers ?? []
   const backends = managedData?.backends ?? []
+
+  // Routes have no unique URL; the proxy dispatches by the `model` field (= route
+  // name). Show a ready-to-run curl snippet against the shared endpoint. Host comes
+  // from how the admin UI was reached; port from the proxy status.
+  const proxyUrl = `http://${window.location.hostname}:${status?.proxy_port ?? 3000}/v1/chat/completions`
+  const curlSnippet = [
+    `curl ${proxyUrl} \\`,
+    `  -H 'Authorization: Bearer <key>' \\`,
+    `  -H 'Content-Type: application/json' \\`,
+    `  -d '${JSON.stringify({ model: route.name, messages: [{ role: 'user', content: 'hi' }] })}'`,
+  ].join('\n')
+
+  async function copyCurl() {
+    const ok = await copyToClipboard(curlSnippet)
+    pushToast(
+      ok
+        ? { variant: 'success', message: 'curl snippet copied' }
+        : { variant: 'error', message: 'Copy failed (clipboard blocked)' },
+    )
+  }
   const usedBackendIds = new Set(providers.map((p) => p.backend_id))
   const availableBackends = backends.filter((b) => !usedBackendIds.has(b.id))
 
@@ -60,9 +114,106 @@ function RouteDetail({ route, onClose }: { route: Route; onClose: () => void }) 
           {route.description && <span className="dim route-detail-desc">{route.description}</span>}
         </div>
         <div className="route-detail-meta">
-          <span className="dim">strategy: {route.strategy}</span>
           {route.rpm && <span className="dim mono">RPM {route.rpm}</span>}
+          <AdminButton
+            size="sm"
+            tone={route.enabled ? 'primary' : 'secondary'}
+            title="Route on/off. Disabled routes stop dispatching and lose virtual-key scope."
+            onClick={() => updateRoute.mutate({ id: route.id, data: { enabled: !route.enabled } })}
+          >
+            {route.enabled ? 'route on' : 'route off'}
+          </AdminButton>
           <AdminButton size="sm" onClick={onClose}>Close</AdminButton>
+        </div>
+      </div>
+
+      {route.enabled && (
+        <div className="route-detail-curl">
+          <div className="route-detail-curl-head">
+            <span className="section-label">Call this route</span>
+            <AdminButton size="sm" onClick={copyCurl}>Copy curl</AdminButton>
+          </div>
+          <pre className="route-detail-curl-body mono">{curlSnippet}</pre>
+          <div className="dim route-detail-curl-hint">
+            The route is selected by the <code>model</code> field (= route name). Replace{' '}
+            <code>&lt;key&gt;</code> with a proxy or virtual key.
+          </div>
+        </div>
+      )}
+
+      <div className="route-detail-options">
+        <span className="section-label route-detail-subhead-label">Route options</span>
+        <div className="route-options-grid">
+          <label className="route-option">
+            <span className="dim">Strategy</span>
+            <select
+              value={route.strategy}
+              onChange={(e) => updateRoute.mutate({ id: route.id, data: { strategy: e.target.value } })}
+            >
+              {STRATEGIES.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </label>
+          <label className="route-option">
+            <span className="dim">Position (lower wins across routes)</span>
+            <input
+              type="number"
+              name="route-position"
+              defaultValue={route.position}
+              onBlur={(e) => {
+                const v = Number.parseInt(e.target.value, 10)
+                if (Number.isNaN(v) || v === route.position) return
+                updateRoute.mutate({ id: route.id, data: { position: v } })
+              }}
+            />
+          </label>
+          <label className="route-option">
+            <span className="dim">Guardrails</span>
+            <select
+              value={route.guardrail_mode ?? 'inherit'}
+              onChange={(e) =>
+                updateRoute.mutate({
+                  id: route.id,
+                  data: { guardrail_mode: e.target.value === 'inherit' ? null : e.target.value },
+                })
+              }
+            >
+              <option value="inherit">inherit (global)</option>
+              <option value="disabled">disabled</option>
+              <option value="standard">standard</option>
+            </select>
+          </label>
+          <label className="route-option">
+            <span className="dim">Secret redaction</span>
+            <TriStateSelect
+              value={route.redact_secrets}
+              onChange={(v) => updateRoute.mutate({ id: route.id, data: { redact_secrets: v } })}
+            />
+          </label>
+          <label className="route-option">
+            <span className="dim">Image compression</span>
+            <TriStateSelect
+              value={route.pxpipe_compress}
+              onChange={(v) => updateRoute.mutate({ id: route.id, data: { pxpipe_compress: v } })}
+            />
+          </label>
+          <label className="route-option route-option-wide">
+            <span className="dim">Compression model scope (CSV, blank = inherit)</span>
+            <input
+              type="text"
+              name="route-pxpipe-models"
+              defaultValue={route.pxpipe_models ?? ''}
+              placeholder="inherit global"
+              onBlur={(e) => {
+                const v = e.target.value.trim()
+                if ((route.pxpipe_models ?? '') === v) return
+                updateRoute.mutate({ id: route.id, data: { pxpipe_models: v === '' ? null : v } })
+              }}
+            />
+          </label>
+        </div>
+        <div className="dim route-options-note">
+          Overrides apply only where the feature already runs (image compression: Anthropic passthrough
+          backends only). "inherit" / blank uses the global value from Settings.
         </div>
       </div>
 
@@ -137,10 +288,26 @@ function RouteDetail({ route, onClose }: { route: Route; onClose: () => void }) 
             size="sm"
             tone={p.enabled ? 'primary' : 'secondary'}
             className="route-provider-toggle"
+            title="In-route membership: whether this backend is active within this route."
             onClick={() => updateProvider.mutate({ routeId: route.id, providerId: p.id, data: { enabled: !p.enabled } })}
           >
-            {p.enabled ? 'enabled' : 'disabled'}
+            {p.enabled ? 'in route' : 'excluded'}
           </AdminButton>
+          {(() => {
+            const backend = backends.find((b) => b.id === p.backend_id)
+            if (!backend) return null
+            return (
+              <AdminButton
+                size="sm"
+                tone={backend.enabled ? 'primary' : 'secondary'}
+                className="route-provider-toggle"
+                title="Backend online (global). Disables this backend everywhere, not just this route."
+                onClick={() => updateBackend.mutate({ name: backend.name, data: { enabled: !backend.enabled } })}
+              >
+                {backend.enabled ? 'backend on' : 'backend off'}
+              </AdminButton>
+            )
+          })()}
           <AdminButton
             tone="danger"
             size="sm"
@@ -161,9 +328,13 @@ function CreateRouteModal({ onClose }: { onClose: () => void }) {
   const create = useCreateRoute()
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
+  const [strategy, setStrategy] = useState('failover')
 
   function submit() {
-    create.mutate({ name, description: description || undefined }, { onSuccess: onClose })
+    create.mutate(
+      { name, description: description || undefined, strategy },
+      { onSuccess: onClose },
+    )
   }
 
   return (
@@ -205,6 +376,22 @@ function CreateRouteModal({ onClose }: { onClose: () => void }) {
           placeholder="optional"
           style={{ width: '100%' }}
         />
+      </div>
+      <div className="form-group">
+        <label className="form-label" htmlFor="route-strategy">Strategy</label>
+        <select
+          id="route-strategy"
+          name="strategy"
+          value={strategy}
+          onChange={(e) => setStrategy(e.target.value)}
+          style={{ width: '100%' }}
+        >
+          {STRATEGIES.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+      </div>
+      <div className="dim" style={{ fontSize: '0.85em' }}>
+        Per-route options (guardrails, compression, secret redaction) and on/off are set after
+        creation from the route's detail panel.
       </div>
       {create.isError && <div className="error">Failed to create route</div>}
     </Modal>
@@ -309,6 +496,7 @@ function RouteRow({
       <tr className="route-row" onClick={onToggle}>
         <td className="route-row-name">
           {expanded ? '\u25BE ' : '\u25B8 '}{route.name}
+          {!route.enabled && <span className="dim route-row-desc">(disabled)</span>}
           {route.description && <span className="dim route-row-desc">{route.description}</span>}
         </td>
         <td className="dim">{route.strategy}</td>

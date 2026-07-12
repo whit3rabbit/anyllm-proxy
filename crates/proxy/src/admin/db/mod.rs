@@ -4,6 +4,7 @@ pub mod audit;
 pub mod backends;
 pub mod common;
 pub mod config;
+pub mod favorites;
 pub mod health;
 pub mod keys;
 pub mod logs;
@@ -13,6 +14,7 @@ pub use audit::*;
 pub use backends::*;
 pub use common::*;
 pub use config::*;
+pub use favorites::*;
 pub use health::*;
 pub use keys::*;
 pub use logs::*;
@@ -192,6 +194,14 @@ pub fn init_db(conn: &Connection) -> rusqlite::Result<()> {
         );",
     )?;
 
+    // provider_favorites: admin-starred providers, shown in a Favorites row in the UI.
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS provider_favorites (
+            provider_id TEXT PRIMARY KEY,
+            created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+        );",
+    )?;
+
     // provider_models_cache: live model lists fetched from provider APIs.
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS provider_models_cache (
@@ -239,6 +249,23 @@ pub fn init_db(conn: &Connection) -> rusqlite::Result<()> {
         conn,
         "ALTER TABLE virtual_api_key ADD COLUMN allowed_routes TEXT",
     )?;
+
+    // Route-level dispatch controls: on/off toggle + per-route option overrides.
+    // NULL option columns mean "inherit the global RuntimeConfig value".
+    let route_migrations = [
+        "ALTER TABLE routes ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1",
+        "ALTER TABLE routes ADD COLUMN guardrail_mode TEXT",
+        "ALTER TABLE routes ADD COLUMN pxpipe_compress INTEGER",
+        "ALTER TABLE routes ADD COLUMN pxpipe_models TEXT",
+        "ALTER TABLE routes ADD COLUMN redact_secrets INTEGER",
+        // Explicit cross-route ordering when a model matches multiple routes
+        // (lower wins). Default 0 preserves the exact-over-wildcard, then name tiebreak.
+        "ALTER TABLE routes ADD COLUMN position INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE managed_backends ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1",
+    ];
+    for stmt in &route_migrations {
+        idempotent_add_column(conn, stmt)?;
+    }
 
     Ok(())
 }

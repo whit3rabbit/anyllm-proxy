@@ -10,6 +10,46 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ## [Unreleased]
 
+### Added
+- Admin UI: enabled routes now show a ready-to-run `curl` snippet (proxy endpoint URL built from
+  the new `proxy_port` in `/admin/api/status`, plus the route name as the `model`) with a one-click
+  copy button. Routes have no unique URL; dispatch is by the `model` field, and the snippet makes
+  that callable path obvious.
+- Admin UI: Settings shows a live proxy status badge (running / unreachable), backed by a
+  `proxy_running` TCP liveness check added to `/admin/api/status`, and a per-save toast confirming
+  each setting is applied live with no restart.
+
+### Changed
+- Admin UI: selecting a provider now shows the full key/options form immediately instead of hiding
+  it behind a "+ Add key" button (the API key is one of the fields). The old collapse toggle is gone;
+  a "Reset" button clears the form.
+
+### Added
+- Routes now actually dispatch traffic. A request's `model` field selects a route (admin `routes` +
+  `route_providers` tables), and the route picks one of its ordered managed backends by strategy
+  (`failover` default, plus round-robin / least-busy / latency / weighted / cost). Previously the
+  Routes tab was config-only and never routed. Implemented as a `RouteRouter` layer that reuses the
+  existing `ModelRouter` strategy algorithms and sits ahead of LiteLLM model_list routing and the
+  legacy default backend; installs with no routes are unaffected. Wildcard (`*`) and exact model
+  globs are supported. When a model matches several routes the winner is chosen by route `position`
+  (operator-set, lower wins), then exact-match over `*`, then route name.
+- Per-route option overrides: guardrail mode, image/context compression (pxpipe) + model scope, and
+  secret redaction can be set per route (nullable = inherit the global Settings value), plus a
+  route-level on/off toggle and a global managed-backend on/off toggle. Admin UI: the route detail
+  panel gains a strategy selector, tri-state option controls, a route enable toggle, and a
+  backend-online toggle on each provider row; disabled routes also drop out of virtual-key route scope.
+- Local LLM backends (LM Studio, Ollama, vLLM, llamafile, ...) now work end-to-end. SSRF protection
+  is auto-relaxed to allow loopback + private/LAN IPs for managed backends whose provider is a local
+  LLM server (detected from the catalog's default base URL); cloud-metadata IPs stay blocked. Admin UI:
+  the provider popup gets an optional API Key field for local (`auth: none`) providers, a "Query models"
+  button that discovers models from the configured endpoint, and shows the real backend error instead
+  of a generic "Failed to create backend" banner.
+- Admin UI Providers tab: favorite providers (heart toggle on each card) pinned to a top row and
+  persisted server-side in SQLite (`provider_favorites` table, `GET/POST/DELETE /admin/api/favorites`).
+  New sections group providers into Favorites, Local LLMs, and Free. Local-LLM providers
+  (lm_studio, llamafile, vLLM, docker_model_runner, xinference, ollama, ...) are now surfaced in the
+  catalog list and their loopback endpoint is pre-filled in the Add-key form (editable).
+
 ### Fixed
 - Admin UI: the provider detail popup (add API keys per provider) now uses the shared centered modal
   with an internal scroll region, so the "Add key" form and its Create button can no longer render

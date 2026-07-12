@@ -139,6 +139,9 @@ pub fn row_to_backend_config(
         omit_stream_options: false,
         stream_timeout_secs: 0,
         bedrock_credentials,
+        // Local LLM servers (Ollama/LM Studio/vLLM/...) run on loopback or a LAN IP;
+        // relax SSRF for them so admin-configured managed backends can actually reach them.
+        allow_local_ssrf: provider.is_local(),
     })
 }
 
@@ -177,6 +180,7 @@ mod tests {
             aws_session_token: None,
             rpm: None,
             tpm: None,
+            enabled: true,
             created_at: "2024-01-01T00:00:00Z".to_string(),
             updated_at: "2024-01-01T00:00:00Z".to_string(),
         }
@@ -376,6 +380,27 @@ mod tests {
             }
             _ => panic!("Expected AnthropicApiKey auth"),
         }
+    }
+
+    #[test]
+    fn local_provider_sets_allow_local_ssrf() {
+        // A provider whose default base URL is loopback/private is treated as local,
+        // so SSRF is relaxed for its managed-backend client.
+        let mut provider = make_provider(ProviderProtocol::OpenAICompat, AuthKind::None);
+        provider.default_base_url = "http://localhost:1234/v1".to_string();
+        assert!(provider.is_local());
+        let row = make_row();
+        let bc = row_to_backend_config(&row, &provider).unwrap();
+        assert!(bc.allow_local_ssrf);
+    }
+
+    #[test]
+    fn hosted_provider_does_not_set_allow_local_ssrf() {
+        // Default make_provider base URL is https://api.test.com/v1 (not local).
+        let provider = make_provider(ProviderProtocol::OpenAICompat, AuthKind::Bearer);
+        assert!(!provider.is_local());
+        let bc = row_to_backend_config(&make_row(), &provider).unwrap();
+        assert!(!bc.allow_local_ssrf);
     }
 
     #[test]

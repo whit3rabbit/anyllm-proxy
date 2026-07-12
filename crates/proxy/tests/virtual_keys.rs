@@ -720,6 +720,7 @@ fn openai_backend_config_with_base(base_url: &str) -> BackendConfig {
         omit_stream_options: false,
         stream_timeout_secs: 900,
         bedrock_credentials: None,
+        allow_local_ssrf: false,
     }
 }
 
@@ -775,6 +776,7 @@ fn seed_route_scope(
                 aws_session_token: None,
                 rpm: None,
                 tpm: None,
+                enabled: true,
                 created_at: now.clone(),
                 updated_at: now.clone(),
             },
@@ -792,6 +794,12 @@ fn seed_route_scope(
             rpm: None,
             tpm: None,
             budget_usd: None,
+            enabled: true,
+            guardrail_mode: None,
+            pxpipe_compress: None,
+            pxpipe_models: None,
+            redact_secrets: None,
+            position: 0,
             created_at: now.clone(),
             updated_at: now,
         },

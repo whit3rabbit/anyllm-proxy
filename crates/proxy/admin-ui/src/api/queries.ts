@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiFetch, mutatingFetch, mutatingFetchMultipart } from './client'
 import { useAuthStore } from '../store/auth'
+import { pushToast } from '../store/toast'
 import type {
   Metrics, RequestsResponse, VirtualKey, KeySpend,
   Backend, ConfigEntry, ConfigResponse, ObservabilityResponse,
@@ -20,7 +21,8 @@ export function useStatus(enabled = true) {
     queryKey: ['status'],
     queryFn: () => apiFetch('/admin/api/status'),
     enabled,
-    staleTime: Infinity,
+    // Poll so the proxy running/unreachable badge stays fresh.
+    refetchInterval: 10_000,
   })
 }
 
@@ -151,7 +153,11 @@ export function useSaveConfig() {
   return useMutation({
     mutationFn: (body: Record<string, unknown>) =>
       mutatingFetch<void>('PUT', '/admin/api/config', body),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['config'] }) },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['config'] })
+      // Every config PUT is applied live (config.rs Phase 2); no restart needed.
+      pushToast({ variant: 'success', message: 'Setting saved — applied live, no restart needed' })
+    },
   })
 }
 
@@ -201,7 +207,11 @@ export function useRemoveModel() {
 }
 
 export function useDiscoverModels() {
-  return useMutation<DiscoverResponse, Error, { source: string; url?: string }>({
+  return useMutation<
+    DiscoverResponse,
+    Error,
+    { source: string; url?: string; provider_id?: string; api_key?: string }
+  >({
     mutationFn: (body) =>
       mutatingFetch<DiscoverResponse>('POST', '/admin/api/models/discover', body),
   })
@@ -280,6 +290,27 @@ export function useCatalogProviderModels(providerId: string | null) {
     queryFn: () => apiFetch(`/admin/api/catalog/providers/${encodeURIComponent(providerId!)}/models`),
     enabled: !!providerId,
     staleTime: 30_000,
+  })
+}
+
+// ── Favorite providers ─────────────────────────────────────────────────────────
+
+export function useFavorites() {
+  return useQuery<string[]>({
+    queryKey: ['favorites'],
+    queryFn: () => apiFetch<{ favorites: string[] }>('/admin/api/favorites').then(r => r.favorites),
+    staleTime: Infinity,
+  })
+}
+
+export function useToggleFavorite() {
+  const qc = useQueryClient()
+  return useMutation<void, Error, { providerId: string; on: boolean }>({
+    mutationFn: ({ providerId, on }) =>
+      on
+        ? mutatingFetch<void>('POST', '/admin/api/favorites', { provider_id: providerId })
+        : mutatingFetch<void>('DELETE', `/admin/api/favorites/${encodeURIComponent(providerId)}`),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['favorites'] }) },
   })
 }
 

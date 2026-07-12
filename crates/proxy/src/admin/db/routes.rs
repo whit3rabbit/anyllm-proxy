@@ -11,6 +11,15 @@ pub struct RouteRow {
     pub rpm: Option<u32>,
     pub tpm: Option<u64>,
     pub budget_usd: Option<f64>,
+    /// Route on/off toggle. Disabled routes do not dispatch and lose virtual-key scope.
+    pub enabled: bool,
+    /// Per-route option overrides. `None` means "inherit the global RuntimeConfig value".
+    pub guardrail_mode: Option<String>,
+    pub pxpipe_compress: Option<bool>,
+    pub pxpipe_models: Option<String>,
+    pub redact_secrets: Option<bool>,
+    /// Explicit cross-route ordering (lower wins) when a model matches several routes.
+    pub position: i32,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -29,8 +38,10 @@ pub struct RouteProviderRow {
 
 pub fn insert_route(conn: &Connection, row: &RouteRow) -> rusqlite::Result<()> {
     conn.execute(
-        "INSERT INTO routes (id, name, description, strategy, rpm, tpm, budget_usd, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        "INSERT INTO routes (id, name, description, strategy, rpm, tpm, budget_usd,
+             enabled, guardrail_mode, pxpipe_compress, pxpipe_models, redact_secrets,
+             position, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
         params![
             row.id,
             row.name,
@@ -39,6 +50,12 @@ pub fn insert_route(conn: &Connection, row: &RouteRow) -> rusqlite::Result<()> {
             row.rpm.map(|v| v as i64),
             row.tpm.map(|v| v as i64),
             row.budget_usd,
+            row.enabled as i32,
+            row.guardrail_mode,
+            row.pxpipe_compress.map(|v| v as i32),
+            row.pxpipe_models,
+            row.redact_secrets.map(|v| v as i32),
+            row.position,
             row.created_at,
             row.updated_at,
         ],
@@ -55,25 +72,30 @@ fn row_to_route(row: &rusqlite::Row) -> rusqlite::Result<RouteRow> {
         rpm: row.get::<_, Option<i64>>(4)?.map(|v| v as u32),
         tpm: row.get::<_, Option<i64>>(5)?.map(|v| v as u64),
         budget_usd: row.get(6)?,
-        created_at: row.get(7)?,
-        updated_at: row.get(8)?,
+        enabled: row.get::<_, i32>(7)? != 0,
+        guardrail_mode: row.get(8)?,
+        pxpipe_compress: row.get::<_, Option<i32>>(9)?.map(|v| v != 0),
+        pxpipe_models: row.get(10)?,
+        redact_secrets: row.get::<_, Option<i32>>(11)?.map(|v| v != 0),
+        position: row.get(12)?,
+        created_at: row.get(13)?,
+        updated_at: row.get(14)?,
     })
 }
 
+/// Column list for route SELECTs, matching `row_to_route`'s index order.
+const ROUTE_COLUMNS: &str = "id, name, description, strategy, rpm, tpm, budget_usd, \
+     enabled, guardrail_mode, pxpipe_compress, pxpipe_models, redact_secrets, \
+     position, created_at, updated_at";
+
 pub fn list_routes(conn: &Connection) -> rusqlite::Result<Vec<RouteRow>> {
-    let mut stmt = conn.prepare(
-        "SELECT id, name, description, strategy, rpm, tpm, budget_usd, created_at, updated_at
-         FROM routes ORDER BY name",
-    )?;
+    let mut stmt = conn.prepare(&format!("SELECT {ROUTE_COLUMNS} FROM routes ORDER BY name"))?;
     let rows = stmt.query_map([], row_to_route)?;
     rows.collect()
 }
 
 pub fn get_route(conn: &Connection, id: &str) -> rusqlite::Result<Option<RouteRow>> {
-    let mut stmt = conn.prepare(
-        "SELECT id, name, description, strategy, rpm, tpm, budget_usd, created_at, updated_at
-         FROM routes WHERE id = ?1",
-    )?;
+    let mut stmt = conn.prepare(&format!("SELECT {ROUTE_COLUMNS} FROM routes WHERE id = ?1"))?;
     let mut rows = stmt.query_map([id], row_to_route)?;
     match rows.next() {
         Some(row) => Ok(Some(row?)),
@@ -90,6 +112,14 @@ pub struct RoutePatch {
     pub rpm: Option<Option<u32>>,
     pub tpm: Option<Option<u64>>,
     pub budget_usd: Option<Option<f64>>,
+    pub enabled: Option<bool>,
+    // Nullable option overrides: `Some(Some(v))` sets, `Some(None)` clears to
+    // NULL (= inherit global), `None` leaves unchanged.
+    pub guardrail_mode: Option<Option<String>>,
+    pub pxpipe_compress: Option<Option<bool>>,
+    pub pxpipe_models: Option<Option<String>>,
+    pub redact_secrets: Option<Option<bool>>,
+    pub position: Option<i32>,
 }
 
 pub fn update_route(conn: &Connection, id: &str, patch: &RoutePatch) -> rusqlite::Result<bool> {
@@ -139,6 +169,51 @@ pub fn update_route(conn: &Connection, id: &str, patch: &RoutePatch) -> rusqlite
             None => {
                 set_clauses.push("budget_usd = NULL".into());
             }
+        }
+    }
+    if let Some(v) = patch.enabled {
+        set_clauses.push("enabled = ?".into());
+        param_values.push(Box::new(v as i32));
+    }
+    if let Some(v) = patch.position {
+        set_clauses.push("position = ?".into());
+        param_values.push(Box::new(v));
+    }
+    // Nullable option overrides: Some(Some) sets, Some(None) clears to NULL.
+    if let Some(ref v) = patch.guardrail_mode {
+        match v {
+            Some(val) => {
+                set_clauses.push("guardrail_mode = ?".into());
+                param_values.push(Box::new(val.clone()));
+            }
+            None => set_clauses.push("guardrail_mode = NULL".into()),
+        }
+    }
+    if let Some(ref v) = patch.pxpipe_compress {
+        match v {
+            Some(val) => {
+                set_clauses.push("pxpipe_compress = ?".into());
+                param_values.push(Box::new(*val as i32));
+            }
+            None => set_clauses.push("pxpipe_compress = NULL".into()),
+        }
+    }
+    if let Some(ref v) = patch.pxpipe_models {
+        match v {
+            Some(val) => {
+                set_clauses.push("pxpipe_models = ?".into());
+                param_values.push(Box::new(val.clone()));
+            }
+            None => set_clauses.push("pxpipe_models = NULL".into()),
+        }
+    }
+    if let Some(ref v) = patch.redact_secrets {
+        match v {
+            Some(val) => {
+                set_clauses.push("redact_secrets = ?".into());
+                param_values.push(Box::new(*val as i32));
+            }
+            None => set_clauses.push("redact_secrets = NULL".into()),
         }
     }
 
@@ -199,7 +274,8 @@ pub fn enabled_route_ids_for_backend_name(
         "SELECT DISTINCT rp.route_id
          FROM route_providers rp
          JOIN managed_backends mb ON mb.id = rp.backend_id
-         WHERE mb.name = ?1 AND rp.enabled = 1
+         JOIN routes r ON r.id = rp.route_id
+         WHERE mb.name = ?1 AND rp.enabled = 1 AND r.enabled = 1
          ORDER BY rp.route_id",
     )?;
     let rows = stmt.query_map([backend_name], |row| row.get::<_, String>(0))?;
@@ -375,6 +451,7 @@ mod tests {
             aws_session_token: None,
             rpm: Some(100),
             tpm: Some(10_000),
+            enabled: true,
             created_at: "2026-01-01T00:00:00Z".to_string(),
             updated_at: "2026-01-01T00:00:00Z".to_string(),
         }
@@ -389,6 +466,12 @@ mod tests {
             rpm: None,
             tpm: None,
             budget_usd: None,
+            enabled: true,
+            guardrail_mode: None,
+            pxpipe_compress: None,
+            pxpipe_models: None,
+            redact_secrets: None,
+            position: 0,
             created_at: now_iso8601(),
             updated_at: now_iso8601(),
         };
@@ -407,6 +490,86 @@ mod tests {
             .map(|p| p.id)
             .collect();
         (route.id, ids)
+    }
+
+    #[test]
+    fn update_route_sets_and_clears_option_override() {
+        let conn = in_memory_db();
+        let (route_id, _) = seed_route_with_providers(&conn, 1);
+
+        // Set an override.
+        let set = RoutePatch {
+            name: None,
+            description: None,
+            strategy: None,
+            rpm: None,
+            tpm: None,
+            budget_usd: None,
+            enabled: Some(false),
+            guardrail_mode: Some(Some("standard".into())),
+            pxpipe_compress: Some(Some(true)),
+            pxpipe_models: None,
+            redact_secrets: None,
+            position: None,
+        };
+        assert!(update_route(&conn, &route_id, &set).unwrap());
+        let r = get_route(&conn, &route_id).unwrap().unwrap();
+        assert!(!r.enabled);
+        assert_eq!(r.guardrail_mode.as_deref(), Some("standard"));
+        assert_eq!(r.pxpipe_compress, Some(true));
+
+        // Clear the override back to NULL (inherit).
+        let clear = RoutePatch {
+            name: None,
+            description: None,
+            strategy: None,
+            rpm: None,
+            tpm: None,
+            budget_usd: None,
+            enabled: None,
+            guardrail_mode: Some(None),
+            pxpipe_compress: Some(None),
+            pxpipe_models: None,
+            redact_secrets: None,
+            position: None,
+        };
+        assert!(update_route(&conn, &route_id, &clear).unwrap());
+        let r = get_route(&conn, &route_id).unwrap().unwrap();
+        assert_eq!(r.guardrail_mode, None);
+        assert_eq!(r.pxpipe_compress, None);
+        // enabled was left unchanged (None) — still false.
+        assert!(!r.enabled);
+    }
+
+    #[test]
+    fn disabled_route_excluded_from_enabled_route_ids() {
+        let conn = in_memory_db();
+        let (route_id, _) = seed_route_with_providers(&conn, 1);
+        // The seeded backend is "b0"; while enabled the route id is returned.
+        assert_eq!(
+            enabled_route_ids_for_backend_name(&conn, "b0").unwrap(),
+            vec![route_id.clone()]
+        );
+
+        // Disable the route -> it drops out of the virtual-key scope query.
+        let patch = RoutePatch {
+            name: None,
+            description: None,
+            strategy: None,
+            rpm: None,
+            tpm: None,
+            budget_usd: None,
+            enabled: Some(false),
+            guardrail_mode: None,
+            pxpipe_compress: None,
+            pxpipe_models: None,
+            redact_secrets: None,
+            position: None,
+        };
+        assert!(update_route(&conn, &route_id, &patch).unwrap());
+        assert!(enabled_route_ids_for_backend_name(&conn, "b0")
+            .unwrap()
+            .is_empty());
     }
 
     #[test]

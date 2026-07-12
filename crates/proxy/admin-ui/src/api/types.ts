@@ -3,6 +3,8 @@
 
 export interface ProxyStatus {
   configured: boolean
+  proxy_port: number
+  proxy_running: boolean
 }
 
 export interface Metrics {
@@ -298,6 +300,7 @@ export interface ManagedBackend {
   region: string | null
   rpm: number | null
   tpm: number | null
+  enabled: boolean
   created_at: string
   updated_at: string
 }
@@ -320,6 +323,7 @@ export interface CreateManagedBackendRequest {
   aws_session_token?: string
   rpm?: number
   tpm?: number
+  enabled?: boolean
 }
 
 export type UpdateManagedBackendRequest = Partial<Omit<CreateManagedBackendRequest, 'name'>>
@@ -334,6 +338,14 @@ export interface Route {
   rpm: number | null
   tpm: number | null
   budget_usd: number | null
+  enabled: boolean
+  // Per-route option overrides. null = inherit the global setting.
+  guardrail_mode: string | null
+  pxpipe_compress: boolean | null
+  pxpipe_models: string | null
+  redact_secrets: boolean | null
+  // Explicit cross-route ordering (lower wins) when a model matches several routes.
+  position: number
   provider_count: number
   created_at: string
   updated_at: string
@@ -350,6 +362,13 @@ export interface CreateRouteRequest {
   rpm?: number
   tpm?: number
   budget_usd?: number
+  enabled?: boolean
+  // null clears an override back to "inherit"; undefined leaves it unchanged.
+  guardrail_mode?: string | null
+  pxpipe_compress?: boolean | null
+  pxpipe_models?: string | null
+  redact_secrets?: boolean | null
+  position?: number
 }
 
 export type UpdateRouteRequest = Partial<CreateRouteRequest>

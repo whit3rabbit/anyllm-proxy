@@ -441,5 +441,6 @@ fn build_backend_config(
         omit_stream_options: false,
         stream_timeout_secs: 900,
         bedrock_credentials,
+        allow_local_ssrf: false,
     }
 }

@@ -4,6 +4,7 @@ pub mod audit;
 pub mod catalog;
 pub mod config;
 pub mod env;
+pub mod favorites;
 pub mod helpers;
 pub mod keys;
 pub mod logs;
@@ -106,6 +107,14 @@ pub fn admin_router(shared: SharedState, token: Arc<zeroize::Zeroizing<String>>)
         .route(
             "/admin/api/mcp-servers/{name}",
             delete(mcp::remove_mcp_server),
+        )
+        .route(
+            "/admin/api/favorites",
+            get(favorites::list).post(favorites::create),
+        )
+        .route(
+            "/admin/api/favorites/{provider_id}",
+            delete(favorites::delete),
         )
         .route("/admin/api/catalog/providers", get(catalog::list_providers))
         .route(
@@ -281,6 +290,27 @@ pub(super) async fn get_backends(State(shared): State<SharedState>) -> Json<serd
 }
 
 /// Fire-and-forget audit log write. Failures are logged but never block the caller.
+/// Recompile the route dispatch table from the DB and swap it in atomically.
+/// Call after any route / route-provider / managed-backend mutation so the
+/// live `RouteRouter` reflects the change without a restart. No-op if the
+/// route router is absent (test states).
+pub(crate) async fn rebuild_route_router(shared: &SharedState) {
+    let Some(rr_lock) = shared.route_router.clone() else {
+        return;
+    };
+    let built = crate::admin::state::with_db(&shared.db, |conn| {
+        crate::config::route_router::RouteRouter::build_from_db(conn)
+    })
+    .await;
+    match built {
+        Some(Ok(rr)) => {
+            *rr_lock.write().unwrap_or_else(|e| e.into_inner()) = rr;
+        }
+        Some(Err(e)) => tracing::warn!(error = %e, "failed to rebuild route router"),
+        None => {}
+    }
+}
+
 pub(crate) fn emit_audit(shared: &SharedState, entry: crate::admin::db::AuditEntry) {
     let db = shared.db.clone();
     tokio::task::spawn_blocking(move || {

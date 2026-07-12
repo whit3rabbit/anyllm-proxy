@@ -54,12 +54,36 @@ pub(crate) async fn messages(
         }
     }
 
-    let body = match super::super::secret_redaction::redact_json_value(state.redact_secrets(), body)
-        .await
-    {
-        Ok(body) => body,
-        Err(err) => return super::super::secret_redaction::error_response(err),
+    // Resolve routing first (route selection depends only on the model name, not
+    // body content) so per-route option overrides (redaction, guardrails, pxpipe)
+    // carried on `effective` apply to this request. Resolution advances the
+    // route's round-robin/failover counter, so it must run exactly once.
+    // ponytail: this records one RPM/in-flight slot before redaction, so a body
+    // rejected by redaction still consumes a slot. Accepted (rejects are rare and
+    // the alternative is resolving twice or un-recording); revisit if it matters.
+    let (mapped_model, effective, deployment) = match state.resolve_model_and_state(&body.model) {
+        Ok(v) => v,
+        Err(resp) => return resp,
     };
+    if let Some(ref ctx) = vk_ctx {
+        if let Err(error) = super::super::policy::enforce_route_scope(
+            &effective.backend_name,
+            &effective.shared,
+            &ctx.allowed_routes,
+        )
+        .await
+        {
+            return route_scope_forbidden_response(error);
+        }
+    }
+
+    let body =
+        match super::super::secret_redaction::redact_json_value(effective.redact_secrets(), body)
+            .await
+        {
+            Ok(body) => body,
+            Err(err) => return super::super::secret_redaction::error_response(err),
+        };
 
     if state.log_bodies() {
         tracing::debug!(
@@ -78,22 +102,6 @@ pub(crate) async fn messages(
     if is_streaming {
         if state.log_bodies() {
             tracing::debug!(model = %body.model, "streaming request initiated");
-        }
-        let (mapped_model, effective, deployment) = match state.resolve_model_and_state(&body.model)
-        {
-            Ok(v) => v,
-            Err(resp) => return resp,
-        };
-        if let Some(ref ctx) = vk_ctx {
-            if let Err(error) = super::super::policy::enforce_route_scope(
-                &effective.backend_name,
-                &effective.shared,
-                &ctx.allowed_routes,
-            )
-            .await
-            {
-                return route_scope_forbidden_response(error);
-            }
         }
         // Logging deferred until stream completes (inside messages_stream tasks).
         let deployment_accounting =
@@ -146,23 +154,9 @@ pub(crate) async fn messages(
         }
     };
 
-    // Resolve model routing (may switch to a different backend) before reading
-    // cache so route-scoped keys cannot receive cached disallowed-backend data.
-    let (mapped_model, effective, deployment) = match state.resolve_model_and_state(&body.model) {
-        Ok(v) => v,
-        Err(resp) => return resp,
-    };
-    if let Some(ref ctx) = vk_ctx {
-        if let Err(error) = super::super::policy::enforce_route_scope(
-            &effective.backend_name,
-            &effective.shared,
-            &ctx.allowed_routes,
-        )
-        .await
-        {
-            return route_scope_forbidden_response(error);
-        }
-    }
+    // Model routing already resolved above (before redaction) into
+    // `mapped_model`/`effective`/`deployment`; the route scope was enforced there
+    // too, so route-scoped keys cannot receive cached disallowed-backend data.
     let auth_identity = cache_auth_identity(&headers, &vk_ctx);
     let cache_key = if cache_control.lookup || cache_control.store {
         Some(cache::cache_key_for_request(
@@ -283,16 +277,18 @@ pub(crate) async fn messages(
                     );
 
                     // Tool execution: bounded loop with termination guards.
-                    let anthropic_resp = if let Some(ref engine) = state.tool_engine {
+                    // Use `effective` (carries per-route option overrides) for
+                    // guardrails + follow-up redaction, not the base `state`.
+                    let anthropic_resp = if let Some(ref engine) = effective.tool_engine {
                         let client_for_tools = client.clone();
                         let model_for_tools = mapped_model.clone();
                         let orig_model_for_tools = original_model.clone();
-                        let redact_follow_up = state.redact_secrets();
+                        let redact_follow_up = effective.redact_secrets();
                         let backend_kind_for_tools = backend_kind_for_policy(&effective.backend);
                         let provider_id_for_tools = effective.provider_id.clone();
                         let provider_catalog_for_tools = effective.provider_catalog.clone();
                         let server_advertised_tool_names = std::collections::HashSet::new();
-                        let guardrails_for_tools = state.effective_tool_guardrails(engine);
+                        let guardrails_for_tools = effective.effective_tool_guardrails(engine);
                         let (resp, trace) = crate::tools::execution::maybe_execute_tools(
                             engine,
                             &body,

@@ -147,6 +147,8 @@ pub fn app_multi_with_shared(
             metrics,
             runtime_config: runtime_config.clone(),
             shared: shared.clone(),
+            // Set per-request by resolve_model_and_state when a DB route is hit.
+            route_options: None,
             backend_name: name.clone(),
             provider_id: bc.provider_id.clone(),
             concurrency: Arc::new(Semaphore::new(super::middleware::MAX_CONCURRENT_REQUESTS)),

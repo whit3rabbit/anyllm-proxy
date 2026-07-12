@@ -18,8 +18,16 @@ pub struct ManagedBackendRow {
     pub aws_session_token: Option<String>,
     pub rpm: Option<u32>,
     pub tpm: Option<u64>,
+    /// Operator on/off toggle. Disabled backends are excluded from route dispatch.
+    #[serde(default = "default_true")]
+    pub enabled: bool,
     pub created_at: String,
     pub updated_at: String,
+}
+
+/// serde default for the `enabled` flag (backends default to on).
+fn default_true() -> bool {
+    true
 }
 
 /// Patch struct for partial updates — all fields optional.
@@ -40,6 +48,8 @@ pub struct ManagedBackendPatch {
     pub aws_session_token: Option<String>,
     pub rpm: Option<u32>,
     pub tpm: Option<u64>,
+    /// Operator on/off toggle. Never cleared to NULL (bool, defaults true).
+    pub enabled: Option<bool>,
 }
 
 /// Row returned by `list_model_deployments`.
@@ -112,8 +122,8 @@ pub fn insert_managed_backend(conn: &Connection, row: &ManagedBackendRow) -> rus
         "INSERT INTO managed_backends
              (id, name, provider_id, api_key, api_base, deployment, api_version,
               project, region, aws_access_key_id, aws_secret_access_key, aws_session_token,
-              rpm, tpm, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+              rpm, tpm, enabled, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
         params![
             row.id,
             row.name,
@@ -129,6 +139,7 @@ pub fn insert_managed_backend(conn: &Connection, row: &ManagedBackendRow) -> rus
             row.aws_session_token,
             row.rpm,
             row.tpm,
+            row.enabled as i32,
             row.created_at,
             row.updated_at,
         ],
@@ -141,7 +152,7 @@ pub fn list_managed_backends(conn: &Connection) -> rusqlite::Result<Vec<ManagedB
     let mut stmt = conn.prepare(
         "SELECT id, name, provider_id, api_key, api_base, deployment, api_version,
                 project, region, aws_access_key_id, aws_secret_access_key, aws_session_token,
-                rpm, tpm, created_at, updated_at
+                rpm, tpm, enabled, created_at, updated_at
          FROM managed_backends ORDER BY name",
     )?;
     let rows = stmt.query_map([], |r| {
@@ -160,8 +171,9 @@ pub fn list_managed_backends(conn: &Connection) -> rusqlite::Result<Vec<ManagedB
             aws_session_token: r.get(11)?,
             rpm: r.get(12)?,
             tpm: r.get(13)?,
-            created_at: r.get(14)?,
-            updated_at: r.get(15)?,
+            enabled: r.get::<_, i32>(14)? != 0,
+            created_at: r.get(15)?,
+            updated_at: r.get(16)?,
         })
     })?;
     rows.collect()
@@ -207,6 +219,10 @@ pub fn update_managed_backend(
     if let Some(v) = patch.tpm {
         set_clauses.push("tpm = ?".to_string());
         param_values.push(Box::new(v as i64));
+    }
+    if let Some(v) = patch.enabled {
+        set_clauses.push("enabled = ?".to_string());
+        param_values.push(Box::new(v as i32));
     }
 
     if set_clauses.is_empty() {
@@ -268,6 +284,7 @@ mod tests {
             aws_session_token: None,
             rpm: Some(100),
             tpm: Some(10_000),
+            enabled: true,
             created_at: "2026-01-01T00:00:00Z".to_string(),
             updated_at: "2026-01-01T00:00:00Z".to_string(),
         }
@@ -342,6 +359,20 @@ mod tests {
 
         let rows = list_managed_backends(&conn).unwrap();
         assert_eq!(rows[0].provider_id, "openai");
+    }
+
+    #[test]
+    fn managed_backend_enabled_defaults_true_and_toggles() {
+        let conn = in_memory_db();
+        insert_managed_backend(&conn, &test_row("tog")).unwrap();
+        assert!(list_managed_backends(&conn).unwrap()[0].enabled);
+
+        let patch = ManagedBackendPatch {
+            enabled: Some(false),
+            ..Default::default()
+        };
+        assert!(update_managed_backend(&conn, "tog", &patch).unwrap());
+        assert!(!list_managed_backends(&conn).unwrap()[0].enabled);
     }
 
     #[test]

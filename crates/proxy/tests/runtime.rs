@@ -124,6 +124,7 @@ fn backend_config(kind: BackendKind, base_url: String) -> BackendConfig {
         omit_stream_options: false,
         stream_timeout_secs: 900,
         bedrock_credentials: None,
+        allow_local_ssrf: false,
     }
 }
 

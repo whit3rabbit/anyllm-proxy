@@ -82,6 +82,7 @@ async fn spawn_proxy(backend_base_url: String, deployment: Arc<Deployment>) -> S
             omit_stream_options: false,
             stream_timeout_secs: 900,
             bedrock_credentials: None,
+            allow_local_ssrf: false,
         },
     );
     let config = MultiConfig {

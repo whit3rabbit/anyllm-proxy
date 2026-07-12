@@ -68,7 +68,7 @@ impl GeminiNativeClient {
         small_model: String,
         tls: &TlsConfig,
     ) -> Self {
-        let client = build_http_client(tls);
+        let client = build_http_client(tls, false);
         Self {
             client,
             base_url,

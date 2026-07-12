@@ -348,6 +348,52 @@ fn cost_based_falls_back_to_round_robin_for_unknown_models() {
 // ---- Mutation method tests ----
 
 #[test]
+fn failover_sticks_to_priority_zero_then_falls_over() {
+    use std::sync::atomic::AtomicUsize;
+    let deps = make_deployments(&[("primary", "m", Some(1)), ("secondary", "m", None)]);
+    let counter = AtomicUsize::new(0);
+
+    // Sticky to priority 0 while under limit (no rotation across calls).
+    let i0 = select_from(&deps, &counter, RoutingStrategy::Failover).unwrap();
+    assert_eq!(deps[i0].backend_name, "primary");
+    // primary now at its RPM limit (1); failover to the next priority.
+    let i1 = select_from(&deps, &counter, RoutingStrategy::Failover).unwrap();
+    assert_eq!(deps[i1].backend_name, "secondary");
+    // secondary has no limit; stays there.
+    let i2 = select_from(&deps, &counter, RoutingStrategy::Failover).unwrap();
+    assert_eq!(deps[i2].backend_name, "secondary");
+}
+
+#[test]
+fn routing_strategy_from_route_str_maps_known_and_defaults_failover() {
+    assert_eq!(
+        RoutingStrategy::from_route_str("round-robin"),
+        RoutingStrategy::RoundRobin
+    );
+    assert_eq!(
+        RoutingStrategy::from_route_str("round_robin"),
+        RoutingStrategy::RoundRobin
+    );
+    assert_eq!(
+        RoutingStrategy::from_route_str("least-busy"),
+        RoutingStrategy::LeastBusy
+    );
+    assert_eq!(
+        RoutingStrategy::from_route_str("cost"),
+        RoutingStrategy::CostBased
+    );
+    // Unknown / "failover" both map to Failover.
+    assert_eq!(
+        RoutingStrategy::from_route_str("failover"),
+        RoutingStrategy::Failover
+    );
+    assert_eq!(
+        RoutingStrategy::from_route_str("nonsense"),
+        RoutingStrategy::Failover
+    );
+}
+
+#[test]
 fn add_deployment_to_existing_model() {
     let mut router = ModelRouter::new(HashMap::new());
     let d = Arc::new(Deployment::new("b1".into(), "m1".into(), None, None));

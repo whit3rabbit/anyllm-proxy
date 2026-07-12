@@ -26,6 +26,7 @@ pub struct ManagedBackendResponse {
     pub region: Option<String>,
     pub rpm: Option<u32>,
     pub tpm: Option<u64>,
+    pub enabled: bool,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -54,6 +55,7 @@ impl ManagedBackendResponse {
             region: row.region.clone(),
             rpm: row.rpm,
             tpm: row.tpm,
+            enabled: row.enabled,
             created_at: row.created_at.clone(),
             updated_at: row.updated_at.clone(),
         }
@@ -87,6 +89,13 @@ pub struct CreateManagedBackendRequest {
     pub rpm: Option<u32>,
     #[serde(default)]
     pub tpm: Option<u64>,
+    #[serde(default = "default_backend_enabled")]
+    pub enabled: bool,
+}
+
+/// serde default for a new managed backend's on/off toggle (on).
+fn default_backend_enabled() -> bool {
+    true
 }
 
 /// GET /admin/api/backends/managed -- list all managed backends (masked).
@@ -154,6 +163,7 @@ pub async fn create(
         aws_session_token: body.aws_session_token.clone(),
         rpm: body.rpm,
         tpm: body.tpm,
+        enabled: body.enabled,
         created_at: now.clone(),
         updated_at: now,
     };
@@ -220,6 +230,9 @@ pub async fn create(
             source_ip: Some(addr.ip().to_string()),
         },
     );
+
+    // 7b. Refresh route dispatch table (new backend may be assigned to a route).
+    crate::admin::routes::rebuild_route_router(&shared).await;
 
     // 8. Return 201 with masked representation.
     (
@@ -293,6 +306,9 @@ pub async fn update(
     }
     if let Some(v) = patch.tpm {
         updated_row.tpm = Some(v);
+    }
+    if let Some(v) = patch.enabled {
+        updated_row.enabled = v;
     }
 
     // 3. Build BackendConfig/Client from updated row.
@@ -373,6 +389,9 @@ pub async fn update(
         },
     );
 
+    // Refresh route dispatch table (enabled/rpm/tpm/credentials may have changed).
+    crate::admin::routes::rebuild_route_router(&shared).await;
+
     (
         StatusCode::OK,
         Json(serde_json::json!({ "backend": ManagedBackendResponse::from_row(&updated_row) })),
@@ -433,6 +452,9 @@ pub async fn delete(
             source_ip: Some(addr.ip().to_string()),
         },
     );
+
+    // Refresh route dispatch table (a route may have referenced this backend).
+    crate::admin::routes::rebuild_route_router(&shared).await;
 
     Json(serde_json::json!({ "status": "deleted", "name": name })).into_response()
 }

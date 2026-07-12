@@ -23,11 +23,17 @@ pub use anyllm_client::sse::{find_double_newline, SseFrameBuffer, MAX_SSE_BUFFER
 use anyllm_client::http::HttpClientConfig;
 
 /// Build a reqwest HTTP client from proxy TlsConfig (adapter to client crate).
-pub(crate) fn build_http_client(tls: &TlsConfig) -> reqwest::Client {
+///
+/// `allow_local` relaxes SSRF protection to permit loopback + RFC-1918 private IPs.
+/// Only set true for admin-configured managed backends whose provider is a known local
+/// LLM server (Ollama/LM Studio/vLLM/...). Cloud-metadata IPs stay blocked regardless.
+pub(crate) fn build_http_client(tls: &TlsConfig, allow_local: bool) -> reqwest::Client {
     let config = HttpClientConfig {
         p12_identity: tls.p12_identity.clone(),
         ca_cert_pem: tls.ca_cert_pem.clone(),
         ssrf_protection: true,
+        ssrf_allow_loopback: allow_local,
+        ssrf_allow_private: allow_local,
         ..Default::default()
     };
     anyllm_client::build_http_client(&config)
@@ -369,11 +375,19 @@ impl BackendClient {
 
         match bc.kind {
             BackendKind::OpenAI => match bc.api_format {
-                OpenAIApiFormat::Chat => Self::OpenAI(OpenAIClient::new(&legacy)),
-                OpenAIApiFormat::Responses => Self::OpenAIResponses(OpenAIClient::new(&legacy)),
+                OpenAIApiFormat::Chat => {
+                    Self::OpenAI(OpenAIClient::with_ssrf(&legacy, bc.allow_local_ssrf))
+                }
+                OpenAIApiFormat::Responses => {
+                    Self::OpenAIResponses(OpenAIClient::with_ssrf(&legacy, bc.allow_local_ssrf))
+                }
             },
-            BackendKind::AzureOpenAI => Self::AzureOpenAI(OpenAIClient::new(&legacy)),
-            BackendKind::Vertex => Self::Vertex(OpenAIClient::new(&legacy)),
+            BackendKind::AzureOpenAI => {
+                Self::AzureOpenAI(OpenAIClient::with_ssrf(&legacy, bc.allow_local_ssrf))
+            }
+            BackendKind::Vertex => {
+                Self::Vertex(OpenAIClient::with_ssrf(&legacy, bc.allow_local_ssrf))
+            }
             BackendKind::Gemini => {
                 let native = std::env::var("GEMINI_API_FORMAT")
                     .map(|v| v.to_lowercase() == "native")
@@ -397,7 +411,7 @@ impl BackendClient {
                         &bc.tls,
                     ))
                 } else {
-                    Self::GeminiOpenAI(OpenAIClient::new(&legacy))
+                    Self::GeminiOpenAI(OpenAIClient::with_ssrf(&legacy, bc.allow_local_ssrf))
                 }
             }
             BackendKind::Anthropic => Self::Anthropic(AnthropicClient::from_backend_config(bc)),

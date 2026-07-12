@@ -366,6 +366,10 @@ button[disabled] { opacity: 0.55; cursor: not-allowed; }
 /* Route detail (extracted from inline styles) */
 .route-detail { padding: 12px 16px; background: var(--bg-sunken); border-top: 1px solid var(--border); }
 .route-detail-header { display: flex; justify-content: space-between; margin-bottom: 12px; }
+.route-detail-curl { margin-bottom: 12px; padding: 10px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--r); }
+.route-detail-curl-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.route-detail-curl-body { margin: 0; padding: 8px 10px; background: var(--bg-sunken); border-radius: var(--r); font-size: 12px; white-space: pre-wrap; word-break: break-all; overflow-x: auto; }
+.route-detail-curl-hint { margin-top: 6px; font-size: 12px; }
 .route-detail-title { font-weight: 600; }
 .route-detail-desc { margin-left: 8px; }
 .route-detail-meta { display: flex; gap: 8px; align-items: center; font-size: 12px; }
@@ -418,6 +422,12 @@ button[disabled] { opacity: 0.55; cursor: not-allowed; }
 .provider-tile-name { font-size: 12px; font-weight: 500; color: var(--text-1); line-height: 1.3; }
 .provider-tile-id { font-size: 10px; color: var(--text-3); font-family: var(--font-mono); line-height: 1.2; word-break: break-all; }
 .provider-tile-count { font-size: 10px; color: var(--text-3); font-family: var(--font-mono); }
+.provider-tile-wrap { position: relative; display: flex; }
+.provider-tile-wrap .provider-tile { flex: 1; width: 100%; }
+.provider-fav-btn { position: absolute; top: 4px; right: 4px; padding: 0 4px; line-height: 1; font-size: 15px; background: transparent; border: none; cursor: pointer; color: var(--text-3); opacity: 0; transition: opacity 0.1s, color 0.1s; }
+.provider-tile-wrap:hover .provider-fav-btn { opacity: 1; }
+.provider-fav-btn:hover { color: var(--accent); }
+.provider-fav-btn.active { opacity: 1; color: var(--accent); }
 
 /* Provider detail panel (rendered inside shared Modal .modal-body) */
 .provider-panel-caps { display: flex; flex-wrap: wrap; gap: 5px; padding: 0 0 10px; border-bottom: 1px solid var(--border-sub); align-items: center; }

@@ -68,7 +68,7 @@ impl std::fmt::Display for AnthropicClientError {
 impl AnthropicClient {
     /// Create from a BackendConfig (used in multi-backend mode).
     pub fn from_backend_config(bc: &BackendConfig) -> Self {
-        let client = build_http_client(&bc.tls);
+        let client = build_http_client(&bc.tls, bc.allow_local_ssrf);
         let (base_url, messages_url) = anthropic_urls(&bc.base_url);
         Self {
             client,
@@ -80,7 +80,7 @@ impl AnthropicClient {
 
     /// Create from raw parts (used in legacy single-backend mode).
     pub fn new(base_url: &str, auth: &BackendAuth, tls: &TlsConfig) -> Self {
-        let client = build_http_client(tls);
+        let client = build_http_client(tls, false);
         let (base_url, messages_url) = anthropic_urls(base_url);
         Self {
             client,

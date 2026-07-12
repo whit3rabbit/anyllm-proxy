@@ -161,6 +161,7 @@ impl MultiConfig {
             omit_stream_options,
             stream_timeout_secs,
             bedrock_credentials,
+            allow_local_ssrf: false,
         };
 
         let mut backends = IndexMap::new();

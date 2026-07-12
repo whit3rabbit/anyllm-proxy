@@ -1,7 +1,7 @@
 import { Fragment, useRef, useState } from 'react'
 import {
   useConfig, useSaveConfig, useDeleteConfigOverride, useEnv,
-  useImportEnv, downloadEnvExport,
+  useImportEnv, downloadEnvExport, useStatus,
 } from '../../api/queries'
 import EmptyState from '../../components/shared/EmptyState'
 import ConfirmDialog from '../../components/shared/ConfirmDialog'
@@ -17,6 +17,7 @@ function restartPending() {
 export default function Settings({ configured = true }: { configured?: boolean }) {
   const { data: cfg, isLoading, error } = useConfig()
   const { data: envData } = useEnv()
+  const { data: status } = useStatus()
   const save = useSaveConfig()
   const del = useDeleteConfigOverride()
   const importEnv = useImportEnv()
@@ -105,8 +106,26 @@ export default function Settings({ configured = true }: { configured?: boolean }
     setShowRestartBanner(false)
   }
 
+  const proxyUrl = status ? `http://${window.location.hostname}:${status.proxy_port}` : ''
+
   return (
     <div>
+      {/* Live proxy status. Every setting below applies immediately (no restart);
+          this badge just confirms the proxy port is actually reachable. */}
+      {status && (
+        <div
+          className="proxy-status-badge"
+          style={{ marginBottom: 16, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}
+        >
+          <span style={{ color: status.proxy_running ? 'var(--ok, green)' : 'var(--warn, orange)' }}>
+            {status.proxy_running ? '●' : '○'}
+          </span>
+          {status.proxy_running
+            ? <span>Proxy running — <span className="mono">{proxyUrl}</span></span>
+            : <span>Proxy unreachable on <span className="mono">{proxyUrl}</span></span>}
+        </div>
+      )}
+
       {/* Getting-started notice — shown when no backend is configured (no env/config-file
           signal and no managed backend). Manage backends on the Backends tab. */}
       {!configured && (

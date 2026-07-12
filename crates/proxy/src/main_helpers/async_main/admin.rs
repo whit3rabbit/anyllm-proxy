@@ -357,6 +357,22 @@ pub(crate) async fn init_admin(
     };
 
     let db = Arc::new(std::sync::Mutex::new(conn));
+
+    // Compile the initial route dispatch table from the admin DB (enabled routes
+    // + providers + backends). Rebuilt on route/backend CRUD via rebuild_route_router.
+    let route_router = {
+        let conn = db.lock().unwrap_or_else(|e| e.into_inner());
+        let rr = config::route_router::RouteRouter::build_from_db(&conn).unwrap_or_else(|e| {
+            tracing::warn!(error = %e, "failed to build route router from DB; starting empty");
+            config::route_router::RouteRouter::empty()
+        });
+        tracing::info!(
+            has_routes = !rr.is_empty(),
+            "initialized route dispatch table"
+        );
+        Some(Arc::new(std::sync::RwLock::new(rr)))
+    };
+
     let (events_tx, _) = tokio::sync::broadcast::channel(1024);
     let log_tx = admin::db::spawn_write_buffer(db.clone());
 
@@ -426,6 +442,7 @@ pub(crate) async fn init_admin(
         virtual_keys,
         hmac_secret,
         model_router: model_router.clone(),
+        route_router,
         provider_catalog: provider_catalog.clone(),
         mcp_manager: tool_engine_state
             .as_ref()
@@ -437,6 +454,7 @@ pub(crate) async fn init_admin(
                 .build(),
         ),
         started_at: std::time::SystemTime::now(),
+        listen_port: multi_config.listen_port,
         managed_backends,
     };
 

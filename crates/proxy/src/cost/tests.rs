@@ -207,6 +207,7 @@ fn record_cost_with_shared_state_persists_spend() {
         virtual_keys: Arc::new(dashmap::DashMap::new()),
         hmac_secret: Arc::new(b"test-secret".to_vec()),
         model_router: None,
+        route_router: None,
         provider_catalog: Arc::new(anyllm_providers::ProviderCatalog::bundled()),
         mcp_manager: None,
         issued_csrf_tokens: Arc::new(
@@ -216,6 +217,7 @@ fn record_cost_with_shared_state_persists_spend() {
                 .build(),
         ),
         started_at: std::time::SystemTime::now(),
+        listen_port: 3000,
         managed_backends: Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
     };
 

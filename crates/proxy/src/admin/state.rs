@@ -56,6 +56,11 @@ pub struct SharedState {
     pub hmac_secret: Arc<Vec<u8>>,
     /// Model router for dynamic model management. None unless LiteLLM config is active.
     pub model_router: Option<Arc<RwLock<crate::config::model_router::ModelRouter>>>,
+    /// Route-level dispatch table compiled from the admin DB (`routes` +
+    /// `route_providers` + `managed_backends`). Takes precedence over
+    /// `model_router`. Rebuilt on route/backend CRUD. `None` in tests that
+    /// don't exercise routing.
+    pub route_router: Option<Arc<RwLock<crate::config::route_router::RouteRouter>>>,
     /// Immutable provider/model catalog used by the admin UI and proxy runtime.
     pub provider_catalog: Arc<ProviderCatalog>,
     /// MCP server manager for tool discovery and execution. None when tool execution is disabled.
@@ -67,6 +72,9 @@ pub struct SharedState {
     pub issued_csrf_tokens: Arc<moka::sync::Cache<String, ()>>,
     /// Unix timestamp of admin server startup; used by /admin/api/uptime.
     pub started_at: std::time::SystemTime,
+    /// TCP port the proxy listens on. Exposed via /admin/api/status so the UI
+    /// can build a copy-paste curl snippet and a liveness check for the proxy.
+    pub listen_port: u16,
     /// In-memory registry of managed backends loaded from SQLite at startup.
     /// Key = backend name (same as `row.name`). Keyed by name so routing lookups
     /// can find by backend_name string. Value = (row snapshot, live BackendClient).
@@ -240,6 +248,7 @@ impl SharedState {
             virtual_keys: Arc::new(DashMap::new()),
             hmac_secret: Arc::new(hmac_secret),
             model_router: None,
+            route_router: None,
             provider_catalog: Arc::new(ProviderCatalog::bundled()),
             mcp_manager: None,
             issued_csrf_tokens: Arc::new(
@@ -249,6 +258,7 @@ impl SharedState {
                     .build(),
             ),
             started_at: std::time::SystemTime::now(),
+            listen_port: 3000,
             managed_backends: Arc::new(RwLock::new(HashMap::new())),
         }
     }

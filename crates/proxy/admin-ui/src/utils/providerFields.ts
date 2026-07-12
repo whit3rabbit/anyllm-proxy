@@ -31,7 +31,7 @@ export function getProviderFields(provider: CatalogProvider): FieldDef[] {
       name: 'api_base',
       label: 'API Base URL',
       type: 'url',
-      required: false,
+      required: !default_base_url,
       group: 'endpoint',
       ...(default_base_url ? { placeholder: default_base_url } : {}),
     })
@@ -40,9 +40,18 @@ export function getProviderFields(provider: CatalogProvider): FieldDef[] {
       name: 'api_base',
       label: 'API Base URL',
       type: 'url',
-      required: false,
+      required: !default_base_url,
       group: 'endpoint',
       ...(default_base_url ? { placeholder: default_base_url } : {}),
+    })
+    // Local servers (LM Studio/Ollama/vLLM) can optionally enforce a key.
+    fields.push({
+      name: 'api_key',
+      label: 'API Key (optional)',
+      type: 'password',
+      required: false,
+      group: 'auth',
+      hint: 'Only if your local server enforces a key',
     })
   } else if (protocol === 'azure_openai' && auth === 'azure_api_key') {
     fields.push({
@@ -162,9 +171,19 @@ export function getProviderFields(provider: CatalogProvider): FieldDef[] {
         name: 'api_base',
         label: 'API Base URL',
         type: 'url',
-        required: false,
+        required: !default_base_url,
         group: 'endpoint',
         ...(default_base_url ? { placeholder: default_base_url } : {}),
+      })
+    }
+    if (auth === 'none') {
+      fields.push({
+        name: 'api_key',
+        label: 'API Key (optional)',
+        type: 'password',
+        required: false,
+        group: 'auth',
+        hint: 'Only if your server enforces a key',
       })
     }
   }

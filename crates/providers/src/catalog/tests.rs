@@ -35,10 +35,7 @@ const TEST_FIXTURE: &str = r#"{
 fn bundled_catalog_matches_static_lookup_shape() {
     let catalog = ProviderCatalog::bundled();
 
-    assert_eq!(
-        catalog.all_providers().count(),
-        crate::registry::all_providers().count()
-    );
+    assert!(catalog.all_providers().count() >= crate::registry::all_providers().count());
     assert_eq!(
         catalog.get_provider("gmi_cloud").unwrap().id,
         crate::registry::get_provider("gmi_cloud").unwrap().id
@@ -49,8 +46,33 @@ fn bundled_catalog_matches_static_lookup_shape() {
     );
     assert!(catalog
         .all_providers()
-        .all(|provider| provider.id != "lm_studio"));
+        .any(|provider| provider.id == "lm_studio"));
     assert!(catalog.get_provider("lm_studio").is_some());
+}
+
+#[test]
+fn is_local_detects_loopback_providers() {
+    let catalog = ProviderCatalog::bundled();
+    assert!(catalog.get_provider("lm_studio").unwrap().is_local());
+    assert!(catalog.get_provider("ollama").unwrap().is_local());
+    assert!(!catalog.get_provider("openai").unwrap().is_local());
+}
+
+#[test]
+fn base_url_is_local_matches_host_not_substring() {
+    // Genuine local endpoints.
+    assert!(base_url_is_local("http://localhost:11434"));
+    assert!(base_url_is_local("http://127.0.0.1:1234/v1"));
+    assert!(base_url_is_local("http://192.168.1.50:8080/v1"));
+    assert!(base_url_is_local("http://[::1]:8080"));
+    assert!(base_url_is_local("http://0.0.0.0:11434"));
+    // Public hosts that merely CONTAIN a local-looking substring must not match.
+    assert!(!base_url_is_local(
+        "https://api.localhost-cdn.example.com/v1"
+    ));
+    assert!(!base_url_is_local("https://api.openai.com/127.0.0.1"));
+    assert!(!base_url_is_local("https://0.0.0.0.example.com/v1"));
+    assert!(!base_url_is_local("https://api.openai.com/v1"));
 }
 
 #[test]

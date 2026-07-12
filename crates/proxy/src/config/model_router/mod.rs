@@ -26,6 +26,121 @@ pub enum RoutingStrategy {
     /// Pick deployment with lowest cost per token from the bundled model pricing table.
     /// Falls back to round-robin if none of the deployments have known pricing.
     CostBased,
+    /// Failover: scan deployments in priority order, pick the first one under its
+    /// RPM limit. Sticky to the highest-priority available deployment (no rotation).
+    /// This is the default for admin-DB routes (`routes.strategy = "failover"`).
+    Failover,
+}
+
+impl RoutingStrategy {
+    /// Map an admin-DB `routes.strategy` string to a strategy. Unknown values
+    /// fall back to `Failover` (the `routes` table default).
+    pub fn from_route_str(s: &str) -> Self {
+        match s.trim().to_ascii_lowercase().replace('_', "-").as_str() {
+            "round-robin" => RoutingStrategy::RoundRobin,
+            "least-busy" => RoutingStrategy::LeastBusy,
+            "latency" | "latency-based" => RoutingStrategy::LatencyBased,
+            "weighted" => RoutingStrategy::Weighted,
+            "cost" | "cost-based" => RoutingStrategy::CostBased,
+            _ => RoutingStrategy::Failover,
+        }
+    }
+}
+
+/// Select the index of the deployment to route to from a slice, applying the
+/// given strategy and RPM-aware skipping. Records the request on the chosen
+/// deployment (so callers must not call `record_request` again). Returns `None`
+/// when the slice is empty or every candidate is at its RPM limit.
+///
+/// Shared by `ModelRouter::route` (keyed by model name) and `RouteRouter`
+/// (per-route provider slice) so both use identical selection semantics.
+pub(crate) fn select_from(
+    deployments: &[Arc<Deployment>],
+    counter: &AtomicUsize,
+    strategy: RoutingStrategy,
+) -> Option<usize> {
+    let len = deployments.len();
+    if len == 0 {
+        return None;
+    }
+    let chosen = match strategy {
+        RoutingStrategy::RoundRobin => {
+            let start = counter.fetch_add(1, Ordering::Relaxed) % len;
+            (0..len)
+                .map(|i| (start + i) % len)
+                .find(|&idx| deployments[idx].under_rpm_limit())
+        }
+        RoutingStrategy::Failover => {
+            // Priority order (slice is already priority-sorted); no rotation.
+            (0..len).find(|&idx| deployments[idx].under_rpm_limit())
+        }
+        RoutingStrategy::LeastBusy => min_by_metric(deployments, |d| d.in_flight_count() as u64),
+        RoutingStrategy::LatencyBased => min_by_metric(deployments, |d| d.latency_ms()),
+        RoutingStrategy::Weighted => {
+            let total_weight: usize = deployments.iter().map(|d| d.weight as usize).sum();
+            if total_weight == 0 {
+                return None;
+            }
+            let tick = counter.fetch_add(1, Ordering::Relaxed) % total_weight;
+            let mut cumulative = 0usize;
+            let mut start_idx = 0;
+            for (i, d) in deployments.iter().enumerate() {
+                cumulative += d.weight as usize;
+                if tick < cumulative {
+                    start_idx = i;
+                    break;
+                }
+            }
+            (0..len)
+                .map(|i| (start_idx + i) % len)
+                .find(|&idx| deployments[idx].under_rpm_limit())
+        }
+        RoutingStrategy::CostBased => {
+            let pricing = crate::cost::pricing();
+            let mut best: Option<(usize, f64)> = None;
+            let mut any_priced = false;
+            for (i, d) in deployments.iter().enumerate() {
+                if !d.under_rpm_limit() {
+                    continue;
+                }
+                if let Some((input, output)) = pricing.price_for_model(&d.actual_model) {
+                    any_priced = true;
+                    let score = input + output;
+                    if best.is_none() || score < best.unwrap().1 {
+                        best = Some((i, score));
+                    }
+                }
+            }
+            if !any_priced {
+                // No known pricing: fall back to round-robin (records internally).
+                return select_from(deployments, counter, RoutingStrategy::RoundRobin);
+            }
+            best.map(|(idx, _)| idx)
+        }
+    };
+    if let Some(idx) = chosen {
+        deployments[idx].record_request();
+    }
+    chosen
+}
+
+/// Pick the index of the deployment with the smallest metric value among those
+/// under their RPM limit; ties broken by slice order. `None` if all are limited.
+fn min_by_metric(
+    deployments: &[Arc<Deployment>],
+    metric: impl Fn(&Deployment) -> u64,
+) -> Option<usize> {
+    let mut best: Option<(usize, u64)> = None;
+    for (i, d) in deployments.iter().enumerate() {
+        if !d.under_rpm_limit() {
+            continue;
+        }
+        let m = metric(d);
+        if best.is_none() || m < best.unwrap().1 {
+            best = Some((i, m));
+        }
+    }
+    best.map(|(idx, _)| idx)
 }
 
 /// A single backend deployment that can serve a model name.
@@ -206,185 +321,14 @@ impl ModelRouter {
     /// skip deployments that are at their RPM limit.
     /// Returns None if the model is unknown or all deployments are at limit.
     pub fn route(&self, model_name: &str) -> Option<RoutedDeployment<'_>> {
-        match self.strategy {
-            RoutingStrategy::RoundRobin => self.route_round_robin(model_name),
-            RoutingStrategy::LeastBusy => self.route_least_busy(model_name),
-            RoutingStrategy::LatencyBased => self.route_latency_based(model_name),
-            RoutingStrategy::Weighted => self.route_weighted(model_name),
-            RoutingStrategy::CostBased => self.route_cost_based(model_name),
-        }
-    }
-
-    /// Round-robin with RPM-aware skip.
-    fn route_round_robin(&self, model_name: &str) -> Option<RoutedDeployment<'_>> {
         let deployments = self.routes.get(model_name)?;
         let counter = self.counters.get(model_name)?;
-        let len = deployments.len();
-        if len == 0 {
-            return None;
-        }
-
-        let start = counter.fetch_add(1, Ordering::Relaxed) % len;
-        for i in 0..len {
-            let idx = (start + i) % len;
-            let d = &deployments[idx];
-            if d.under_rpm_limit() {
-                d.record_request();
-                return Some(RoutedDeployment {
-                    backend_name: &d.backend_name,
-                    actual_model: &d.actual_model,
-                    deployment: d,
-                });
-            }
-        }
-        None
-    }
-
-    /// Pick deployment with lowest in-flight count (ties broken by config order).
-    fn route_least_busy(&self, model_name: &str) -> Option<RoutedDeployment<'_>> {
-        let deployments = self.routes.get(model_name)?;
-        if deployments.is_empty() {
-            return None;
-        }
-
-        let mut best: Option<(usize, u32)> = None;
-        for (i, d) in deployments.iter().enumerate() {
-            if !d.under_rpm_limit() {
-                continue;
-            }
-            let count = d.in_flight_count();
-            if best.is_none() || count < best.unwrap().1 {
-                best = Some((i, count));
-            }
-        }
-
-        best.map(|(idx, _)| {
-            let d = &deployments[idx];
-            d.record_request();
-            RoutedDeployment {
-                backend_name: &d.backend_name,
-                actual_model: &d.actual_model,
-                deployment: d,
-            }
-        })
-    }
-
-    /// Pick deployment with lowest latency EWMA. Zero (no data yet) is naturally
-    /// the minimum, so unknown deployments get tried first for warmup.
-    fn route_latency_based(&self, model_name: &str) -> Option<RoutedDeployment<'_>> {
-        let deployments = self.routes.get(model_name)?;
-        if deployments.is_empty() {
-            return None;
-        }
-
-        let mut best: Option<(usize, u64)> = None;
-        for (i, d) in deployments.iter().enumerate() {
-            if !d.under_rpm_limit() {
-                continue;
-            }
-            let lat = d.latency_ms();
-            if best.is_none() || lat < best.unwrap().1 {
-                best = Some((i, lat));
-            }
-        }
-
-        best.map(|(idx, _)| {
-            let d = &deployments[idx];
-            d.record_request();
-            RoutedDeployment {
-                backend_name: &d.backend_name,
-                actual_model: &d.actual_model,
-                deployment: d,
-            }
-        })
-    }
-
-    /// Weighted round-robin. Deployments with weight=3 get 3x traffic vs weight=1.
-    /// Uses a virtual counter that expands by total weight per cycle.
-    fn route_weighted(&self, model_name: &str) -> Option<RoutedDeployment<'_>> {
-        let deployments = self.routes.get(model_name)?;
-        let counter = self.counters.get(model_name)?;
-        let len = deployments.len();
-        if len == 0 {
-            return None;
-        }
-
-        // Build expanded index: deployment i appears weight[i] times.
-        let total_weight: usize = deployments.iter().map(|d| d.weight as usize).sum();
-        if total_weight == 0 {
-            return None;
-        }
-
-        let tick = counter.fetch_add(1, Ordering::Relaxed) % total_weight;
-        let mut cumulative = 0usize;
-
-        // Find which deployment this tick maps to.
-        let mut start_idx = 0;
-        for (i, d) in deployments.iter().enumerate() {
-            cumulative += d.weight as usize;
-            if tick < cumulative {
-                start_idx = i;
-                break;
-            }
-        }
-
-        // Try starting at the weighted pick, then scan others if RPM-limited.
-        for i in 0..len {
-            let idx = (start_idx + i) % len;
-            let d = &deployments[idx];
-            if d.under_rpm_limit() {
-                d.record_request();
-                return Some(RoutedDeployment {
-                    backend_name: &d.backend_name,
-                    actual_model: &d.actual_model,
-                    deployment: d,
-                });
-            }
-        }
-        None
-    }
-
-    /// Pick deployment with the lowest combined cost per token (input + output).
-    ///
-    /// Uses the global model pricing table. Deployments with unknown pricing are
-    /// treated as having infinite cost and are skipped in favour of priced ones.
-    /// If no deployment has known pricing, falls back to round-robin.
-    fn route_cost_based(&self, model_name: &str) -> Option<RoutedDeployment<'_>> {
-        let deployments = self.routes.get(model_name)?;
-        if deployments.is_empty() {
-            return None;
-        }
-
-        let pricing = crate::cost::pricing();
-        let mut best: Option<(usize, f64)> = None;
-        let mut any_priced = false;
-
-        for (i, d) in deployments.iter().enumerate() {
-            if !d.under_rpm_limit() {
-                continue;
-            }
-            if let Some((input, output)) = pricing.price_for_model(&d.actual_model) {
-                any_priced = true;
-                let score = input + output;
-                if best.is_none() || score < best.unwrap().1 {
-                    best = Some((i, score));
-                }
-            }
-        }
-
-        // No deployment has known pricing; fall back to round-robin.
-        if !any_priced {
-            return self.route_round_robin(model_name);
-        }
-
-        best.map(|(idx, _)| {
-            let d = &deployments[idx];
-            d.record_request();
-            RoutedDeployment {
-                backend_name: &d.backend_name,
-                actual_model: &d.actual_model,
-                deployment: d,
-            }
+        let idx = select_from(deployments, counter, self.strategy)?;
+        let d = &deployments[idx];
+        Some(RoutedDeployment {
+            backend_name: &d.backend_name,
+            actual_model: &d.actual_model,
+            deployment: d,
         })
     }
 

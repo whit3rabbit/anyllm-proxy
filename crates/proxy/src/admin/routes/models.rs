@@ -18,12 +18,15 @@ static DISCOVER_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
     })
 });
 
-/// Local discovery is only for explicit local provider sources such as Ollama.
+/// Local discovery is only for explicit local provider sources such as Ollama and for
+/// managed backends whose provider is a local LLM server. Allows loopback + private IPs
+/// (localhost/LAN); cloud-metadata IPs stay blocked by the SSRF-safe DNS resolver.
 static LOCAL_DISCOVER_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
     build_http_client(&HttpClientConfig {
         connect_timeout: Some(std::time::Duration::from_secs(10)),
         request_timeout: Some(std::time::Duration::from_secs(15)),
         ssrf_allow_loopback: true,
+        ssrf_allow_private: true,
         ..HttpClientConfig::new()
     })
 });
@@ -249,6 +252,13 @@ pub(super) struct DiscoverRequest {
     source: String,
     #[serde(default)]
     url: Option<String>,
+    /// Provider being configured. When it is a local LLM server (loopback/private
+    /// default base URL), SSRF is relaxed for discovery so localhost/LAN targets work.
+    #[serde(default)]
+    provider_id: Option<String>,
+    /// Optional key for a `custom` source that enforces one (e.g. a keyed LM Studio).
+    #[serde(default)]
+    api_key: Option<String>,
 }
 
 #[derive(serde::Serialize)]
@@ -266,8 +276,18 @@ struct DiscoveredModel {
 }
 
 /// POST /admin/api/models/discover -- fetch available models from a provider.
-pub(super) async fn discover_models(Json(body): Json<DiscoverRequest>) -> impl IntoResponse {
-    let (url, api_key) = match resolve_discover_target(&body) {
+pub(super) async fn discover_models(
+    State(shared): State<SharedState>,
+    Json(body): Json<DiscoverRequest>,
+) -> impl IntoResponse {
+    // A provider counts as local only if the catalog says so — never trust a client flag.
+    let provider_is_local = body
+        .provider_id
+        .as_deref()
+        .and_then(|id| shared.provider_catalog.get_provider(id))
+        .is_some_and(|p| p.is_local());
+
+    let (url, api_key) = match resolve_discover_target(&body, provider_is_local) {
         Ok(v) => v,
         Err(msg) => {
             return (
@@ -279,7 +299,7 @@ pub(super) async fn discover_models(Json(body): Json<DiscoverRequest>) -> impl I
     };
 
     let auth_used = api_key.is_some();
-    let client = if body.source == "ollama" {
+    let client = if body.source == "ollama" || provider_is_local {
         &*LOCAL_DISCOVER_CLIENT
     } else {
         &*DISCOVER_CLIENT
@@ -367,7 +387,14 @@ pub(super) async fn discover_models(Json(body): Json<DiscoverRequest>) -> impl I
 }
 
 /// Map the source name to a (URL, optional API key) pair.
-fn resolve_discover_target(body: &DiscoverRequest) -> Result<(String, Option<String>), String> {
+///
+/// `allow_local` is true when the provider being configured is a local LLM server; it
+/// relaxes the private/loopback SSRF rejection for the `custom` source (the scheme check
+/// stays, and the local discover client still blocks cloud-metadata IPs).
+fn resolve_discover_target(
+    body: &DiscoverRequest,
+    allow_local: bool,
+) -> Result<(String, Option<String>), String> {
     match body.source.as_str() {
         "openrouter" => Ok(("https://openrouter.ai/api/v1/models".into(), None)),
         "deepinfra" => Ok(("https://api.deepinfra.com/v1/openai/models".into(), None)),
@@ -396,16 +423,53 @@ fn resolve_discover_target(body: &DiscoverRequest) -> Result<(String, Option<Str
                 .filter(|u| !u.is_empty())
                 .ok_or("url is required for custom source")?;
             let url = url.trim_end_matches('/');
-            crate::config::validate_base_url(url)?;
+            if allow_local {
+                // Local provider: allow loopback/LAN targets but NOT public hosts, so
+                // `allow_local` can't turn discovery into a general outbound fetch/SSRF.
+                // Cloud-metadata + link-local stay blocked here and again by the resolver.
+                let parsed = url::Url::parse(url).map_err(|e| format!("invalid URL: {e}"))?;
+                match parsed.scheme() {
+                    "http" | "https" => {}
+                    other => {
+                        return Err(format!("scheme '{other}' not allowed, use http or https"))
+                    }
+                }
+                ensure_local_discover_host(&parsed)?;
+            } else {
+                crate::config::validate_base_url(url)?;
+            }
             // If the URL already ends with /models, use as-is; otherwise append.
             let url = if url.ends_with("/models") {
                 url.to_string()
             } else {
                 format!("{url}/v1/models")
             };
-            Ok((url, None))
+            Ok((url, body.api_key.clone()))
         }
         other => Err(format!("unknown source: {other}")),
+    }
+}
+
+/// For the local-provider discover path, require the target host be loopback,
+/// an RFC 1918 LAN IP, or literally `localhost`. Public IPs and other host names
+/// are rejected so `allow_local` cannot be abused as a general outbound fetch.
+/// Metadata/link-local IPs are rejected here (and again by the connect resolver).
+fn ensure_local_discover_host(parsed: &url::Url) -> Result<(), String> {
+    use anyllm_client::http::is_blocked_ip;
+    use std::net::IpAddr;
+    let local_ip_ok = |ip: IpAddr| -> bool {
+        let is_local = match ip {
+            IpAddr::V4(v4) => v4.is_loopback() || v4.is_private(),
+            IpAddr::V6(v6) => v6.is_loopback(),
+        };
+        // is_blocked_ip(_, true, true) still rejects metadata/link-local/unspecified.
+        is_local && !is_blocked_ip(ip, true, true)
+    };
+    match parsed.host() {
+        Some(url::Host::Ipv4(v4)) if local_ip_ok(IpAddr::V4(v4)) => Ok(()),
+        Some(url::Host::Ipv6(v6)) if local_ip_ok(IpAddr::V6(v6)) => Ok(()),
+        Some(url::Host::Domain(d)) if d.eq_ignore_ascii_case("localhost") => Ok(()),
+        _ => Err("local discovery requires a loopback/LAN IP or 'localhost'".into()),
     }
 }
 
@@ -417,12 +481,14 @@ mod tests {
         DiscoverRequest {
             source: "custom".to_string(),
             url: Some(url.to_string()),
+            provider_id: None,
+            api_key: None,
         }
     }
 
     #[test]
     fn custom_discover_rejects_loopback_url() {
-        let err = resolve_discover_target(&custom_request("http://127.0.0.1:11434"))
+        let err = resolve_discover_target(&custom_request("http://127.0.0.1:11434"), false)
             .expect_err("loopback custom discovery URL must be rejected");
 
         assert!(err.contains("private/loopback"));
@@ -430,7 +496,7 @@ mod tests {
 
     #[test]
     fn custom_discover_rejects_file_scheme() {
-        let err = resolve_discover_target(&custom_request("file:///tmp/anyllm"))
+        let err = resolve_discover_target(&custom_request("file:///tmp/anyllm"), false)
             .expect_err("non-http custom discovery URL must be rejected");
 
         assert!(err.contains("scheme"));
@@ -438,7 +504,7 @@ mod tests {
 
     #[test]
     fn custom_discover_accepts_https_url_and_appends_models() {
-        let (url, api_key) = resolve_discover_target(&custom_request("https://1.1.1.1"))
+        let (url, api_key) = resolve_discover_target(&custom_request("https://1.1.1.1"), false)
             .expect("public HTTPS custom discovery URL should be accepted");
 
         assert_eq!(url, "https://1.1.1.1/v1/models");
@@ -447,10 +513,49 @@ mod tests {
 
     #[test]
     fn custom_discover_accepts_existing_models_suffix() {
-        let (url, api_key) = resolve_discover_target(&custom_request("https://1.1.1.1/v1/models"))
-            .expect("public HTTPS custom discovery URL should be accepted");
+        let (url, api_key) =
+            resolve_discover_target(&custom_request("https://1.1.1.1/v1/models"), false)
+                .expect("public HTTPS custom discovery URL should be accepted");
 
         assert_eq!(url, "https://1.1.1.1/v1/models");
         assert_eq!(api_key, None);
+    }
+
+    #[test]
+    fn custom_discover_local_allows_loopback_but_keeps_scheme_check() {
+        // allow_local=true: loopback is accepted (LM Studio/Ollama on localhost)...
+        let (url, _) = resolve_discover_target(&custom_request("http://127.0.0.1:1234"), true)
+            .expect("local loopback discovery URL should be accepted when allow_local");
+        assert_eq!(url, "http://127.0.0.1:1234/v1/models");
+
+        // ...but a non-http scheme is still rejected.
+        let err = resolve_discover_target(&custom_request("file:///tmp/anyllm"), true)
+            .expect_err("non-http scheme must be rejected even when allow_local");
+        assert!(err.contains("scheme"));
+    }
+
+    #[test]
+    fn custom_discover_threads_api_key() {
+        let mut req = custom_request("http://192.168.1.72:4444");
+        req.api_key = Some("sk-local".to_string());
+        let (_, api_key) = resolve_discover_target(&req, true)
+            .expect("local LAN discovery URL should be accepted when allow_local");
+        assert_eq!(api_key.as_deref(), Some("sk-local"));
+    }
+
+    #[test]
+    fn custom_discover_local_rejects_public_and_metadata_hosts() {
+        // allow_local must NOT permit public hosts (would be a general outbound fetch).
+        let err = resolve_discover_target(&custom_request("http://1.1.1.1/v1"), true)
+            .expect_err("public IP must be rejected even when allow_local");
+        assert!(err.contains("loopback/LAN"));
+        // Cloud-metadata / link-local stay blocked here too.
+        let err = resolve_discover_target(&custom_request("http://169.254.169.254/"), true)
+            .expect_err("metadata IP must be rejected even when allow_local");
+        assert!(err.contains("loopback/LAN"));
+        // A bare host name that isn't `localhost` cannot be verified as local.
+        let err = resolve_discover_target(&custom_request("http://evil.example.com/"), true)
+            .expect_err("non-local host name must be rejected when allow_local");
+        assert!(err.contains("loopback/LAN"));
     }
 }

@@ -22,6 +22,12 @@ struct RouteResponse {
     rpm: Option<u32>,
     tpm: Option<u64>,
     budget_usd: Option<f64>,
+    enabled: bool,
+    guardrail_mode: Option<String>,
+    pxpipe_compress: Option<bool>,
+    pxpipe_models: Option<String>,
+    redact_secrets: Option<bool>,
+    position: i32,
     provider_count: usize,
     created_at: String,
     updated_at: String,
@@ -51,6 +57,18 @@ pub struct CreateRouteRequest {
     pub rpm: Option<u32>,
     pub tpm: Option<u64>,
     pub budget_usd: Option<f64>,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default)]
+    pub guardrail_mode: Option<String>,
+    #[serde(default)]
+    pub pxpipe_compress: Option<bool>,
+    #[serde(default)]
+    pub pxpipe_models: Option<String>,
+    #[serde(default)]
+    pub redact_secrets: Option<bool>,
+    #[serde(default)]
+    pub position: i32,
 }
 
 fn default_strategy() -> String {
@@ -99,6 +117,12 @@ fn route_to_response(route: &RouteRow, provider_count: usize) -> RouteResponse {
         rpm: route.rpm,
         tpm: route.tpm,
         budget_usd: route.budget_usd,
+        enabled: route.enabled,
+        guardrail_mode: route.guardrail_mode.clone(),
+        pxpipe_compress: route.pxpipe_compress,
+        pxpipe_models: route.pxpipe_models.clone(),
+        redact_secrets: route.redact_secrets,
+        position: route.position,
         provider_count,
         created_at: route.created_at.clone(),
         updated_at: route.updated_at.clone(),
@@ -206,6 +230,12 @@ pub(super) async fn create_route(
         rpm: body.rpm,
         tpm: body.tpm,
         budget_usd: body.budget_usd,
+        enabled: body.enabled,
+        guardrail_mode: body.guardrail_mode,
+        pxpipe_compress: body.pxpipe_compress,
+        pxpipe_models: body.pxpipe_models,
+        redact_secrets: body.redact_secrets,
+        position: body.position,
         created_at: now.clone(),
         updated_at: now,
     };
@@ -226,6 +256,7 @@ pub(super) async fn create_route(
                 row.name.clone(),
                 None,
             );
+            super::rebuild_route_router(&shared).await;
             (
                 StatusCode::CREATED,
                 Json(serde_json::to_value(route_to_response(&row, 0)).unwrap()),
@@ -265,6 +296,7 @@ pub(super) async fn update_route(
                 id,
                 None,
             );
+            super::rebuild_route_router(&shared).await;
             ok_json(route_to_response(&r, count))
         }
         Some(Ok((true, None, _))) => err_json(
@@ -298,6 +330,7 @@ pub(super) async fn delete_route(
                 id,
                 None,
             );
+            super::rebuild_route_router(&shared).await;
             ok_json(serde_json::json!({ "ok": true }))
         }
         Some(Ok(false)) => err_json(StatusCode::NOT_FOUND, "route not found"),
@@ -383,6 +416,7 @@ pub(super) async fn add_route_provider_handler(
                 route_id,
                 Some(format!("backend_id={}", backend_id)),
             );
+            super::rebuild_route_router(&shared).await;
             (StatusCode::CREATED, Json(serde_json::json!({ "ok": true }))).into_response()
         }
         Some(Ok(Err(msg))) => err_json(
@@ -429,6 +463,7 @@ pub(super) async fn update_route_provider_handler(
                 provider_id,
                 Some(format!("route_id={}", route_id)),
             );
+            super::rebuild_route_router(&shared).await;
             ok_json(serde_json::json!({ "ok": true }))
         }
         Some(Ok(false)) => err_json(StatusCode::NOT_FOUND, "route provider not found"),
@@ -477,6 +512,7 @@ pub(super) async fn reorder_route_providers_handler(
                 route_id,
                 Some(format!("count={}", providers.len())),
             );
+            super::rebuild_route_router(&shared).await;
             ok_json(serde_json::json!({ "providers": providers }))
         }
         Some(Ok(Some(Err(())))) => err_json(
@@ -513,6 +549,7 @@ pub(super) async fn remove_route_provider_handler(
                 provider_id,
                 None,
             );
+            super::rebuild_route_router(&shared).await;
             ok_json(serde_json::json!({ "ok": true }))
         }
         Some(Ok(false)) => err_json(StatusCode::NOT_FOUND, "route provider not found"),

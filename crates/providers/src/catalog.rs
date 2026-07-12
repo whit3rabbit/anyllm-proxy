@@ -32,6 +32,53 @@ pub struct OwnedProviderDef {
     pub capabilities: ProviderCapabilities,
 }
 
+impl OwnedProviderDef {
+    /// True for local LLM servers (Ollama/LM Studio/vLLM/llamafile/...), detected by a
+    /// loopback/private default base URL. Used to auto-relax SSRF protection for
+    /// admin-configured managed backends pointing at localhost or a LAN address.
+    pub fn is_local(&self) -> bool {
+        base_url_is_local(&self.default_base_url)
+    }
+}
+
+/// Detect a local LLM server by its default base URL. Kept as a free fn so both
+/// `OwnedProviderDef::is_local` and the catalog assembler (which works with the
+/// `&'static str` from `ProviderDef`) share one definition.
+///
+/// Matches on the parsed host only (not a raw substring) so a hosted provider
+/// whose URL merely *contains* `localhost`/`127.0.0.1`/`0.0.0.0` in a subdomain,
+/// path, or query is not misclassified as local (this gates SSRF relaxation).
+pub fn base_url_is_local(base: &str) -> bool {
+    let host = host_from_base_url(base);
+    if host.eq_ignore_ascii_case("localhost") {
+        return true;
+    }
+    match host.parse::<std::net::IpAddr>() {
+        Ok(std::net::IpAddr::V4(v4)) => v4.is_loopback() || v4.is_private() || v4.is_unspecified(),
+        Ok(std::net::IpAddr::V6(v6)) => v6.is_loopback() || v6.is_unspecified(),
+        Err(_) => false,
+    }
+}
+
+/// Extract the host from a base URL without pulling in the `url` crate (the
+/// providers crate is dependency-light). Handles scheme, userinfo, port, and
+/// bracketed IPv6 literals; good enough for the curated `default_base_url` set.
+fn host_from_base_url(base: &str) -> &str {
+    let after_scheme = base.split_once("://").map_or(base, |(_, rest)| rest);
+    let authority = after_scheme
+        .split(['/', '?', '#'])
+        .next()
+        .unwrap_or(after_scheme);
+    let hostport = authority
+        .rsplit_once('@')
+        .map_or(authority, |(_, host)| host);
+    if let Some(rest) = hostport.strip_prefix('[') {
+        // [ipv6]:port -> ipv6
+        return rest.split(']').next().unwrap_or(rest);
+    }
+    hostport.rsplit_once(':').map_or(hostport, |(host, _)| host)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct OwnedModelDef {
     pub id: String,
@@ -197,6 +244,11 @@ impl ProviderCatalog {
             providers.insert(provider.id.to_string(), OwnedProviderDef::from(*provider));
         }
         for provider in registry::legacy_only_provider_defs() {
+            // Local LLM servers (ollama/lm_studio/llamafile/vllm/...) should be listable so the
+            // admin UI can offer a "Local LLMs" section. Detect by localhost default base URL.
+            if base_url_is_local(provider.default_base_url) {
+                advertised_provider_ids.insert(provider.id.to_string());
+            }
             providers.insert(provider.id.to_string(), OwnedProviderDef::from(*provider));
         }
 

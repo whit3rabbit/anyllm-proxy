@@ -658,6 +658,8 @@ fn build_backend_config(
             .and_then(|v| v.parse().ok())
             .unwrap_or(900u64),
         bedrock_credentials,
+        // Config-file backends are validated against SSRF at load time; no auto-relax.
+        allow_local_ssrf: false,
     }
 }
 

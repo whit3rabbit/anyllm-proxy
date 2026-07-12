@@ -75,23 +75,11 @@ pub(crate) async fn chat_completions(
         }
     }
 
-    let body = match super::super::secret_redaction::redact_json_value(state.redact_secrets(), body)
-        .await
-    {
-        Ok(body) => body,
-        Err(err) => {
-            return openai_error_response(err.safe_message(), "api_error", err.status_code());
-        }
-    };
-
-    let is_streaming = body.stream == Some(true);
+    // Resolve routing first (route selection depends only on the model name, not
+    // body content) so per-route option overrides on `effective` (redaction,
+    // guardrails) apply. Resolution advances the route's round-robin/failover
+    // counter, so it must run exactly once, before redaction.
     let original_model = body.model.clone();
-    let mut safe_headers = safe_anthropic_extra_headers(&headers);
-    let caller_omitted_max_tokens =
-        body.max_tokens.is_none() && body.max_completion_tokens.is_none();
-
-    // Resolve model routing before translation so Anthropic-targeted requests
-    // can apply LiteLLM's Anthropic defaults without changing other backends.
     let (mapped_model, effective, deployment) = match state.resolve_model_and_state(&original_model)
     {
         Ok((mapped, effective, deployment)) => (
@@ -116,6 +104,21 @@ pub(crate) async fn chat_completions(
             );
         }
     }
+
+    let body =
+        match super::super::secret_redaction::redact_json_value(effective.redact_secrets(), body)
+            .await
+        {
+            Ok(body) => body,
+            Err(err) => {
+                return openai_error_response(err.safe_message(), "api_error", err.status_code());
+            }
+        };
+
+    let is_streaming = body.stream == Some(true);
+    let mut safe_headers = safe_anthropic_extra_headers(&headers);
+    let caller_omitted_max_tokens =
+        body.max_tokens.is_none() && body.max_completion_tokens.is_none();
 
     let mut translated_body = body.clone();
     if is_anthropic_backend(&effective) && caller_omitted_max_tokens {
@@ -308,16 +311,18 @@ pub(crate) async fn chat_completions(
                     );
 
                     // Tool execution: bounded loop with termination guards.
-                    let anthropic_resp = if let Some(ref engine) = state.tool_engine {
+                    // Use `effective` (per-route option overrides) for guardrails
+                    // + follow-up redaction, not the base `state`.
+                    let anthropic_resp = if let Some(ref engine) = effective.tool_engine {
                         let client_for_tools = client.clone();
                         let model_for_tools = mapped_model.clone();
                         let orig_model_for_tools = original_model.clone();
-                        let redact_follow_up = state.redact_secrets();
+                        let redact_follow_up = effective.redact_secrets();
                         let backend_kind_for_tools = backend_kind_for_policy(&effective.backend);
                         let provider_id_for_tools = effective.provider_id.clone();
                         let provider_catalog_for_tools = effective.provider_catalog.clone();
                         let server_advertised_tool_names = std::collections::HashSet::new();
-                        let guardrails_for_tools = state.effective_tool_guardrails(engine);
+                        let guardrails_for_tools = effective.effective_tool_guardrails(engine);
                         let (resp, _trace) = crate::tools::execution::maybe_execute_tools(
                             engine,
                             &anthropic_req,

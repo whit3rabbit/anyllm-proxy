@@ -31,6 +31,10 @@ pub struct BackendConfig {
     pub stream_timeout_secs: u64,
     /// AWS credentials for Bedrock backend. None for all other backends.
     pub bedrock_credentials: Option<aws_credential_types::Credentials>,
+    /// Relax SSRF protection to permit loopback + private IPs. Set true only for
+    /// admin-configured managed backends whose provider is a local LLM server
+    /// (Ollama/LM Studio/vLLM/...). Cloud-metadata IPs stay blocked regardless.
+    pub allow_local_ssrf: bool,
 }
 
 /// Top-level multi-backend configuration loaded from TOML.

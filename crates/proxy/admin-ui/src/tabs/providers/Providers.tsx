@@ -5,10 +5,32 @@ import {
   useCreateManagedBackend,
   useDeleteManagedBackend,
   useUptime,
+  useFavorites,
+  useToggleFavorite,
+  useDiscoverModels,
 } from '../../api/queries'
 import type { CatalogProvider, ManagedBackend } from '../../api/types'
 import { getProviderFields } from '../../utils/providerFields'
-import { groupByTier } from '../../utils/providerTiers'
+import { groupSections } from '../../utils/providerTiers'
+
+// A provider is "local" when its default endpoint is a loopback address.
+// Used to pre-fill the endpoint field so local-LLM users don't type it.
+function isLocalProvider(p: CatalogProvider): boolean {
+  return /localhost|127\.0\.0\.1|0\.0\.0\.0/.test(p.default_base_url ?? '')
+}
+
+// Backend errors arrive as `{"error":"..."}` JSON in the thrown Error's message.
+// Surface the real message instead of a generic banner.
+function errorMessage(err: Error | null, fallback: string): string {
+  if (!err) return fallback
+  try {
+    const parsed = JSON.parse(err.message)
+    if (parsed && typeof parsed.error === 'string') return parsed.error
+  } catch {
+    // not JSON; fall through to the raw message
+  }
+  return err.message || fallback
+}
 import AsyncBoundary from '../../components/shared/AsyncBoundary'
 import ConfirmDialog from '../../components/shared/ConfirmDialog'
 import Modal from '../../components/shared/Modal'
@@ -21,27 +43,47 @@ import { AdminButton, AdminSurface } from '../../components/shared/Performative'
 function ProviderTile({
   provider,
   backendCount,
+  favorited,
+  onToggleFavorite,
   onClick,
 }: {
   provider: CatalogProvider
   backendCount: number
+  favorited: boolean
+  onToggleFavorite: () => void
   onClick: () => void
 }) {
+  // Heart is a sibling, not a child, of the tile button — nesting <button> is invalid DOM.
   return (
-    <button
-      type="button"
-      className={`provider-tile${backendCount > 0 ? ' has-backends' : ''}`}
-      onClick={onClick}
-    >
-      <ProviderIcon id={provider.id} size={28} />
-      <span className="provider-tile-name">{provider.display_name}</span>
-      <span className="provider-tile-id">{provider.id}</span>
-      {backendCount > 0 && (
-        <span className="provider-tile-count">
-          {backendCount} key{backendCount !== 1 ? 's' : ''}
-        </span>
-      )}
-    </button>
+    <div className="provider-tile-wrap">
+      <button
+        type="button"
+        className={`provider-tile${backendCount > 0 ? ' has-backends' : ''}`}
+        onClick={onClick}
+      >
+        <ProviderIcon id={provider.id} size={28} />
+        <span className="provider-tile-name">{provider.display_name}</span>
+        <span className="provider-tile-id">{provider.id}</span>
+        {backendCount > 0 && (
+          <span className="provider-tile-count">
+            {backendCount} key{backendCount !== 1 ? 's' : ''}
+          </span>
+        )}
+      </button>
+      <button
+        type="button"
+        className={`provider-fav-btn${favorited ? ' active' : ''}`}
+        aria-label={favorited ? 'Remove from favorites' : 'Add to favorites'}
+        aria-pressed={favorited}
+        title={favorited ? 'Unfavorite' : 'Favorite'}
+        onClick={(e) => {
+          e.stopPropagation()
+          onToggleFavorite()
+        }}
+      >
+        {favorited ? '♥' : '♡'}
+      </button>
+    </div>
   )
 }
 
@@ -84,16 +126,25 @@ function AddBackendForm({
   existingCount: number
 }) {
   const create = useCreateManagedBackend()
-  const [open, setOpen] = useState(false)
-  const [form, setForm] = useState<Record<string, string>>(() => ({
-    name: `${provider.id}-${existingCount + 1}`,
-    provider_id: provider.id,
-  }))
+  const discover = useDiscoverModels()
+  // Local providers get their loopback endpoint pre-filled (editable); hosted ones don't,
+  // so we never send a redundant api_base for them.
+  const initialForm = (): Record<string, string> => {
+    const base: Record<string, string> = {
+      name: `${provider.id}-${existingCount + 1}`,
+      provider_id: provider.id,
+    }
+    if (isLocalProvider(provider) && provider.default_base_url) {
+      base.api_base = provider.default_base_url
+    }
+    return base
+  }
+  const [form, setForm] = useState<Record<string, string>>(initialForm)
 
   // Reset form when the provider or count changes
   useEffect(() => {
-    setForm({ name: `${provider.id}-${existingCount + 1}`, provider_id: provider.id })
-    setOpen(false)
+    setForm(initialForm())
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [provider.id, existingCount])
 
   function submit() {
@@ -115,19 +166,20 @@ function AddBackendForm({
       },
       {
         // useCreateManagedBackend invalidates ['managed-backends'], so the list refreshes itself.
-        onSuccess: () => setOpen(false),
+        // Reset the form so a second key can be added without stale field values.
+        onSuccess: () => setForm(initialForm()),
       },
     )
   }
 
-  if (!open) {
-    return (
-      <div className="provider-add-toggle">
-        <AdminButton tone="primary" size="sm" onClick={() => setOpen(true)}>
-          + Add key
-        </AdminButton>
-      </div>
-    )
+  function queryModels() {
+    // For local providers the backend relaxes SSRF (loopback/LAN) based on provider_id.
+    discover.mutate({
+      source: 'custom',
+      url: form.api_base || provider.default_base_url,
+      provider_id: provider.id,
+      api_key: form.api_key || undefined,
+    })
   }
 
   const fields = getProviderFields(provider)
@@ -160,14 +212,37 @@ function AddBackendForm({
           />
         </div>
       ))}
-      {create.isError && <div className="inline-error">Failed to create backend</div>}
+      {discover.isError && (
+        <div className="inline-error">{errorMessage(discover.error, 'Failed to query models')}</div>
+      )}
+      {discover.isSuccess && (
+        <div className="form-hint">
+          {discover.data.models.length > 0
+            ? `Found ${discover.data.models.length} model(s): ${discover.data.models
+                .slice(0, 8)
+                .map((m) => m.id)
+                .join(', ')}${discover.data.models.length > 8 ? ', …' : ''}`
+            : 'No models returned by the server.'}
+        </div>
+      )}
+      {create.isError && (
+        <div className="inline-error">{errorMessage(create.error, 'Failed to create backend')}</div>
+      )}
       <div className="provider-add-actions">
         <AdminButton
           size="sm"
-          onClick={() => setOpen(false)}
+          onClick={() => setForm(initialForm())}
           disabled={create.isPending}
         >
-          Cancel
+          Reset
+        </AdminButton>
+        <AdminButton
+          size="sm"
+          onClick={queryModels}
+          disabled={discover.isPending || (!form.api_base && !provider.default_base_url)}
+          loading={discover.isPending}
+        >
+          Query models
         </AdminButton>
         <AdminButton
           tone="primary"
@@ -273,7 +348,11 @@ export default function Providers() {
   const catalogQuery = useCatalogProviders()
   const managedQuery = useManagedBackends()
   const { data: uptime } = useUptime()
+  const { data: favorites } = useFavorites()
+  const toggleFavorite = useToggleFavorite()
   const deleteBackend = useDeleteManagedBackend()
+
+  const favoriteIds = useMemo(() => new Set(favorites ?? []), [favorites])
 
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
@@ -306,8 +385,8 @@ export default function Providers() {
     const matching = lc
       ? catalog.filter((p) => p.display_name.toLowerCase().includes(lc) || p.id.includes(lc))
       : catalog
-    return groupByTier(matching)
-  }, [catalog, search])
+    return groupSections(matching, favoriteIds)
+  }, [catalog, search, favoriteIds])
 
   const expandedProvider = expandedId ? catalog.find((p) => p.id === expandedId) : null
   const expandedBackends = expandedId ? backendsByProvider.get(expandedId) ?? [] : []
@@ -349,14 +428,18 @@ export default function Providers() {
         {() => (
           <div className="provider-catalog">
             {filtered.map((group) => (
-              <div key={group.tier}>
+              <div key={group.key}>
                 <div className="provider-tier-label">{group.label}</div>
-                <div className={`provider-tile-grid${group.tier === 0 ? ' tier-top' : ''}`}>
+                <div className={`provider-tile-grid${group.top ? ' tier-top' : ''}`}>
                   {group.providers.map((p) => (
                     <ProviderTile
                       key={p.id}
                       provider={p}
                       backendCount={backendsByProvider.get(p.id)?.length ?? 0}
+                      favorited={favoriteIds.has(p.id)}
+                      onToggleFavorite={() =>
+                        toggleFavorite.mutate({ providerId: p.id, on: !favoriteIds.has(p.id) })
+                      }
                       onClick={() => setExpandedId(p.id)}
                     />
                   ))}

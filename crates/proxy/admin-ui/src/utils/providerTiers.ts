@@ -20,28 +20,60 @@ const TIER_LABELS: Record<number, string> = {
   3: 'More providers',
 }
 
-export interface TierGroup {
-  tier: number
+// Providers with a free tier (API key still required). Curated from provider docs.
+const FREE_PROVIDERS = new Set([
+  'gemini', 'groq', 'openrouter', 'mistral', 'deepseek', 'cohere_chat', 'cohere',
+])
+
+// A provider is "local" when its default endpoint points at the loopback address —
+// ollama, lm_studio, llamafile, vllm, etc. Same rule the backend uses to advertise them.
+function isLocal(p: CatalogProvider): boolean {
+  const base = p.default_base_url ?? ''
+  return /localhost|127\.0\.0\.1|0\.0\.0\.0/.test(base)
+}
+
+export interface SectionGroup {
+  key: string
   label: string
+  top: boolean // render with the larger "top" grid
   providers: CatalogProvider[]
 }
 
-export function groupByTier(providers: CatalogProvider[]): TierGroup[] {
-  const buckets = new Map<number, CatalogProvider[]>()
+// Group providers into ordered sections. Each provider lands in exactly one section,
+// first match wins: Favorite > Local > Free > popularity tier.
+export function groupSections(
+  providers: CatalogProvider[],
+  favoriteIds: Set<string>,
+): SectionGroup[] {
+  const favorites: CatalogProvider[] = []
+  const local: CatalogProvider[] = []
+  const free: CatalogProvider[] = []
+  const tiers = new Map<number, CatalogProvider[]>()
+
   for (const p of providers) {
-    const tier = PROVIDER_TIERS[p.id] ?? 3
-    if (!buckets.has(tier)) buckets.set(tier, [])
-    buckets.get(tier)!.push(p)
+    if (favoriteIds.has(p.id)) favorites.push(p)
+    else if (isLocal(p)) local.push(p)
+    else if (FREE_PROVIDERS.has(p.id)) free.push(p)
+    else {
+      const tier = PROVIDER_TIERS[p.id] ?? 3
+      if (!tiers.has(tier)) tiers.set(tier, [])
+      tiers.get(tier)!.push(p)
+    }
   }
-  // Sort within each tier alphabetically by display_name
-  for (const list of buckets.values()) {
-    list.sort((a, b) => a.display_name.localeCompare(b.display_name))
+
+  const byName = (a: CatalogProvider, b: CatalogProvider) =>
+    a.display_name.localeCompare(b.display_name)
+  favorites.sort(byName)
+  local.sort(byName)
+  free.sort(byName)
+
+  const out: SectionGroup[] = []
+  if (favorites.length) out.push({ key: 'favorites', label: 'Favorites', top: true, providers: favorites })
+  if (local.length) out.push({ key: 'local', label: 'Local LLMs', top: false, providers: local })
+  if (free.length) out.push({ key: 'free', label: 'Free', top: false, providers: free })
+  for (const [tier, provs] of [...tiers.entries()].sort(([a], [b]) => a - b)) {
+    provs.sort(byName)
+    out.push({ key: `tier-${tier}`, label: TIER_LABELS[tier] ?? 'Other', top: false, providers: provs })
   }
-  return [...buckets.entries()]
-    .sort(([a], [b]) => a - b)
-    .map(([tier, provs]) => ({
-      tier,
-      label: TIER_LABELS[tier] ?? 'Other',
-      providers: provs,
-    }))
+  return out
 }

@@ -56,7 +56,7 @@ impl BedrockClient {
         small_model: String,
         tls: &TlsConfig,
     ) -> Self {
-        let client = build_http_client(tls);
+        let client = build_http_client(tls, false);
         let access_key_id = credentials.access_key_id().to_string();
         let secret_access_key = Zeroizing::new(credentials.secret_access_key().to_string());
         let session_token = credentials
