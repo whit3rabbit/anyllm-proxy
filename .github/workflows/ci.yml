@@ -215,7 +215,7 @@ jobs:
 
   release-assets:
     name: Upload release assets
-    needs: [create-release]
+    needs: [create-release, build-release]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
@@ -231,12 +231,45 @@ jobs:
         with:
           name: anyllm-proxy-deb-arm64
           path: ./debs
-      - name: Upload to GitHub Release
+      - name: Upload debs to GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           ls -la ./debs/
           gh release upload "${{ github.ref_name }}" ./debs/*.deb --repo "${{ github.repository }}" --clobber
+      # Linux + Windows binaries are built by build-release but only uploaded as
+      # CI artifacts; package them into release archives (tar.gz / zip) matching
+      # the macOS tarball naming produced by brew-release.
+      - name: Download linux x86_64 binary
+        uses: actions/download-artifact@v8
+        with:
+          name: anyllm_proxy-x86_64-unknown-linux-gnu
+          path: ./bins/linux-x86_64
+      - name: Download linux arm64 binary
+        uses: actions/download-artifact@v8
+        with:
+          name: anyllm_proxy-aarch64-unknown-linux-gnu
+          path: ./bins/linux-arm64
+      - name: Download windows x86_64 binary
+        uses: actions/download-artifact@v8
+        with:
+          name: anyllm_proxy-x86_64-pc-windows-msvc
+          path: ./bins/windows-x86_64
+      - name: Package binary archives
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          chmod +x ./bins/linux-x86_64/anyllm-proxy ./bins/linux-arm64/anyllm-proxy
+          mkdir -p dist
+          tar -czf "dist/anyllm-proxy-${VERSION}-linux-x86_64.tar.gz" -C ./bins/linux-x86_64 anyllm-proxy
+          tar -czf "dist/anyllm-proxy-${VERSION}-linux-arm64.tar.gz"  -C ./bins/linux-arm64  anyllm-proxy
+          ( cd ./bins/windows-x86_64 && zip -q "${GITHUB_WORKSPACE}/dist/anyllm-proxy-${VERSION}-windows-x86_64.zip" anyllm-proxy.exe )
+          ls -la dist/
+      - name: Upload binary archives to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${{ github.ref_name }}" dist/*.tar.gz dist/*.zip --repo "${{ github.repository }}" --clobber
 
   publish:
     name: Publish to crates.io

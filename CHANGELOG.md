@@ -10,6 +10,19 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ## [Unreleased]
 
+### Added
+- Release: GitHub Releases now include Linux (`x86_64`, `arm64`) `.tar.gz` and Windows
+  (`x86_64`) `.zip` binary archives, alongside the existing macOS tarballs and `.deb`
+  packages. The binaries were already built in CI but never packaged/attached.
+
+### Fixed
+- Security: Bedrock native routes (`POST /model/{modelId}/converse`,
+  `/converse-stream`, `/invoke`, `/invoke-with-response-stream`) now enforce the
+  virtual key's model allowlist. Previously these handlers skipped the
+  `is_model_allowed` check that `bedrock_passthrough` and every other
+  client-facing handler apply, so a model-scoped key could invoke any Bedrock
+  `modelId` (model-scope bypass / cost-abuse). Found via a keyless 3gate scan.
+
 ## [0.13.0] - 2026-07-12
 
 ### Fixed
