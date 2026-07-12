@@ -10,6 +10,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-07-12
+
 ### Added
 - Admin UI: enabled routes now show a ready-to-run `curl` snippet (proxy endpoint URL built from
   the new `proxy_port` in `/admin/api/status`, plus the route name as the `model`) with a one-click
