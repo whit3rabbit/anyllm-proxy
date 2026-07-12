@@ -12,6 +12,16 @@ export interface FieldDef {
   group: FieldGroup
 }
 
+// Mirror of resolve_discover_target's /v1/models logic in models.rs — keep in sync.
+// Handles trailing slashes and avoids doubling /v1 (catalog defaults end in /v1).
+export function resolveDiscoveryUrl(base: string): string {
+  const trimmed = base.trim().replace(/\/+$/, '')
+  if (!trimmed) return ''
+  if (trimmed.endsWith('/models')) return trimmed
+  if (trimmed.endsWith('/v1')) return `${trimmed}/models`
+  return `${trimmed}/v1/models`
+}
+
 export function getProviderFields(provider: CatalogProvider): FieldDef[] {
   const fields: FieldDef[] = []
   const firstEnvVar = provider.env_vars.length > 0 ? provider.env_vars[0] : null

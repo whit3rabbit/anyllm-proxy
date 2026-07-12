@@ -16,6 +16,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
   packages. The binaries were already built in CI but never packaged/attached.
 
 ### Fixed
+- Admin UI model discovery ("Query models"): fixed the discovery URL builder doubling
+  `/v1` into `/v1/v1/models` for local providers whose catalog default base URL already
+  ends in `/v1` (LM Studio, vLLM, etc.), and now trims trailing slashes off `api_base`
+  before saving/discovering. Anthropic-native providers are now discoverable too:
+  the request authenticates with `x-api-key` + `anthropic-version` (not a Bearer token)
+  and reads the model name from `display_name` (Anthropic's field) as well as `name`.
+  The Add-Backend form shows the exact URL "Query models" will hit and warns when
+  discovery is unsupported for the provider protocol (Vertex/Gemini/Bedrock native).
 - Security: Bedrock native routes (`POST /model/{modelId}/converse`,
   `/converse-stream`, `/invoke`, `/invoke-with-response-stream`) now enforce the
   virtual key's model allowlist. Previously these handlers skipped the

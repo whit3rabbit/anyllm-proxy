@@ -17,14 +17,17 @@ use axum::{
     response::{IntoResponse, Response},
 };
 
+type VkCtx = Option<axum::Extension<crate::server::middleware::VirtualKeyContext>>;
+
 /// POST /model/{modelId}/converse — Bedrock Converse API (non-streaming).
 pub(crate) async fn bedrock_converse(
     State(state): State<AppState>,
     Path(model_id): Path<String>,
     headers: HeaderMap,
+    vk_ctx: VkCtx,
     body: Bytes,
 ) -> Response {
-    forward_native(&state, &model_id, &headers, body, "converse", false).await
+    forward_native(&state, &model_id, &headers, vk_ctx, body, "converse", false).await
 }
 
 /// POST /model/{modelId}/converse-stream — Bedrock Converse API (streaming).
@@ -32,9 +35,19 @@ pub(crate) async fn bedrock_converse_stream(
     State(state): State<AppState>,
     Path(model_id): Path<String>,
     headers: HeaderMap,
+    vk_ctx: VkCtx,
     body: Bytes,
 ) -> Response {
-    forward_native(&state, &model_id, &headers, body, "converse-stream", true).await
+    forward_native(
+        &state,
+        &model_id,
+        &headers,
+        vk_ctx,
+        body,
+        "converse-stream",
+        true,
+    )
+    .await
 }
 
 /// POST /model/{modelId}/invoke — Bedrock InvokeModel (non-streaming, model-native format).
@@ -42,9 +55,10 @@ pub(crate) async fn bedrock_invoke(
     State(state): State<AppState>,
     Path(model_id): Path<String>,
     headers: HeaderMap,
+    vk_ctx: VkCtx,
     body: Bytes,
 ) -> Response {
-    forward_native(&state, &model_id, &headers, body, "invoke", false).await
+    forward_native(&state, &model_id, &headers, vk_ctx, body, "invoke", false).await
 }
 
 /// POST /model/{modelId}/invoke-with-response-stream — Bedrock InvokeModel (streaming).
@@ -52,12 +66,14 @@ pub(crate) async fn bedrock_invoke_stream(
     State(state): State<AppState>,
     Path(model_id): Path<String>,
     headers: HeaderMap,
+    vk_ctx: VkCtx,
     body: Bytes,
 ) -> Response {
     forward_native(
         &state,
         &model_id,
         &headers,
+        vk_ctx,
         body,
         "invoke-with-response-stream",
         true,
@@ -69,6 +85,7 @@ async fn forward_native(
     state: &AppState,
     model_id: &str,
     headers: &HeaderMap,
+    vk_ctx: VkCtx,
     body: Bytes,
     suffix: &str,
     streaming: bool,
@@ -84,6 +101,20 @@ async fn forward_native(
             return (StatusCode::NOT_IMPLEMENTED, axum::Json(err)).into_response();
         }
     };
+
+    // Enforce the virtual key's model allowlist. The model comes from the URL path
+    // here (Bedrock native puts modelId in the URL), so check it directly — the
+    // same enforcement bedrock_passthrough applies to the body's `model` field.
+    if let Some(axum::Extension(ref ctx)) = vk_ctx {
+        if !crate::server::policy::is_model_allowed(model_id, &ctx.allowed_models) {
+            let err = anyllm_translate::mapping::errors_map::create_anthropic_error(
+                anyllm_translate::anthropic::ErrorType::PermissionError,
+                format!("Model '{model_id}' is not allowed for this API key."),
+                None,
+            );
+            return (StatusCode::FORBIDDEN, axum::Json(err)).into_response();
+        }
+    }
 
     let body =
         match super::secret_redaction::redact_body(state.redact_secrets(), headers, body).await {

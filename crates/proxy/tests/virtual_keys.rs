@@ -7,6 +7,7 @@
 use anyllm_proxy::admin;
 use anyllm_proxy::config::{
     BackendAuth, BackendConfig, BackendKind, Config, ModelMapping, MultiConfig, OpenAIApiFormat,
+    TlsConfig,
 };
 use anyllm_proxy::server::routes;
 use axum::body::Body;
@@ -1672,6 +1673,92 @@ async fn translate_model_passthrough_routes_enforce_virtual_key_model_allowlist(
         0,
         "denied model passthrough routes must not reach upstream"
     );
+}
+
+// ---------------------------------------------------------------------------
+// Bedrock native routes (POST /model/{modelId}/...) must enforce the virtual
+// key's model allowlist, same as bedrock_passthrough. The modelId comes from
+// the URL path here, so the check runs before any AWS call — a denied model is
+// rejected 403 without dummy credentials ever being signed/sent.
+// ---------------------------------------------------------------------------
+
+fn bedrock_backend_config() -> BackendConfig {
+    BackendConfig {
+        kind: BackendKind::Bedrock,
+        provider_id: Some("bedrock".to_string()),
+        api_key: String::new(),
+        base_url: "us-east-1".to_string(), // region is stored in base_url for Bedrock
+        api_format: OpenAIApiFormat::Chat,
+        model_mapping: ModelMapping {
+            big_model: "anthropic.claude-3-5-sonnet-20241022-v2:0".into(),
+            small_model: "anthropic.claude-3-5-haiku-20241022-v1:0".into(),
+        },
+        tls: TlsConfig::default(),
+        backend_auth: BackendAuth::BearerToken(String::new()),
+        log_bodies: false,
+        omit_stream_options: false,
+        stream_timeout_secs: 900,
+        // Dummy static credentials — never actually used because the denied
+        // model is rejected before signing.
+        bedrock_credentials: Some(aws_credential_types::Credentials::new(
+            "AKIDTEST", "secret", None, None, "test",
+        )),
+        allow_local_ssrf: true,
+    }
+}
+
+async fn spawn_bedrock_proxy_with_shared_vk() -> String {
+    let state = shared_state(); // fires set_virtual_keys before app build
+    let mut backends = IndexMap::new();
+    backends.insert("bedrock".to_string(), bedrock_backend_config());
+    let multi = MultiConfig {
+        listen_port: 0,
+        log_bodies: false,
+        redact_secrets: false,
+        anthropic_thinking_repair: false,
+        pxpipe_compress: false,
+        forward_client_auth: false,
+        default_backend: "bedrock".to_string(),
+        backends,
+        expose_degradation_warnings: false,
+    };
+    let app = routes::app_multi_with_shared(multi, Some(state), None, None, None, None);
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    format!("http://{addr}")
+}
+
+#[tokio::test]
+async fn bedrock_native_routes_enforce_virtual_key_model_allowlist() {
+    let proxy_url = spawn_bedrock_proxy_with_shared_vk().await;
+    let raw_key = "sk-vkbedrocknativedenied";
+    insert_test_virtual_key(
+        raw_key,
+        90_010,
+        Some(vec!["anthropic.claude-3-5-sonnet-20241022-v2:0".to_string()]),
+    );
+
+    let client = Client::new();
+    // Denied model in the URL path across all four native endpoints.
+    let denied = "anthropic.claude-3-opus-20240229-v1:0";
+    for suffix in [
+        "converse",
+        "converse-stream",
+        "invoke",
+        "invoke-with-response-stream",
+    ] {
+        let resp = client
+            .post(format!("{proxy_url}/model/{denied}/{suffix}"))
+            .header("x-api-key", raw_key)
+            .json(&json!({"messages": [{"role": "user", "content": "hi"}]}))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), 403, "native {suffix} must deny scoped model");
+        let body: serde_json::Value = resp.json().await.unwrap();
+        assert_eq!(body["error"]["type"], "permission_error");
+    }
 }
 
 // ---------------------------------------------------------------------------

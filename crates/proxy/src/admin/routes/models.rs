@@ -1,5 +1,6 @@
 use crate::admin::state::SharedState;
 use anyllm_client::http::{build_http_client, HttpClientConfig};
+use anyllm_providers::provider::ProviderProtocol;
 use axum::{
     extract::{ConnectInfo, Path, State},
     http::StatusCode,
@@ -280,12 +281,17 @@ pub(super) async fn discover_models(
     State(shared): State<SharedState>,
     Json(body): Json<DiscoverRequest>,
 ) -> impl IntoResponse {
-    // A provider counts as local only if the catalog says so — never trust a client flag.
-    let provider_is_local = body
+    // Look the provider up once; derive local-ness and protocol from the catalog,
+    // never from a client flag.
+    let provider_def = body
         .provider_id
         .as_deref()
-        .and_then(|id| shared.provider_catalog.get_provider(id))
-        .is_some_and(|p| p.is_local());
+        .and_then(|id| shared.provider_catalog.get_provider(id));
+    let provider_is_local = provider_def.is_some_and(|p| p.is_local());
+    // Anthropic-native providers list models at /v1/models too, but authenticate with
+    // x-api-key + anthropic-version instead of a Bearer token.
+    let is_anthropic =
+        provider_def.is_some_and(|p| p.protocol == ProviderProtocol::AnthropicNative);
 
     let (url, api_key) = match resolve_discover_target(&body, provider_is_local) {
         Ok(v) => v,
@@ -306,7 +312,13 @@ pub(super) async fn discover_models(
     };
     let mut req = client.get(&url);
     if let Some(ref key) = api_key {
-        req = req.header("Authorization", format!("Bearer {key}"));
+        if is_anthropic {
+            req = req
+                .header("x-api-key", key)
+                .header("anthropic-version", "2023-06-01");
+        } else {
+            req = req.header("Authorization", format!("Bearer {key}"));
+        }
     }
 
     let resp = match req.send().await {
@@ -366,7 +378,12 @@ pub(super) async fn discover_models(
             arr.iter()
                 .filter_map(|m| {
                     let id = m.get("id")?.as_str()?.to_string();
-                    let name = m.get("name").and_then(|n| n.as_str()).map(String::from);
+                    // OpenAI uses "name"; Anthropic list-models uses "display_name".
+                    let name = m
+                        .get("name")
+                        .or_else(|| m.get("display_name"))
+                        .and_then(|n| n.as_str())
+                        .map(String::from);
                     Some(DiscoveredModel { id, name })
                 })
                 .collect()
@@ -438,9 +455,13 @@ fn resolve_discover_target(
             } else {
                 crate::config::validate_base_url(url)?;
             }
-            // If the URL already ends with /models, use as-is; otherwise append.
+            // Append the models path, but don't double up: catalog default base URLs
+            // for local providers already end in /v1 (e.g. http://host:4444/v1), so a
+            // blind /v1/models append produced /v1/v1/models.
             let url = if url.ends_with("/models") {
                 url.to_string()
+            } else if url.ends_with("/v1") {
+                format!("{url}/models")
             } else {
                 format!("{url}/v1/models")
             };
@@ -519,6 +540,21 @@ mod tests {
 
         assert_eq!(url, "https://1.1.1.1/v1/models");
         assert_eq!(api_key, None);
+    }
+
+    #[test]
+    fn custom_discover_does_not_double_v1_suffix() {
+        // Local-provider catalog defaults already end in /v1; don't produce /v1/v1/models.
+        let (url, _) =
+            resolve_discover_target(&custom_request("http://192.168.1.72:4444/v1"), true)
+                .expect("local LAN /v1 discovery URL should be accepted when allow_local");
+        assert_eq!(url, "http://192.168.1.72:4444/v1/models");
+
+        // Trailing slash on a /v1 base collapses the same way.
+        let (url, _) =
+            resolve_discover_target(&custom_request("http://192.168.1.72:4444/v1/"), true)
+                .expect("trailing-slash /v1 discovery URL should be accepted when allow_local");
+        assert_eq!(url, "http://192.168.1.72:4444/v1/models");
     }
 
     #[test]

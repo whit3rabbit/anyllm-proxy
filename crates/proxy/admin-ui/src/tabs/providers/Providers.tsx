@@ -10,7 +10,7 @@ import {
   useDiscoverModels,
 } from '../../api/queries'
 import type { CatalogProvider, ManagedBackend } from '../../api/types'
-import { getProviderFields } from '../../utils/providerFields'
+import { getProviderFields, resolveDiscoveryUrl } from '../../utils/providerFields'
 import { groupSections } from '../../utils/providerTiers'
 
 // A provider is "local" when its default endpoint is a loopback address.
@@ -153,7 +153,7 @@ function AddBackendForm({
         name: form.name,
         provider_id: provider.id,
         api_key: form.api_key || undefined,
-        api_base: form.api_base || undefined,
+        api_base: form.api_base ? form.api_base.trim().replace(/\/+$/, '') : undefined,
         deployment: form.deployment || undefined,
         api_version: form.api_version || undefined,
         project: form.project || undefined,
@@ -210,6 +210,20 @@ function AddBackendForm({
             onChange={(e) => setForm((p) => ({ ...p, [f.name]: e.target.value }))}
             style={{ width: '100%' }}
           />
+          {f.name === 'api_base' && (() => {
+            const target = resolveDiscoveryUrl(form.api_base || provider.default_base_url || '')
+            if (!target) return null
+            // /v1/models discovery only works for OpenAI-shaped and Anthropic-native providers.
+            const unsupported = ['vertex_ai', 'gemini_native', 'bedrock_native'].includes(
+              provider.protocol,
+            )
+            return (
+              <div className="form-hint">
+                Query models will request: <span className="mono">{target}</span>
+                {unsupported && ' — model discovery may not work for this provider.'}
+              </div>
+            )
+          })()}
         </div>
       ))}
       {discover.isError && (
