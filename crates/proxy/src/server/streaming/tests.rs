@@ -1,4 +1,7 @@
-use super::*;
+use crate::server::streaming::{observe_anthropic_sse_frames, AnthropicStreamUsage};
+use crate::thinking_repair::ThinkingRecorder;
+use anyllm_translate::anthropic;
+use bytes::BytesMut;
 
 #[test]
 fn anthropic_stream_usage_tracks_complete_sse_frames() {
@@ -26,7 +29,7 @@ data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinki
 data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"signature_delta\",\"signature\":\"sig_1\"}}\n\n\
 data: {\"type\":\"message_stop\"}\n\n"[..]);
     let mut search_from = 0;
-    let mut recorder = crate::thinking_repair::ThinkingRecorder::new();
+    let mut recorder = ThinkingRecorder::new();
     let mut ready = Vec::new();
 
     observe_anthropic_sse_frames(

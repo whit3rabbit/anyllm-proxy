@@ -9,7 +9,7 @@ use crate::server::streaming::{observe_anthropic_sse_frames, AnthropicStreamUsag
 use anyllm_translate::{anthropic, mapping};
 use axum::{
     body::Bytes,
-    extract::{OriginalUri, State},
+    extract::State,
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
@@ -18,7 +18,10 @@ use futures::StreamExt;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
-use super::auth::resolve_client_auth_override;
+use super::super::auth::resolve_client_auth_override;
+use super::errors::{
+    passthrough_error_status, passthrough_error_to_response, virtual_key_accounting_parse_error,
+};
 
 /// Forward an Anthropic-format request byte-for-byte to the upstream Anthropic API.
 /// No translation is performed. Only active when `BACKEND=anthropic`.
@@ -37,12 +40,6 @@ pub(crate) async fn anthropic_passthrough(
     let claims = claims.map(|axum::Extension(c)| c);
     state.metrics.record_request();
 
-    // Verbatim client-credential override for ANTHROPIC_FORWARD_CLIENT_AUTH:
-    // computed once per request, reused across the streaming/non-streaming
-    // branches below. Borrowed straight from `headers` (which outlives both
-    // branches and is never mutated), not owned -- `forward`/`forward_stream`
-    // consume it synchronously before the branch that does
-    // `tokio::spawn`, so there's no need to outlive the spawned task.
     let auth_override_ref = resolve_client_auth_override(
         state.forward_client_auth_enabled(),
         auth_path,
@@ -51,16 +48,6 @@ pub(crate) async fn anthropic_passthrough(
         &headers,
     );
 
-    // Scopes every thinking-repair store lookup/commit to this backend and
-    // virtual key: `state.thinking_repair` is one store shared across every
-    // Anthropic-mode backend (see server/routes.rs), so without this a
-    // colliding message id / thinking signature / tool_use id from a
-    // different backend or tenant could resolve to this request's repair.
-    // NUL, not `:`, joins the two parts: `state.backend_name` is an
-    // operator-configured string whose validated charset (`is_safe_model_name`)
-    // allows `:` but not NUL, so a backend literally named e.g. "anthropic:5"
-    // can no longer produce the same namespace as backend "anthropic" + key
-    // id 5 -- `:` let those collide onto one shared cache-record namespace.
     let thinking_repair_namespace = match &vk_ctx {
         Some(ctx) => format!("{}\u{0}{}", state.backend_name, ctx.key_id),
         None => state.backend_name.clone(),
@@ -78,9 +65,6 @@ pub(crate) async fn anthropic_passthrough(
         }
     };
 
-    // Collect Anthropic-specific client headers to forward upstream.
-    // anthropic-beta enables beta features; must reach upstream to take effect.
-    // x-claude-code-session-id allows upstream and intermediary proxies to correlate sessions.
     let extra_headers: Vec<(&str, &str)> = ["x-claude-code-session-id", "anthropic-beta"]
         .iter()
         .filter_map(|&name| {
@@ -91,9 +75,6 @@ pub(crate) async fn anthropic_passthrough(
         })
         .collect();
 
-    // Peek at just the `stream` and `model` fields instead of parsing the full body.
-    // Full deserialization would be wasteful for image-heavy requests
-    // (up to 32MB) when we only need one boolean to choose the handler.
     #[derive(serde::Deserialize)]
     struct BodyPeek {
         #[serde(default)]
@@ -115,7 +96,6 @@ pub(crate) async fn anthropic_passthrough(
         model_requested: peek.model.clone().unwrap_or_else(|| "unknown".to_string()),
     };
 
-    // Enforce model allowlist for virtual keys.
     if let Some(ref ctx) = vk_ctx {
         match &peek.model {
             Some(m) => {
@@ -129,8 +109,6 @@ pub(crate) async fn anthropic_passthrough(
                 }
             }
             None => {
-                // If a model allowlist is configured, we cannot verify the request
-                // is permitted without knowing the model. Reject rather than bypass.
                 if ctx.allowed_models.is_some() {
                     let err = mapping::errors_map::create_anthropic_error(
                         anthropic::ErrorType::InvalidRequestError,
@@ -144,18 +122,8 @@ pub(crate) async fn anthropic_passthrough(
         }
     }
 
-    // pxpipe compression is decided here but APPLIED after secret redaction
-    // below: imaging bakes the system/tool_result text into PNG pixels, which the
-    // text-based redactor cannot see, so redaction must run on the raw text first.
     let mut pxpipe_apply: Option<(std::sync::Arc<crate::pxpipe::PxpipeEngine>, String)> = None;
-    // RTK tool-output compression, likewise deferred to after redaction and run
-    // BEFORE pxpipe so imaging sees the already-filtered text.
     let mut rtk_apply: Option<(std::sync::Arc<crate::rtk::RtkEngine>, String)> = None;
-    // FFEC prompt compression (history + frontier cache_control breakpoint). Runs
-    // on the raw Value bytes (never round-tripping MessageCreateRequest, which has
-    // no cache_control field), so the breakpoint survives to the Anthropic API. The
-    // `.filter` gates the (up to 32MB) parse: only capture when the resolved mode is
-    // not Off. Does not need the parsed model, so it sits outside the parse block.
     let optimizer_apply = state
         .effective_optimizer()
         .filter(|e| e.mode() != anyllm_optimize_core::Mode::Off);
@@ -177,10 +145,6 @@ pub(crate) async fn anthropic_passthrough(
             return (StatusCode::BAD_REQUEST, Json(err)).into_response();
         }
 
-        // Repair the last assistant message's thinking blocks against
-        // recorded ground truth (opt-in, see crate::thinking_repair). Only
-        // rewrites `body` when something actually changed; on a byte-exact
-        // replay (the common case) this is a no-op past the store lookups.
         if let Some(store) = state.active_thinking_repair() {
             if let Some(what) = crate::thinking_repair::repair_request(
                 &store,
@@ -189,21 +153,12 @@ pub(crate) async fn anthropic_passthrough(
             )
             .await
             {
-                // Patch only the repaired message's `content` into the
-                // ORIGINAL raw JSON instead of re-serializing the whole
-                // typed request: ContentBlock/Tool have no cache_control or
-                // flatten catch-all, so a full-struct round-trip would
-                // silently drop cache_control breakpoints and any block/tool
-                // type this crate doesn't model yet, on every OTHER message
-                // too.
                 match crate::thinking_repair::patch_repaired_body(&body, &parsed_req) {
                     Ok(bytes) => {
                         tracing::info!(repair = %what, "anthropic thinking-block repair applied");
                         body = bytes;
                     }
                     Err(e) => {
-                        // Fail open: forward the original (unrepaired) bytes
-                        // rather than drop the request.
                         tracing::warn!(
                             error = %e,
                             "failed to patch repaired anthropic request; forwarding original body"
@@ -213,11 +168,6 @@ pub(crate) async fn anthropic_passthrough(
             }
         }
 
-        // Opt-in text-to-image context compression (pxpipe). Decided here (needs
-        // the parsed model for scope/vision gating) but deferred to after
-        // redaction — see the `pxpipe_apply` capture note above. The transform
-        // works on the raw `body` bytes (Value-level) so it can RELOCATE the
-        // caller's cache_control anchor onto the image; it fails open on any error.
         if let Some(engine) = state.pxpipe_engine_for(&parsed_req.model) {
             pxpipe_apply = Some((engine, parsed_req.model.clone()));
         }
@@ -237,19 +187,10 @@ pub(crate) async fn anthropic_passthrough(
         Err(err) => return crate::server::secret_redaction::error_response(err),
     };
 
-    // FFEC prompt compression runs FIRST: it compresses conversation history text
-    // and places the frontier cache_control breakpoint. It MUST precede pxpipe,
-    // which images the static message slab into a PNG — after imaging there is no
-    // history text left to compress and no place for a breakpoint. Combining the
-    // optimizer's breakpoint with pxpipe's cache_control-anchor relocation is
-    // untested (both are opt-in); we don't try to reconcile them here. Fails open.
     if let Some(engine) = optimizer_apply {
         body = engine.optimize_anthropic_bytes(body, "messages", &state.metrics);
     }
 
-    // Now that secrets are redacted, compress tool output (RTK) then image the
-    // static slab / large live regions (pxpipe). RTK first so pxpipe images the
-    // already-filtered text; both fail open.
     if let Some((engine, model)) = rtk_apply {
         body = engine.compress_anthropic(body, &model, &state.metrics);
     }
@@ -268,8 +209,6 @@ pub(crate) async fn anthropic_passthrough(
                 let log_shared = state.shared.clone();
                 let log_backend_name = state.backend_name.clone();
                 let cost_model = peek.model.clone().unwrap_or_else(|| "unknown".to_string());
-                // Captured once, before the stream starts: a toggle mid-stream
-                // must not half-record ground truth.
                 let thinking_repair = state.active_thinking_repair();
                 let thinking_repair_namespace = thinking_repair_namespace.clone();
 
@@ -390,10 +329,6 @@ pub(crate) async fn anthropic_passthrough(
             .await
         {
             Ok((resp_body, rate_limits)) => {
-                // Parsed once and shared between thinking-repair recording
-                // and virtual-key accounting below (previously each parsed
-                // the same bytes independently, and recording additionally
-                // cloned the whole content Vec instead of moving it out).
                 let mut parsed_resp =
                     serde_json::from_slice::<anthropic::MessageResponse>(&resp_body);
 
@@ -490,168 +425,4 @@ pub(crate) async fn anthropic_passthrough(
             }
         }
     }
-}
-
-/// Generic catch-all passthrough for any /v1/* path in Anthropic mode.
-/// Forwards batch, file CRUD, count_tokens, and other Anthropic-native endpoints
-/// directly to the upstream Anthropic API. Registered after /v1/messages so that
-/// route retains its dedicated streaming/model-peek logic.
-#[allow(clippy::too_many_arguments)]
-pub(crate) async fn anthropic_generic_passthrough(
-    State(state): State<AppState>,
-    vk_ctx: Option<axum::Extension<crate::server::middleware::VirtualKeyContext>>,
-    auth_path: Option<axum::Extension<ClientAuthPath>>,
-    claims: Option<axum::Extension<crate::server::oidc::JwtClaims>>,
-    OriginalUri(uri): OriginalUri,
-    method: axum::http::Method,
-    headers: axum::http::HeaderMap,
-    body: Bytes,
-) -> Response {
-    state.metrics.record_request();
-
-    // Virtual keys must use policy-aware handlers only. The generic passthrough
-    // can reach Anthropic-native endpoints that lack per-key authorization,
-    // resource ownership checks, and usage accounting.
-    if vk_ctx.is_some() {
-        let err = mapping::errors_map::create_anthropic_error(
-            anthropic::ErrorType::PermissionError,
-            "This endpoint is not available for virtual API keys.".to_string(),
-            None,
-        );
-        return (StatusCode::FORBIDDEN, Json(err)).into_response();
-    }
-    let vk_ctx = vk_ctx.map(|axum::Extension(c)| c);
-    let auth_path = auth_path.map(|axum::Extension(p)| p);
-    let claims = claims.map(|axum::Extension(c)| c);
-    // vk_ctx is already rejected above (so resolve_client_auth_override's
-    // vk_ctx.is_none() check is always true here), but an OIDC-authenticated
-    // non-virtual-key request can still reach here, so this must also be
-    // gated on claims/auth_path (never forward a JWT upstream as if it were
-    // an Anthropic credential).
-    let auth_override_ref = resolve_client_auth_override(
-        state.forward_client_auth_enabled(),
-        auth_path,
-        &vk_ctx,
-        &claims,
-        &headers,
-    );
-
-    let client = match &state.backend {
-        BackendClient::Anthropic(c) => c,
-        _ => {
-            let err = mapping::errors_map::create_anthropic_error(
-                anthropic::ErrorType::ApiError,
-                "Backend is not configured as anthropic passthrough".to_string(),
-                None,
-            );
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(err)).into_response();
-        }
-    };
-
-    // Build full path with query string preserved.
-    let mut full_path = uri.path().to_string();
-    if let Some(q) = uri.query() {
-        full_path.push('?');
-        full_path.push_str(q);
-    }
-
-    // Collect owned Strings before building the &str slice (lifetime requirement).
-    let session_id = headers
-        .get("x-claude-code-session-id")
-        .and_then(|v| v.to_str().ok())
-        .map(str::to_string);
-    let beta = headers
-        .get("anthropic-beta")
-        .and_then(|v| v.to_str().ok())
-        .map(str::to_string);
-    let mut extra: Vec<(&str, &str)> = Vec::new();
-    if let Some(ref v) = session_id {
-        extra.push(("x-claude-code-session-id", v));
-    }
-    if let Some(ref v) = beta {
-        extra.push(("anthropic-beta", v));
-    }
-
-    let body =
-        match crate::server::secret_redaction::redact_body(state.redact_secrets(), &headers, body)
-            .await
-        {
-            Ok(body) => body,
-            Err(err) => return crate::server::secret_redaction::error_response(err),
-        };
-
-    match client
-        .forward_generic(method, &full_path, body, &extra, auth_override_ref)
-        .await
-    {
-        Ok(response) => {
-            let status = StatusCode::from_u16(response.status().as_u16()).unwrap_or(StatusCode::OK);
-            if status.is_success() {
-                state.metrics.record_success();
-            } else {
-                state.metrics.record_error();
-            }
-            // Preserve upstream content-type (batches return application/x-jsonl, etc.)
-            let upstream_ct = response
-                .headers()
-                .get("content-type")
-                .and_then(|v| v.to_str().ok())
-                .unwrap_or("application/json")
-                .to_string();
-            let stream = response.bytes_stream();
-            let axum_body = axum::body::Body::from_stream(stream);
-            let mut resp = (status, axum_body).into_response();
-            if let Ok(hv) = axum::http::HeaderValue::from_str(&upstream_ct) {
-                resp.headers_mut().insert("content-type", hv);
-            }
-            resp
-        }
-        Err(e) => {
-            state.metrics.record_error();
-            passthrough_error_to_response(e)
-        }
-    }
-}
-
-/// Convert an AnthropicClientError into a Response.
-/// For API errors, return the upstream error body directly (it's already Anthropic format).
-fn passthrough_error_to_response(
-    error: crate::backend::anthropic_client::AnthropicClientError,
-) -> Response {
-    use crate::backend::anthropic_client::AnthropicClientError;
-    match error {
-        AnthropicClientError::ApiError { status, body } => {
-            let http_status =
-                StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
-            (http_status, [("content-type", "application/json")], body).into_response()
-        }
-        AnthropicClientError::Transport(msg) => {
-            tracing::error!("Anthropic passthrough transport error: {msg}");
-            let err = mapping::errors_map::create_anthropic_error(
-                anthropic::ErrorType::ApiError,
-                "An internal error occurred while communicating with the upstream service."
-                    .to_string(),
-                None,
-            );
-            (StatusCode::BAD_GATEWAY, Json(err)).into_response()
-        }
-    }
-}
-
-fn passthrough_error_status(error: &crate::backend::anthropic_client::AnthropicClientError) -> u16 {
-    match error {
-        crate::backend::anthropic_client::AnthropicClientError::ApiError { status, .. } => *status,
-        crate::backend::anthropic_client::AnthropicClientError::Transport(_) => {
-            StatusCode::BAD_GATEWAY.as_u16()
-        }
-    }
-}
-
-fn virtual_key_accounting_parse_error() -> Response {
-    let err = mapping::errors_map::create_anthropic_error(
-        anthropic::ErrorType::ApiError,
-        "Upstream response could not be accounted for this virtual API key.".to_string(),
-        None,
-    );
-    (StatusCode::BAD_GATEWAY, Json(err)).into_response()
 }

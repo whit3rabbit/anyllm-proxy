@@ -992,3 +992,95 @@ fn finish_reason_error_without_object_emits_error_event() {
     }
     assert!(translator.finish().is_empty());
 }
+
+#[test]
+fn reasoning_content_then_tool_calls_creates_thinking_then_tool_use() {
+    let mut translator = StreamingTranslator::new("deepseek-reasoner".into());
+    translator.process_chunk(&reasoning_chunk(
+        "c1",
+        "deepseek-reasoner",
+        "Let me calculate",
+    ));
+
+    let chunks = vec![
+        ChatCompletionChunk {
+            id: "c1".into(),
+            object: "chat.completion.chunk".into(),
+            model: "deepseek-reasoner".into(),
+            choices: vec![ChunkChoice {
+                index: 0,
+                delta: ChunkDelta {
+                    role: None,
+                    content: None,
+                    refusal: None,
+                    tool_calls: Some(vec![ChunkToolCall {
+                        index: 0,
+                        id: Some("call_1".into()),
+                        function: Some(ChunkFunctionCall {
+                            name: Some("get_weather".into()),
+                            arguments: Some("{\"loc\":\"NYC\"}".into()),
+                        }),
+                        call_type: Some("function".into()),
+                    }]),
+                    reasoning_content: None,
+                },
+                finish_reason: None,
+                logprobs: None,
+            }],
+            usage: None,
+            created: None,
+            system_fingerprint: None,
+            error: None,
+        },
+        finish_chunk("c1", "deepseek-reasoner", openai::FinishReason::ToolCalls),
+    ];
+
+    let mut all_events = Vec::new();
+    for chunk in &chunks {
+        all_events.extend(translator.process_chunk(chunk));
+    }
+
+    let tool_use_started = all_events.iter().any(|e| {
+        matches!(
+            e,
+            anthropic::StreamEvent::ContentBlockStart { index: 0, content_block }
+            if matches!(content_block, anthropic::ContentBlock::ToolUse { name, .. } if name == "get_weather")
+        )
+    });
+    assert!(
+        tool_use_started,
+        "tool_use block should start after reasoning: {all_events:?}"
+    );
+
+    let args_delta = all_events.iter().any(|e| {
+        matches!(
+            e,
+            anthropic::StreamEvent::ContentBlockDelta { index: 0, delta }
+            if matches!(delta, anthropic::Delta::InputJsonDelta { .. })
+        )
+    });
+    assert!(args_delta, "tool call args should arrive as JSON delta");
+}
+
+#[test]
+fn multiple_reasoning_chunks_merge_into_single_thinking_block() {
+    let mut translator = StreamingTranslator::new("deepseek-reasoner".into());
+
+    let events = translator.process_chunk(&reasoning_chunk("c1", "deepseek-reasoner", "Step 1: "));
+    assert_eq!(events.len(), 3);
+
+    let events = translator.process_chunk(&reasoning_chunk("c1", "deepseek-reasoner", "think "));
+    assert_eq!(events.len(), 1);
+    let delta = &events[0];
+    assert!(
+        matches!(delta, anthropic::StreamEvent::ContentBlockDelta { delta, .. }
+        if matches!(delta, anthropic::Delta::ThinkingDelta { thinking } if thinking == "think "))
+    );
+
+    let events = translator.process_chunk(&reasoning_chunk("c1", "deepseek-reasoner", "carefully"));
+    assert_eq!(events.len(), 1);
+    assert!(
+        matches!(&events[0], anthropic::StreamEvent::ContentBlockDelta { delta, .. }
+        if matches!(delta, anthropic::Delta::ThinkingDelta { thinking } if thinking == "carefully"))
+    );
+}

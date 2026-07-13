@@ -1,107 +1,21 @@
 use crate::admin::state::SharedState;
 use axum::{
-    extract::{ConnectInfo, Path, State},
+    extract::{ConnectInfo, State},
     http::StatusCode,
     response::IntoResponse,
     Json,
 };
 use std::net::SocketAddr;
 
-/// GET /admin/api/config -- effective config (env defaults + overrides).
-pub(super) async fn get_config(State(shared): State<SharedState>) -> Json<serde_json::Value> {
-    // Clone config snapshot and drop the read guard before any .await points.
-    // std::sync::RwLockReadGuard is !Send, cannot be held across awaits.
-    let (
-        log_level,
-        log_bodies,
-        redact_secrets,
-        anthropic_thinking_repair,
-        pxpipe_compress,
-        pxpipe_models,
-        rtk_compress,
-        rtk_models,
-        forward_client_auth,
-        tool_guardrail_mode,
-        optimizer_mode,
-        backends,
-    ) = {
-        let config = shared
-            .runtime_config
-            .read()
-            .unwrap_or_else(|e| e.into_inner());
-        let mut backends = serde_json::Map::new();
-        for (name, mapping) in &config.model_mappings {
-            backends.insert(
-                name.clone(),
-                serde_json::json!({
-                    "big_model": mapping.big_model,
-                    "small_model": mapping.small_model,
-                }),
-            );
-        }
-        (
-            config.log_level.clone(),
-            config.log_bodies,
-            config.redact_secrets,
-            config.anthropic_thinking_repair,
-            config.pxpipe_compress,
-            config.pxpipe_models.clone(),
-            config.rtk_compress,
-            config.rtk_models.clone(),
-            config.forward_client_auth,
-            config.tool_guardrail_mode.clone(),
-            config.optimizer_mode.clone(),
-            backends,
-        )
-    };
-
-    // Get overrides to mark which fields are overridden.
-    let overrides = crate::admin::state::with_db(&shared.db, |conn| {
-        crate::admin::db::get_config_overrides(conn).unwrap_or_default()
-    })
-    .await
-    .unwrap_or_default();
-    let override_keys: Vec<String> = overrides.iter().map(|(k, _, _)| k.clone()).collect();
-
-    // Computed before the json! macro consumes `pxpipe_models` by move.
-    let pxpipe_available_models =
-        crate::pxpipe::available_vision_models(&shared.provider_catalog, &pxpipe_models);
-
-    Json(serde_json::json!({
-        "log_level": log_level,
-        "log_bodies": log_bodies,
-        "redact_secrets": redact_secrets,
-        "anthropic_thinking_repair": anthropic_thinking_repair,
-        "pxpipe_compress": pxpipe_compress,
-        "pxpipe_models": pxpipe_models,
-        // Vision-capable Claude models (+ current out-of-list scope entries) the
-        // UI offers as per-model scope toggles.
-        "pxpipe_available_models": pxpipe_available_models,
-        "rtk_compress": rtk_compress,
-        "rtk_models": rtk_models,
-        "forward_client_auth": forward_client_auth,
-        "tool_guardrail_mode": tool_guardrail_mode,
-        "optimizer_mode": optimizer_mode,
-        "backends": backends,
-        "overridden_keys": override_keys,
-    }))
-}
-
 /// PUT /admin/api/config -- update config overrides. Partial JSON body.
-pub(super) async fn put_config(
+pub(crate) async fn put_config(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     State(shared): State<SharedState>,
     Json(body): Json<serde_json::Value>,
 ) -> impl IntoResponse {
-    // Collect the key-value pairs to persist, then do all SQLite I/O
-    // before touching in-memory state. This avoids holding the async
-    // MutexGuard across block_in_place.
     let mut db_writes: Vec<(String, String)> = Vec::new();
 
     if let Some(level) = body.get("log_level").and_then(|v| v.as_str()) {
-        // Allowlist: trace-level logging exposes HTTP headers (including API
-        // keys) in log output. Arbitrary filter directives could also be used
-        // to selectively leak data. Restrict to safe levels only.
         const ALLOWED_LOG_LEVELS: &[&str] = &["error", "warn", "info", "debug"];
         let normalized = level.trim().to_lowercase();
         if !ALLOWED_LOG_LEVELS.contains(&normalized.as_str()) {
@@ -161,21 +75,10 @@ pub(super) async fn put_config(
         db_writes.push(("rtk_compress".to_string(), val.to_string()));
     }
     if let Some(val) = body.get("rtk_models").and_then(|v| v.as_str()) {
-        // Normalize the CSV (trim entries, drop empties); empty = all models.
         let normalized = crate::config::helpers::normalize_csv(val);
         db_writes.push(("rtk_models".to_string(), normalized));
     }
     if let Some(val) = body.get("forward_client_auth").and_then(|v| v.as_bool()) {
-        // Same rule enforced at startup (main_helpers::async_main) for
-        // statically-configured backends: 2+ distinct PROXY_API_KEYS entries
-        // with no PROXY_OPEN_RELAY would let different callers each redirect
-        // the upstream Anthropic credential. This is the only path that can
-        // enable the toggle *after* boot (live, no restart), so it must be
-        // re-checked here -- otherwise this admin route would silently
-        // reopen exactly the misconfiguration the startup panic exists to
-        // block. Reads the same ALLOWED_KEY_HASHES/OPEN_RELAY statics
-        // validate_auth uses, not a re-parse of the env vars, so it can't
-        // diverge from what a request actually experiences.
         if val
             && crate::server::middleware::forward_client_auth_misconfigured(
                 crate::server::middleware::distinct_static_key_count(),
@@ -223,7 +126,6 @@ pub(super) async fn put_config(
         }
     }
     if let Some(backends) = body.get("backends").and_then(|v| v.as_object()) {
-        // Read current config to validate backend names exist
         let config = shared
             .runtime_config
             .read()
@@ -231,7 +133,7 @@ pub(super) async fn put_config(
         for (name, settings) in backends {
             if config.model_mappings.contains_key(name) {
                 if let Some(big) = settings.get("big_model").and_then(|v| v.as_str()) {
-                    if !super::is_safe_model_name(big) {
+                    if !super::super::is_safe_model_name(big) {
                         return (
                             StatusCode::BAD_REQUEST,
                             Json(serde_json::json!({
@@ -243,7 +145,7 @@ pub(super) async fn put_config(
                     db_writes.push((format!("{name}.big_model"), big.to_string()));
                 }
                 if let Some(small) = settings.get("small_model").and_then(|v| v.as_str()) {
-                    if !super::is_safe_model_name(small) {
+                    if !super::super::is_safe_model_name(small) {
                         return (
                             StatusCode::BAD_REQUEST,
                             Json(serde_json::json!({
@@ -258,14 +160,8 @@ pub(super) async fn put_config(
         }
     }
 
-    // Serialize config writes so concurrent requests cannot interleave
-    // Phase 1 (SQLite) and Phase 2 (in-memory), which would leave them
-    // inconsistent.
     let _config_guard = shared.config_write_lock.lock().await;
 
-    // Phase 1: Persist to SQLite first. If the process crashes between
-    // phases, the database is the source of truth and config is restored
-    // on restart. Reversing the order would lose updates on crash.
     {
         let writes = db_writes.clone();
         crate::admin::state::with_db(&shared.db, move |conn| {
@@ -276,14 +172,12 @@ pub(super) async fn put_config(
         .await;
     }
 
-    // Phase 2: Apply to in-memory config (no async lock held)
     {
         let mut config = shared
             .runtime_config
             .write()
             .unwrap_or_else(|e| e.into_inner());
 
-        // Audit log: capture old values before applying changes
         for (key, new_value) in &db_writes {
             let old_value = match key.as_str() {
                 "log_level" => config.log_level.clone(),
@@ -378,7 +272,6 @@ pub(super) async fn put_config(
 
     drop(_config_guard);
 
-    // Broadcast config changes.
     for (key, value) in &db_writes {
         let _ = shared
             .events_tx
@@ -386,7 +279,7 @@ pub(super) async fn put_config(
                 key: key.clone(),
                 value: value.clone(),
             });
-        super::emit_audit(
+        super::super::emit_audit(
             &shared,
             crate::admin::db::AuditEntry {
                 id: None,
@@ -408,159 +301,4 @@ pub(super) async fn put_config(
         })),
     )
         .into_response()
-}
-
-/// GET /admin/api/config/overrides -- only SQLite overrides.
-pub(super) async fn get_config_overrides(
-    State(shared): State<SharedState>,
-) -> Json<serde_json::Value> {
-    let overrides = crate::admin::state::with_db(&shared.db, |conn| {
-        crate::admin::db::get_config_overrides(conn).unwrap_or_default()
-    })
-    .await
-    .unwrap_or_default();
-
-    let entries: Vec<serde_json::Value> = overrides
-        .into_iter()
-        .map(|(k, v, updated_at)| {
-            serde_json::json!({
-                "key": k,
-                "value": v,
-                "updated_at": updated_at,
-            })
-        })
-        .collect();
-
-    Json(serde_json::json!({ "overrides": entries }))
-}
-
-/// DELETE /admin/api/config/overrides/:key -- remove a single override.
-pub(super) async fn delete_config_override(
-    ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    State(shared): State<SharedState>,
-    Path(key): Path<String>,
-) -> impl IntoResponse {
-    let key_clone = key.clone();
-    match crate::admin::state::with_db(&shared.db, move |conn| {
-        crate::admin::db::delete_config_override(conn, &key_clone)
-    })
-    .await
-    {
-        Some(Ok(true)) => {
-            // Restore the runtime value to its pre-override default. Without this,
-            // deleting an override leaves the overridden value live until restart.
-            let restored = match key.as_str() {
-                "redact_secrets" => {
-                    let env_default = shared.runtime_defaults.redact_secrets;
-                    if let Ok(mut config) = shared.runtime_config.write() {
-                        config.redact_secrets = env_default;
-                    }
-                    Some(env_default.to_string())
-                }
-                "log_bodies" => {
-                    let env_default = shared.runtime_defaults.log_bodies;
-                    if let Ok(mut config) = shared.runtime_config.write() {
-                        config.log_bodies = env_default;
-                    }
-                    Some(env_default.to_string())
-                }
-                "anthropic_thinking_repair" => {
-                    let env_default = shared.runtime_defaults.anthropic_thinking_repair;
-                    if let Ok(mut config) = shared.runtime_config.write() {
-                        config.anthropic_thinking_repair = env_default;
-                    }
-                    Some(env_default.to_string())
-                }
-                "pxpipe_compress" => {
-                    let env_default = shared.runtime_defaults.pxpipe_compress;
-                    if let Ok(mut config) = shared.runtime_config.write() {
-                        config.pxpipe_compress = env_default;
-                    }
-                    Some(env_default.to_string())
-                }
-                "rtk_compress" => {
-                    let env_default = shared.runtime_defaults.rtk_compress;
-                    if let Ok(mut config) = shared.runtime_config.write() {
-                        config.rtk_compress = env_default;
-                    }
-                    Some(env_default.to_string())
-                }
-                "rtk_models" => {
-                    let env_default = shared.runtime_defaults.rtk_models.clone();
-                    if let Ok(mut config) = shared.runtime_config.write() {
-                        config.rtk_models = env_default.clone();
-                    }
-                    Some(env_default)
-                }
-                "pxpipe_models" => {
-                    let env_default = shared.runtime_defaults.pxpipe_models.clone();
-                    if let Ok(mut config) = shared.runtime_config.write() {
-                        config.pxpipe_models = env_default.clone();
-                    }
-                    Some(env_default)
-                }
-                "forward_client_auth" => {
-                    let env_default = shared.runtime_defaults.forward_client_auth;
-                    if let Ok(mut config) = shared.runtime_config.write() {
-                        config.forward_client_auth = env_default;
-                    }
-                    Some(env_default.to_string())
-                }
-                "tool_guardrail_mode" => {
-                    let env_default = shared.runtime_defaults.tool_guardrail_mode.clone();
-                    if let Ok(mut config) = shared.runtime_config.write() {
-                        config.tool_guardrail_mode = env_default.clone();
-                    }
-                    Some(env_default)
-                }
-                "optimizer_mode" => {
-                    let env_default = shared.runtime_defaults.optimizer_mode.clone();
-                    if let Ok(mut config) = shared.runtime_config.write() {
-                        config.optimizer_mode = env_default.clone();
-                    }
-                    Some(env_default)
-                }
-                _ => None,
-            };
-            if let Some(value) = restored {
-                let _ = shared
-                    .events_tx
-                    .send(crate::admin::state::AdminEvent::ConfigChanged {
-                        key: key.clone(),
-                        value,
-                    });
-            }
-            super::emit_audit(
-                &shared,
-                crate::admin::db::AuditEntry {
-                    id: None,
-                    timestamp: None,
-                    action: "config_deleted".into(),
-                    target_type: "config".into(),
-                    target_id: Some(key.clone()),
-                    detail: None,
-                    source_ip: Some(addr.ip().to_string()),
-                },
-            );
-            (StatusCode::OK, Json(serde_json::json!({"deleted": key}))).into_response()
-        }
-        Some(Ok(false)) => (
-            StatusCode::NOT_FOUND,
-            Json(serde_json::json!({"error": "override not found"})),
-        )
-            .into_response(),
-        Some(Err(e)) => {
-            tracing::error!(error = %e, "delete_config_override failed");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"error": "internal database error"})),
-            )
-                .into_response()
-        }
-        None => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"error": "internal error"})),
-        )
-            .into_response(),
-    }
 }

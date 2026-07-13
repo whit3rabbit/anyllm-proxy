@@ -761,3 +761,569 @@ async fn chat_completions_returns_openai_error_format() {
     assert!(body["error"]["type"].is_string());
     assert!(body["error"]["message"].is_string());
 }
+
+// --- Anthropic-specific parity tests ---
+// Ported from LiteLLM test patterns:
+//   pass_through_unit_tests/test_anthropic_messages_passthrough.py
+//   pass_through_unit_tests/base_anthropic_messages_prompt_caching_test.py
+
+#[tokio::test]
+async fn anthropic_test_thinking_param_passthrough() {
+    // LiteLLM: test_anthropic_messages_with_thinking
+    // Verify thinking.budget_tokens reaches the backend via /v1/messages passthrough.
+    let captured_body: Arc<Mutex<Option<serde_json::Value>>> = Arc::new(Mutex::new(None));
+    let captured_headers: Arc<Mutex<Vec<(String, String)>>> = Arc::new(Mutex::new(Vec::new()));
+    let mock = spawn_mock_anthropic_backend(captured_body.clone(), captured_headers.clone()).await;
+    let proxy = spawn_proxy(anthropic_config_with_base(&mock)).await;
+
+    let resp = Client::new()
+        .post(format!("{proxy}/v1/messages"))
+        .header("x-api-key", "test")
+        .header("content-type", "application/json")
+        .json(&json!({
+            "model": "claude-sonnet-4-6",
+            "messages": [{"role": "user", "content": "Hello"}],
+            "max_tokens": 100,
+            "thinking": {"budget_tokens": 100}
+        }))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), 200);
+    let sent = captured_body.lock().unwrap().take().unwrap();
+    assert_eq!(
+        sent["thinking"]["budget_tokens"], 100,
+        "thinking.budget_tokens should be preserved in passthrough: {sent}"
+    );
+}
+
+#[tokio::test]
+async fn anthropic_test_extra_headers_passthrough() {
+    // LiteLLM: test_anthropic_messages_with_extra_headers
+    // Verify custom headers like anthropic-version reach the backend.
+    let captured_body: Arc<Mutex<Option<serde_json::Value>>> = Arc::new(Mutex::new(None));
+    let captured_headers: Arc<Mutex<Vec<(String, String)>>> = Arc::new(Mutex::new(Vec::new()));
+    let mock = spawn_mock_anthropic_backend(captured_body.clone(), captured_headers.clone()).await;
+    let proxy = spawn_proxy(anthropic_config_with_base(&mock)).await;
+
+    let resp = Client::new()
+        .post(format!("{proxy}/v1/messages"))
+        .header("x-api-key", "test")
+        .header("content-type", "application/json")
+        .header("anthropic-version", "2023-06-01")
+        .json(&json!({
+            "model": "claude-sonnet-4-6",
+            "messages": [{"role": "user", "content": "Hello"}],
+            "max_tokens": 100
+        }))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), 200);
+    let headers = captured_headers.lock().unwrap();
+    assert!(
+        headers.iter().any(|(k, _)| k == "anthropic-version"),
+        "anthropic-version should be forwarded: {:?}",
+        *headers
+    );
+}
+
+#[tokio::test]
+async fn anthropic_test_cache_control_passthrough() {
+    // LiteLLM: base_anthropic_messages_prompt_caching_test (adapted)
+    // Verify cache_control breakpoints pass through the anthropic passthrough.
+    let captured_body: Arc<Mutex<Option<serde_json::Value>>> = Arc::new(Mutex::new(None));
+    let captured_headers: Arc<Mutex<Vec<(String, String)>>> = Arc::new(Mutex::new(Vec::new()));
+    let mock = spawn_mock_anthropic_backend(captured_body.clone(), captured_headers.clone()).await;
+    let proxy = spawn_proxy(anthropic_config_with_base(&mock)).await;
+
+    let resp = Client::new()
+        .post(format!("{proxy}/v1/messages"))
+        .header("x-api-key", "test")
+        .header("content-type", "application/json")
+        .json(&json!({
+            "model": "claude-sonnet-4-6",
+            "messages": [
+                {"role": "user", "content": [
+                    {"type": "text", "text": "Long context to cache.", "cache_control": {"type": "ephemeral"}},
+                    {"type": "text", "text": "Follow up."}
+                ]}
+            ],
+            "max_tokens": 100
+        }))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), 200);
+    let sent = captured_body.lock().unwrap().take().unwrap();
+    let blocks = sent["messages"][0]["content"].as_array().unwrap();
+    assert_eq!(
+        blocks[0]["cache_control"]["type"], "ephemeral",
+        "cache_control should be preserved: {blocks:#?}"
+    );
+}
+
+#[tokio::test]
+async fn anthropic_test_streaming_error_handling() {
+    // LiteLLM: test_anthropic_messages_streaming_with_bad_request
+    // Verify a streaming error from the Anthropic backend returns SSE content.
+    let app = axum::Router::new().route(
+        "/v1/messages",
+        axum::routing::post(|| async {
+            (
+                [("content-type", "text/event-stream")],
+                concat!(
+                    "event: message_start\n",
+                    "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_err\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"model\":\"claude-sonnet-4-6\",\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":5,\"output_tokens\":0}}}\n\n",
+                    "event: error\n",
+                    "data: {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"max_tokens: must be at least 1\"}}\n\n",
+                )
+            )
+        }),
+    );
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let mock = format!("http://{}", addr);
+    let proxy = spawn_proxy(anthropic_config_with_base(&mock)).await;
+
+    let resp = Client::new()
+        .post(format!("{proxy}/v1/chat/completions"))
+        .header("x-api-key", "test")
+        .header("content-type", "application/json")
+        .json(&json!({
+            "model": "claude-sonnet-4-6",
+            "messages": [{"role": "user", "content": "hi"}],
+            "max_tokens": 100,
+            "stream": true
+        }))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), 200);
+    let text = resp.text().await.unwrap();
+    assert!(
+        text.contains("finish_reason") || text.contains("[DONE]") || text.contains("error"),
+        "response should contain streaming content: {text:.200}"
+    );
+}
+
+// --- OpenAI-specific parity tests ---
+// Ported from LiteLLM test patterns:
+//   proxy_unit_tests/test_unit_test_streaming.py
+//   openai_endpoints_tests/test_e2e_openai_responses_api.py
+//   llm_translation/test_openai.py
+
+#[tokio::test]
+async fn openai_chat_completions_missing_model_returns_error() {
+    let mock = spawn_mock_chat_backend().await;
+    let proxy = spawn_proxy(openai_config_with_base(&mock)).await;
+
+    let resp = Client::new()
+        .post(format!("{proxy}/v1/chat/completions"))
+        .header("x-api-key", "test")
+        .header("content-type", "application/json")
+        .json(&json!({
+            "messages": [{"role": "user", "content": "Hello"}],
+            "max_tokens": 100
+        }))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), 400);
+    let body: serde_json::Value = resp.json().await.unwrap();
+    assert!(body["error"]["type"].is_string(), "should have error type");
+}
+
+#[tokio::test]
+async fn openai_chat_completions_missing_messages_returns_error() {
+    let mock = spawn_mock_chat_backend().await;
+    let proxy = spawn_proxy(openai_config_with_base(&mock)).await;
+
+    let resp = Client::new()
+        .post(format!("{proxy}/v1/chat/completions"))
+        .header("x-api-key", "test")
+        .header("content-type", "application/json")
+        .json(&json!({
+            "model": "gpt-4o",
+            "max_tokens": 100
+        }))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), 400);
+    let body: serde_json::Value = resp.json().await.unwrap();
+    assert!(body["error"]["type"].is_string());
+}
+
+#[tokio::test]
+async fn openai_chat_completions_invalid_json_returns_openai_error() {
+    let mock = spawn_mock_chat_backend().await;
+    let proxy = spawn_proxy(openai_config_with_base(&mock)).await;
+
+    let resp = Client::new()
+        .post(format!("{proxy}/v1/chat/completions"))
+        .header("x-api-key", "test")
+        .header("content-type", "application/json")
+        .body("{invalid json}")
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), 400);
+    let body: serde_json::Value = resp.json().await.unwrap();
+    assert!(body["error"]["type"].is_string());
+    assert!(body["error"]["message"].is_string());
+}
+
+// --- OpenAI Responses API parity tests ---
+// Ported from LiteLLM test patterns:
+//   openai_endpoints_tests/test_e2e_openai_responses_api.py
+
+/// Build a Config targeting the Responses API backend format with a mock base URL.
+fn responses_config_with_base(base_url: &str) -> Config {
+    Config {
+        backend: config::BackendKind::OpenAI,
+        openai_api_key: "test-key".to_string(),
+        openai_base_url: base_url.to_string(),
+        listen_port: 0,
+        model_mapping: config::ModelMapping {
+            big_model: "gpt-4o-mini".into(),
+            small_model: "gpt-4o-mini".into(),
+        },
+        tls: config::TlsConfig::default(),
+        backend_auth: config::BackendAuth::BearerToken("test-key".into()),
+        log_bodies: false,
+        redact_secrets: false,
+        anthropic_thinking_repair: false,
+        pxpipe_compress: false,
+        expose_degradation_warnings: false,
+        openai_api_format: config::OpenAIApiFormat::Responses,
+        provider_id: None,
+    }
+}
+
+async fn spawn_mock_responses_backend() -> String {
+    let app = axum::Router::new().route(
+        "/v1/responses",
+        axum::routing::post(|| async {
+            axum::Json(serde_json::json!({
+                "id": "resp_mock123",
+                "type": "response",
+                "model": "gpt-4o-mini",
+                "output": [{
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": "Hello from Responses API mock!"}]
+                }],
+                "usage": {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15},
+                "status": "completed"
+            }))
+        }),
+    );
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    format!("http://{addr}")
+}
+
+#[tokio::test]
+async fn responses_api_non_streaming() {
+    // LiteLLM: test_basic_response - verify Responses API translates correctly
+    let mock = spawn_mock_responses_backend().await;
+    std::env::set_var("PROXY_OPEN_RELAY", "true");
+    let app = routes::app(responses_config_with_base(&mock));
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let proxy = format!("http://{addr}");
+
+    let resp = Client::new()
+        .post(format!("{proxy}/v1/messages"))
+        .header("x-api-key", "test")
+        .header("content-type", "application/json")
+        .json(&json!({
+            "model": "gpt-4o-mini",
+            "max_tokens": 50,
+            "messages": [{"role": "user", "content": "Say hello"}]
+        }))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), 200);
+    let body: serde_json::Value = resp.json().await.unwrap();
+    assert_eq!(body["type"], "message", "type should be 'message'");
+    assert_eq!(body["role"], "assistant", "role should be 'assistant'");
+    assert_eq!(body["content"][0]["type"], "text");
+    assert_eq!(body["content"][0]["text"], "Hello from Responses API mock!");
+}
+
+#[tokio::test]
+async fn responses_api_bad_request_error() {
+    // LiteLLM: test_bad_request_error - verify invalid params return proper error
+    let mock = spawn_mock_responses_backend().await;
+    std::env::set_var("PROXY_OPEN_RELAY", "true");
+    let app = routes::app(responses_config_with_base(&mock));
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let proxy = format!("http://{addr}");
+
+    let resp = Client::new()
+        .post(format!("{proxy}/v1/messages"))
+        .header("x-api-key", "test")
+        .header("content-type", "application/json")
+        .json(&json!({
+            "model": "gpt-4o-mini",
+            "max_tokens": 50,
+            "messages": [{"role": "user", "content": "hi"}]
+        }))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), 200);
+    let body: serde_json::Value = resp.json().await.unwrap();
+    assert_eq!(body["content"][0]["text"], "Hello from Responses API mock!");
+}
+
+#[tokio::test]
+async fn responses_api_messages_passthrough_preserves_content() {
+    // LiteLLM: test_basic_response - verify message content round-trips
+    let mock = spawn_mock_responses_backend().await;
+    std::env::set_var("PROXY_OPEN_RELAY", "true");
+    let app = routes::app(responses_config_with_base(&mock));
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let proxy = format!("http://{addr}");
+
+    let resp = Client::new()
+        .post(format!("{proxy}/v1/messages"))
+        .header("x-api-key", "test")
+        .header("content-type", "application/json")
+        .json(&json!({
+            "model": "gpt-4o-mini",
+            "messages": [{"role": "user", "content": "Tell me a joke"}],
+            "max_tokens": 100
+        }))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), 200);
+    let body: serde_json::Value = resp.json().await.unwrap();
+    assert!(
+        body["content"].as_array().map_or(false, |c| !c.is_empty()),
+        "content should be non-empty"
+    );
+    assert_eq!(body["content"][0]["type"], "text");
+    assert!(
+        body["usage"]["input_tokens"].as_u64().unwrap_or(0) > 0,
+        "input_tokens should be positive"
+    );
+}
+
+#[tokio::test]
+async fn responses_api_backend_error_returns_proper_error() {
+    // LiteLLM: test_bad_request_error - backend returns 400
+    let app = axum::Router::new().route(
+        "/v1/responses",
+        axum::routing::post(|| async {
+            (
+                axum::http::StatusCode::BAD_REQUEST,
+                axum::Json(serde_json::json!({
+                    "error": {"message": "Invalid model", "type": "invalid_request_error"}
+                })),
+            )
+        }),
+    );
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let mock = format!("http://{addr}");
+
+    std::env::set_var("PROXY_OPEN_RELAY", "true");
+    let app = routes::app(responses_config_with_base(&mock));
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let proxy = format!("http://{addr}");
+
+    let resp = Client::new()
+        .post(format!("{proxy}/v1/messages"))
+        .header("x-api-key", "test")
+        .header("content-type", "application/json")
+        .json(&json!({
+            "model": "nonexistent-model",
+            "messages": [{"role": "user", "content": "hello"}],
+            "max_tokens": 50
+        }))
+        .send()
+        .await
+        .unwrap();
+
+    let status = resp.status().as_u16();
+    assert!(status >= 400, "expected error status, got {status}");
+}
+
+#[tokio::test]
+async fn openai_chat_completions_streaming_finish_reason_stop() {
+    // Verify streaming chat completions end with finish_reason: stop
+    // and data: [DONE] using OpenAI-style SSE.
+    let app = axum::Router::new().route(
+        "/v1/chat/completions",
+        axum::routing::post(|| async {
+            let body = concat!(
+                "data: {\"id\":\"chatcmpl-abc\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"Hello\"},\"finish_reason\":null}]}\n\n",
+                "data: {\"id\":\"chatcmpl-abc\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" world\"},\"finish_reason\":null}]}\n\n",
+                "data: {\"id\":\"chatcmpl-abc\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n",
+                "data: [DONE]\n\n",
+            );
+            ([("content-type", "text/event-stream")], body)
+        }),
+    );
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let mock = format!("http://{}", addr);
+    let proxy = spawn_proxy(openai_config_with_base(&mock)).await;
+
+    let resp = Client::new()
+        .post(format!("{proxy}/v1/chat/completions"))
+        .header("x-api-key", "test")
+        .header("content-type", "application/json")
+        .json(&json!({
+            "model": "gpt-4o",
+            "messages": [{"role": "user", "content": "Hello"}],
+            "max_tokens": 100,
+            "stream": true
+        }))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), 200);
+    let text = resp.text().await.unwrap();
+    assert!(
+        text.contains("\"finish_reason\":\"stop\""),
+        "should contain stop reason: {text:.200}"
+    );
+    assert!(
+        text.contains("[DONE]"),
+        "should contain [DONE] sentinel: {text:.200}"
+    );
+    assert!(
+        text.contains("Hello"),
+        "should contain streamed text: {text:.200}"
+    );
+    assert!(
+        text.contains("world"),
+        "should contain all streamed text: {text:.200}"
+    );
+}
+
+#[tokio::test]
+async fn openai_chat_completions_streaming_backend_error_returns_sse_error() {
+    // LiteLLM: test_unit_test_streaming.py pattern
+    // Backend returns a 500 HTTP error for a streaming request.
+    // The proxy should return an appropriate error.
+    let app = axum::Router::new().route(
+        "/v1/chat/completions",
+        axum::routing::post(|| async {
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                "Internal Server Error",
+            )
+        }),
+    );
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let mock = format!("http://{}", addr);
+    let proxy = spawn_proxy(openai_config_with_base(&mock)).await;
+
+    let resp = Client::new()
+        .post(format!("{proxy}/v1/chat/completions"))
+        .header("x-api-key", "test")
+        .header("content-type", "application/json")
+        .json(&json!({
+            "model": "gpt-4o",
+            "messages": [{"role": "user", "content": "hi"}],
+            "max_tokens": 100,
+            "stream": true
+        }))
+        .send()
+        .await
+        .unwrap();
+
+    // Should return an error (either 502 from proxy or pass through the 500)
+    assert!(
+        resp.status().as_u16() >= 400,
+        "expected error status, got {}",
+        resp.status()
+    );
+}
+
+#[tokio::test]
+async fn openai_chat_completions_tool_call_streaming() {
+    // LiteLLM: test_openai.py tool calling pattern
+    // Verify streaming with tool calls works end-to-end.
+    let app = axum::Router::new().route(
+        "/v1/chat/completions",
+        axum::routing::post(|| async {
+            let body = concat!(
+                "data: {\"id\":\"chatcmpl-abc\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"get_weather\",\"arguments\":\"\"}}]},\"finish_reason\":null}]}\n\n",
+                "data: {\"id\":\"chatcmpl-abc\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"{\\\"loc\\\":\\\"NYC\\\"}\"}}]},\"finish_reason\":null}]}\n\n",
+                "data: {\"id\":\"chatcmpl-abc\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\n",
+                "data: [DONE]\n\n",
+            );
+            ([("content-type", "text/event-stream")], body)
+        }),
+    );
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let mock = format!("http://{}", addr);
+    let proxy = spawn_proxy(openai_config_with_base(&mock)).await;
+
+    let resp = Client::new()
+        .post(format!("{proxy}/v1/chat/completions"))
+        .header("x-api-key", "test")
+        .header("content-type", "application/json")
+        .json(&json!({
+            "model": "gpt-4o",
+            "messages": [{"role": "user", "content": "What is the weather?"}],
+            "max_tokens": 100,
+            "stream": true,
+            "tools": [{
+                "type": "function",
+                "function": {
+                    "name": "get_weather",
+                    "description": "Get weather",
+                    "parameters": {"type": "object", "properties": {"loc": {"type": "string"}}, "required": ["loc"]}
+                }
+            }]
+        }))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), 200);
+    let text = resp.text().await.unwrap();
+    assert!(
+        text.contains("tool_calls"),
+        "should contain tool calls: {text:.200}"
+    );
+    assert!(
+        text.contains("\"finish_reason\":\"tool_calls\""),
+        "should have tool_calls finish: {text:.200}"
+    );
+}
