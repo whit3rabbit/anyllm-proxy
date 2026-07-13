@@ -171,8 +171,13 @@ CI does the rest on tag push: builds binaries (Linux/macOS/Windows), packages de
 
 ## crates.io Publish Order
 
-anyllm_translate → anyllm_providers → anyllm_client → anyllm_batch_engine → anyllm_proxy
+anyllm_translate → anyllm_providers → anyllm_client → anyllm_batch_engine → anyllm_pxpipe → anyllm_rtk → anyllm_optimize_core → anyllm_optimize_passes → anyllm_optimize_scorer → anyllm_proxy
 (sleep 30 between each for index propagation)
+
+`anyllm_proxy` depends on all of the above, so every new leaf crate (`pxpipe`, `rtk`,
+`optimize_*`) MUST be added to the `publish` job in `ci.yml` before `anyllm_proxy`, or
+`cargo publish -p anyllm_proxy` fails on the missing dep. The `exit 101` guard masks that
+failure (cargo returns 101 for most errors), so the job goes green while proxy never lands.
 
 ## Version Bumping
 
