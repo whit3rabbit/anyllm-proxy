@@ -104,7 +104,7 @@ checksum = "2a4385e2e34eb35d6b3efe798b9eb88096925d87726c0798709bf56d9ed84af3"
 
 [[package]]
 name = "anyllm_batch_engine"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "anyllm_translate",
  "async-trait",
@@ -126,7 +126,7 @@ dependencies = [
 
 [[package]]
 name = "anyllm_client"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "anyllm_translate",
  "bytes",
@@ -145,7 +145,7 @@ dependencies = [
 
 [[package]]
 name = "anyllm_optimize_benches"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "anyllm_optimize_core",
  "anyllm_optimize_passes",
@@ -154,7 +154,7 @@ dependencies = [
 
 [[package]]
 name = "anyllm_optimize_cli"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "anyhow",
  "anyllm_optimize_core",
@@ -169,7 +169,7 @@ dependencies = [
 
 [[package]]
 name = "anyllm_optimize_core"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "memchr",
  "proptest",
@@ -180,7 +180,7 @@ dependencies = [
 
 [[package]]
 name = "anyllm_optimize_passes"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "anyllm_optimize_core",
  "memchr",
@@ -191,7 +191,7 @@ dependencies = [
 
 [[package]]
 name = "anyllm_optimize_scorer"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "anyllm_optimize_core",
  "ndarray",
@@ -205,7 +205,7 @@ dependencies = [
 
 [[package]]
 name = "anyllm_providers"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "reqwest 0.12.28",
  "serde",
@@ -215,7 +215,7 @@ dependencies = [
 
 [[package]]
 name = "anyllm_proxy"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "anyllm_batch_engine",
  "anyllm_client",
@@ -274,7 +274,7 @@ dependencies = [
 
 [[package]]
 name = "anyllm_pxpipe"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "base64 0.22.1",
  "font8x8",
@@ -286,7 +286,7 @@ dependencies = [
 
 [[package]]
 name = "anyllm_rtk"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "regex",
  "serde",
@@ -295,7 +295,7 @@ dependencies = [
 
 [[package]]
 name = "anyllm_translate"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "axum 0.8.9",
  "bytes",

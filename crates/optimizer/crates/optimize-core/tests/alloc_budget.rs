@@ -15,8 +15,8 @@ use anyllm_optimize_core::{
 };
 
 thread_local! {
-    static RECORDING: Cell<bool> = Cell::new(false);
-    static ALLOC_COUNT: Cell<u64> = Cell::new(0);
+    static RECORDING: Cell<bool> = const { Cell::new(false) };
+    static ALLOC_COUNT: Cell<u64> = const { Cell::new(0) };
 }
 
 struct CountingAllocator;
