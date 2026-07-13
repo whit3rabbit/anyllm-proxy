@@ -10,7 +10,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ## [Unreleased]
 
-## [0.14.0] - 2026-07-12
+## [0.14.1] - 2026-07-12
 
 ### Added
 - RTK tool-output compression (`RTK_COMPRESS=true` / admin toggle): command-aware filtering

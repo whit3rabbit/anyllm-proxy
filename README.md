@@ -18,7 +18,7 @@ brew install whit3rabbit/tap/anyllm-proxy
 **Linux (Debian/Ubuntu):**
 ```bash
 # Check https://github.com/whit3rabbit/anyllm-proxy/releases for the current filename
-curl -LO https://github.com/whit3rabbit/anyllm-proxy/releases/latest/download/anyllm-proxy_0.14.0-1_amd64.deb
+curl -LO https://github.com/whit3rabbit/anyllm-proxy/releases/latest/download/anyllm-proxy_0.14.1-1_amd64.deb
 # arm64: replace amd64 with arm64
 sudo dpkg -i anyllm-proxy_*.deb
 sudo systemctl enable --now anyllm-proxy
