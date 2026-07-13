@@ -31,6 +31,8 @@ cargo test --test live_api -- --ignored --test-threads=1    # needs real key
 - **Admin UI requires a flag.** `--webui`/`--admin` or `WEBUI=1`/`ADMIN=1`. Without it, only the proxy starts.
 - **Auth defaults to reject-all.** No `PROXY_API_KEYS` and no `PROXY_OPEN_RELAY=true` => every request is 401.
 - **CSRF tokens are one-time-use.** Fetch a fresh one from `GET /admin/csrf-token` before each admin POST/PUT/DELETE. Scripts must too.
+- **Live admin-endpoint smoke:** run with `ADMIN_TOKEN=<32+ chars> ... --webui` (admin on :3001). GET needs `Authorization: Bearer $ADMIN_TOKEN`. POST/PUT/DELETE ALSO need CSRF: `GET /admin/csrf-token` with a cookie jar (`curl -c jar`), then resend with `-b jar` + `X-CSRF-Token: <token>` (header must equal the cookie). Missing/mismatched CSRF returns 403 before your handler runs.
+- **`main_helpers` is bin-only** (declared in `main.rs`, NOT `lib.rs`). Library code (anything reached via `crate::` at runtime, e.g. `optimizer.rs`) cannot use `crate::main_helpers::bootstrap::*` — it won't compile. The data-dir/home helpers live in `crate::config::helpers::{resolve_data_dir, home_dir}`; use those from lib code.
 - **Docker admin needs `ADMIN_BIND=0.0.0.0`** — default 127.0.0.1 is unreachable from outside the container.
 - **`OPENAI_API_KEY` takes precedence over provider keys for stub backends.** With `BACKEND=groq` but `OPENAI_API_KEY` set globally, the OpenAI key gets sent to Groq. Unset it when switching to a stub provider.
 - **`BACKEND=sagemaker` panics at startup** (`ProviderProtocol::Custom` -> `resolve_backend()` None). Use `BACKEND=bedrock` for AWS-hosted Anthropic.

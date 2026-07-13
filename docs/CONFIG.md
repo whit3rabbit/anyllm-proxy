@@ -67,6 +67,15 @@ If a tool engine is configured, `FORGE_TOOL_CALL_POLICY=standard` can enable the
 for that branch (`crates/proxy/src/config/multi/loader.rs`). Users on LiteLLM YAML who
 need guardrails must use `FORGE_TOOL_CALL_POLICY` instead.
 
+Opt-in prompt compression of long client-sent conversation history is controlled by
+`OPTIMIZER_MODE=off|shadow|live` (seeds `RuntimeConfig.optimizer_mode`; also
+live-toggleable from the admin UI / `PUT /admin/api/config` without a restart, same
+pattern as `redact_secrets`/`anthropic_thinking_repair` above). `off` is the default
+(no-op). `shadow` logs an `OptimizationReport` and forwards the original body
+unchanged. `live` compresses the body in place and, for Anthropic requests, places a
+`cache_control` breakpoint at the compression frontier. See [ENV.md](ENV.md#prompt-compression-optimizer-optional)
+and `crates/optimizer/CLAUDE.md` for the algorithm.
+
 ## Model Persistence
 
 Models added via the admin API (`POST /admin/api/models`) are stored in

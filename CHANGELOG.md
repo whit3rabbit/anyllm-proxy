@@ -11,9 +11,34 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 ## [Unreleased]
 
 ### Added
+- RTK tool-output compression (`RTK_COMPRESS=true` / admin toggle): command-aware filtering
+  of tool-result text (test/build/git/log output) using a catalog of 55 declarative filters
+  ported from OmniRoute (MIT). New IO-free `anyllm_rtk` crate; deterministic and prompt-cache
+  safe (`cache_control`-marked blocks are preserved byte-for-byte). Wired into the Anthropic
+  passthrough (stream + non-stream) and OpenAI-translate paths, gated per-model via
+  `RTK_MODELS` (empty = all). New `rtk_compress` / `rtk_models` runtime config + Settings UI.
 - Release: GitHub Releases now include Linux (`x86_64`, `arm64`) `.tar.gz` and Windows
   (`x86_64`) `.zip` binary archives, alongside the existing macOS tarballs and `.deb`
   packages. The binaries were already built in CI but never packaged/attached.
+- Opt-in prompt compression (`OPTIMIZER_MODE=off|shadow|live` / admin toggle):
+  Frozen-Frontier Extractive Compression of long client-sent conversation history,
+  applied for OpenAI Chat Completions, the Anthropic-Messages translate path, and the
+  Anthropic passthrough path (`BACKEND=anthropic`) (client history only, never proxy
+  tool-loop turns). `shadow` reports would-be savings without mutating the request;
+  `live` compresses in place and, for Anthropic passthrough, places a `cache_control`
+  breakpoint at the compression frontier on the wire (applied over raw bytes, so the
+  breakpoint is not dropped by a typed round-trip). New
+  IO-free `anyllm_optimize_core`/`anyllm_optimize_passes` crates; fails open on any
+  error. New `optimizer_compressed_total` / `optimizer_messages_compressed_total` /
+  `optimizer_removed_tokens_total` counters on `GET /metrics`. Optional LLMLingua-2 ONNX
+  token-importance scorer behind the proxy's `optimizer-onnx` feature (never
+  bundled/auto-downloaded): the model (~170MB, pinned to a sha256-verified HuggingFace
+  artifact) is fetched on demand from the admin UI (Settings → Prompt compression →
+  Download model) or the `optimize-model` CLI. The admin UI detects the model, gates the
+  optimizer mode toggle on its presence, and offers a Download button when absent; the
+  proxy loads the scorer eagerly at startup or lazily on the first live request after a
+  download. Admin endpoints `GET`/`POST /admin/api/optimizer/model`; env `MODEL_URL` /
+  `MODEL_SHA256` / `MODEL_CACHE_DIR` override the pin/cache location.
 
 ### Fixed
 - Admin UI model discovery ("Query models"): fixed the discovery URL builder doubling

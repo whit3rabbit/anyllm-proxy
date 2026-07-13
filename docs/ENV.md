@@ -78,6 +78,40 @@ These apply only when a config file initializes the tool engine through `tool_ex
 |----------|---------|-------------|
 | `FORGE_TOOL_CALL_POLICY` | `disabled` | Set to `standard` to enable Forge-style advisory guardrails for model-produced tool calls. YAML `tool_execution.guardrails` takes precedence. |
 
+## Prompt Compression (Optimizer, optional)
+
+Opt-in Frozen-Frontier Extractive Compression (FFEC) of long client-sent conversation
+history, applied at the parsed-body seam (OpenAI Chat Completions and Anthropic Messages)
+before translation. Never touches proxy-internal tool-loop turns, only what the client sent.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OPTIMIZER_MODE` | `off` | `off`, `shadow`, or `live`. `shadow` runs the full pipeline and logs an `OptimizationReport` (would-be token savings) but forwards the original body unchanged. `live` renders the compressed body back in place and, for Anthropic requests, places a `cache_control` breakpoint at the compression frontier. Seeds `RuntimeConfig.optimizer_mode` (also live-toggleable from the admin UI / `PUT /admin/api/config` without a restart). |
+
+Fails open on any error (malformed body, panic in the adapter/algorithm pipeline): the
+original request is forwarded unchanged and the mode is reported as a no-op. See
+`crates/optimizer/CLAUDE.md` for the compression algorithm and `record_optimization`
+counters (`optimizer_compressed_total`, `optimizer_messages_compressed_total`,
+`optimizer_removed_tokens_total`) exposed on `GET /metrics`.
+
+### ONNX scorer (opt-in, LLMLingua-2)
+
+Live mode uses a heuristic scorer by default. Build the proxy with `--features
+optimizer-onnx` to enable the LLMLingua-2 ONNX scorer (`ort` downloads an onnxruntime
+binary at build time). The ~170MB model is never bundled or auto-downloaded: fetch it once
+from the admin UI (Settings → Prompt compression → **Download model**, which
+sha256-verifies against a pinned digest) or with the `optimize-model` CLI. The verified
+`model.onnx` + `tokenizer.json` land in `<ANYLLM_HOME>/models/<sha256>/`; the proxy loads
+the scorer eagerly at startup if present, else lazily on the first live request after a
+download. Admin endpoints: `GET /admin/api/optimizer/model` (status), `POST` (start
+download).
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MODEL_URL` | pinned HF repo | Base URL the artifact (`<url>/model.onnx`, `<url>/tokenizer.json`) is fetched from. |
+| `MODEL_SHA256` | pinned digest | sha256 the downloaded `model.onnx` must match; the download is rejected on mismatch. |
+| `MODEL_CACHE_DIR` | `<ANYLLM_HOME>/models` | Cache root; the verified pair lands in `<dir>/<sha256>/`. |
+
 ## OIDC / JWT Authentication (optional)
 
 When `OIDC_ISSUER_URL` is set, the proxy discovers the OIDC configuration and loads JWKS. Tokens that look like JWTs are validated against the JWKS before falling through to key-based auth.
