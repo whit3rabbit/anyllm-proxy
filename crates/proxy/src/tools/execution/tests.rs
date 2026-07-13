@@ -2,6 +2,7 @@ use super::*;
 use crate::tools::policy::{PolicyAction, PolicyRule, ToolExecutionPolicy};
 use crate::tools::registry::ToolRegistry;
 use serde_json::json;
+use std::collections::HashSet;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;

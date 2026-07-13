@@ -1,4 +1,7 @@
+use super::parser::parse_provider_model;
 use super::*;
+use crate::config::model_router::RoutingStrategy;
+use crate::config::BackendKind;
 
 #[test]
 fn parse_provider_model_openai() {

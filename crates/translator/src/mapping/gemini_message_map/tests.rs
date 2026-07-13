@@ -1,4 +1,7 @@
 use super::*;
+use crate::anthropic::messages as anthropic;
+use crate::gemini::request as gemini;
+use crate::gemini::response as gemini_resp;
 use serde_json::json;
 
 // Helper: build a minimal Anthropic request for testing.

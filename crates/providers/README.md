@@ -1,6 +1,6 @@
 # anyllm_providers
 
-Provider and model catalog for the [anyllm-proxy](https://github.com/whit3rabbit/llm-translate-api) workspace.
+Provider and model catalog.
 
 ## What this crate is
 

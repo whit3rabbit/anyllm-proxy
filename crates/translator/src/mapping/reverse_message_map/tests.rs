@@ -1,4 +1,7 @@
+use super::request::url_to_image_source;
 use super::*;
+use crate::mapping::warnings::TranslationWarnings;
+use crate::{anthropic, openai};
 use serde_json::json;
 
 fn make_basic_request() -> openai::ChatCompletionRequest {

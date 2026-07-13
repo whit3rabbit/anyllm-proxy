@@ -83,7 +83,7 @@ pub fn admin_router(shared: SharedState, token: Arc<zeroize::Zeroizing<String>>)
             "/admin/api/config/overrides/{key}",
             delete(config::delete_config_override),
         )
-        .route("/admin/api/env", get(config::get_env))
+        .route("/admin/api/env", get(env::get_env))
         .route("/admin/api/env/import", post(env::import_env))
         .route("/admin/api/env/export", get(env::export_env))
         .route("/admin/api/metrics", get(logs::get_metrics))

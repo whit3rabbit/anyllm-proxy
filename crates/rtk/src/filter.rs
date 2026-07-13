@@ -257,13 +257,11 @@ impl RtkFilter {
                     .build()
                     .ok()?;
                 let unless = match r.unless {
-                    Some(u) => {
-                        RegexBuilder::new(&u)
-                            .case_insensitive(true)
-                            .multi_line(true)
-                            .build()
-                            .ok()
-                    }
+                    Some(u) => RegexBuilder::new(&u)
+                        .case_insensitive(true)
+                        .multi_line(true)
+                        .build()
+                        .ok(),
                     None => None,
                 };
                 Some(MatchOutputRule {

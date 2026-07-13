@@ -876,6 +876,30 @@
     "provider": "openai"
   },
   {
+    "model_pattern": "gpt-5.6",
+    "input_cost_per_token": 5e-06,
+    "output_cost_per_token": 3e-05,
+    "provider": "openai"
+  },
+  {
+    "model_pattern": "gpt-5.6-luna",
+    "input_cost_per_token": 1e-06,
+    "output_cost_per_token": 6e-06,
+    "provider": "openai"
+  },
+  {
+    "model_pattern": "gpt-5.6-sol",
+    "input_cost_per_token": 5e-06,
+    "output_cost_per_token": 3e-05,
+    "provider": "openai"
+  },
+  {
+    "model_pattern": "gpt-5.6-terra",
+    "input_cost_per_token": 2.5e-06,
+    "output_cost_per_token": 1.5e-05,
+    "provider": "openai"
+  },
+  {
     "model_pattern": "gpt-audio",
     "input_cost_per_token": 2.5e-06,
     "output_cost_per_token": 1e-05,
@@ -927,6 +951,18 @@
     "model_pattern": "gpt-realtime-2",
     "input_cost_per_token": 4e-06,
     "output_cost_per_token": 1.6e-05,
+    "provider": "openai"
+  },
+  {
+    "model_pattern": "gpt-realtime-2.1",
+    "input_cost_per_token": 4e-06,
+    "output_cost_per_token": 2.4e-05,
+    "provider": "openai"
+  },
+  {
+    "model_pattern": "gpt-realtime-2.1-mini",
+    "input_cost_per_token": 6e-07,
+    "output_cost_per_token": 2.4e-06,
     "provider": "openai"
   },
   {

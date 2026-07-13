@@ -40,11 +40,14 @@ fn build_lookup(messages: &[Value]) -> ToolLookup {
             // strings). For OpenAI the parse is deferred — build_lookup only
             // stores the raw string.
             let command = None;
-            lookup.insert(id.to_string(), ToolMeta {
-                name,
-                command,
-                arguments_str,
-            });
+            lookup.insert(
+                id.to_string(),
+                ToolMeta {
+                    name,
+                    command,
+                    arguments_str,
+                },
+            );
         }
     }
     lookup

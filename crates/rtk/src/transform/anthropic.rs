@@ -31,11 +31,14 @@ fn build_lookup(messages: &[Value]) -> ToolLookup {
                 .unwrap_or_default()
                 .to_string();
             let command = part.get("input").and_then(command_from_input);
-            lookup.insert(id.to_string(), ToolMeta {
-                name,
-                command,
-                arguments_str: None,
-            });
+            lookup.insert(
+                id.to_string(),
+                ToolMeta {
+                    name,
+                    command,
+                    arguments_str: None,
+                },
+            );
         }
     }
     lookup
