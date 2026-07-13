@@ -1,0 +1,18 @@
+[package]
+name = "anyllm_optimize_passes"
+description = "FFEC provider adapters (OpenAI/Anthropic JSON <-> IR), cache strategies, cost gate, heuristics"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+categories = ["compression", "text-processing"]
+keywords = ["llm", "prompt", "compression", "openai", "anthropic"]
+
+[dependencies]
+anyllm_optimize_core = { path = "../optimize-core", version = "0.13.0" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+memchr = "2"
+
+[dev-dependencies]
+proptest = "1"

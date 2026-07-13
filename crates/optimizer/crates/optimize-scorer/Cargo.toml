@@ -1,0 +1,36 @@
+[package]
+name = "anyllm_optimize_scorer"
+description = "FFEC LLMLingua-2 token-importance scorer (ONNX), feature-gated"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+categories = ["compression", "science"]
+keywords = ["llm", "llmlingua", "onnx", "compression"]
+
+[features]
+default = []
+# Phase 3: enable the ONNX LLMLingua-2 scorer. Pulls in the heavy inference deps
+# below (ort downloads an onnxruntime binary at build time) — opt-in only, the
+# default feature set stays fast and offline.
+onnx = ["dep:ort", "dep:tokenizers", "dep:ndarray", "dep:rayon"]
+
+[dependencies]
+anyllm_optimize_core = { path = "../optimize-core", version = "0.13.0" }
+# Model-artifact download + sha256 verify (always compiled — the `artifact` module lets
+# the proxy/CLI detect+fetch the model without pulling the ONNX Runtime stack).
+sha2 = "0.10"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+# int8 encoder + token-classification head inference (ONNX Runtime 1.24 wrapper).
+# Default features include `download-binaries` (fetches a prebuilt onnxruntime at
+# build time) so the crate compiles without a system-installed onnxruntime.
+ort = { version = "2.0.0-rc.12", optional = true }
+# exact XLM-R/mBERT vocab, matches the exported model's tokenizer config.
+tokenizers = { version = "0.23", optional = true }
+ndarray = { version = "0.17", optional = true }
+rayon = { version = "1.12", optional = true }
+
+[dev-dependencies]
+# parity fixtures (fixtures/parity/**/*.json) are plain JSON; parsed only by the
+# integration test below, never by the crate itself.
+serde_json = "1"

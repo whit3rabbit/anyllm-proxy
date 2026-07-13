@@ -1,0 +1,17 @@
+[package]
+name = "anyllm_rtk"
+description = "Command-aware tool-output compression for the anyllm proxy (RTK port)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+categories = ["compression", "web-programming"]
+keywords = ["anthropic", "llm", "compression", "tool-output", "rtk"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Line/pattern filtering is regex-driven. Rust's `regex` crate (no lookaround,
+# no backreferences) covers 52/55 vendored filters directly; the 3 lookahead
+# detection patterns fail to compile and are skipped fail-open (see filter.rs).
+regex = "1"

@@ -5,7 +5,7 @@ use crate::admin::state::{RuntimeConfig, SharedState};
 use crate::backend::BackendClient;
 use crate::metrics::Metrics;
 use anyllm_providers::ProviderCatalog;
-use anyllm_translate::{anthropic, mapping};
+use anyllm_translate::{anthropic, mapping, openai};
 use axum::{
     extract::{rejection::JsonRejection, FromRequest},
     http::StatusCode,
@@ -121,6 +121,15 @@ pub struct AppState {
     /// of the live toggle -- use `active_pxpipe()`, which checks
     /// `RuntimeConfig.pxpipe_compress`, before using it.
     pub pxpipe: Option<Arc<crate::pxpipe::PxpipeEngine>>,
+    /// Command-aware tool-output compression engine (RTK). `Some` for Anthropic
+    /// and Translate modes; only consulted when `RuntimeConfig.rtk_compress` is
+    /// on -- use `rtk_engine_for(model)`.
+    pub rtk: Option<Arc<crate::rtk::RtkEngine>>,
+    /// FFEC prompt-compression engine (`OptimizerEngine`). `Some` for Anthropic
+    /// and Translate modes, mirroring `rtk`; baked with the static
+    /// `OPTIMIZER_MODE`-env default at startup -- use `effective_optimizer()`,
+    /// which applies the live `RouteOptions.optimizer_mode` override on top.
+    pub optimizer: Option<Arc<crate::optimizer::OptimizerEngine>>,
     /// Model-level router for LiteLLM model_list configs. None for TOML/env configs.
     /// Wrapped in RwLock for dynamic model management via admin API.
     pub model_router: Option<Arc<RwLock<crate::config::model_router::ModelRouter>>>,
@@ -423,6 +432,533 @@ impl AppState {
         } else {
             None
         }
+    }
+
+    /// The RTK engine for `model`, or `None` if compression shouldn't run: the
+    /// toggle is off, the engine is absent, or the model is out of scope. RTK is
+    /// not vision-gated, so there is no capability check.
+    ///
+    /// Reads the toggle and scope from a single RwLock critical section for
+    /// consistency, and checks `route_options` first (matching the pxpipe pattern)
+    /// so per-route overrides take precedence over the global RuntimeConfig.
+    pub(crate) fn rtk_engine_for(&self, model: &str) -> Option<Arc<crate::rtk::RtkEngine>> {
+        let cfg = self
+            .runtime_config
+            .read()
+            .unwrap_or_else(|e| e.into_inner());
+        let enabled = self
+            .route_options
+            .as_ref()
+            .and_then(|o| o.rtk_compress)
+            .unwrap_or(cfg.rtk_compress);
+        if !enabled {
+            return None;
+        }
+        let engine = self.rtk.clone()?;
+        let models_csv = self
+            .route_options
+            .as_ref()
+            .and_then(|o| o.rtk_models.as_deref())
+            .unwrap_or(&cfg.rtk_models);
+        if crate::rtk::model_in_scope(model, models_csv) {
+            Some(engine)
+        } else {
+            None
+        }
+    }
+
+    /// Effective FFEC prompt-compression engine for this request, or `None`
+    /// when optimization is unconfigured for this backend/mode (`self.optimizer`
+    /// is `None`). Precedence, mirroring `effective_tool_guardrails` /
+    /// `resolve_runtime_guardrails_locked`: (1) route override
+    /// (`RouteOptions.optimizer_mode`, if set) wins outright; (2) otherwise the
+    /// live `RuntimeConfig.optimizer_mode` admin toggle (no restart required);
+    /// (3) otherwise the static per-process engine baked with the
+    /// `OPTIMIZER_MODE`-env default at startup.
+    pub(crate) fn effective_optimizer(&self) -> Option<Arc<crate::optimizer::OptimizerEngine>> {
+        let engine = self.optimizer.as_ref()?;
+        if let Some(mode_str) = self
+            .route_options
+            .as_ref()
+            .and_then(|o| o.optimizer_mode.as_deref())
+        {
+            return Some(Arc::new(engine.with_mode_override(mode_str)));
+        }
+        Some(Arc::new(
+            crate::optimizer::resolve_runtime_optimizer_locked(&self.runtime_config, engine),
+        ))
+    }
+
+    /// Apply RTK tool-output compression to an OpenAI-format request and record
+    /// metrics. Shared helper used by both the /v1/chat/completions and /v1/messages
+    /// translate paths (streaming and non-streaming). No-op when the engine is
+    /// unavailable, disabled, or no tool messages are present.
+    pub(crate) fn apply_rtk_to_openai(&self, req: &mut openai::ChatCompletionRequest, model: &str) {
+        let engine = match self.rtk_engine_for(model) {
+            Some(e) => e,
+            None => return,
+        };
+        // Pre-check: only serialize when there are tool messages to compress.
+        if !req
+            .messages
+            .iter()
+            .any(|m| m.role == openai::ChatRole::Tool)
+        {
+            return;
+        }
+        let mut v = match serde_json::to_value(&*req) {
+            Ok(v) => v,
+            Err(_) => return,
+        };
+        let Some((blocks, saved)) = engine.compress_openai_chat(&mut v) else {
+            return;
+        };
+        match serde_json::from_value::<openai::ChatCompletionRequest>(v) {
+            Ok(patched) => {
+                *req = patched;
+                self.metrics.record_rtk_compression(blocks, saved);
+                tracing::info!(
+                    model,
+                    blocks,
+                    chars_saved = saved,
+                    "rtk: compressed OpenAI request"
+                );
+            }
+            Err(e) => tracing::warn!(
+                error = %e,
+                "rtk: failed to re-deserialize compressed OpenAI request; forwarding original"
+            ),
+        }
+    }
+
+    /// Apply FFEC prompt compression (`effective_optimizer()`) to an OpenAI-format
+    /// request at the parsed-body seam. Client-sent history only -- callers must
+    /// never invoke this on proxy-appended tool-loop turns (see
+    /// `crates/optimizer/CLAUDE.md` "Streaming & tool-loop decision"). `Shadow`
+    /// mode logs the `OptimizationReport` and leaves `req` unchanged; `Live` mode
+    /// applies the rendered body in place. No-op when optimization is
+    /// unconfigured or resolves to `Mode::Off` for this request.
+    pub(crate) fn apply_optimizer_to_openai(
+        &self,
+        req: &mut openai::ChatCompletionRequest,
+        route: &str,
+    ) {
+        let Some(engine) = self.effective_optimizer() else {
+            return;
+        };
+        let mut v = match serde_json::to_value(&*req) {
+            Ok(v) => v,
+            Err(_) => return,
+        };
+        let report = engine.optimize_openai(&mut v, route);
+        if report.mode == anyllm_optimize_core::Mode::Shadow {
+            tracing::info!(
+                route,
+                removed_tokens_est = report.removed_tokens_est,
+                messages_compressed = report.messages_compressed,
+                failure = report.failure.as_deref().unwrap_or(""),
+                "optimizer: shadow report (not applied)"
+            );
+        }
+        if !report.applied {
+            return;
+        }
+        match serde_json::from_value::<openai::ChatCompletionRequest>(v) {
+            Ok(patched) => {
+                *req = patched;
+                self.metrics.record_optimization(
+                    report.messages_compressed as u64,
+                    report.removed_tokens_est,
+                );
+                tracing::info!(
+                    route,
+                    removed_tokens_est = report.removed_tokens_est,
+                    messages_compressed = report.messages_compressed,
+                    "optimizer: compressed OpenAI request"
+                );
+            }
+            Err(e) => tracing::warn!(
+                error = %e,
+                "optimizer: failed to re-deserialize compressed OpenAI request; forwarding original"
+            ),
+        }
+    }
+
+    /// Apply FFEC prompt compression (`effective_optimizer()`) to an Anthropic
+    /// Messages request at the parsed-body seam. Same contract as
+    /// [`Self::apply_optimizer_to_openai`]: client-sent history only, fails open,
+    /// `Shadow` never mutates `req`.
+    pub(crate) fn apply_optimizer_to_anthropic(
+        &self,
+        req: &mut anthropic::MessageCreateRequest,
+        route: &str,
+    ) {
+        let Some(engine) = self.effective_optimizer() else {
+            return;
+        };
+        let mut v = match serde_json::to_value(&*req) {
+            Ok(v) => v,
+            Err(_) => return,
+        };
+        let report = engine.optimize_anthropic(&mut v, route);
+        if report.mode == anyllm_optimize_core::Mode::Shadow {
+            tracing::info!(
+                route,
+                removed_tokens_est = report.removed_tokens_est,
+                messages_compressed = report.messages_compressed,
+                failure = report.failure.as_deref().unwrap_or(""),
+                "optimizer: shadow report (not applied)"
+            );
+        }
+        if !report.applied {
+            return;
+        }
+        match serde_json::from_value::<anthropic::MessageCreateRequest>(v) {
+            Ok(patched) => {
+                *req = patched;
+                self.metrics.record_optimization(
+                    report.messages_compressed as u64,
+                    report.removed_tokens_est,
+                );
+                tracing::info!(
+                    route,
+                    removed_tokens_est = report.removed_tokens_est,
+                    messages_compressed = report.messages_compressed,
+                    "optimizer: compressed Anthropic request"
+                );
+            }
+            Err(e) => tracing::warn!(
+                error = %e,
+                "optimizer: failed to re-deserialize compressed Anthropic request; forwarding original"
+            ),
+        }
+    }
+}
+
+#[cfg(test)]
+mod optimizer_seam_tests {
+    use super::*;
+    use crate::config::{
+        BackendAuth, BackendKind, Config, ModelMapping, OpenAIApiFormat, TlsConfig,
+    };
+    use anyllm_optimize_core::Mode;
+
+    /// Long enough that FFEC's min-length gate actually has something to compress.
+    fn long_text() -> String {
+        "The quick brown fox jumps over the lazy dog again and again across the wide \
+         green field toward the distant blue mountains far beyond the winding river."
+            .repeat(4)
+    }
+
+    fn minimal_state(optimizer_mode: Mode) -> AppState {
+        let config = Config {
+            backend: BackendKind::OpenAI,
+            openai_api_key: "test".into(),
+            openai_base_url: "https://api.openai.com".into(),
+            listen_port: 3000,
+            model_mapping: ModelMapping {
+                big_model: "gpt-4o".into(),
+                small_model: "gpt-4o-mini".into(),
+            },
+            tls: TlsConfig::default(),
+            backend_auth: BackendAuth::BearerToken("test".into()),
+            log_bodies: false,
+            redact_secrets: false,
+            anthropic_thinking_repair: false,
+            pxpipe_compress: false,
+            expose_degradation_warnings: false,
+            openai_api_format: OpenAIApiFormat::Chat,
+            provider_id: None,
+        };
+        let backend = crate::backend::BackendClient::OpenAI(
+            crate::backend::openai_client::OpenAIClient::new(&config),
+        );
+        let runtime_config = Arc::new(RwLock::new(RuntimeConfig {
+            model_mappings: indexmap::IndexMap::new(),
+            log_level: "info".to_string(),
+            log_bodies: false,
+            redact_secrets: false,
+            anthropic_thinking_repair: false,
+            pxpipe_compress: false,
+            pxpipe_models: String::new(),
+            rtk_compress: false,
+            rtk_models: String::new(),
+            forward_client_auth: false,
+            tool_guardrail_mode: "disabled".to_string(),
+            optimizer_mode: optimizer_mode.as_str().to_string(),
+        }));
+        AppState {
+            backend,
+            metrics: Metrics::new(),
+            runtime_config,
+            shared: None,
+            route_options: None,
+            backend_name: "openai".to_string(),
+            provider_id: None,
+            concurrency: Arc::new(Semaphore::new(64)),
+            omit_stream_options: false,
+            stream_timeout_secs: 0,
+            expose_degradation_warnings: false,
+            cache: None,
+            thinking_repair: None,
+            pxpipe: None,
+            rtk: None,
+            optimizer: Some(Arc::new(crate::optimizer::OptimizerEngine::new(
+                optimizer_mode,
+            ))),
+            model_router: None,
+            provider_catalog: Arc::new(ProviderCatalog::bundled()),
+            all_backends: None,
+            tool_engine: None,
+            batch_engine: None,
+        }
+    }
+
+    fn long_openai_request() -> openai::ChatCompletionRequest {
+        let long = long_text();
+        let mut body = serde_json::json!({
+            "model": "gpt-4o",
+            "messages": [{"role": "system", "content": "you are helpful"}],
+        });
+        let msgs = body["messages"].as_array_mut().unwrap();
+        for _ in 0..16 {
+            msgs.push(serde_json::json!({"role": "user", "content": long}));
+            msgs.push(serde_json::json!({"role": "assistant", "content": long}));
+        }
+        msgs.push(serde_json::json!({"role": "user", "content": "what is the latest?"}));
+        serde_json::from_value(body).expect("valid ChatCompletionRequest")
+    }
+
+    fn long_anthropic_request() -> anthropic::MessageCreateRequest {
+        let long = long_text();
+        let mut body = serde_json::json!({
+            "model": "claude-sonnet-5",
+            "max_tokens": 1024,
+            "messages": [],
+        });
+        let msgs = body["messages"].as_array_mut().unwrap();
+        for _ in 0..16 {
+            msgs.push(serde_json::json!({"role": "user", "content": long}));
+            msgs.push(serde_json::json!({"role": "assistant", "content": long}));
+        }
+        msgs.push(serde_json::json!({"role": "user", "content": "what is the latest?"}));
+        serde_json::from_value(body).expect("valid MessageCreateRequest")
+    }
+
+    #[test]
+    fn shadow_mode_forwards_openai_body_unchanged() {
+        let state = minimal_state(Mode::Shadow);
+        let mut req = long_openai_request();
+        let before = serde_json::to_value(&req).unwrap();
+        state.apply_optimizer_to_openai(&mut req, "chat_completions");
+        let after = serde_json::to_value(&req).unwrap();
+        assert_eq!(before, after, "shadow mode must forward the original body");
+        assert_eq!(
+            state.metrics.snapshot().optimizer_compressed_total,
+            0,
+            "shadow mode must never record a metrics-visible compression"
+        );
+    }
+
+    #[test]
+    fn shadow_mode_forwards_anthropic_body_unchanged() {
+        let state = minimal_state(Mode::Shadow);
+        let mut req = long_anthropic_request();
+        let before = serde_json::to_value(&req).unwrap();
+        state.apply_optimizer_to_anthropic(&mut req, "messages");
+        let after = serde_json::to_value(&req).unwrap();
+        assert_eq!(before, after, "shadow mode must forward the original body");
+    }
+
+    #[test]
+    fn live_mode_compresses_openai_history_and_preserves_latest() {
+        let state = minimal_state(Mode::Live);
+        let mut req = long_openai_request();
+        let before = serde_json::to_value(&req).unwrap();
+        state.apply_optimizer_to_openai(&mut req, "chat_completions");
+        let after = serde_json::to_value(&req).unwrap();
+        assert_eq!(
+            before["messages"].as_array().unwrap().last(),
+            after["messages"].as_array().unwrap().last(),
+            "the latest turn must never be rewritten"
+        );
+        assert_eq!(
+            state.metrics.snapshot().optimizer_compressed_total,
+            1,
+            "an applied Live compression must be recorded in metrics"
+        );
+    }
+
+    #[test]
+    fn live_mode_compresses_anthropic_history_and_preserves_latest() {
+        let state = minimal_state(Mode::Live);
+        let mut req = long_anthropic_request();
+        let before = serde_json::to_value(&req).unwrap();
+        state.apply_optimizer_to_anthropic(&mut req, "messages");
+        let after = serde_json::to_value(&req).unwrap();
+        assert_eq!(
+            before["messages"].as_array().unwrap().last(),
+            after["messages"].as_array().unwrap().last(),
+            "the latest turn must never be rewritten"
+        );
+    }
+
+    #[test]
+    fn off_mode_is_noop_and_engine_absent_is_noop() {
+        // Off mode: engine present, mode Off -> never applied.
+        let state = minimal_state(Mode::Off);
+        let mut req = long_openai_request();
+        let before = serde_json::to_value(&req).unwrap();
+        state.apply_optimizer_to_openai(&mut req, "chat_completions");
+        assert_eq!(before, serde_json::to_value(&req).unwrap());
+
+        // No engine at all (e.g. non-Anthropic/Translate mode backend): no panic, no-op.
+        let mut state_no_engine = minimal_state(Mode::Live);
+        state_no_engine.optimizer = None;
+        let mut req2 = long_openai_request();
+        let before2 = serde_json::to_value(&req2).unwrap();
+        state_no_engine.apply_optimizer_to_openai(&mut req2, "chat_completions");
+        assert_eq!(before2, serde_json::to_value(&req2).unwrap());
+    }
+
+    #[test]
+    fn short_history_below_min_len_gate_is_a_noop_not_a_panic() {
+        // A short request has nothing worth compressing (below FFEC's min-length
+        // gate) -- the seam must still round-trip cleanly without panicking or
+        // corrupting the body, i.e. it fails open when there's nothing to do.
+        let state = minimal_state(Mode::Live);
+        let mut req: openai::ChatCompletionRequest = serde_json::from_value(serde_json::json!({
+            "model": "gpt-4o",
+            "messages": [{"role": "user", "content": "hi"}],
+        }))
+        .unwrap();
+        let before = serde_json::to_value(&req).unwrap();
+        state.apply_optimizer_to_openai(&mut req, "chat_completions");
+        assert_eq!(before, serde_json::to_value(&req).unwrap());
+    }
+}
+
+#[cfg(test)]
+mod rtk_seam_tests {
+    use super::*;
+
+    /// Build a minimal `AppState` with the RTK engine present and the runtime
+    /// `rtk_compress` toggle set to `enabled` (scope left empty = all models).
+    fn state_with_rtk(enabled: bool) -> AppState {
+        use crate::config::{
+            BackendAuth, BackendKind, Config, ModelMapping, OpenAIApiFormat, TlsConfig,
+        };
+        let config = Config {
+            backend: BackendKind::OpenAI,
+            openai_api_key: "test".into(),
+            openai_base_url: "https://api.openai.com".into(),
+            listen_port: 3000,
+            model_mapping: ModelMapping {
+                big_model: "gpt-4o".into(),
+                small_model: "gpt-4o-mini".into(),
+            },
+            tls: TlsConfig::default(),
+            backend_auth: BackendAuth::BearerToken("test".into()),
+            log_bodies: false,
+            redact_secrets: false,
+            anthropic_thinking_repair: false,
+            pxpipe_compress: false,
+            expose_degradation_warnings: false,
+            openai_api_format: OpenAIApiFormat::Chat,
+            provider_id: None,
+        };
+        let backend = crate::backend::BackendClient::OpenAI(
+            crate::backend::openai_client::OpenAIClient::new(&config),
+        );
+        let runtime_config = Arc::new(RwLock::new(RuntimeConfig {
+            model_mappings: indexmap::IndexMap::new(),
+            log_level: "info".to_string(),
+            log_bodies: false,
+            redact_secrets: false,
+            anthropic_thinking_repair: false,
+            pxpipe_compress: false,
+            pxpipe_models: String::new(),
+            rtk_compress: enabled,
+            rtk_models: String::new(),
+            forward_client_auth: false,
+            tool_guardrail_mode: "disabled".to_string(),
+            optimizer_mode: "off".to_string(),
+        }));
+        AppState {
+            backend,
+            metrics: Metrics::new(),
+            runtime_config,
+            shared: None,
+            route_options: None,
+            backend_name: "openai".to_string(),
+            provider_id: None,
+            concurrency: Arc::new(Semaphore::new(64)),
+            omit_stream_options: false,
+            stream_timeout_secs: 0,
+            expose_degradation_warnings: false,
+            cache: None,
+            thinking_repair: None,
+            pxpipe: None,
+            rtk: Some(Arc::new(crate::rtk::RtkEngine::new())),
+            optimizer: None,
+            model_router: None,
+            provider_catalog: Arc::new(ProviderCatalog::bundled()),
+            all_backends: None,
+            tool_engine: None,
+            batch_engine: None,
+        }
+    }
+
+    /// An OpenAI request whose `role: tool` message carries compressible git noise.
+    fn request_with_noisy_tool_output() -> openai::ChatCompletionRequest {
+        let mut noise = String::from("On branch main\nChanges not staged for commit:\n");
+        for i in 0..200 {
+            noise.push_str(&format!("  (use \"git add ...\" file {i})\n"));
+        }
+        serde_json::from_value(serde_json::json!({
+            "model": "gpt-4o",
+            "messages": [
+                {"role": "user", "content": "run git status"},
+                {"role": "assistant", "content": null, "tool_calls": [
+                    {"id": "t1", "type": "function",
+                     "function": {"name": "bash", "arguments": "{\"cmd\":\"git status\"}"}}
+                ]},
+                {"role": "tool", "tool_call_id": "t1", "content": noise},
+            ],
+        }))
+        .expect("valid ChatCompletionRequest")
+    }
+
+    #[test]
+    fn enabled_compresses_tool_output_and_records_metrics() {
+        let state = state_with_rtk(true);
+        let mut req = request_with_noisy_tool_output();
+        let before = serde_json::to_value(&req).unwrap();
+        state.apply_rtk_to_openai(&mut req, "gpt-4o");
+        let after = serde_json::to_value(&req).unwrap();
+        assert_ne!(before, after, "tool output should have been compressed");
+        assert_eq!(state.metrics.snapshot().rtk_compressed_total, 1);
+    }
+
+    #[test]
+    fn disabled_is_a_noop() {
+        let state = state_with_rtk(false);
+        let mut req = request_with_noisy_tool_output();
+        let before = serde_json::to_value(&req).unwrap();
+        state.apply_rtk_to_openai(&mut req, "gpt-4o");
+        assert_eq!(before, serde_json::to_value(&req).unwrap());
+        assert_eq!(state.metrics.snapshot().rtk_compressed_total, 0);
+    }
+
+    #[test]
+    fn engine_absent_is_a_noop() {
+        let mut state = state_with_rtk(true);
+        state.rtk = None;
+        let mut req = request_with_noisy_tool_output();
+        let before = serde_json::to_value(&req).unwrap();
+        state.apply_rtk_to_openai(&mut req, "gpt-4o");
+        assert_eq!(before, serde_json::to_value(&req).unwrap());
+        assert_eq!(state.metrics.snapshot().rtk_compressed_total, 0);
     }
 }
 

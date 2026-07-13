@@ -184,10 +184,13 @@ fn record_cost_with_shared_state_persists_spend() {
             anthropic_thinking_repair: false,
             pxpipe_compress: false,
             pxpipe_models: String::new(),
+            rtk_compress: false,
+            rtk_models: String::new(),
             forward_client_auth: false,
             tool_guardrail_mode: crate::tools::ToolGuardrailMode::Disabled
                 .as_str()
                 .to_string(),
+            optimizer_mode: anyllm_optimize_core::Mode::Off.as_str().to_string(),
         })),
         runtime_defaults: crate::admin::state::RuntimeConfigDefaults {
             log_bodies: false,
@@ -195,10 +198,13 @@ fn record_cost_with_shared_state_persists_spend() {
             anthropic_thinking_repair: false,
             pxpipe_compress: false,
             pxpipe_models: String::new(),
+            rtk_compress: false,
+            rtk_models: String::new(),
             forward_client_auth: false,
             tool_guardrail_mode: crate::tools::ToolGuardrailMode::Disabled
                 .as_str()
                 .to_string(),
+            optimizer_mode: anyllm_optimize_core::Mode::Off.as_str().to_string(),
         },
         backend_metrics: Arc::new(std::collections::HashMap::new()),
         log_tx,

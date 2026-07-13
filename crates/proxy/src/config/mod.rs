@@ -1,14 +1,28 @@
+//! Configuration loading, parsing, and management for the proxy server.
+//!
+//! Supports single-backend (legacy) configurations, LiteLLM config syntax,
+//! environment variables mapping, and multi-backend routing setups.
+
+/// Environment variable aliases for LiteLLM/OpenAI/Anthropic keys.
 pub mod env_aliases;
+/// LiteLLM-compatible YAML configuration format parser.
 pub mod litellm;
+/// Dynamic routing rules mapping request model names to backends.
 pub mod model_router;
+/// DB-backed API route dispatcher.
 pub mod route_router;
+/// Simple YAML/TOML configuration parser.
 pub mod simple;
 mod tls;
 mod url_validation;
 
+/// Helper functions for resolving environment configurations.
 pub mod helpers;
+/// Configuration representation for multi-backend routing.
 pub mod multi;
+/// Configuration representation for a single static backend.
 pub mod single;
+/// Common backend configuration type definitions.
 pub mod types;
 
 pub use tls::TlsConfig;

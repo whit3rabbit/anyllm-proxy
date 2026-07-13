@@ -20,6 +20,10 @@ import Providers from './tabs/providers/Providers'
 import Backends from './tabs/backends/Backends'
 import RoutesTab from './tabs/routes/Routes'
 
+/**
+ * Root Application component. Sets up routing, global queries,
+ * WebSocket connections for real-time logs, and renders the layout.
+ */
 export default function App() {
   const token = useAuthStore((s) => s.token)
   const lastEvent = useWsStore((s) => s.lastEvent)

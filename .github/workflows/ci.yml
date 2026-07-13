@@ -60,6 +60,15 @@ jobs:
         run: cargo build
       - name: Test
         run: cargo test
+      # Optimizer ONNX scorer (opt-in feature). Compile + lint + model-free lib tests so
+      # the feature-gated code cannot rot. NOT `cargo test` on the whole workspace: the
+      # parity integration test (optimize-scorer/tests/parity.rs) is intentionally not
+      # #[ignore] and panics without the ~170MB model artifact, so only the lib unit tests
+      # (which need no artifact) run here. `ort` downloads an onnxruntime binary at build.
+      - name: Clippy (optimizer-onnx)
+        run: cargo clippy -p anyllm_proxy --features optimizer-onnx -- -D warnings
+      - name: Test optimizer-onnx (lib only, no model artifact)
+        run: cargo test -p anyllm_optimize_scorer --features onnx --lib
       - name: Security audit
         run: |
           cargo install cargo-audit --locked --quiet

@@ -105,7 +105,7 @@ pub(crate) async fn chat_completions(
         }
     }
 
-    let body =
+    let mut body =
         match super::super::secret_redaction::redact_json_value(effective.redact_secrets(), body)
             .await
         {
@@ -114,6 +114,10 @@ pub(crate) async fn chat_completions(
                 return openai_error_response(err.safe_message(), "api_error", err.status_code());
             }
         };
+
+    // FFEC prompt compression: client-sent history only, before any tool-loop
+    // turns are appended. Fails open (off/unconfigured/parse-error all no-op).
+    effective.apply_optimizer_to_openai(&mut body, "chat_completions");
 
     let is_streaming = body.stream == Some(true);
     let mut safe_headers = safe_anthropic_extra_headers(&headers);
@@ -280,6 +284,10 @@ pub(crate) async fn chat_completions(
                 openai_req.stream_options = None;
             }
             openai_req.model = mapped_model.clone();
+
+            // Opt-in RTK tool-output compression (OpenAI-in translate path).
+            effective.apply_rtk_to_openai(&mut openai_req, &mapped_model);
+
             if let Err(err) = prepare_openai_tool_request(
                 &mut openai_req,
                 OpenAiToolPolicyContext {

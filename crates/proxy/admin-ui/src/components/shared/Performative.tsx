@@ -30,14 +30,21 @@ const BUTTON_SIZE: Record<ButtonSizeName, ButtonSize> = {
   md: 'md',
 }
 
+/** Props for the AdminButton component. */
 export interface AdminButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  /** The button style tone (primary, secondary, danger, icon). */
   tone?: ButtonTone
+  /** The size of the button (sm, md). */
   size?: ButtonSizeName
+  /** Whether the button should show a loading spinner. */
   loading?: boolean
+  /** Whether the button should stretch to fill the width of its container. */
   block?: boolean
+  /** Inner content. */
   children: ReactNode
 }
 
+/** Wrapper component around performative-ui's Button, providing theme colors and states. */
 export function AdminButton({
   tone = 'secondary',
   size = 'md',
@@ -72,11 +79,15 @@ const DOT_COLOR: Record<DotStatus, string> = {
   dim: 'var(--text-3)',
 }
 
+/** Props for the AdminStatusDot component. */
 interface AdminStatusDotProps {
+  /** Status indicator state ('ok', 'warn', 'err', 'dim'). */
   status: DotStatus
+  /** Whether the status dot should pulse/animate. */
   pulse?: boolean
 }
 
+/** Renders a styled status indicator dot using performative-ui. */
 export function AdminStatusDot({ status, pulse }: AdminStatusDotProps) {
   return (
     <PuiStatusDot
@@ -87,11 +98,15 @@ export function AdminStatusDot({ status, pulse }: AdminStatusDotProps) {
   )
 }
 
+/** Props for the AdminSurface container component. */
 interface AdminSurfaceProps extends ComponentPropsWithoutRef<'article'> {
+  /** Enables a subtle breathing opacity animation. */
   breathing?: boolean
+  /** Enables a hover glow styling effect. */
   glowOnHover?: boolean
 }
 
+/** A container surface card with optional glow and breathing animations. */
 export function AdminSurface({
   children,
   className,
@@ -111,12 +126,17 @@ export function AdminSurface({
   )
 }
 
+/** Props for the AdminLoading indicator component. */
 interface AdminLoadingProps {
+  /** Primary loading message/verb to display. */
   label?: string
+  /** Optional secondary info nodes or helper text. */
   info?: ReactNode
+  /** Additional styling class names. */
   className?: string
 }
 
+/** A styled loading spinner component displaying animated messages. */
 export function AdminLoading({ label = 'Loading', info, className }: AdminLoadingProps) {
   return (
     <WibblingSpinner
@@ -131,14 +151,21 @@ export function AdminLoading({ label = 'Loading', info, className }: AdminLoadin
   )
 }
 
+/** Props for the AnimatedMetric counter component. */
 interface AnimatedMetricProps {
+  /** Target numeric value to count up/down to. */
   value: number
+  /** Number of decimal places to round to. */
   precision?: number
+  /** Duration of the counting animation in milliseconds. */
   durationMs?: number
+  /** Additional styling class names. */
   className?: string
+  /** Custom formatter function for the displayed value. */
   format?: (value: number) => string
 }
 
+/** Renders a numeric value with a smooth count-up animation on value change. */
 export function AnimatedMetric({
   value,
   precision = 0,

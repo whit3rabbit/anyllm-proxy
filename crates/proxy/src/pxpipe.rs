@@ -34,12 +34,7 @@ const DEFAULT_MODELS: &[&str] = &["claude-fable-5"];
 /// Seeds `RuntimeConfig.pxpipe_models`; the admin UI edits the runtime value.
 pub fn resolve_default_models_csv() -> String {
     match std::env::var("PXPIPE_MODELS") {
-        Ok(csv) if !csv.trim().is_empty() => csv
-            .split(',')
-            .map(|s| s.trim())
-            .filter(|s| !s.is_empty())
-            .collect::<Vec<_>>()
-            .join(","),
+        Ok(csv) if !csv.trim().is_empty() => crate::config::helpers::normalize_csv(&csv),
         _ => DEFAULT_MODELS.join(","),
     }
 }
@@ -219,12 +214,7 @@ mod tests {
     // process env (which would race other tests per the crate ENV_TEST_LOCK rule).
     fn resolve_default_models_csv_from(env: Option<&str>) -> String {
         match env {
-            Some(csv) if !csv.trim().is_empty() => csv
-                .split(',')
-                .map(|s| s.trim())
-                .filter(|s| !s.is_empty())
-                .collect::<Vec<_>>()
-                .join(","),
+            Some(csv) if !csv.trim().is_empty() => crate::config::helpers::normalize_csv(csv),
             _ => DEFAULT_MODELS.join(","),
         }
     }

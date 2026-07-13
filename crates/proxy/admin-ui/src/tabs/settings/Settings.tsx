@@ -2,6 +2,7 @@ import { Fragment, useRef, useState } from 'react'
 import {
   useConfig, useSaveConfig, useDeleteConfigOverride, useEnv,
   useImportEnv, downloadEnvExport, useStatus,
+  useOptimizerModel, useDownloadOptimizerModel,
 } from '../../api/queries'
 import EmptyState from '../../components/shared/EmptyState'
 import ConfirmDialog from '../../components/shared/ConfirmDialog'
@@ -14,8 +15,19 @@ function restartPending() {
   return sessionStorage.getItem(RESTART_KEY) === '1'
 }
 
+function fmtMB(bytes: number): string {
+  return `${Math.round(bytes / 1_000_000)} MB`
+}
+
+/**
+ * Settings Component.
+ * Provides controls for configuring system settings, environment variables export/import,
+ * and proxy properties.
+ */
 export default function Settings({ configured = true }: { configured?: boolean }) {
   const { data: cfg, isLoading, error } = useConfig()
+  const { data: model } = useOptimizerModel()
+  const downloadModel = useDownloadOptimizerModel()
   const { data: envData } = useEnv()
   const { data: status } = useStatus()
   const save = useSaveConfig()
@@ -30,16 +42,19 @@ export default function Settings({ configured = true }: { configured?: boolean }
   const [showRestartBanner, setShowRestartBanner] = useState(restartPending)
   const [pendingReset, setPendingReset] = useState<string | null>(null)
 
+  /** Resets a config override key back to its default value. */
   function doReset() {
     if (!pendingReset) return Promise.resolve()
     const key = pendingReset
     return del.mutateAsync(key).then(() => undefined)
   }
 
+  /** Saves a text configuration setting value. */
   function handleSave(key: string, currentValue: string) {
     save.mutate({ [key]: form[key] ?? currentValue })
   }
 
+  /** Saves a boolean configuration setting value. */
   function handleBooleanSave(key: string, value: boolean) {
     save.mutate({ [key]: value })
   }
@@ -101,6 +116,7 @@ export default function Settings({ configured = true }: { configured?: boolean }
     }
   }
 
+  /** Dismisses the restart banner reminding the operator that imports require a restart. */
   function dismissRestartBanner() {
     sessionStorage.removeItem(RESTART_KEY)
     setShowRestartBanner(false)
@@ -371,6 +387,56 @@ PROXY_API_KEYS=my-key`}
           </div>
 
           <div className="form-group">
+            <label className="form-label" htmlFor="cfg-rtk-compress" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input
+                id="cfg-rtk-compress"
+                type="checkbox"
+                checked={cfg.rtk_compress}
+                disabled={save.isPending}
+                onChange={(e) => handleBooleanSave('rtk_compress', e.target.checked)}
+              />
+              Tool-output compression (RTK)
+            </label>
+            <div className="dim" style={{ fontSize: 12 }}>
+              Command-aware filtering of tool-result text (test/build/git/log output) using the RTK
+              filter catalog. Shrinks noisy machine output before it reaches the backend; deterministic
+              and cache-safe. Off by default. Applies to Anthropic passthrough and translate paths.
+            </div>
+            {cfg.overridden_keys.includes('rtk_compress') && (
+              <div className="form-row">
+                <AdminButton size="sm" onClick={() => setPendingReset('rtk_compress')}>
+                  Reset
+                </AdminButton>
+              </div>
+            )}
+            {cfg.rtk_compress && (
+              <div style={{ marginTop: 8 }}>
+                <div className="form-label" style={{ fontSize: 13 }}>Models in scope (CSV, empty = all)</div>
+                <input
+                  type="text"
+                  className="form-input"
+                  key={cfg.rtk_models}
+                  defaultValue={cfg.rtk_models}
+                  placeholder="empty = all models; e.g. claude, gpt-5"
+                  disabled={save.isPending}
+                  onBlur={(e) => {
+                    const v = e.target.value.trim()
+                    if (v === (cfg.rtk_models ?? '')) return
+                    save.mutate({ rtk_models: v })
+                  }}
+                />
+                {cfg.overridden_keys.includes('rtk_models') && (
+                  <div className="form-row" style={{ marginTop: 6 }}>
+                    <AdminButton size="sm" onClick={() => setPendingReset('rtk_models')}>
+                      Reset scope
+                    </AdminButton>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="form-group">
             <label className="form-label" htmlFor="cfg-forward-client-auth" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <input
                 id="cfg-forward-client-auth"
@@ -419,7 +485,68 @@ PROXY_API_KEYS=my-key`}
             </div>
           </div>
 
-          {cfg.entries.filter((entry) => !['redact_secrets', 'log_bodies', 'anthropic_thinking_repair', 'pxpipe_compress', 'pxpipe_models', 'forward_client_auth', 'tool_guardrail_mode'].includes(entry.key)).map((entry) => {
+          <div className="form-group">
+            <label className="form-label" htmlFor="cfg-optimizer-mode">Prompt compression (optimizer)</label>
+            <div className="form-row">
+              <select
+                id="cfg-optimizer-mode"
+                value={cfg.optimizer_mode}
+                // Gate enabling on the ONNX model when the tier is compiled in but the
+                // model isn't downloaded yet (point 2: "not toggle if not detected").
+                disabled={save.isPending || (!!model?.compiled_in && !model?.present)}
+                onChange={(e) => save.mutate({ optimizer_mode: e.target.value })}
+              >
+                <option value="off">Off</option>
+                <option value="shadow">Shadow (report only)</option>
+                <option value="live">Live (compress)</option>
+              </select>
+              {cfg.overridden_keys.includes('optimizer_mode') && (
+                <AdminButton size="sm" onClick={() => setPendingReset('optimizer_mode')}>
+                  Reset
+                </AdminButton>
+              )}
+            </div>
+            <div className="dim" style={{ fontSize: 12 }}>
+              Frozen-Frontier compression of long conversation history (latest turn untouched). Off by default.
+            </div>
+
+            {model && !model.compiled_in && (
+              <div className="dim" style={{ fontSize: 12, marginTop: 8 }}>
+                Heuristic scorer only. Rebuild the proxy with <code>--features optimizer-onnx</code> to enable the LLMLingua-2 ONNX scorer.
+              </div>
+            )}
+            {model?.compiled_in && !model.present && !model.downloading && (
+              <div className="form-row" style={{ marginTop: 8 }}>
+                <AdminButton
+                  size="sm"
+                  disabled={downloadModel.isPending}
+                  onClick={() => downloadModel.mutate()}
+                >
+                  Download model ({fmtMB(model.size_bytes)})
+                </AdminButton>
+                <span className="dim" style={{ fontSize: 12 }}>
+                  Required before enabling. Verified against a pinned sha256.
+                </span>
+              </div>
+            )}
+            {model?.downloading && (
+              <div className="dim" style={{ fontSize: 12, marginTop: 8 }}>
+                Downloading and verifying model ({fmtMB(model.size_bytes)})…
+              </div>
+            )}
+            {model?.error && !model.downloading && (
+              <div style={{ fontSize: 12, marginTop: 8, color: 'var(--danger, #c0392b)' }}>
+                Download failed: {model.error}
+              </div>
+            )}
+            {model?.compiled_in && model.present && (
+              <div className="dim" style={{ fontSize: 12, marginTop: 8 }}>
+                ONNX scorer ready — live mode uses LLMLingua-2 (loaded on the next request).
+              </div>
+            )}
+          </div>
+
+          {cfg.entries.filter((entry) => !['redact_secrets', 'log_bodies', 'anthropic_thinking_repair', 'pxpipe_compress', 'pxpipe_models', 'rtk_compress', 'rtk_models', 'forward_client_auth', 'tool_guardrail_mode', 'optimizer_mode'].includes(entry.key)).map((entry) => {
             const inputId = `cfg-${entry.key}`
             return (
               <div className="form-group" key={entry.key}>

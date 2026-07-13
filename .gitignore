@@ -59,3 +59,12 @@ crates/proxy/admin-ui/node_modules/
 .eatahorse*/
 # Security scanner (gate/3gate) scratch artifacts
 .gate/
+
+# optimizer: exported/downloaded ONNX model artifacts (hash-pinned, fetched via the
+# `optimize-model` CLI, never committed — see crates/optimizer/scripts/export_llmlingua2.py
+# and crates/optimizer/optimize-cli/src/model_fetch.rs). onnxruntime binaries live under
+# target/ (already ignored) via ort's download-binaries feature.
+crates/optimizer/artifacts/
+*.onnx
+__pycache__/
+*.pyc

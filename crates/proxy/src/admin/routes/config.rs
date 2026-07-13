@@ -87,8 +87,11 @@ pub(super) async fn get_config(State(shared): State<SharedState>) -> Json<serde_
         anthropic_thinking_repair,
         pxpipe_compress,
         pxpipe_models,
+        rtk_compress,
+        rtk_models,
         forward_client_auth,
         tool_guardrail_mode,
+        optimizer_mode,
         backends,
     ) = {
         let config = shared
@@ -112,8 +115,11 @@ pub(super) async fn get_config(State(shared): State<SharedState>) -> Json<serde_
             config.anthropic_thinking_repair,
             config.pxpipe_compress,
             config.pxpipe_models.clone(),
+            config.rtk_compress,
+            config.rtk_models.clone(),
             config.forward_client_auth,
             config.tool_guardrail_mode.clone(),
+            config.optimizer_mode.clone(),
             backends,
         )
     };
@@ -140,8 +146,11 @@ pub(super) async fn get_config(State(shared): State<SharedState>) -> Json<serde_
         // Vision-capable Claude models (+ current out-of-list scope entries) the
         // UI offers as per-model scope toggles.
         "pxpipe_available_models": pxpipe_available_models,
+        "rtk_compress": rtk_compress,
+        "rtk_models": rtk_models,
         "forward_client_auth": forward_client_auth,
         "tool_guardrail_mode": tool_guardrail_mode,
+        "optimizer_mode": optimizer_mode,
         "backends": backends,
         "overridden_keys": override_keys,
     }))
@@ -214,14 +223,16 @@ pub(super) async fn put_config(
         db_writes.push(("pxpipe_compress".to_string(), val.to_string()));
     }
     if let Some(val) = body.get("pxpipe_models").and_then(|v| v.as_str()) {
-        // Normalize the CSV (trim entries, drop empties); scope match is substring.
-        let normalized = val
-            .split(',')
-            .map(|s| s.trim())
-            .filter(|s| !s.is_empty())
-            .collect::<Vec<_>>()
-            .join(",");
+        let normalized = crate::config::helpers::normalize_csv(val);
         db_writes.push(("pxpipe_models".to_string(), normalized));
+    }
+    if let Some(val) = body.get("rtk_compress").and_then(|v| v.as_bool()) {
+        db_writes.push(("rtk_compress".to_string(), val.to_string()));
+    }
+    if let Some(val) = body.get("rtk_models").and_then(|v| v.as_str()) {
+        // Normalize the CSV (trim entries, drop empties); empty = all models.
+        let normalized = crate::config::helpers::normalize_csv(val);
+        db_writes.push(("rtk_models".to_string(), normalized));
     }
     if let Some(val) = body.get("forward_client_auth").and_then(|v| v.as_bool()) {
         // Same rule enforced at startup (main_helpers::async_main) for
@@ -259,6 +270,18 @@ pub(super) async fn put_config(
             Ok(mode) => {
                 db_writes.push(("tool_guardrail_mode".to_string(), mode.as_str().to_string()))
             }
+            Err(message) => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(serde_json::json!({ "error": message })),
+                )
+                    .into_response();
+            }
+        }
+    }
+    if let Some(val) = body.get("optimizer_mode").and_then(|v| v.as_str()) {
+        match val.parse::<anyllm_optimize_core::Mode>() {
+            Ok(mode) => db_writes.push(("optimizer_mode".to_string(), mode.as_str().to_string())),
             Err(message) => {
                 return (
                     StatusCode::BAD_REQUEST,
@@ -338,8 +361,11 @@ pub(super) async fn put_config(
                 "anthropic_thinking_repair" => config.anthropic_thinking_repair.to_string(),
                 "pxpipe_compress" => config.pxpipe_compress.to_string(),
                 "pxpipe_models" => config.pxpipe_models.clone(),
+                "rtk_compress" => config.rtk_compress.to_string(),
+                "rtk_models" => config.rtk_models.clone(),
                 "forward_client_auth" => config.forward_client_auth.to_string(),
                 "tool_guardrail_mode" => config.tool_guardrail_mode.clone(),
+                "optimizer_mode" => config.optimizer_mode.clone(),
                 other => {
                     if let Some((backend, field)) = other.split_once('.') {
                         config
@@ -389,11 +415,20 @@ pub(super) async fn put_config(
                 "pxpipe_models" => {
                     config.pxpipe_models = value.clone();
                 }
+                "rtk_compress" => {
+                    config.rtk_compress = value == "true";
+                }
+                "rtk_models" => {
+                    config.rtk_models = value.clone();
+                }
                 "forward_client_auth" => {
                     config.forward_client_auth = value == "true";
                 }
                 "tool_guardrail_mode" => {
                     config.tool_guardrail_mode = value.clone();
+                }
+                "optimizer_mode" => {
+                    config.optimizer_mode = value.clone();
                 }
                 _ => {
                     if let Some((backend, field)) = key.split_once('.') {
@@ -512,6 +547,20 @@ pub(super) async fn delete_config_override(
                     }
                     Some(env_default.to_string())
                 }
+                "rtk_compress" => {
+                    let env_default = shared.runtime_defaults.rtk_compress;
+                    if let Ok(mut config) = shared.runtime_config.write() {
+                        config.rtk_compress = env_default;
+                    }
+                    Some(env_default.to_string())
+                }
+                "rtk_models" => {
+                    let env_default = shared.runtime_defaults.rtk_models.clone();
+                    if let Ok(mut config) = shared.runtime_config.write() {
+                        config.rtk_models = env_default.clone();
+                    }
+                    Some(env_default)
+                }
                 "pxpipe_models" => {
                     let env_default = shared.runtime_defaults.pxpipe_models.clone();
                     if let Ok(mut config) = shared.runtime_config.write() {
@@ -530,6 +579,13 @@ pub(super) async fn delete_config_override(
                     let env_default = shared.runtime_defaults.tool_guardrail_mode.clone();
                     if let Ok(mut config) = shared.runtime_config.write() {
                         config.tool_guardrail_mode = env_default.clone();
+                    }
+                    Some(env_default)
+                }
+                "optimizer_mode" => {
+                    let env_default = shared.runtime_defaults.optimizer_mode.clone();
+                    if let Ok(mut config) = shared.runtime_config.write() {
+                        config.optimizer_mode = env_default.clone();
                     }
                     Some(env_default)
                 }

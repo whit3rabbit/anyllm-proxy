@@ -1,27 +1,43 @@
+/** Supported HTTP request methods for database mutations. */
 export type MutationMethod = 'POST' | 'PUT' | 'DELETE' | 'PATCH'
 
-interface CsrfResponseLike {
+/** Minimal interface representing an HTTP response compatible with CSRF handlers. */
+export interface CsrfResponseLike {
+  /** True if response was successful (status 2xx). */
   ok: boolean
+  /** HTTP response status code. */
   status: number
+  /** Response headers interface. */
   headers: {
     get(name: string): string | null
   }
+  /** Parses response body as JSON. */
   json(): Promise<unknown>
 }
 
-type FetchLike<TResponse extends CsrfResponseLike> = (
+/** Function type mimicking the browser fetch API. */
+export type FetchLike<TResponse extends CsrfResponseLike> = (
   input: string,
   init?: RequestInit,
 ) => Promise<TResponse>
 
-interface CsrfMutationDeps<TResponse extends CsrfResponseLike> {
+/** Dependencies required to execute a CSRF mutation. */
+export interface CsrfMutationDeps<TResponse extends CsrfResponseLike> {
+  /** Fetch implementation to use. */
   fetchImpl: FetchLike<TResponse>
+  /** Function retrieving the current authentication token. */
   getToken: () => string
+  /** Error/auth response handler. */
   handleAuthAndErrors: (res: TResponse) => Promise<void>
 }
 
-type MutationTask<T> = () => Promise<T>
+/** A deferred task returning a promise. */
+export type MutationTask<T> = () => Promise<T>
 
+/**
+ * Creates a queue to serialize mutating API requests, preventing concurrent race
+ * conditions when refreshing and using CSRF tokens.
+ */
 export function createMutationQueue() {
   let tail: Promise<unknown> = Promise.resolve()
 
@@ -32,6 +48,7 @@ export function createMutationQueue() {
   }
 }
 
+/** Global mutation queue instance. */
 export const enqueueCsrfMutation = createMutationQueue()
 
 async function fetchFreshCsrfToken<TResponse extends CsrfResponseLike>(
@@ -62,6 +79,10 @@ function hasNoBody(res: CsrfResponseLike): boolean {
   return res.status === 204 || res.headers.get('content-length') === '0'
 }
 
+/**
+ * Executes an HTTP mutation (POST/PUT/DELETE/PATCH) by first fetching a fresh CSRF token,
+ * attaching the headers, and executing the request. Retries on 403.
+ */
 export async function runCsrfMutation<T, TResponse extends CsrfResponseLike>(
   method: MutationMethod,
   path: string,
@@ -87,3 +108,4 @@ export async function runCsrfMutation<T, TResponse extends CsrfResponseLike>(
   if (hasNoBody(res)) return undefined as T
   return res.json() as Promise<T>
 }
+

@@ -11,6 +11,10 @@ import { pushToast } from '../../store/toast'
 import { copyToClipboard } from '../../utils/clipboard'
 import type { VirtualKey } from '../../api/types'
 
+/**
+ * Main Keys tab component.
+ * Displays virtual API keys, spent budget charts, and allows creating or editing keys.
+ */
 export default function Keys() {
   const query = useKeys()
   const [params, setParams] = useSearchParams()
@@ -25,6 +29,7 @@ export default function Keys() {
     if (match) setEditing(match)
   }, [editId, query.data])
 
+  /** Closes the key editing modal dialog and removes the edit parameter from URL search params. */
   function closeEdit() {
     setEditing(null)
     if (params.has('edit')) {
@@ -34,6 +39,7 @@ export default function Keys() {
     }
   }
 
+  /** Opens the key editing modal dialog and sets the edit parameter in URL search params. */
   function openEdit(k: VirtualKey) {
     setEditing(k)
     const next = new URLSearchParams(params)

@@ -85,6 +85,13 @@ pub async fn generic_chat_completions_stream(
 
     let mapped_model = openai_req.model.clone();
 
+    // Opt-in RTK tool-output compression on the streaming translate path.
+    // Order: tool-request preparation (above) runs before compression;
+    // on the non-streaming path in handler.rs the order is reversed.
+    // Both paths are correct because RTK and tool policy touch disjoint
+    // fields (text content vs tool_call IDs / tool_choice / tools[]).
+    state.apply_rtk_to_openai(&mut openai_req, &mapped_model);
+
     // Start the backend request
     let response = match client.chat_completion_stream(&openai_req).await {
         Ok((resp, rate_limits)) => {

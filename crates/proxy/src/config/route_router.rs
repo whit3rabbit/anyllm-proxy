@@ -25,6 +25,14 @@ pub struct RouteOptions {
     pub pxpipe_compress: Option<bool>,
     pub pxpipe_models: Option<String>,
     pub redact_secrets: Option<bool>,
+    pub rtk_compress: Option<bool>,
+    pub rtk_models: Option<String>,
+    /// FFEC prompt-compression mode override (`off|shadow|live`, parsed via
+    /// `anyllm_optimize_core::Mode::from_str`). Not DB-backed yet (same
+    /// scaffolding stage as `rtk_compress`/`rtk_models` above) -- always
+    /// `None` until a route-provider column + admin UI control land. See
+    /// `AppState::effective_optimizer`.
+    pub optimizer_mode: Option<String>,
 }
 
 /// A backend assigned to a route, with the model globs it serves.
@@ -146,6 +154,9 @@ impl RouteRouter {
                     pxpipe_compress: r.pxpipe_compress,
                     pxpipe_models: r.pxpipe_models.clone(),
                     redact_secrets: r.redact_secrets,
+                    rtk_compress: None,
+                    rtk_models: None,
+                    optimizer_mode: None,
                 }),
                 providers,
                 counter: AtomicUsize::new(0),

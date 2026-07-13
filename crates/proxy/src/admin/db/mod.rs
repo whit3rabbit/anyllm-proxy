@@ -1,13 +1,27 @@
+//! SQLite database persistence and schema migrations.
+//!
+//! Provides modular storage tables for request logs, configuration overrides,
+//! virtual API keys, audit logs, provider favorites, and route definitions.
+
 use rusqlite::Connection;
 
+/// Audit log table queries.
 pub mod audit;
+/// Managed backend credentials queries.
 pub mod backends;
+/// Shared database utilities.
 pub mod common;
+/// Configuration override queries.
 pub mod config;
+/// Provider favorites queries.
 pub mod favorites;
+/// Backend health check history queries.
 pub mod health;
+/// Virtual API key and quota tracking queries.
 pub mod keys;
+/// Request log and metrics summary queries.
 pub mod logs;
+/// Route definition and provider mappings queries.
 pub mod routes;
 
 pub use audit::*;

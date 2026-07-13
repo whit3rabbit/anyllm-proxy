@@ -1,5 +1,18 @@
 [workspace]
-members = ["crates/translator", "crates/client", "crates/batch_engine", "crates/proxy", "crates/providers", "crates/pxpipe"]
+members = [
+    "crates/translator",
+    "crates/client",
+    "crates/batch_engine",
+    "crates/proxy",
+    "crates/providers",
+    "crates/pxpipe",
+    "crates/rtk",
+    "crates/optimizer/crates/optimize-core",
+    "crates/optimizer/crates/optimize-passes",
+    "crates/optimizer/crates/optimize-scorer",
+    "crates/optimizer/optimize-cli",
+    "crates/optimizer/benches",
+]
 resolver = "2"
 
 [workspace.package]

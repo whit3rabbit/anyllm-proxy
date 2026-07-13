@@ -123,6 +123,12 @@ pub struct RuntimeConfig {
     /// per-model from the admin UI, which offers only vision-capable models.
     /// Seeded from `PXPIPE_MODELS` env / `crate::pxpipe::resolve_default_models_csv`.
     pub pxpipe_models: String,
+    /// Whether command-aware tool-output compression is active (see
+    /// `crate::rtk`; Anthropic passthrough + translate). Live-toggleable.
+    pub rtk_compress: bool,
+    /// CSV of model bases in RTK compression scope (substring match). **Empty =
+    /// ALL models** (RTK has no vision requirement). Seeded from `RTK_MODELS`.
+    pub rtk_models: String,
     /// Whether Anthropic passthrough forwards the client's own incoming
     /// credential upstream instead of the operator's (BACKEND=anthropic
     /// only; see `ANTHROPIC_FORWARD_CLIENT_AUTH` / `server::passthrough`).
@@ -136,6 +142,13 @@ pub struct RuntimeConfig {
     /// above; the startup-time `ToolEngineState.guardrails` config is a
     /// separate, static value built from YAML/env at process start.
     pub tool_guardrail_mode: String,
+    /// Opt-in FFEC prompt-compression mode, stored as the stable string form
+    /// of `anyllm_optimize_core::Mode` (see `Mode::as_str`), e.g. "off",
+    /// "shadow", or "live". Runtime-tunable like the other fields above; the
+    /// startup-time `AppState.optimizer` engine is a separate, static value
+    /// seeded from `OPTIMIZER_MODE` at process start (see
+    /// `crate::optimizer::resolve_default_mode`).
+    pub optimizer_mode: String,
 }
 
 /// Runtime config defaults before SQLite overrides are applied. Used to restore
@@ -147,8 +160,11 @@ pub struct RuntimeConfigDefaults {
     pub anthropic_thinking_repair: bool,
     pub pxpipe_compress: bool,
     pub pxpipe_models: String,
+    pub rtk_compress: bool,
+    pub rtk_models: String,
     pub forward_client_auth: bool,
     pub tool_guardrail_mode: String,
+    pub optimizer_mode: String,
 }
 
 /// Events broadcast to WebSocket clients for live dashboard updates.
@@ -225,10 +241,13 @@ impl SharedState {
                 anthropic_thinking_repair: false,
                 pxpipe_compress: false,
                 pxpipe_models: String::new(),
+                rtk_compress: false,
+                rtk_models: String::new(),
                 forward_client_auth: false,
                 tool_guardrail_mode: crate::tools::ToolGuardrailMode::Disabled
                     .as_str()
                     .to_string(),
+                optimizer_mode: anyllm_optimize_core::Mode::Off.as_str().to_string(),
             })),
             runtime_defaults: RuntimeConfigDefaults {
                 log_bodies: false,
@@ -236,10 +255,13 @@ impl SharedState {
                 anthropic_thinking_repair: false,
                 pxpipe_compress: false,
                 pxpipe_models: String::new(),
+                rtk_compress: false,
+                rtk_models: String::new(),
                 forward_client_auth: false,
                 tool_guardrail_mode: crate::tools::ToolGuardrailMode::Disabled
                     .as_str()
                     .to_string(),
+                optimizer_mode: anyllm_optimize_core::Mode::Off.as_str().to_string(),
             },
             backend_metrics: Arc::new(HashMap::new()),
             log_tx,

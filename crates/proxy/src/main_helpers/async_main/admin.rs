@@ -111,8 +111,13 @@ pub(crate) async fn init_admin(
         anthropic_thinking_repair: multi_config.anthropic_thinking_repair,
         pxpipe_compress: multi_config.pxpipe_compress,
         pxpipe_models: anyllm_proxy::pxpipe::resolve_default_models_csv(),
+        rtk_compress: anyllm_proxy::rtk::resolve_default_enabled(),
+        rtk_models: anyllm_proxy::rtk::resolve_default_models_csv(),
         forward_client_auth: multi_config.forward_client_auth,
         tool_guardrail_mode: tool_guardrail_default.clone(),
+        optimizer_mode: anyllm_proxy::optimizer::resolve_default_mode()
+            .as_str()
+            .to_string(),
     };
     let runtime_defaults = admin::state::RuntimeConfigDefaults {
         log_bodies: multi_config.log_bodies,
@@ -120,8 +125,13 @@ pub(crate) async fn init_admin(
         anthropic_thinking_repair: multi_config.anthropic_thinking_repair,
         pxpipe_compress: multi_config.pxpipe_compress,
         pxpipe_models: anyllm_proxy::pxpipe::resolve_default_models_csv(),
+        rtk_compress: anyllm_proxy::rtk::resolve_default_enabled(),
+        rtk_models: anyllm_proxy::rtk::resolve_default_models_csv(),
         forward_client_auth: multi_config.forward_client_auth,
         tool_guardrail_mode: tool_guardrail_default,
+        optimizer_mode: anyllm_proxy::optimizer::resolve_default_mode()
+            .as_str()
+            .to_string(),
     };
     let mut log_bodies_enabled_by_override = false;
     let mut redact_secrets_enabled_by_override = false;
@@ -164,6 +174,12 @@ pub(crate) async fn init_admin(
                 "pxpipe_models" => {
                     runtime_config.pxpipe_models = value.clone();
                 }
+                "rtk_compress" => {
+                    runtime_config.rtk_compress = value == "true";
+                }
+                "rtk_models" => {
+                    runtime_config.rtk_models = value.clone();
+                }
                 "forward_client_auth" => {
                     // Defensively re-validate against the same rule
                     // enforced by put_config (a tampered/hand-edited SQLite
@@ -198,6 +214,16 @@ pub(crate) async fn init_admin(
                         tracing::warn!(
                             value = %value,
                             "ignoring invalid tool_guardrail_mode override from database"
+                        );
+                    }
+                }
+                "optimizer_mode" => {
+                    if value.parse::<anyllm_optimize_core::Mode>().is_ok() {
+                        runtime_config.optimizer_mode = value.clone();
+                    } else {
+                        tracing::warn!(
+                            value = %value,
+                            "ignoring invalid optimizer_mode override from database"
                         );
                     }
                 }

@@ -1,0 +1,41 @@
+[package]
+name = "anyllm_optimize_cli"
+description = "Offline runner for FFEC: token-usage/savings eval harness, parity, shadow-diff"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "optimize-eval"
+path = "src/main.rs"
+
+# Opt-in prerequisite fetcher for the `onnx` scorer. Builds without the heavy ONNX
+# Runtime stack (download + sha256 verify only); running it is an explicit operator step,
+# never automatic. See src/model_fetch.rs.
+[[bin]]
+name = "optimize-model"
+path = "src/model_fetch.rs"
+
+[features]
+default = []
+# M3.6: wire the real LLMLingua2Pass scorer (--llmlingua2-model-dir) into the harness
+# behind the frontier, instead of always defaulting to UniformScorer. Pulls in the same
+# heavy ONNX Runtime deps as `anyllm_optimize_scorer/onnx` — opt-in only.
+onnx = ["anyllm_optimize_scorer/onnx"]
+
+# M3.6: exact OpenAI token counting for the eval harness's reported est_raw/est_comp
+# columns (ALGO.md: tiktoken o200k_base for OpenAI; bytes/3.6 heuristic elsewhere, since
+# Anthropic's tokenizer is unpublished). Opt-in only — pulls in tiktoken-rs's BPE tables.
+tiktoken = ["dep:tiktoken-rs"]
+
+[dependencies]
+anyllm_optimize_core = { path = "../crates/optimize-core", version = "0.13.0" }
+anyllm_optimize_passes = { path = "../crates/optimize-passes", version = "0.13.0" }
+anyllm_optimize_scorer = { path = "../crates/optimize-scorer", version = "0.13.0" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+clap = { version = "4", features = ["derive", "env"] }
+anyhow = "1"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+tiktoken-rs = { version = "0.9", optional = true }

@@ -1,8 +1,12 @@
 import { create } from 'zustand'
 
+/** Represents the state and actions for admin authentication. */
 interface AuthState {
+  /** The current authentication token (admin Bearer token) or null if logged out. */
   token: string | null
+  /** Performs login by storing and setting the token. */
   login: (token: string) => void
+  /** Performs logout by removing the stored token and clearing state. */
   logout: () => void
 }
 
@@ -57,6 +61,7 @@ function deleteStoredToken() {
   }
 }
 
+/** Zustand store hook for managing admin auth token state. */
 export const useAuthStore = create<AuthState>((set) => ({
   token: getStoredToken(),
   login(token) {

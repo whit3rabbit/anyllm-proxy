@@ -1,0 +1,18 @@
+[package]
+name = "anyllm_optimize_core"
+description = "Frozen-Frontier Extractive Compression: IR, edit scripts, frontier, selection, invariants (IO-free, no serde)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+categories = ["compression", "text-processing"]
+keywords = ["llm", "prompt", "compression", "llmlingua", "cache"]
+
+[dependencies]
+smallvec = "1"
+memchr = "2"
+thiserror = "1"
+unicode-segmentation = "1"
+
+[dev-dependencies]
+proptest = "1"

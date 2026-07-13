@@ -65,14 +65,22 @@ compile_error!(
      anyllm_client = { features = [\"native-tls\"] }"
 );
 
+/// Native Anthropic Messages API passthrough client.
 pub mod anthropic_client;
+/// High-level HTTP Client for routing translated requests to OpenAI-compatible backends.
 pub mod client;
+/// Error definitions for the client.
 pub mod error;
+/// HTTP client builder and SSL/SSRF protection mechanisms.
 pub mod http;
+/// Rate limit headers parsing and format conversion.
 pub mod rate_limit;
+/// Retry with exponential backoff mechanisms.
 pub mod retry;
+/// SSE frame parser.
 pub mod sse;
 pub(crate) mod streaming;
+/// Tools builder helpers.
 pub mod tools;
 
 // Convenience re-exports

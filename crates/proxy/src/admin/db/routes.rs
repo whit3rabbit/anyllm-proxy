@@ -4,38 +4,58 @@ use rusqlite::{params, Connection};
 /// A route row as stored in SQLite.
 #[derive(Debug, Clone)]
 pub struct RouteRow {
+    /// Unique identifier for the route (typically a UUID).
     pub id: String,
+    /// Name of the route (e.g. used for model name matching).
     pub name: String,
+    /// Optional description of the route.
     pub description: Option<String>,
+    /// Load balancing or routing strategy (e.g. failover, round-robin).
     pub strategy: String,
+    /// Optional rate limit in requests per minute.
     pub rpm: Option<u32>,
+    /// Optional rate limit in tokens per minute.
     pub tpm: Option<u64>,
+    /// Optional budget limit in USD.
     pub budget_usd: Option<f64>,
     /// Route on/off toggle. Disabled routes do not dispatch and lose virtual-key scope.
     pub enabled: bool,
     /// Per-route option overrides. `None` means "inherit the global RuntimeConfig value".
     pub guardrail_mode: Option<String>,
+    /// Override for pxpipe compression enabled status.
     pub pxpipe_compress: Option<bool>,
+    /// Override for pxpipe models CSV string.
     pub pxpipe_models: Option<String>,
+    /// Override for secret redaction.
     pub redact_secrets: Option<bool>,
     /// Explicit cross-route ordering (lower wins) when a model matches several routes.
     pub position: i32,
+    /// Creation timestamp in ISO 8601 format.
     pub created_at: String,
+    /// Last updated timestamp in ISO 8601 format.
     pub updated_at: String,
 }
 
 /// A route↔provider assignment row.
 #[derive(Debug, Clone)]
 pub struct RouteProviderRow {
+    /// Unique identifier for the assignment.
     pub id: String,
+    /// ID of the route this provider belongs to.
     pub route_id: String,
+    /// ID of the managed backend provider.
     pub backend_id: String,
+    /// The list of model pattern globs/names this provider supports (e.g. `["*"]`).
     pub models: Vec<String>,
+    /// Evaluation priority order (lower is evaluated first).
     pub priority: i32,
+    /// Whether this assignment is currently enabled.
     pub enabled: bool,
+    /// Creation timestamp in ISO 8601 format.
     pub created_at: String,
 }
 
+/// Inserts a new route row into the database.
 pub fn insert_route(conn: &Connection, row: &RouteRow) -> rusqlite::Result<()> {
     conn.execute(
         "INSERT INTO routes (id, name, description, strategy, rpm, tpm, budget_usd,
@@ -88,12 +108,14 @@ const ROUTE_COLUMNS: &str = "id, name, description, strategy, rpm, tpm, budget_u
      enabled, guardrail_mode, pxpipe_compress, pxpipe_models, redact_secrets, \
      position, created_at, updated_at";
 
+/// Lists all routes in the database ordered by name.
 pub fn list_routes(conn: &Connection) -> rusqlite::Result<Vec<RouteRow>> {
     let mut stmt = conn.prepare(&format!("SELECT {ROUTE_COLUMNS} FROM routes ORDER BY name"))?;
     let rows = stmt.query_map([], row_to_route)?;
     rows.collect()
 }
 
+/// Retrieves a specific route by its ID.
 pub fn get_route(conn: &Connection, id: &str) -> rusqlite::Result<Option<RouteRow>> {
     let mut stmt = conn.prepare(&format!("SELECT {ROUTE_COLUMNS} FROM routes WHERE id = ?1"))?;
     let mut rows = stmt.query_map([id], row_to_route)?;
@@ -122,6 +144,7 @@ pub struct RoutePatch {
     pub position: Option<i32>,
 }
 
+/// Updates an existing route row in the database using a RoutePatch.
 pub fn update_route(conn: &Connection, id: &str, patch: &RoutePatch) -> rusqlite::Result<bool> {
     let mut set_clauses: Vec<String> = Vec::new();
     let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
@@ -236,11 +259,13 @@ pub fn update_route(conn: &Connection, id: &str, patch: &RoutePatch) -> rusqlite
     Ok(updated > 0)
 }
 
+/// Deletes a route from the database by its ID.
 pub fn delete_route(conn: &Connection, id: &str) -> rusqlite::Result<bool> {
     let deleted = conn.execute("DELETE FROM routes WHERE id = ?1", [id])?;
     Ok(deleted > 0)
 }
 
+/// Lists all providers assigned to a given route, ordered by priority.
 pub fn list_route_providers(
     conn: &Connection,
     route_id: &str,
@@ -266,6 +291,7 @@ pub fn list_route_providers(
     rows.collect()
 }
 
+/// Returns a list of active route IDs that reference a specific backend provider name.
 pub fn enabled_route_ids_for_backend_name(
     conn: &Connection,
     backend_name: &str,
@@ -282,6 +308,7 @@ pub fn enabled_route_ids_for_backend_name(
     rows.collect()
 }
 
+/// Returns the total number of providers mapped to a specific route.
 pub fn count_route_providers(conn: &Connection, route_id: &str) -> rusqlite::Result<usize> {
     let n: i64 = conn.query_row(
         "SELECT COUNT(*) FROM route_providers WHERE route_id = ?1",
@@ -291,6 +318,7 @@ pub fn count_route_providers(conn: &Connection, route_id: &str) -> rusqlite::Res
     Ok(n.max(0) as usize)
 }
 
+/// Checks if a managed backend exists in the database.
 pub fn managed_backend_exists(conn: &Connection, id: &str) -> rusqlite::Result<bool> {
     let n: i64 = conn
         .query_row(
@@ -305,6 +333,7 @@ pub fn managed_backend_exists(conn: &Connection, id: &str) -> rusqlite::Result<b
     Ok(n == 1)
 }
 
+/// Maps a managed backend provider to a route.
 pub fn add_route_provider(
     conn: &Connection,
     route_id: &str,
@@ -322,6 +351,7 @@ pub fn add_route_provider(
     Ok(())
 }
 
+/// Updates the configurations of an existing route provider assignment.
 pub fn update_route_provider(
     conn: &Connection,
     id: &str,
@@ -362,6 +392,7 @@ pub fn update_route_provider(
     Ok(updated > 0)
 }
 
+/// Removes a provider assignment from a route by the assignment ID.
 pub fn remove_route_provider(conn: &Connection, id: &str) -> rusqlite::Result<bool> {
     let deleted = conn.execute("DELETE FROM route_providers WHERE id = ?1", [id])?;
     Ok(deleted > 0)
@@ -374,7 +405,9 @@ pub fn remove_route_provider(conn: &Connection, id: &str) -> rusqlite::Result<bo
 /// route's current provider set (wrong route, duplicate ids, missing ids, or extra ids).
 /// On `Mismatch` the transaction is rolled back, so priorities are unchanged.
 pub enum ReorderOutcome {
+    /// Reordering succeeded and returned the updated list of provider rows.
     Ok(Vec<RouteProviderRow>),
+    /// Reordering failed due to matching validation mismatch.
     Mismatch,
 }
 

@@ -22,6 +22,8 @@ pub mod integrations;
 pub mod metrics;
 /// Provider/model-specific OpenAI-compatible tool request and response normalization.
 pub mod openai_tool_policy;
+/// Opt-in prompt compression (Frozen-Frontier Extractive Compression / FFEC) shim.
+pub mod optimizer;
 /// Optional OpenTelemetry OTLP trace export (requires `otel` feature).
 #[cfg(feature = "otel")]
 pub mod otel;
@@ -29,6 +31,8 @@ pub mod otel;
 pub mod pxpipe;
 /// Distributed rate limiting via Redis sorted sets (requires `redis` feature).
 pub mod ratelimit;
+/// Opt-in command-aware tool-output compression (RTK port).
+pub mod rtk;
 /// In-process chat completion runtime without HTTP route ownership.
 pub mod runtime;
 /// Axum HTTP server: routes, middleware (auth, request ID, size/concurrency limits), SSE streaming.

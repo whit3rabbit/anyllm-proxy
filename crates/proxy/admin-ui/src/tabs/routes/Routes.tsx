@@ -49,6 +49,10 @@ function TriStateSelect({
   )
 }
 
+/**
+ * Component displaying details of a specific route, including its mapped providers,
+ * reordering priority controls, limits, and code snippets.
+ */
 function RouteDetail({ route, onClose }: { route: Route; onClose: () => void }) {
   const { data: providersData, isLoading } = useRouteProviders(route.id)
   const addProvider = useAddRouteProvider()
@@ -77,6 +81,7 @@ function RouteDetail({ route, onClose }: { route: Route; onClose: () => void }) 
     `  -d '${JSON.stringify({ model: route.name, messages: [{ role: 'user', content: 'hi' }] })}'`,
   ].join('\n')
 
+  /** Copies the Curl code snippet representing the route to the clipboard. */
   async function copyCurl() {
     const ok = await copyToClipboard(curlSnippet)
     pushToast(
@@ -324,6 +329,9 @@ function RouteDetail({ route, onClose }: { route: Route; onClose: () => void }) 
 
 // ── Create Route Modal ────────────────────────────────────────────────────────
 
+/**
+ * Modal dialog component for creating a new route.
+ */
 function CreateRouteModal({ onClose }: { onClose: () => void }) {
   const create = useCreateRoute()
   const [name, setName] = useState('')
@@ -400,6 +408,10 @@ function CreateRouteModal({ onClose }: { onClose: () => void }) {
 
 // ── Main Routes Tab ───────────────────────────────────────────────────────────
 
+/**
+ * Main Routes tab component.
+ * Displays list of routes, strategies, status toggles, and allows creating routes.
+ */
 export default function Routes() {
   const query = useRoutes()
   const deleteRoute = useDeleteRoute()

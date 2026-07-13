@@ -70,8 +70,61 @@ pub fn extract_litellm_master_key(path: &str) -> Option<String> {
     super::litellm::extract_master_key(&yaml)
 }
 
+/// Normalize a CSV string: split on comma, trim each entry, drop empties, rejoin.
+/// Used by model-scope config values so split/trim/filter/join lives in one place
+/// instead of being duplicated across pxpipe, rtk, and the admin config route.
+pub fn normalize_csv(csv: &str) -> String {
+    csv.split(',')
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
 pub(crate) fn contains_ignore_ascii_case(haystack: &[u8], needle: &[u8]) -> bool {
     haystack
         .windows(needle.len())
         .any(|w| w.eq_ignore_ascii_case(needle))
+}
+
+/// Resolve the home directory on Unix or Windows.
+pub fn home_dir() -> Option<std::path::PathBuf> {
+    std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .ok()
+        .map(std::path::PathBuf::from)
+}
+
+/// Resolve the data directory where config, DB, and token files live.
+/// Priority: ANYLLM_HOME env var > ~/.anyllm/ > CWD (fallback if HOME unresolvable).
+/// Creates the directory on first use (mode 0700 on Unix).
+pub fn resolve_data_dir() -> std::path::PathBuf {
+    let dir = if let Ok(home) = std::env::var("ANYLLM_HOME") {
+        std::path::PathBuf::from(home)
+    } else if let Some(home) = home_dir() {
+        home.join(".anyllm")
+    } else {
+        std::path::PathBuf::from(".")
+    };
+
+    if !dir.exists() {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::DirBuilderExt;
+            let mut builder = std::fs::DirBuilder::new();
+            builder.recursive(true).mode(0o700);
+            if let Err(e) = builder.create(&dir) {
+                eprintln!(
+                    "anyllm_proxy: could not create data directory '{}': {e}",
+                    dir.display()
+                );
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = std::fs::create_dir_all(&dir);
+        }
+    }
+
+    dir
 }

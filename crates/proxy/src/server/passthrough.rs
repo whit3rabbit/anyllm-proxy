@@ -225,6 +225,17 @@ pub(crate) async fn anthropic_passthrough(
     // below: imaging bakes the system/tool_result text into PNG pixels, which the
     // text-based redactor cannot see, so redaction must run on the raw text first.
     let mut pxpipe_apply: Option<(std::sync::Arc<crate::pxpipe::PxpipeEngine>, String)> = None;
+    // RTK tool-output compression, likewise deferred to after redaction and run
+    // BEFORE pxpipe so imaging sees the already-filtered text.
+    let mut rtk_apply: Option<(std::sync::Arc<crate::rtk::RtkEngine>, String)> = None;
+    // FFEC prompt compression (history + frontier cache_control breakpoint). Runs
+    // on the raw Value bytes (never round-tripping MessageCreateRequest, which has
+    // no cache_control field), so the breakpoint survives to the Anthropic API. The
+    // `.filter` gates the (up to 32MB) parse: only capture when the resolved mode is
+    // not Off. Does not need the parsed model, so it sits outside the parse block.
+    let optimizer_apply = state
+        .effective_optimizer()
+        .filter(|e| e.mode() != anyllm_optimize_core::Mode::Off);
     if let Ok(mut parsed_req) = serde_json::from_slice::<anthropic::MessageCreateRequest>(&body) {
         if let Err(err) = validate_anthropic_tool_request(
             &parsed_req,
@@ -287,6 +298,9 @@ pub(crate) async fn anthropic_passthrough(
         if let Some(engine) = state.pxpipe_engine_for(&parsed_req.model) {
             pxpipe_apply = Some((engine, parsed_req.model.clone()));
         }
+        if let Some(engine) = state.rtk_engine_for(&parsed_req.model) {
+            rtk_apply = Some((engine, parsed_req.model.clone()));
+        }
     }
 
     let mut body = match super::secret_redaction::redact_body_with_content_type(
@@ -300,8 +314,22 @@ pub(crate) async fn anthropic_passthrough(
         Err(err) => return super::secret_redaction::error_response(err),
     };
 
-    // Now that secrets are redacted from the raw text, image the static slab /
-    // large live regions (see the capture note above).
+    // FFEC prompt compression runs FIRST: it compresses conversation history text
+    // and places the frontier cache_control breakpoint. It MUST precede pxpipe,
+    // which images the static message slab into a PNG — after imaging there is no
+    // history text left to compress and no place for a breakpoint. Combining the
+    // optimizer's breakpoint with pxpipe's cache_control-anchor relocation is
+    // untested (both are opt-in); we don't try to reconcile them here. Fails open.
+    if let Some(engine) = optimizer_apply {
+        body = engine.optimize_anthropic_bytes(body, "messages", &state.metrics);
+    }
+
+    // Now that secrets are redacted, compress tool output (RTK) then image the
+    // static slab / large live regions (pxpipe). RTK first so pxpipe images the
+    // already-filtered text; both fail open.
+    if let Some((engine, model)) = rtk_apply {
+        body = engine.compress_anthropic(body, &model, &state.metrics);
+    }
     if let Some((engine, model)) = pxpipe_apply {
         body = engine.compress_anthropic(body, &model, &state.metrics);
     }

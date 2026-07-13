@@ -13,27 +13,39 @@ pub(crate) mod helpers;
 use helpers::*;
 
 #[cfg(feature = "remote-catalog")]
+/// The default URL used to fetch the remote LiteLLM model catalog.
 pub const LITELLM_CATALOG_URL: &str =
     "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json";
 
 #[cfg(feature = "remote-catalog")]
+/// The default limit on downloaded catalog size (4MB) to prevent OOM/DoS.
 pub const DEFAULT_MAX_CATALOG_BYTES: usize = 4 * 1024 * 1024;
 
+/// An owned representation of a provider definition, suitable for serialization and storage.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct OwnedProviderDef {
+    /// The unique identifier of the provider.
     pub id: String,
+    /// The user-facing display name of the provider.
     pub display_name: String,
+    /// The default base URL for the provider API.
     pub default_base_url: String,
+    /// The network protocol used to communicate with the provider.
     pub protocol: ProviderProtocol,
+    /// The kind of authentication required by the provider.
     pub auth: AuthKind,
+    /// The implementation status of the provider in the proxy.
     pub status: ProviderStatus,
+    /// The environment variables containing API keys/secrets for this provider.
     pub env_vars: Vec<String>,
+    /// The prefix used by LiteLLM to route requests to this provider.
     pub litellm_prefix: String,
+    /// The capability flags supported by this provider.
     pub capabilities: ProviderCapabilities,
 }
 
 impl OwnedProviderDef {
-    /// True for local LLM servers (Ollama/LM Studio/vLLM/llamafile/...), detected by a
+    /// Returns true for local LLM servers (Ollama/LM Studio/vLLM/llamafile/...), detected by a
     /// loopback/private default base URL. Used to auto-relax SSRF protection for
     /// admin-configured managed backends pointing at localhost or a LAN address.
     pub fn is_local(&self) -> bool {
@@ -79,52 +91,85 @@ fn host_from_base_url(base: &str) -> &str {
     hostport.rsplit_once(':').map_or(hostport, |(host, _)| host)
 }
 
+/// An owned representation of a model definition.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct OwnedModelDef {
+    /// The unique model identifier (e.g. "gpt-4o").
     pub id: String,
+    /// The ID of the provider that offers this model.
     pub provider_id: String,
+    /// The maximum input/context window size in tokens.
     pub context_window: u32,
+    /// The maximum number of output tokens this model can generate.
     pub max_output_tokens: u32,
+    /// The capabilities supported by this model (e.g. vision, streaming, tool use).
     pub capabilities: ModelCapabilities,
+    /// The current status of this model (e.g. available, deprecated).
     pub status: ModelStatus,
 }
 
+/// Metadata about the current state/source of the provider catalog.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CatalogMetadata {
+    /// The source of the catalog, e.g. "bundled" or "remote".
     pub source: String,
+    /// The URL from which the catalog was fetched, if remote.
     pub source_url: Option<String>,
+    /// The ETag of the remote HTTP response, if available.
     pub etag: Option<String>,
+    /// The UNIX timestamp when the catalog was fetched.
     pub fetched_at_unix_secs: Option<u64>,
+    /// The total number of providers defined in the catalog.
     pub provider_count: usize,
+    /// The total number of models defined in the catalog.
     pub model_count: usize,
 }
 
+/// A structured catalog of all known backend providers and models.
+/// Under the hood, this combines static metadata with optional LiteLLM remote snapshots.
 #[derive(Debug, Clone)]
 pub struct ProviderCatalog {
-    metadata: CatalogMetadata,
-    providers: BTreeMap<String, OwnedProviderDef>,
-    advertised_provider_ids: BTreeSet<String>,
-    models_by_provider: BTreeMap<String, Vec<OwnedModelDef>>,
-    provider_ids_by_litellm_prefix: BTreeMap<String, String>,
-    model_indexes_by_provider: BTreeMap<String, BTreeMap<String, usize>>,
+    /// Metadata about the catalog's source and fetch state.
+    pub metadata: CatalogMetadata,
+    /// Map of provider ID to its definition.
+    pub providers: BTreeMap<String, OwnedProviderDef>,
+    /// Set of provider IDs that should be actively advertised to the user/UI.
+    pub advertised_provider_ids: BTreeSet<String>,
+    /// Map of provider ID to the list of models it offers.
+    pub models_by_provider: BTreeMap<String, Vec<OwnedModelDef>>,
+    /// Helper index for matching providers by their LiteLLM prefix.
+    pub provider_ids_by_litellm_prefix: BTreeMap<String, String>,
+    /// Nested index maps for fast O(1) lookup of models by provider and model ID.
+    pub model_indexes_by_provider: BTreeMap<String, BTreeMap<String, usize>>,
 }
 
+/// Errors that can occur when parsing or fetching the model catalog.
 #[derive(Debug)]
 pub enum CatalogError {
+    /// JSON parsing or serialization errors.
     Json(serde_json::Error),
+    /// File I/O or network stream read errors.
     Io(std::io::Error),
+    /// Invalid shape or field format in the parsed LiteLLM catalog JSON.
     InvalidFormat(&'static str),
+    /// The catalog content is not valid UTF-8.
     Utf8(std::string::FromUtf8Error),
     #[cfg(feature = "remote-catalog")]
+    /// HTTP errors when fetching the remote catalog.
     Http(reqwest::Error),
     #[cfg(feature = "remote-catalog")]
+    /// The remote server returned a non-200 HTTP status code.
     HttpStatus(u16),
     #[cfg(feature = "remote-catalog")]
+    /// The downloaded catalog exceeds the specified size limit.
     TooLarge {
+        /// The maximum allowed size in bytes.
         max_bytes: usize,
+        /// The actual response size received.
         actual_bytes: usize,
     },
     #[cfg(feature = "remote-catalog")]
+    /// The catalog cache is missing.
     CacheMiss,
     #[cfg(feature = "remote-catalog")]
     Redirect {
@@ -234,6 +279,7 @@ impl From<&ModelDef> for OwnedModelDef {
 }
 
 impl ProviderCatalog {
+    /// Builds a catalog initialized with the bundled/static provider and model definitions.
     pub fn bundled() -> Self {
         let mut providers = BTreeMap::new();
         let mut advertised_provider_ids = BTreeSet::new();
@@ -281,6 +327,7 @@ impl ProviderCatalog {
         catalog
     }
 
+    /// Parses a LiteLLM catalog JSON string and merges it with the bundled definitions.
     pub fn from_litellm_json(json: &str) -> Result<Self, CatalogError> {
         let raw: Value = serde_json::from_str(json)?;
         let root = raw
@@ -358,21 +405,25 @@ impl ProviderCatalog {
         Ok(catalog)
     }
 
+    /// Returns a reference to the catalog's metadata.
     pub fn metadata(&self) -> &CatalogMetadata {
         &self.metadata
     }
 
+    /// Looks up a provider definition by its ID.
     pub fn get_provider(&self, id: &str) -> Option<&OwnedProviderDef> {
         let id = registry::canonical_provider_id(id);
         self.providers.get(id)
     }
 
+    /// Returns an iterator over all advertised provider definitions.
     pub fn all_providers(&self) -> impl Iterator<Item = &OwnedProviderDef> {
         self.advertised_provider_ids
             .iter()
             .filter_map(|id| self.providers.get(id))
     }
 
+    /// Lists all models offered by a given provider.
     pub fn list_models(&self, provider_id: &str) -> &[OwnedModelDef] {
         let provider_id = registry::canonical_provider_id(provider_id);
         self.models_by_provider
@@ -381,6 +432,7 @@ impl ProviderCatalog {
             .unwrap_or(&[])
     }
 
+    /// Looks up a specific model definition by provider ID and model ID.
     pub fn get_model(&self, provider_id: &str, model_id: &str) -> Option<&OwnedModelDef> {
         let provider_id = registry::canonical_provider_id(provider_id);
         let index = self
@@ -390,6 +442,7 @@ impl ProviderCatalog {
         self.models_by_provider.get(provider_id)?.get(*index)
     }
 
+    /// Resolves the provider protocol kind and base URL for routing.
     pub fn resolve_backend(&self, provider_id: &str) -> Option<(&'static str, &str)> {
         let p = self.get_provider(provider_id)?;
         let kind = match p.protocol {
@@ -405,6 +458,7 @@ impl ProviderCatalog {
         Some((kind, p.default_base_url.as_str()))
     }
 
+    /// Finds a provider definition based on a LiteLLM prefix string.
     pub fn find_by_litellm_prefix(&self, prefix: &str) -> Option<&OwnedProviderDef> {
         if let Some(provider_id) = self.provider_ids_by_litellm_prefix.get(prefix) {
             return self.providers.get(provider_id);

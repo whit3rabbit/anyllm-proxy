@@ -11,7 +11,7 @@ import type {
   CatalogProvider,
   Route, RoutesResponse, CreateRouteRequest, UpdateRouteRequest,
   RouteProvidersResponse, AddRouteProviderRequest, UpdateRouteProviderRequest,
-  ReorderRouteProvidersRequest,
+  ReorderRouteProvidersRequest, OptimizerModelStatus,
 } from './types'
 
 // ── Status ───────────────────────────────────────────────────────────────────
@@ -167,6 +167,28 @@ export function useDeleteConfigOverride() {
     mutationFn: (key: string) =>
       mutatingFetch<void>('DELETE', `/admin/api/config/overrides/${encodeURIComponent(key)}`),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['config'] }) },
+  })
+}
+
+// ── Optimizer ONNX model ───────────────────────────────────────────────────────
+
+export function useOptimizerModel() {
+  return useQuery<OptimizerModelStatus>({
+    queryKey: ['optimizer-model'],
+    queryFn: () => apiFetch<OptimizerModelStatus>('/admin/api/optimizer/model'),
+    // Poll while a download is in flight so the UI advances to "present" on its own.
+    refetchInterval: (query) => (query.state.data?.downloading ? 2000 : false),
+  })
+}
+
+export function useDownloadOptimizerModel() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => mutatingFetch<void>('POST', '/admin/api/optimizer/model'),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['optimizer-model'] })
+      pushToast({ variant: 'success', message: 'Model download started' })
+    },
   })
 }
 

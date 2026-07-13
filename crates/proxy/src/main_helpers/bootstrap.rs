@@ -1,51 +1,6 @@
 use std::path::{Path, PathBuf};
 
-/// Resolve the data directory where config, DB, and token files live.
-/// Priority: ANYLLM_HOME env var > ~/.anyllm/ > CWD (fallback if HOME unresolvable).
-/// Creates the directory on first use (mode 0700 on Unix).
-pub fn resolve_data_dir() -> PathBuf {
-    let dir = if let Ok(home) = std::env::var("ANYLLM_HOME") {
-        PathBuf::from(home)
-    } else if let Some(home) = home_dir() {
-        home.join(".anyllm")
-    } else {
-        // No home directory (unusual). Fall back to CWD.
-        PathBuf::from(".")
-    };
-
-    if !dir.exists() {
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::DirBuilderExt;
-            let mut builder = std::fs::DirBuilder::new();
-            builder.recursive(true).mode(0o700);
-            if let Err(e) = builder.create(&dir) {
-                eprintln!(
-                    "anyllm_proxy: could not create data directory '{}': {e}",
-                    dir.display()
-                );
-            }
-        }
-        #[cfg(not(unix))]
-        {
-            if let Err(e) = std::fs::create_dir_all(&dir) {
-                eprintln!(
-                    "anyllm_proxy: could not create data directory '{}': {e}",
-                    dir.display()
-                );
-            }
-        }
-    }
-    dir
-}
-
-/// Cross-platform home directory lookup.
-pub fn home_dir() -> Option<PathBuf> {
-    std::env::var("HOME")
-        .or_else(|_| std::env::var("USERPROFILE"))
-        .ok()
-        .map(PathBuf::from)
-}
+pub use crate::config::helpers::resolve_data_dir;
 
 /// Resolve SQLite DB path: ADMIN_DB_PATH env var > data_dir/admin.db.
 pub fn resolve_db_path(data_dir: &Path) -> String {

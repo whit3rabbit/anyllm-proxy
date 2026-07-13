@@ -40,6 +40,10 @@ import { AdminButton, AdminSurface } from '../../components/shared/Performative'
 
 // ── Provider Tile ──────────────────────────────────────────────────────────────
 
+/**
+ * Component representing a provider tile in the grid.
+ * Displays provider details, configured credentials count, and favorite state.
+ */
 function ProviderTile({
   provider,
   backendCount,
@@ -89,6 +93,9 @@ function ProviderTile({
 
 // ── Backend Row (inside detail panel) ──────────────────────────────────────────
 
+/**
+ * Renders a row for a configured managed backend credentials instance.
+ */
 function BackendRow({
   backend,
   healthStatus,
@@ -118,6 +125,9 @@ function BackendRow({
 
 // ── Add Backend Form (inside detail panel) ─────────────────────────────────────
 
+/**
+ * Component providing fields to configure credentials and create a new managed backend.
+ */
 function AddBackendForm({
   provider,
   existingCount,
@@ -274,6 +284,9 @@ function AddBackendForm({
 
 // ── Provider Detail Panel (lightbox overlay) ───────────────────────────────────
 
+/**
+ * Modal overlay displaying provider details, capabilities, and configured managed backends.
+ */
 function ProviderDetailPanel({
   provider,
   backends,
@@ -358,6 +371,10 @@ function ProviderDetailPanel({
 
 // ── Main Providers Tab ─────────────────────────────────────────────────────────
 
+/**
+ * Main Providers tab component.
+ * Displays available LiteLLM providers grouped by tier, allows favoriting, and manages backend keys.
+ */
 export default function Providers() {
   const catalogQuery = useCatalogProviders()
   const managedQuery = useManagedBackends()

@@ -77,13 +77,17 @@ pub(crate) async fn messages(
         }
     }
 
-    let body =
+    let mut body =
         match super::super::secret_redaction::redact_json_value(effective.redact_secrets(), body)
             .await
         {
             Ok(body) => body,
             Err(err) => return super::super::secret_redaction::error_response(err),
         };
+
+    // FFEC prompt compression: client-sent history only, before any tool-loop
+    // turns are appended. Fails open (off/unconfigured/parse-error all no-op).
+    effective.apply_optimizer_to_anthropic(&mut body, "messages");
 
     if state.log_bodies() {
         tracing::debug!(
@@ -214,6 +218,9 @@ pub(crate) async fn messages(
                 openai_req.stream_options = None;
             }
             openai_req.model = mapped_model.clone();
+
+            // Opt-in RTK tool-output compression on the translate path.
+            effective.apply_rtk_to_openai(&mut openai_req, &mapped_model);
 
             // Opt-in text-to-image compression on the translate path (pxpipe).
             // Images the static system/tools slab of the post-mapping OpenAI

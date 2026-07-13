@@ -19,9 +19,13 @@ use tokio::sync::Semaphore;
 use super::passthrough::anthropic_passthrough;
 use crate::batch::anthropic_batch;
 
+/// Request context extraction and management utilities.
 pub mod context;
+/// Endpoint request handler functions (completions, embeddings, health, etc.).
 pub mod handlers;
+/// Helper utilities for route handler processing.
 pub mod helpers;
+/// Messages translation and passthrough handlers.
 pub mod messages;
 #[cfg(test)]
 mod tests;
@@ -38,19 +42,19 @@ pub use helpers::{get_callbacks, set_callbacks};
 use handlers::{completions, embeddings, health, models, rerank, v2_rerank};
 use messages::messages;
 
-/// Build the axum router from a legacy single-backend Config.
+/// Builds the axum router from a legacy single-backend Config.
 pub fn app(config: Config) -> Router {
     let multi = MultiConfig::from_single_config(&config);
     app_multi(multi)
 }
 
-/// Build the axum router from multi-backend configuration.
+/// Builds the axum router from multi-backend configuration.
 /// Creates nested sub-routers for each configured backend.
 pub fn app_multi(config: MultiConfig) -> Router {
     app_multi_with_shared(config, None, None, None, None, None)
 }
 
-/// Build the axum router with optional shared admin state and model router.
+/// Builds the axum router with optional shared admin state and model router.
 pub fn app_multi_with_shared(
     config: MultiConfig,
     shared: Option<SharedState>,
@@ -85,6 +89,8 @@ pub fn app_multi_with_shared(
             anthropic_thinking_repair: config.anthropic_thinking_repair,
             pxpipe_compress: config.pxpipe_compress,
             pxpipe_models: crate::pxpipe::resolve_default_models_csv(),
+            rtk_compress: crate::rtk::resolve_default_enabled(),
+            rtk_models: crate::rtk::resolve_default_models_csv(),
             forward_client_auth: config.forward_client_auth,
             // Derive from the static tool-engine preset (built from YAML/env
             // at startup) rather than hardcoding Disabled -- otherwise a
@@ -96,6 +102,9 @@ pub fn app_multi_with_shared(
                 .as_ref()
                 .map(|e| e.guardrails.mode)
                 .unwrap_or(crate::tools::ToolGuardrailMode::Disabled)
+                .as_str()
+                .to_string(),
+            optimizer_mode: crate::optimizer::resolve_default_mode()
                 .as_str()
                 .to_string(),
         }))
@@ -121,6 +130,22 @@ pub fn app_multi_with_shared(
     // RuntimeConfig.pxpipe_compress (AppState::active_pxpipe()). Scope
     // (PXPIPE_MODELS) is resolved from env at build time.
     let pxpipe_engine = Some(Arc::new(crate::pxpipe::PxpipeEngine::new()));
+
+    // RTK tool-output compression engine. Built once, attached to Anthropic +
+    // Translate backends, gated live per-request via RuntimeConfig.rtk_compress
+    // (AppState::rtk_engine_for). Scope (RTK_MODELS) resolved from env.
+    let rtk_engine = Some(Arc::new(crate::rtk::RtkEngine::new()));
+
+    // FFEC prompt-compression engine. Built once, attached to Anthropic +
+    // Translate backends (same mode gate as RTK above), gated live per-request
+    // via AppState::effective_optimizer(). Baked with the static
+    // OPTIMIZER_MODE-env default + the ONNX model artifact config (loads the
+    // scorer eagerly if already downloaded); the RuntimeConfig.optimizer_mode
+    // admin toggle is applied on top per request.
+    let optimizer_engine = Some(Arc::new(crate::optimizer::OptimizerEngine::with_model(
+        crate::optimizer::resolve_default_mode(),
+        crate::optimizer::resolve_model_config(),
+    )));
 
     let provider_catalog = shared
         .as_ref()
@@ -166,6 +191,16 @@ pub fn app_multi_with_shared(
             // scope + target-model vision via pxpipe_engine_for.
             pxpipe: if matches!(mode, HandlerMode::Anthropic | HandlerMode::Translate) {
                 pxpipe_engine.clone()
+            } else {
+                None
+            },
+            rtk: if matches!(mode, HandlerMode::Anthropic | HandlerMode::Translate) {
+                rtk_engine.clone()
+            } else {
+                None
+            },
+            optimizer: if matches!(mode, HandlerMode::Anthropic | HandlerMode::Translate) {
+                optimizer_engine.clone()
             } else {
                 None
             },

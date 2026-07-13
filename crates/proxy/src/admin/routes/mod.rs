@@ -1,20 +1,41 @@
-// Admin server routes. Served on a separate localhost-only listener.
+//! Admin web server routing logic and request handlers.
+//!
+//! Exposes REST endpoints and a WebSocket channel for managing configurations,
+//! virtual keys, backend catalogs, audits, and real-time logs.
 
+/// Audit log API handlers.
 pub mod audit;
+/// LiteLLM provider catalog API handlers.
 pub mod catalog;
+/// Server configuration API handlers.
 pub mod config;
+/// Environment file export/import API handlers.
 pub mod env;
+/// Favorite providers API handlers.
 pub mod favorites;
+/// Helper utilities for route handlers.
 pub mod helpers;
+/// Virtual API key management handlers.
 pub mod keys;
+/// Request history logs and stats API handlers.
 pub mod logs;
+/// Managed backend credentials API handlers.
 pub mod managed_backends;
+/// MCP server configuration API handlers.
 pub mod mcp;
+/// Admin route auth and CSRF middlewares.
 pub mod middleware;
+/// Model routing and discovery API handlers.
 pub mod models;
+/// Optimizer ONNX-model detect/download API handlers.
+pub mod optimizer;
+/// Custom API route config handlers.
 pub mod routes_api;
+/// Uptime/status overview API handlers.
 pub mod status;
+/// Real-time traffic stats API handlers.
 pub mod traffic;
+/// Proxy/backends uptime history API handlers.
 pub mod uptime;
 
 #[cfg(test)]
@@ -98,6 +119,10 @@ pub fn admin_router(shared: SharedState, token: Arc<zeroize::Zeroizing<String>>)
             get(models::list_models).post(models::add_model),
         )
         .route("/admin/api/models/discover", post(models::discover_models))
+        .route(
+            "/admin/api/optimizer/model",
+            get(optimizer::get_model_status).post(optimizer::download_model),
+        )
         .route("/admin/api/models/{name}", delete(models::remove_model))
         .route("/admin/api/audit", get(audit::get_audit_log))
         .route(

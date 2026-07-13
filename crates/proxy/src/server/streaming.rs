@@ -301,6 +301,10 @@ pub(crate) async fn messages_stream(
             ) {
                 return Err(tool_policy_error_to_backend_error(err));
             }
+
+            // Opt-in RTK tool-output compression on the streaming translate path.
+            state.apply_rtk_to_openai(&mut openai_req, &mapped_model);
+
             let model = body.model.clone();
             let permit = concurrency_permit.clone();
             let mut deployment_accounting = deployment_accounting;

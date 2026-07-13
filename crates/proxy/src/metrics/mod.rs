@@ -22,6 +22,12 @@ struct MetricsInner {
     pxpipe_compressed_total: AtomicU64,
     pxpipe_images_total: AtomicU64,
     pxpipe_imaged_chars_total: AtomicU64,
+    rtk_compressed_total: AtomicU64,
+    rtk_blocks_total: AtomicU64,
+    rtk_saved_chars_total: AtomicU64,
+    optimizer_compressed_total: AtomicU64,
+    optimizer_messages_compressed_total: AtomicU64,
+    optimizer_removed_tokens_total: AtomicU64,
 }
 
 impl Metrics {
@@ -85,6 +91,37 @@ impl Metrics {
             .fetch_add(imaged_chars, Ordering::Relaxed);
     }
 
+    /// Record one RTK tool-output compression: `blocks` tool-result payloads
+    /// rewritten, saving `saved_chars` source chars. Called on the compressed
+    /// path only (Anthropic passthrough + translate).
+    pub fn record_rtk_compression(&self, blocks: u64, saved_chars: u64) {
+        self.inner
+            .rtk_compressed_total
+            .fetch_add(1, Ordering::Relaxed);
+        self.inner
+            .rtk_blocks_total
+            .fetch_add(blocks, Ordering::Relaxed);
+        self.inner
+            .rtk_saved_chars_total
+            .fetch_add(saved_chars, Ordering::Relaxed);
+    }
+
+    /// Record one FFEC prompt-optimizer compression: `messages_compressed`
+    /// history messages rewritten, saving an estimated `removed_tokens_est`
+    /// tokens. Called on the applied (Live, `report.applied == true`) path only
+    /// -- Shadow mode never mutates the request and never calls this.
+    pub fn record_optimization(&self, messages_compressed: u64, removed_tokens_est: u64) {
+        self.inner
+            .optimizer_compressed_total
+            .fetch_add(1, Ordering::Relaxed);
+        self.inner
+            .optimizer_messages_compressed_total
+            .fetch_add(messages_compressed, Ordering::Relaxed);
+        self.inner
+            .optimizer_removed_tokens_total
+            .fetch_add(removed_tokens_est, Ordering::Relaxed);
+    }
+
     /// Take a point-in-time snapshot of all counters for the GET /metrics endpoint.
     pub fn snapshot(&self) -> MetricsSnapshot {
         MetricsSnapshot {
@@ -101,6 +138,21 @@ impl Metrics {
             pxpipe_compressed_total: self.inner.pxpipe_compressed_total.load(Ordering::Relaxed),
             pxpipe_images_total: self.inner.pxpipe_images_total.load(Ordering::Relaxed),
             pxpipe_imaged_chars_total: self.inner.pxpipe_imaged_chars_total.load(Ordering::Relaxed),
+            rtk_compressed_total: self.inner.rtk_compressed_total.load(Ordering::Relaxed),
+            rtk_blocks_total: self.inner.rtk_blocks_total.load(Ordering::Relaxed),
+            rtk_saved_chars_total: self.inner.rtk_saved_chars_total.load(Ordering::Relaxed),
+            optimizer_compressed_total: self
+                .inner
+                .optimizer_compressed_total
+                .load(Ordering::Relaxed),
+            optimizer_messages_compressed_total: self
+                .inner
+                .optimizer_messages_compressed_total
+                .load(Ordering::Relaxed),
+            optimizer_removed_tokens_total: self
+                .inner
+                .optimizer_removed_tokens_total
+                .load(Ordering::Relaxed),
         }
     }
 }
@@ -128,6 +180,18 @@ pub struct MetricsSnapshot {
     pub pxpipe_images_total: u64,
     /// Total source chars pxpipe replaced with images.
     pub pxpipe_imaged_chars_total: u64,
+    /// Requests where RTK tool-output compression fired.
+    pub rtk_compressed_total: u64,
+    /// Total tool-result payloads RTK rewrote across all compressed requests.
+    pub rtk_blocks_total: u64,
+    /// Total source chars RTK removed from tool output.
+    pub rtk_saved_chars_total: u64,
+    /// Requests where the FFEC prompt optimizer applied a compression (Live mode only).
+    pub optimizer_compressed_total: u64,
+    /// Total history messages the optimizer rewrote across all applied requests.
+    pub optimizer_messages_compressed_total: u64,
+    /// Total estimated tokens the optimizer removed across all applied requests.
+    pub optimizer_removed_tokens_total: u64,
 }
 
 impl MetricsSnapshot {
@@ -185,6 +249,17 @@ mod tests {
         assert_eq!(s.pxpipe_compressed_total, 2);
         assert_eq!(s.pxpipe_images_total, 5);
         assert_eq!(s.pxpipe_imaged_chars_total, 20_000);
+    }
+
+    #[test]
+    fn optimizer_metrics_counting() {
+        let m = Metrics::new();
+        m.record_optimization(3, 1_200);
+        m.record_optimization(2, 800);
+        let s = m.snapshot();
+        assert_eq!(s.optimizer_compressed_total, 2);
+        assert_eq!(s.optimizer_messages_compressed_total, 5);
+        assert_eq!(s.optimizer_removed_tokens_total, 2_000);
     }
 
     #[test]
