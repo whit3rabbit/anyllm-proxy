@@ -242,9 +242,10 @@ If no backend is configured, the UI opens on the **Settings** tab with a getting
 
 The admin server binds to `127.0.0.1:3001` by default (localhost only). Dashboard tabs:
 
-- **Dashboard:** Live RPM, error rate, P50/P95 latency, per-backend cards, filterable live request feed.
+- **Dashboard:** Live RPM, error rate, P50/P95 latency (with rolling sparklines and trend percentage deltas), per-backend cards, filterable live request feed.
 - **Request Log:** Historical log with filters (backend, status, key, date range), paginated, with per-request cost and token detail.
 - **Access Control:** Virtual key CRUD -- create, edit (RPM/TPM limits, budget, expiry, model allowlist), revoke without restarting.
+- **Routing:** Configure live traffic routing. Includes **Auto Router** (routes requests based on characteristics like image content, token count, web-search tools, or extended thinking to appropriate backend/model tiers) and **Model Routes** (maps named model aliases to backend providers with failover, round-robin, or load-balancing strategies).
 - **Backends:** Configured backends and their status.
 - **Models:** Discover models from providers (OpenRouter, DeepInfra, Ollama, or configured backend), add/remove deployments. Changes are persisted to SQLite and survive restarts.
 - **Audit:** All admin config mutations and key lifecycle events.

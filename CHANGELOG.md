@@ -25,6 +25,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
   Accent color and light/dark mode are now independent axes (mode layers on top of any
   accent color instead of "Light" being one of the color choices). Default accent is now
   Blue. Existing `anyllm.theme=light` localStorage values migrate to Blue + Light mode.
+- Clearer admin-UI Settings help: the **thinking-block repair** and **forward client
+  credential** runtime toggles are now grouped under an "Anthropic passthrough" sub-heading
+  with rewritten plain-language descriptions and hover `?` tips explaining what each solves
+  and when to enable it.
+- Split large proxy modules into submodule directories for configuration, route APIs, passthrough handlers, streaming, and admin main helpers to improve codebase maintainability, and added `docs/TEST_PARITY_LITELLM.md`.
+- Expanded Makefile build and test targets (such as `all-features`, `otel`, `qdrant`, `redis`, `optimizer`) and UI targets, and documented the admin UI build dist gotcha in `CLAUDE.md`.
 
 ### Added
 - Claude Code tier router (opt-in, disabled by default): the **Routing > Auto Router** tab maps
@@ -38,12 +44,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 - Provider editor redesign: the provider detail modal is now a larger single-column form
   with an API-key show/hide toggle, an informational Models list (add + query-models
   discovery), and inline **Edit** of existing managed backends (not just create/delete).
-
-### Changed
-- Clearer admin-UI Settings help: the **thinking-block repair** and **forward client
-  credential** runtime toggles are now grouped under an "Anthropic passthrough" sub-heading
-  with rewritten plain-language descriptions and hover `?` tips explaining what each solves
-  and when to enable it.
+- Dashboard sparklines and trend deltas: Admin UI dashboard stat cards now feature sparklines and trend percentage deltas, showing rolling activity trends (RPM, error rate, P50/P95 latency) for the last 24 retrieved metric snapshots.
 
 ## [0.14.1] - 2026-07-12
 
