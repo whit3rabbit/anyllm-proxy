@@ -125,6 +125,52 @@ pub(crate) async fn put_config(
             }
         }
     }
+    if let Some(val) = body.get("router") {
+        let cfg: crate::config::router_config::RouterConfig =
+            match serde_json::from_value(val.clone()) {
+                Ok(c) => c,
+                Err(e) => {
+                    return (
+                        StatusCode::BAD_REQUEST,
+                        Json(serde_json::json!({ "error": format!("invalid router config: {e}") })),
+                    )
+                        .into_response();
+                }
+            };
+        // Reject tiers that point at a backend name we don't have. An empty
+        // backend_name means "unset" and is allowed.
+        {
+            let known = shared
+                .managed_backends
+                .read()
+                .unwrap_or_else(|e| e.into_inner());
+            for (tier_name, t) in [
+                ("default", &cfg.default),
+                ("background", &cfg.background),
+                ("think", &cfg.think),
+                ("long_context", &cfg.long_context),
+                ("web_search", &cfg.web_search),
+                ("image", &cfg.image),
+            ] {
+                if !t.backend_name.is_empty() && !known.contains_key(&t.backend_name) {
+                    return (
+                        StatusCode::BAD_REQUEST,
+                        Json(serde_json::json!({
+                            "error": format!(
+                                "router tier '{tier_name}' references unknown backend '{}'",
+                                t.backend_name
+                            )
+                        })),
+                    )
+                        .into_response();
+                }
+            }
+        }
+        db_writes.push((
+            "router".to_string(),
+            serde_json::to_string(&cfg).unwrap_or_default(),
+        ));
+    }
     if let Some(backends) = body.get("backends").and_then(|v| v.as_object()) {
         let config = shared
             .runtime_config
@@ -191,6 +237,7 @@ pub(crate) async fn put_config(
                 "forward_client_auth" => config.forward_client_auth.to_string(),
                 "tool_guardrail_mode" => config.tool_guardrail_mode.clone(),
                 "optimizer_mode" => config.optimizer_mode.clone(),
+                "router" => serde_json::to_string(&config.router).unwrap_or_default(),
                 other => {
                     if let Some((backend, field)) = other.split_once('.') {
                         config
@@ -254,6 +301,9 @@ pub(crate) async fn put_config(
                 }
                 "optimizer_mode" => {
                     config.optimizer_mode = value.clone();
+                }
+                "router" => {
+                    config.router = serde_json::from_str(value).unwrap_or_default();
                 }
                 _ => {
                     if let Some((backend, field)) = key.split_once('.') {

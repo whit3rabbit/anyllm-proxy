@@ -1,5 +1,6 @@
 use crate::admin::state::{RuntimeConfig, SharedState};
 use crate::backend::BackendClient;
+use crate::config::router_config::{RouterConfig, RouterSignals};
 use crate::metrics::Metrics;
 use anyllm_providers::ProviderCatalog;
 use anyllm_translate::{anthropic, mapping};
@@ -175,29 +176,7 @@ impl AppState {
                 options,
             } => {
                 let mut effective = self
-                    .all_backends
-                    .as_ref()
-                    .and_then(|m| m.get(&backend_name))
-                    .cloned()
-                    .or_else(|| {
-                        // Check managed backends (SQLite-backed, zero-restart)
-                        self.shared.as_ref().and_then(|s| {
-                            let guard = s.managed_backends
-                                .read()
-                                .ok()
-                                .or_else(|| {
-                                    tracing::warn!("managed_backends RwLock is poisoned; skipping managed backend lookup");
-                                    None
-                                })?;
-                            guard.get(&backend_name).map(|(row, client)| {
-                                let mut state = self.clone();
-                                state.backend = client.clone();
-                                state.backend_name = backend_name.clone();
-                                state.provider_id = Some(row.provider_id.clone());
-                                state
-                            })
-                        })
-                    })
+                    .effective_state_for_backend(&backend_name)
                     .unwrap_or_else(|| self.clone());
                 // Carry the per-route option overrides onto the effective state so
                 // the option accessors resolve route-first, global-fallback.
@@ -222,6 +201,56 @@ impl AppState {
             }
             ResolvedModel::Legacy(mapped) => Ok((mapped, self.clone(), None)),
         }
+    }
+
+    /// Build an effective `AppState` targeting the named backend: a
+    /// cross-backend deployment from `all_backends`, else a managed backend
+    /// (SQLite-backed, zero-restart). `None` if the name is unknown. Shared by
+    /// `resolve_model_and_state` and `resolve_router_tier` so both construct the
+    /// effective state identically.
+    fn effective_state_for_backend(&self, backend_name: &str) -> Option<AppState> {
+        if let Some(state) = self
+            .all_backends
+            .as_ref()
+            .and_then(|m| m.get(backend_name))
+            .cloned()
+        {
+            return Some(state);
+        }
+        let shared = self.shared.as_ref()?;
+        let guard = shared.managed_backends.read().ok().or_else(|| {
+            tracing::warn!("managed_backends RwLock is poisoned; skipping managed backend lookup");
+            None
+        })?;
+        guard.get(backend_name).map(|(row, client)| {
+            let mut state = self.clone();
+            state.backend = client.clone();
+            state.backend_name = backend_name.to_string();
+            state.provider_id = Some(row.provider_id.clone());
+            state
+        })
+    }
+
+    /// Claude Code tier routing. If the router is enabled and the request's
+    /// signals match a configured tier, return `(model, effective_state, None)`
+    /// targeting that tier's backend+model. Returns `None` to fall through to
+    /// normal model-name routing (router disabled, no tier match, or the tier's
+    /// backend is unknown -- fail open).
+    pub(crate) fn resolve_router_tier(
+        &self,
+        router: &RouterConfig,
+        signals: &RouterSignals,
+    ) -> Option<(
+        String,
+        AppState,
+        Option<Arc<crate::config::model_router::Deployment>>,
+    )> {
+        // `router` is passed in (the caller reads runtime_config once), so the
+        // request path holds the runtime_config lock exactly once.
+        let tier = router.pick_tier(signals)?;
+        let effective = self.effective_state_for_backend(&tier.backend_name)?;
+        // No RPM accounting on the router path (deployment=None), same as Legacy.
+        Some((tier.model.clone(), effective, None))
     }
 
     /// Whether request/response body logging is enabled.
@@ -303,5 +332,151 @@ impl AppState {
         } else {
             None
         }
+    }
+}
+
+#[cfg(test)]
+mod router_tier_tests {
+    use super::*;
+    use crate::admin::state::RuntimeConfig;
+    use crate::config::router_config::{RouterConfig, RouterSignals, TierTarget};
+    use crate::config::{
+        BackendAuth, BackendKind, Config, ModelMapping, OpenAIApiFormat, TlsConfig,
+    };
+    use crate::metrics::Metrics;
+    use anyllm_optimize_core::Mode;
+    use anyllm_providers::ProviderCatalog;
+    use std::collections::HashMap;
+    use std::sync::RwLock;
+    use tokio::sync::Semaphore;
+
+    fn base_state(
+        backend_name: &str,
+        all_backends: Option<Arc<HashMap<String, AppState>>>,
+    ) -> AppState {
+        let config = Config {
+            backend: BackendKind::OpenAI,
+            openai_api_key: "test".into(),
+            openai_base_url: "https://api.openai.com".into(),
+            listen_port: 3000,
+            model_mapping: ModelMapping {
+                big_model: "gpt-4o".into(),
+                small_model: "gpt-4o-mini".into(),
+            },
+            tls: TlsConfig::default(),
+            backend_auth: BackendAuth::BearerToken("test".into()),
+            log_bodies: false,
+            redact_secrets: false,
+            anthropic_thinking_repair: false,
+            pxpipe_compress: false,
+            expose_degradation_warnings: false,
+            openai_api_format: OpenAIApiFormat::Chat,
+            provider_id: None,
+        };
+        let backend = crate::backend::BackendClient::OpenAI(
+            crate::backend::openai_client::OpenAIClient::new(&config),
+        );
+        let runtime_config = Arc::new(RwLock::new(RuntimeConfig {
+            model_mappings: indexmap::IndexMap::new(),
+            log_level: "info".to_string(),
+            log_bodies: false,
+            redact_secrets: false,
+            anthropic_thinking_repair: false,
+            pxpipe_compress: false,
+            pxpipe_models: String::new(),
+            rtk_compress: false,
+            rtk_models: String::new(),
+            forward_client_auth: false,
+            tool_guardrail_mode: "disabled".to_string(),
+            optimizer_mode: Mode::Off.as_str().to_string(),
+            router: Default::default(),
+        }));
+        AppState {
+            backend,
+            metrics: Metrics::new(),
+            runtime_config,
+            shared: None,
+            route_options: None,
+            backend_name: backend_name.to_string(),
+            provider_id: None,
+            concurrency: Arc::new(Semaphore::new(64)),
+            omit_stream_options: false,
+            stream_timeout_secs: 0,
+            expose_degradation_warnings: false,
+            cache: None,
+            thinking_repair: None,
+            pxpipe: None,
+            rtk: None,
+            optimizer: None,
+            model_router: None,
+            provider_catalog: Arc::new(ProviderCatalog::bundled()),
+            all_backends,
+            tool_engine: None,
+            batch_engine: None,
+        }
+    }
+
+    fn tier(backend: &str, model: &str) -> TierTarget {
+        TierTarget {
+            backend_name: backend.into(),
+            model: model.into(),
+            enabled: true,
+        }
+    }
+
+    // The live routing path: an enabled tier must produce the tier's model and an
+    // effective state pointing at the tier's backend, with no RPM deployment.
+    #[test]
+    fn resolve_router_tier_routes_to_configured_backend() {
+        let mut map = HashMap::new();
+        map.insert("cheap".to_string(), base_state("cheap", None));
+        let state = base_state("primary", Some(Arc::new(map)));
+
+        let router = RouterConfig {
+            enabled: true,
+            background: tier("cheap", "cheap-model"),
+            ..Default::default()
+        };
+
+        let signals = RouterSignals {
+            is_background: true,
+            ..Default::default()
+        };
+        let (model, effective, deployment) = state
+            .resolve_router_tier(&router, &signals)
+            .expect("background tier should match");
+        assert_eq!(model, "cheap-model");
+        assert_eq!(effective.backend_name, "cheap");
+        assert!(
+            deployment.is_none(),
+            "router path carries no RPM deployment"
+        );
+    }
+
+    // Fail open: a tier pointing at an unregistered backend routes to None so the
+    // caller falls through to normal model-name routing.
+    #[test]
+    fn resolve_router_tier_none_when_backend_unknown() {
+        let state = base_state("primary", Some(Arc::new(HashMap::new())));
+        let router = RouterConfig {
+            enabled: true,
+            default: tier("ghost", "m"),
+            ..Default::default()
+        };
+        assert!(state
+            .resolve_router_tier(&router, &RouterSignals::default())
+            .is_none());
+    }
+
+    #[test]
+    fn resolve_router_tier_none_when_disabled() {
+        let state = base_state("primary", None);
+        let router = RouterConfig {
+            default: tier("primary", "m"),
+            ..Default::default() // enabled = false
+        };
+        assert!(state
+            .resolve_router_tier(&router, &RouterSignals::default())
+            .is_none());
     }
 }

@@ -80,14 +80,33 @@ pub(crate) async fn chat_completions(
     // guardrails) apply. Resolution advances the route's round-robin/failover
     // counter, so it must run exactly once, before redaction.
     let original_model = body.model.clone();
-    let (mapped_model, effective, deployment) = match state.resolve_model_and_state(&original_model)
-    {
-        Ok((mapped, effective, deployment)) => (
-            mapped_model_for_backend(&original_model, mapped, &effective),
+    // Claude Code tier router (opt-in). LongContext is not classified on the
+    // OpenAI path (the token counter is Anthropic-shaped); that tier is skipped.
+    let router_cfg = {
+        let cfg = state
+            .runtime_config
+            .read()
+            .unwrap_or_else(|e| e.into_inner());
+        cfg.router.enabled.then(|| cfg.router.clone())
+    };
+    let router_tier = router_cfg.and_then(|rc| {
+        let signals = crate::server::router_signals::openai_signals(&body);
+        state.resolve_router_tier(&rc, &signals)
+    });
+    let (mapped_model, effective, deployment) = match router_tier {
+        Some((model, effective, deployment)) => (
+            mapped_model_for_backend(&original_model, model, &effective),
             effective,
             deployment,
         ),
-        Err(resp) => return resp,
+        None => match state.resolve_model_and_state(&original_model) {
+            Ok((mapped, effective, deployment)) => (
+                mapped_model_for_backend(&original_model, mapped, &effective),
+                effective,
+                deployment,
+            ),
+            Err(resp) => return resp,
+        },
     };
     if let Some(ref ctx) = vk_ctx {
         if let Err(error) = crate::server::policy::enforce_route_scope(

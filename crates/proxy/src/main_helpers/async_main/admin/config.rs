@@ -40,6 +40,7 @@ pub(crate) fn load_runtime_config(
         optimizer_mode: anyllm_proxy::optimizer::resolve_default_mode()
             .as_str()
             .to_string(),
+        router: Default::default(),
     };
     let runtime_defaults = admin::state::RuntimeConfigDefaults {
         log_bodies: multi_config.log_bodies,
@@ -54,6 +55,7 @@ pub(crate) fn load_runtime_config(
         optimizer_mode: anyllm_proxy::optimizer::resolve_default_mode()
             .as_str()
             .to_string(),
+        router: Default::default(),
     };
     (runtime_config, runtime_defaults)
 }
@@ -146,6 +148,13 @@ pub(crate) fn apply_config_overrides(
                         );
                     }
                 }
+                "router" => match serde_json::from_str(value) {
+                    Ok(cfg) => runtime_config.router = cfg,
+                    Err(e) => tracing::warn!(
+                        error = %e,
+                        "ignoring invalid router override from database"
+                    ),
+                },
                 k if k.ends_with(".big_model") => {
                     let backend = k.strip_suffix(".big_model").unwrap();
                     if let Some(m) = runtime_config.model_mappings.get_mut(backend) {

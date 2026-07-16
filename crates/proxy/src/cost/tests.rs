@@ -191,6 +191,7 @@ fn record_cost_with_shared_state_persists_spend() {
                 .as_str()
                 .to_string(),
             optimizer_mode: anyllm_optimize_core::Mode::Off.as_str().to_string(),
+            router: Default::default(),
         })),
         runtime_defaults: crate::admin::state::RuntimeConfigDefaults {
             log_bodies: false,
@@ -205,6 +206,7 @@ fn record_cost_with_shared_state_persists_spend() {
                 .as_str()
                 .to_string(),
             optimizer_mode: anyllm_optimize_core::Mode::Off.as_str().to_string(),
+            router: Default::default(),
         },
         backend_metrics: Arc::new(std::collections::HashMap::new()),
         log_tx,

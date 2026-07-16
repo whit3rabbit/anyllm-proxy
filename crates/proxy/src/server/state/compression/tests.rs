@@ -50,6 +50,7 @@ fn minimal_state(optimizer_mode: Mode) -> AppState {
         forward_client_auth: false,
         tool_guardrail_mode: "disabled".to_string(),
         optimizer_mode: optimizer_mode.as_str().to_string(),
+        router: Default::default(),
     }));
     AppState {
         backend,
@@ -237,6 +238,7 @@ fn state_with_rtk(enabled: bool) -> AppState {
         forward_client_auth: false,
         tool_guardrail_mode: "disabled".to_string(),
         optimizer_mode: "off".to_string(),
+        router: Default::default(),
     }));
     AppState {
         backend,

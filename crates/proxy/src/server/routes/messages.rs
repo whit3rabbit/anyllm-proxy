@@ -61,9 +61,47 @@ pub(crate) async fn messages(
     // ponytail: this records one RPM/in-flight slot before redaction, so a body
     // rejected by redaction still consumes a slot. Accepted (rejects are rare and
     // the alternative is resolving twice or un-recording); revisit if it matters.
-    let (mapped_model, effective, deployment) = match state.resolve_model_and_state(&body.model) {
-        Ok(v) => v,
-        Err(resp) => return resp,
+    // Claude Code tier router (opt-in): when enabled and a tier matches the
+    // request's characteristics, route to that tier's backend+model, bypassing
+    // model-name routing. Disabled by default => `router_tier` is None and
+    // behavior is unchanged.
+    // Read the router config once (cheap clone) so the runtime_config lock is
+    // taken a single time per request.
+    let router_cfg = {
+        let cfg = state
+            .runtime_config
+            .read()
+            .unwrap_or_else(|e| e.into_inner());
+        cfg.router.enabled.then(|| cfg.router.clone())
+    };
+    let (body, router_tier) = match router_cfg {
+        Some(rc) => {
+            // LongContext needs a token count. Offload the CPU-bound tokenizer to
+            // the blocking pool (per CLAUDE.md), moving `body` in and back out to
+            // avoid cloning a potentially large request.
+            let (body, long_context) = if rc.long_context_tier_active() {
+                let threshold = rc.context_threshold;
+                tokio::task::spawn_blocking(move || {
+                    let over = super::super::router_signals::is_long_context(&body, threshold);
+                    (body, over)
+                })
+                .await
+                .expect("router token-count task panicked")
+            } else {
+                (body, false)
+            };
+            let signals = super::super::router_signals::anthropic_signals(&body, long_context);
+            let tier = state.resolve_router_tier(&rc, &signals);
+            (body, tier)
+        }
+        None => (body, None),
+    };
+    let (mapped_model, effective, deployment) = match router_tier {
+        Some(v) => v,
+        None => match state.resolve_model_and_state(&body.model) {
+            Ok(v) => v,
+            Err(resp) => return resp,
+        },
     };
     if let Some(ref ctx) = vk_ctx {
         if let Err(error) = super::super::policy::enforce_route_scope(

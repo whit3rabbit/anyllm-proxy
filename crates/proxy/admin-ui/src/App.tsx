@@ -18,7 +18,7 @@ import TrafficView from './tabs/traffic/TrafficView'
 import UptimeView from './tabs/uptime/UptimeView'
 import Providers from './tabs/providers/Providers'
 import Backends from './tabs/backends/Backends'
-import RoutesTab from './tabs/routes/Routes'
+import Routing from './tabs/routing/Routing'
 
 /**
  * Root Application component. Sets up routing, global queries,
@@ -77,7 +77,10 @@ export default function App() {
             <Route path="/requests" element={<RequestLog />} />
             <Route path="/traffic" element={<TrafficView />} />
             <Route path="/providers" element={<Providers />} />
-            <Route path="/routes" element={<RoutesTab />} />
+            <Route path="/routing" element={<Routing />} />
+            {/* Back-compat: the old two tabs are now subtabs of /routing. */}
+            <Route path="/routes" element={<Navigate to="/routing?tab=routes" replace />} />
+            <Route path="/router" element={<Navigate to="/routing?tab=auto" replace />} />
             <Route path="/models" element={<Models />} />
             <Route path="/backends" element={<Backends />} />
             <Route path="/keys" element={<Keys />} />

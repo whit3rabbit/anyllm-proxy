@@ -107,6 +107,7 @@ pub fn app_multi_with_shared(
             optimizer_mode: crate::optimizer::resolve_default_mode()
                 .as_str()
                 .to_string(),
+            router: Default::default(),
         }))
     };
 

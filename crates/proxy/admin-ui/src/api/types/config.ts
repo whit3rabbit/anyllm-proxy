@@ -8,6 +8,30 @@ export interface ConfigEntry {
   updated_at: string
 }
 
+/** One Claude Code router tier: which managed backend + model to route to. */
+export interface RouterTierTarget {
+  /** Managed backend name, or '' if unset. */
+  backend_name: string
+  /** Model name to send upstream. */
+  model: string
+  /** Whether this tier is active. */
+  enabled: boolean
+}
+
+/** Claude Code tier router config (maps request characteristics to backend+model). */
+export interface RouterConfig {
+  /** Master switch. When false, routing is bypassed entirely. */
+  enabled: boolean
+  /** Token count above which a request is classified LongContext. */
+  context_threshold: number
+  default: RouterTierTarget
+  background: RouterTierTarget
+  think: RouterTierTarget
+  long_context: RouterTierTarget
+  web_search: RouterTierTarget
+  image: RouterTierTarget
+}
+
 /** Represents the full system configuration and environment variables. */
 export interface ConfigResponse {
   /** List of config database overrides. */
@@ -38,6 +62,8 @@ export interface ConfigResponse {
   tool_guardrail_mode: string
   /** Prompt-compression optimizer mode: 'off' | 'shadow' | 'live'. */
   optimizer_mode: string
+  /** Claude Code tier router config. */
+  router: RouterConfig
   /** Mappings of backend names to their configured big/small models. */
   backends: Record<string, { big_model: string; small_model: string }>
   /** List of keys whose overrides are active. */

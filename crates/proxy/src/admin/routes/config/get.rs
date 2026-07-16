@@ -15,6 +15,7 @@ pub(crate) async fn get_config(State(shared): State<SharedState>) -> Json<serde_
         forward_client_auth,
         tool_guardrail_mode,
         optimizer_mode,
+        router,
         backends,
     ) = {
         let config = shared
@@ -43,6 +44,7 @@ pub(crate) async fn get_config(State(shared): State<SharedState>) -> Json<serde_
             config.forward_client_auth,
             config.tool_guardrail_mode.clone(),
             config.optimizer_mode.clone(),
+            config.router.clone(),
             backends,
         )
     };
@@ -70,6 +72,7 @@ pub(crate) async fn get_config(State(shared): State<SharedState>) -> Json<serde_
         "forward_client_auth": forward_client_auth,
         "tool_guardrail_mode": tool_guardrail_mode,
         "optimizer_mode": optimizer_mode,
+        "router": router,
         "backends": backends,
         "overridden_keys": override_keys,
     }))

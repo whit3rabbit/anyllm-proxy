@@ -2,6 +2,7 @@ import { useConfig, useEnv, useStatus } from '../../api/queries'
 import EmptyState from '../../components/shared/EmptyState'
 import GettingStartedNotice from './GettingStartedNotice'
 import EnvFileSection from './EnvFileSection'
+import DisplaySection from './DisplaySection'
 import RuntimeSettingsSection from './RuntimeSettingsSection'
 import EnvVariablesSection from './EnvVariablesSection'
 
@@ -37,6 +38,9 @@ export default function Settings({ configured = true }: { configured?: boolean }
 
       {/* Getting-started notice — shown when no backend is configured */}
       <GettingStartedNotice configured={configured} />
+
+      {/* Display: accent color, mode, text size (client-side only) */}
+      <DisplaySection />
 
       {/* Env file import / export */}
       <EnvFileSection />

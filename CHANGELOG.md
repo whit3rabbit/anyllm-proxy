@@ -10,6 +10,35 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ## [Unreleased]
 
+### Changed
+- Admin UI **Router** and **Routes** tabs merged into a single **Routing** tab with two
+  subtabs: **Auto Router** (route by request shape) and **Model Routes** (named model
+  aliases, load-balanced). The old `#/router` and `#/routes` URLs redirect to the matching
+  subtab. No backend change; both config surfaces are unchanged.
+- Admin UI theme controls moved from the sidebar into a **Settings > Display** section.
+  Accent color and light/dark mode are now independent axes (mode layers on top of any
+  accent color instead of "Light" being one of the color choices). Default accent is now
+  Blue. Existing `anyllm.theme=light` localStorage values migrate to Blue + Light mode.
+
+### Added
+- Claude Code tier router (opt-in, disabled by default): the **Routing > Auto Router** tab maps
+  request tiers (Default, Background, Think, Long Context, Web Search, Image) each to a
+  managed backend + model. The proxy classifies each `/v1/messages` request by its
+  characteristics (image content, web-search tool, extended thinking, token count vs a
+  configurable Context Threshold, haiku/background model) and routes to the matching tier,
+  bypassing model-name routing. Also applied on the OpenAI `/v1/chat/completions` path
+  (Long Context excluded there). Stored as one `router` config override; live-toggleable,
+  no restart.
+- Provider editor redesign: the provider detail modal is now a larger single-column form
+  with an API-key show/hide toggle, an informational Models list (add + query-models
+  discovery), and inline **Edit** of existing managed backends (not just create/delete).
+
+### Changed
+- Clearer admin-UI Settings help: the **thinking-block repair** and **forward client
+  credential** runtime toggles are now grouped under an "Anthropic passthrough" sub-heading
+  with rewritten plain-language descriptions and hover `?` tips explaining what each solves
+  and when to enable it.
+
 ## [0.14.1] - 2026-07-12
 
 ### Added

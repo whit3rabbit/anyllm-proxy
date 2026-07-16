@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import App from './App'
 import { RateLimitError } from './api/client'
+import './store/theme' // side-effect: applies persisted theme + font-scale to <html> before mount
 import 'performative-ui/styles.css'
 import './styles/globals.css'
 

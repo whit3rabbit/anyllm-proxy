@@ -11,13 +11,17 @@ import {
   useReorderRouteProviders,
   useManagedBackends,
   useUpdateManagedBackend,
+  useCatalogProviders,
+  useCatalogProviderModels,
   useStatus,
 } from '../../api/queries'
-import type { Route } from '../../api/types'
+import type { Route, ManagedBackend, CatalogProvider } from '../../api/types'
 import AsyncBoundary from '../../components/shared/AsyncBoundary'
 import Modal from '../../components/shared/Modal'
 import ConfirmDialog from '../../components/shared/ConfirmDialog'
 import { AdminButton, AdminLoading, AdminSurface } from '../../components/shared/Performative'
+import ProviderForm from '../providers/ProviderForm'
+import { catalogModelIds } from '../../utils/catalogModels'
 import { copyToClipboard } from '../../utils/clipboard'
 import { pushToast } from '../../store/toast'
 
@@ -62,13 +66,23 @@ function RouteDetail({ route, onClose }: { route: Route; onClose: () => void }) 
   const updateRoute = useUpdateRoute()
   const updateBackend = useUpdateManagedBackend()
   const { data: managedData } = useManagedBackends()
+  const { data: catalogProviders } = useCatalogProviders()
   const { data: status } = useStatus()
   const [showAdd, setShowAdd] = useState(false)
   const [selectedBackend, setSelectedBackend] = useState('')
-  const [modelInput, setModelInput] = useState('*')
+  const [selectedModel, setSelectedModel] = useState('*')
+  const [editingBackend, setEditingBackend] = useState<ManagedBackend | null>(null)
 
   const providers = providersData?.providers ?? []
   const backends = managedData?.backends ?? []
+
+  // Model dropdown for the provider chosen in the add form. Models aren't stored
+  // on a backend; they come from the provider's catalog + live-cached ids.
+  const selectedProviderId = backends.find((b) => b.id === selectedBackend)?.provider_id ?? null
+  const modelsQuery = useCatalogProviderModels(selectedProviderId)
+  const modelOptions = catalogModelIds(modelsQuery.data)
+  const catalogProviderFor = (providerId: string): CatalogProvider | undefined =>
+    catalogProviders?.find((p) => p.id === providerId)
 
   // Routes have no unique URL; the proxy dispatches by the `model` field (= route
   // name). Show a ready-to-run curl snippet against the shared endpoint. Host comes
@@ -95,10 +109,10 @@ function RouteDetail({ route, onClose }: { route: Route; onClose: () => void }) 
 
   function handleAdd() {
     if (!selectedBackend) return
-    const models = modelInput.trim() === '*' ? ['*'] : modelInput.split(',').map((s) => s.trim()).filter(Boolean)
+    const models = selectedModel === '*' ? ['*'] : [selectedModel]
     addProvider.mutate(
       { routeId: route.id, data: { backend_id: selectedBackend, models, priority: providers.length, enabled: true } },
-      { onSuccess: () => { setShowAdd(false); setSelectedBackend(''); setModelInput('*') } },
+      { onSuccess: () => { setShowAdd(false); setSelectedBackend(''); setSelectedModel('*') } },
     )
   }
 
@@ -231,20 +245,27 @@ function RouteDetail({ route, onClose }: { route: Route; onClose: () => void }) 
 
       {showAdd && (
         <div className="route-detail-add">
-          <select value={selectedBackend} onChange={(e) => setSelectedBackend(e.target.value)} className="route-detail-add-select">
+          <select
+            value={selectedBackend}
+            onChange={(e) => { setSelectedBackend(e.target.value); setSelectedModel('*') }}
+            className="route-detail-add-select"
+          >
             <option value="">Select provider...</option>
             {availableBackends.map((b) => (
               <option key={b.id} value={b.id}>{b.name} ({b.provider_id})</option>
             ))}
           </select>
-          <input
-            type="text"
-            name="route-provider-models"
-            placeholder="models (* for all)"
-            value={modelInput}
-            onChange={(e) => setModelInput(e.target.value)}
+          <select
+            value={selectedModel}
+            onChange={(e) => setSelectedModel(e.target.value)}
             className="route-detail-add-models"
-          />
+            disabled={!selectedBackend}
+          >
+            <option value="*">* (all models)</option>
+            {modelOptions.map((m) => (
+              <option key={m} value={m}>{m}</option>
+            ))}
+          </select>
           <AdminButton
             tone="primary"
             size="sm"
@@ -254,6 +275,11 @@ function RouteDetail({ route, onClose }: { route: Route; onClose: () => void }) 
           >
             Add
           </AdminButton>
+          {selectedBackend && !modelsQuery.isLoading && modelOptions.length === 0 && (
+            <span className="dim route-detail-add-hint">
+              No models found for this provider. Add one in the Providers tab (or use <code>*</code> for all).
+            </span>
+          )}
         </div>
       )}
 
@@ -289,40 +315,74 @@ function RouteDetail({ route, onClose }: { route: Route; onClose: () => void }) 
               aria-label="Move down"
             >&darr;</AdminButton>
           </span>
-          <AdminButton
-            size="sm"
-            tone={p.enabled ? 'primary' : 'secondary'}
-            className="route-provider-toggle"
-            title="In-route membership: whether this backend is active within this route."
-            onClick={() => updateProvider.mutate({ routeId: route.id, providerId: p.id, data: { enabled: !p.enabled } })}
-          >
-            {p.enabled ? 'in route' : 'excluded'}
-          </AdminButton>
-          {(() => {
-            const backend = backends.find((b) => b.id === p.backend_id)
-            if (!backend) return null
-            return (
-              <AdminButton
-                size="sm"
-                tone={backend.enabled ? 'primary' : 'secondary'}
-                className="route-provider-toggle"
-                title="Backend online (global). Disables this backend everywhere, not just this route."
-                onClick={() => updateBackend.mutate({ name: backend.name, data: { enabled: !backend.enabled } })}
-              >
-                {backend.enabled ? 'backend on' : 'backend off'}
-              </AdminButton>
-            )
-          })()}
-          <AdminButton
-            tone="danger"
-            size="sm"
-            className="route-provider-remove"
-            onClick={() => removeProvider.mutate({ routeId: route.id, providerId: p.id })}
-          >
-            Remove
-          </AdminButton>
+          <span className="route-provider-actions">
+            <AdminButton
+              size="sm"
+              tone={p.enabled ? 'primary' : 'secondary'}
+              className="route-provider-toggle"
+              title="In-route membership: whether this backend is active within this route."
+              onClick={() => updateProvider.mutate({ routeId: route.id, providerId: p.id, data: { enabled: !p.enabled } })}
+            >
+              {p.enabled ? 'in route' : 'excluded'}
+            </AdminButton>
+            {(() => {
+              const backend = backends.find((b) => b.id === p.backend_id)
+              if (!backend) return null
+              return (
+                <AdminButton
+                  size="sm"
+                  tone={backend.enabled ? 'primary' : 'secondary'}
+                  className="route-provider-toggle"
+                  title="Backend online (global). Disables this backend everywhere, not just this route."
+                  onClick={() => updateBackend.mutate({ name: backend.name, data: { enabled: !backend.enabled } })}
+                >
+                  {backend.enabled ? 'backend on' : 'backend off'}
+                </AdminButton>
+              )
+            })()}
+            {(() => {
+              const backend = backends.find((b) => b.id === p.backend_id)
+              // Only editable if we can resolve both the backend record and its
+              // catalog provider (custom providers have no CatalogProvider).
+              if (!backend || !catalogProviderFor(p.provider_id)) return null
+              return (
+                <AdminButton
+                  size="sm"
+                  className="route-provider-toggle"
+                  title="Edit this provider's credentials and settings."
+                  onClick={() => setEditingBackend(backend)}
+                >
+                  Edit
+                </AdminButton>
+              )
+            })()}
+            <AdminButton
+              tone="danger"
+              size="sm"
+              className="route-provider-remove"
+              onClick={() => removeProvider.mutate({ routeId: route.id, providerId: p.id })}
+            >
+              Remove
+            </AdminButton>
+          </span>
         </div>
       ))}
+
+      {editingBackend && catalogProviderFor(editingBackend.provider_id) && (
+        <Modal
+          open
+          onClose={() => setEditingBackend(null)}
+          title={`Edit provider — ${editingBackend.name}`}
+          size="lg"
+        >
+          <ProviderForm
+            provider={catalogProviderFor(editingBackend.provider_id)!}
+            existing={editingBackend}
+            existingCount={backends.filter((b) => b.provider_id === editingBackend.provider_id).length}
+            onDone={() => setEditingBackend(null)}
+          />
+        </Modal>
+      )}
     </div>
   )
 }
@@ -427,9 +487,14 @@ export default function Routes() {
   return (
     <div>
       <div className="section-header">
-        <h2>Routes</h2>
+        <h2>Model Routes</h2>
         <AdminButton tone="primary" onClick={() => setShowCreate(true)}>+ New Route</AdminButton>
       </div>
+      <p style={{ color: 'var(--text-2)', marginTop: -4, marginBottom: 14 }}>
+        A route is a named model alias: the client sends <code>model: &lt;route-name&gt;</code> and the
+        request is load-balanced across the route's backends by the chosen strategy (failover,
+        round-robin, and so on). Distinct from Auto Router, which routes by request shape.
+      </p>
 
       <AsyncBoundary
         query={query}

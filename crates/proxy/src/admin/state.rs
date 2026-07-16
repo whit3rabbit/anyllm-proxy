@@ -7,6 +7,7 @@
 
 use crate::admin::keys::VirtualKeyMeta;
 use crate::backend::BackendClient;
+use crate::config::router_config::RouterConfig;
 use crate::config::ModelMapping;
 use crate::metrics::Metrics;
 use anyllm_providers::ProviderCatalog;
@@ -149,6 +150,10 @@ pub struct RuntimeConfig {
     /// seeded from `OPTIMIZER_MODE` at process start (see
     /// `crate::optimizer::resolve_default_mode`).
     pub optimizer_mode: String,
+    /// Claude Code tier router. Maps request characteristics (image/web-search/
+    /// thinking/long-context/background/default) to a managed backend + model.
+    /// Disabled by default; stored as one JSON blob under config key `"router"`.
+    pub router: RouterConfig,
 }
 
 /// Runtime config defaults before SQLite overrides are applied. Used to restore
@@ -165,6 +170,7 @@ pub struct RuntimeConfigDefaults {
     pub forward_client_auth: bool,
     pub tool_guardrail_mode: String,
     pub optimizer_mode: String,
+    pub router: RouterConfig,
 }
 
 /// Events broadcast to WebSocket clients for live dashboard updates.
@@ -248,6 +254,7 @@ impl SharedState {
                     .as_str()
                     .to_string(),
                 optimizer_mode: anyllm_optimize_core::Mode::Off.as_str().to_string(),
+                router: Default::default(),
             })),
             runtime_defaults: RuntimeConfigDefaults {
                 log_bodies: false,
@@ -262,6 +269,7 @@ impl SharedState {
                     .as_str()
                     .to_string(),
                 optimizer_mode: anyllm_optimize_core::Mode::Off.as_str().to_string(),
+                router: Default::default(),
             },
             backend_metrics: Arc::new(HashMap::new()),
             log_tx,

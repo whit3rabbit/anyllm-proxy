@@ -4,6 +4,7 @@ import {
   useOptimizerModel, useDownloadOptimizerModel,
 } from '../../api/queries'
 import ConfirmDialog from '../../components/shared/ConfirmDialog'
+import InfoTip from '../../components/shared/InfoTip'
 import { AdminButton } from '../../components/shared/Performative'
 import type { ConfigResponse } from '../../api/types'
 
@@ -101,6 +102,10 @@ export default function RuntimeSettingsSection({ cfg }: RuntimeSettingsSectionPr
         )}
       </div>
 
+      <div className="section-label" style={{ marginTop: 16, marginBottom: 8 }}>
+        Anthropic passthrough <span className="dim" style={{ fontWeight: 'normal' }}>(BACKEND=anthropic only)</span>
+      </div>
+
       <div className="form-group">
         <label className="form-label" htmlFor="cfg-thinking-repair" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <input
@@ -111,15 +116,46 @@ export default function RuntimeSettingsSection({ cfg }: RuntimeSettingsSectionPr
             onChange={(e) => handleBooleanSave('anthropic_thinking_repair', e.target.checked)}
           />
           Anthropic thinking-block repair
+          <InfoTip text="In-memory store, keyed per backend + virtual key; cleared on restart, so it fails open (forwards the request unrepaired) until a fresh response is recorded. Never alters messages before the last assistant turn, so prompt-cache prefixes stay byte-identical. Live-toggle, no restart needed." />
         </label>
         <div className="dim" style={{ fontSize: 12 }}>
-          Repairs corrupted thinking/redacted_thinking blocks in Anthropic passthrough
-          requests (applies to any backend running in BACKEND=anthropic passthrough mode,
-          including a named backend in a multi-backend config). Off by default.
+          Fixes the repeating HTTP 400 you get when a history-replaying client (e.g. Claude
+          Code) corrupts a prior turn's thinking / redacted_thinking blocks: the proxy records
+          each Anthropic response as ground truth and restores the blocks on replay. Only
+          affects BACKEND=anthropic passthrough; a safe no-op on every other backend. Off by
+          default.
         </div>
         {cfg.overridden_keys.includes('anthropic_thinking_repair') && (
           <div className="form-row">
             <AdminButton size="sm" onClick={() => setPendingReset('anthropic_thinking_repair')}>
+              Reset
+            </AdminButton>
+          </div>
+        )}
+      </div>
+
+      <div className="form-group">
+        <label className="form-label" htmlFor="cfg-forward-client-auth" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <input
+            id="cfg-forward-client-auth"
+            type="checkbox"
+            checked={cfg.forward_client_auth}
+            disabled={save.isPending}
+            onChange={(e) => handleBooleanSave('forward_client_auth', e.target.checked)}
+          />
+          Forward client credential
+          <InfoTip text="Auto-skipped for virtual-key and OIDC/JWT requests (those keep the operator credential). The proxy refuses to start, and this PUT returns 400, if enabled with 2+ PROXY_API_KEYS and no PROXY_OPEN_RELAY. Does not apply to translate-mode routing to Anthropic." />
+        </label>
+        <div className="dim" style={{ fontSize: 12 }}>
+          The proxy normally authenticates upstream with the operator's own Anthropic key. Turn
+          this on to forward each client's own x-api-key / Authorization header verbatim instead,
+          so callers bill their own Anthropic Pro/Max or BYOK key (skips the `claude setup-token`
+          step). BACKEND=anthropic passthrough, single-key / BYOK deployments only. Off by
+          default.
+        </div>
+        {cfg.overridden_keys.includes('forward_client_auth') && (
+          <div className="form-row">
+            <AdminButton size="sm" onClick={() => setPendingReset('forward_client_auth')}>
               Reset
             </AdminButton>
           </div>
@@ -226,32 +262,6 @@ export default function RuntimeSettingsSection({ cfg }: RuntimeSettingsSectionPr
                 </AdminButton>
               </div>
             )}
-          </div>
-        )}
-      </div>
-
-      <div className="form-group">
-        <label className="form-label" htmlFor="cfg-forward-client-auth" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <input
-            id="cfg-forward-client-auth"
-            type="checkbox"
-            checked={cfg.forward_client_auth}
-            disabled={save.isPending}
-            onChange={(e) => handleBooleanSave('forward_client_auth', e.target.checked)}
-          />
-          Forward client credential (Anthropic passthrough)
-        </label>
-        <div className="dim" style={{ fontSize: 12 }}>
-          Forwards the client's own x-api-key/Authorization header upstream instead of the
-          operator's configured credential (BACKEND=anthropic passthrough only, single-key/BYOK
-          deployments). The proxy refuses to enable this with 2+ PROXY_API_KEYS entries and no
-          PROXY_OPEN_RELAY. Off by default.
-        </div>
-        {cfg.overridden_keys.includes('forward_client_auth') && (
-          <div className="form-row">
-            <AdminButton size="sm" onClick={() => setPendingReset('forward_client_auth')}>
-              Reset
-            </AdminButton>
           </div>
         )}
       </div>

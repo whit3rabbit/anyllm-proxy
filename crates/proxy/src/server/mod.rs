@@ -34,6 +34,8 @@ pub mod oidc;
 mod passthrough;
 /// Per-key request policy enforcement (model allowlists).
 pub mod policy;
+/// Claude Code tier-router signal extraction from request bodies.
+pub(crate) mod router_signals;
 /// Axum router setup and request handlers for all API endpoints.
 pub mod routes;
 /// Secret redaction for upstream request payloads.

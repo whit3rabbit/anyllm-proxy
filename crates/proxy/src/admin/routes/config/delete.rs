@@ -91,6 +91,14 @@ pub(crate) async fn delete_config_override(
                     }
                     Some(env_default)
                 }
+                "router" => {
+                    let env_default = shared.runtime_defaults.router.clone();
+                    let value = serde_json::to_string(&env_default).unwrap_or_default();
+                    if let Ok(mut config) = shared.runtime_config.write() {
+                        config.router = env_default;
+                    }
+                    Some(value)
+                }
                 _ => None,
             };
             if let Some(value) = restored {

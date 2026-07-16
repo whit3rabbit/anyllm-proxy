@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import { useAuthStore } from '../../store/auth'
 import { useWsStore } from '../../store/ws'
+import { NAV_ICONS } from '../shared/NavIcon'
 import { AdminButton } from '../shared/Performative'
 
 interface SidebarGroup {
@@ -21,7 +22,7 @@ const GROUPS: SidebarGroup[] = [
     label: 'Configure',
     items: [
       { to: '/providers', label: 'Providers' },
-      { to: '/routes', label: 'Routes' },
+      { to: '/routing', label: 'Routing' },
       { to: '/models', label: 'Models' },
       { to: '/backends', label: 'Backends' },
     ],
@@ -48,9 +49,15 @@ export default function Sidebar() {
 
   return (
     <aside className="sidebar">
-      <div className="sidebar-brand">anyllm</div>
+      <div className="sidebar-brand">
+        <div className="sidebar-brand-row">
+          <span className="sidebar-brand-dot" />
+          anyllm
+        </div>
+        <span className="sidebar-brand-sub">Proxy Console</span>
+      </div>
 
-      <div className="sidebar-scroll">
+      <nav className="sidebar-scroll">
         {GROUPS.map((g) => (
           <div key={g.label} className="sidebar-group">
             <div className="sidebar-group-label">{g.label}</div>
@@ -60,20 +67,23 @@ export default function Sidebar() {
                 to={item.to}
                 className={({ isActive }) => `sidebar-item${isActive ? ' active' : ''}`}
               >
-                {item.label}
+                <span className="nav-ico">{NAV_ICONS[item.to]}</span>
+                <span>{item.label}</span>
               </NavLink>
             ))}
           </div>
         ))}
-      </div>
+      </nav>
 
       <div className="sidebar-footer">
-        <span className={`ws-status ${wsStatus === 'connected' ? 'connected' : 'disconnected'}`}>
-          {wsStatus === 'connected' ? 'Live' : 'Offline'}
-        </span>
-        <AdminButton size="sm" onClick={logout}>
-          Sign out
-        </AdminButton>
+        <div className="sidebar-footer-row">
+          <span className={`ws-status ${wsStatus === 'connected' ? 'connected' : 'disconnected'}`}>
+            {wsStatus === 'connected' ? 'Live' : 'Offline'}
+          </span>
+          <AdminButton size="sm" onClick={logout}>
+            Sign out
+          </AdminButton>
+        </div>
       </div>
     </aside>
   )

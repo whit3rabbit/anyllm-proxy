@@ -11,6 +11,8 @@ pub mod litellm;
 pub mod model_router;
 /// DB-backed API route dispatcher.
 pub mod route_router;
+/// Claude Code tier router config (request-characteristic based).
+pub mod router_config;
 /// Simple YAML/TOML configuration parser.
 pub mod simple;
 mod tls;
