@@ -16,7 +16,7 @@ default = []
 onnx = ["dep:ort", "dep:tokenizers", "dep:ndarray", "dep:rayon"]
 
 [dependencies]
-anyllm_optimize_core = { path = "../optimize-core", version = "0.14.1" }
+anyllm_optimize_core = { path = "../optimize-core", version = "0.15.0" }
 # Model-artifact download + sha256 verify (always compiled — the `artifact` module lets
 # the proxy/CLI detect+fetch the model without pulling the ONNX Runtime stack).
 sha2 = "0.10"

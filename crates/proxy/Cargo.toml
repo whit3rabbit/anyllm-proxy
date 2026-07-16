@@ -13,17 +13,17 @@ name = "anyllm-proxy"
 path = "src/main.rs"
 
 [dependencies]
-anyllm_translate = { path = "../translator", version = "0.14.1" }
-anyllm_client = { path = "../client", version = "0.14.1" }
-anyllm_batch_engine = { path = "../batch_engine", version = "0.14.1" }
-anyllm_providers = { path = "../providers", version = "0.14.1", features = ["runtime-catalog"] }
-anyllm_pxpipe = { path = "../pxpipe", version = "0.14.1" }
-anyllm_rtk = { path = "../rtk", version = "0.14.1" }
-anyllm_optimize_core = { path = "../optimizer/crates/optimize-core", version = "0.14.1" }
-anyllm_optimize_passes = { path = "../optimizer/crates/optimize-passes", version = "0.14.1" }
+anyllm_translate = { path = "../translator", version = "0.15.0" }
+anyllm_client = { path = "../client", version = "0.15.0" }
+anyllm_batch_engine = { path = "../batch_engine", version = "0.15.0" }
+anyllm_providers = { path = "../providers", version = "0.15.0", features = ["runtime-catalog"] }
+anyllm_pxpipe = { path = "../pxpipe", version = "0.15.0" }
+anyllm_rtk = { path = "../rtk", version = "0.15.0" }
+anyllm_optimize_core = { path = "../optimizer/crates/optimize-core", version = "0.15.0" }
+anyllm_optimize_passes = { path = "../optimizer/crates/optimize-passes", version = "0.15.0" }
 # Always compiled for the model-artifact detect/download admin flow; the heavy ONNX
 # scorer inference is gated behind the proxy's `optimizer-onnx` feature (below).
-anyllm_optimize_scorer = { path = "../optimizer/crates/optimize-scorer", version = "0.14.1" }
+anyllm_optimize_scorer = { path = "../optimizer/crates/optimize-scorer", version = "0.15.0" }
 axum = { version = "0.8", features = ["ws", "multipart"] }
 tokio = { version = "1", features = ["full"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "native-tls", "http2", "multipart"] }
