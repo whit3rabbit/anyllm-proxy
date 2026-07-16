@@ -475,7 +475,7 @@ cargo run -p anyllm_proxy
 
 ## Admin Web UI
 
-The admin web interface is **opt-in**. Start the proxy with `--webui` or `--admin` to enable it. The `WEBUI=1` or `ADMIN=1` environment variables also work (used by docker-entrypoint.sh).
+The admin web interface starts **by default when the proxy is run with no arguments** (`anyllm_proxy`), and the default browser is opened to the admin page automatically. Passing any argument other than `--webui`/`--admin` (e.g. `--env-file`, `--redact-secrets`) keeps the proxy CLI-only. To run the admin UI alongside other flags without auto-opening a browser, pass `--webui` or `--admin` explicitly. The `WEBUI=1` or `ADMIN=1` environment variables also force it on (used by docker-entrypoint.sh). Set `DISABLE_ADMIN=1` to force it off in all cases.
 
 ```bash
 anyllm_proxy --webui

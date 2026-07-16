@@ -25,14 +25,7 @@ pub(crate) async fn init_admin(
     u16,
     String,
 )> {
-    let flag_set = args.iter().any(|a| a == "--webui" || a == "--admin");
-    let force_disabled = matches!(
-        std::env::var("DISABLE_ADMIN").as_deref(),
-        Ok("1") | Ok("true") | Ok("yes")
-    );
-    let enable_admin = flag_set && !force_disabled;
-
-    if !enable_admin {
+    if !crate::main_helpers::bootstrap::admin_enabled(args) {
         return None;
     }
 
@@ -182,6 +175,14 @@ pub(crate) async fn init_admin(
         started_at: std::time::SystemTime::now(),
         listen_port: multi_config.listen_port,
         managed_backends,
+        // Mirror when `all_backends` is populated in routes.rs (only under an
+        // active model router). Lets the router-config PUT validator accept tiers
+        // targeting statically-configured backends, not just managed ones.
+        static_backends: Arc::new(if model_router.is_some() {
+            multi_config.backends.keys().cloned().collect()
+        } else {
+            std::collections::HashSet::new()
+        }),
     };
 
     // Provider model cache auto-refresh (only when --webui is active)

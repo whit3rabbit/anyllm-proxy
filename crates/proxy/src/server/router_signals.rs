@@ -84,14 +84,16 @@ pub(crate) fn openai_signals(body: &ChatCompletionRequest) -> RouterSignals {
         .is_some_and(|tools| tools.iter().any(|t| is_web_search_tool(&t.function.name)));
 
     // OpenAI reasoning models signal thinking via a non-empty `reasoning_effort`
-    // (minimal/low/medium/high). Ignore explicit "none"/empty so a client that
-    // always sends the field isn't misclassified as a Think-tier request.
+    // (minimal/low/medium/high) on the *current* request. Ignore explicit
+    // "none"/empty so a client that always sends the field isn't misclassified.
+    // Do NOT infer thinking from `reasoning_content` in message history: that is
+    // a prior assistant turn echoed back, so a plain follow-up in a reasoning
+    // conversation would otherwise route to Think on every subsequent request.
     let thinking = body
         .extra
         .get("reasoning_effort")
         .and_then(|v| v.as_str())
-        .is_some_and(|s| !s.is_empty() && !s.eq_ignore_ascii_case("none"))
-        || body.messages.iter().any(|m| m.reasoning_content.is_some());
+        .is_some_and(|s| !s.is_empty() && !s.eq_ignore_ascii_case("none"));
 
     let is_background = is_background_model(&body.model);
 

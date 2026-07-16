@@ -248,7 +248,17 @@ impl AppState {
         // `router` is passed in (the caller reads runtime_config once), so the
         // request path holds the runtime_config lock exactly once.
         let tier = router.pick_tier(signals)?;
-        let effective = self.effective_state_for_backend(&tier.backend_name)?;
+        let Some(effective) = self.effective_state_for_backend(&tier.backend_name) else {
+            // An active tier resolved but its backend is gone (e.g. the managed
+            // backend was deleted after the router config was saved). Fail open to
+            // model-name routing, but log it -- otherwise the router silently
+            // stops routing with nothing to explain why.
+            tracing::warn!(
+                backend = %tier.backend_name,
+                "router tier matched but its backend is unknown; falling back to model-name routing"
+            );
+            return None;
+        };
         // No RPM accounting on the router path (deployment=None), same as Legacy.
         Some((tier.model.clone(), effective, None))
     }

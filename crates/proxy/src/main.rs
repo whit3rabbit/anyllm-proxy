@@ -12,13 +12,10 @@ fn main() {
     // inherited from the parent process; skip env file loading to avoid duplicate messages.
     let is_run_child = std::env::var("_ANYLLM_RUN_CHILD").is_ok();
 
-    // Admin mode is on when --webui/--admin is passed and not force-disabled;
-    // mirrors init_admin's gate. Used to keep startup output quiet in that mode.
-    let admin_mode = (args.iter().any(|a| a == "--webui" || a == "--admin"))
-        && !matches!(
-            std::env::var("DISABLE_ADMIN").as_deref(),
-            Ok("1") | Ok("true") | Ok("yes")
-        );
+    // Admin mode is on when --webui/--admin is passed, or the binary is run with no
+    // args at all (zero-arg default), and not force-disabled. Shares the same gate as
+    // init_admin. Used to keep startup output quiet in that mode.
+    let admin_mode = main_helpers::bootstrap::admin_enabled(&args);
 
     // Resolve the data directory early so all path defaults can use it.
     let data_dir = main_helpers::bootstrap::resolve_data_dir();

@@ -13,7 +13,7 @@ use crate::metrics::Metrics;
 use anyllm_providers::ProviderCatalog;
 use dashmap::DashMap;
 use indexmap::IndexMap;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 use tokio::sync::broadcast;
@@ -82,6 +82,12 @@ pub struct SharedState {
     /// Wrapped in RwLock so the admin CRUD routes can update it without restart.
     pub managed_backends:
         Arc<RwLock<HashMap<String, (crate::admin::db::ManagedBackendRow, BackendClient)>>>,
+    /// Names of statically-configured backends (`MultiConfig.backends`) that the
+    /// request-time resolver can reach via `AppState.all_backends`. Populated only
+    /// when a model router is active (mirrors when `all_backends` is built in
+    /// routes.rs); empty otherwise. Used by the router-config PUT validator to
+    /// accept tiers targeting YAML/TOML/LiteLLM backends, not just managed ones.
+    pub static_backends: Arc<HashSet<String>>,
 }
 
 /// Run a synchronous closure against the SQLite connection on the blocking
@@ -290,6 +296,7 @@ impl SharedState {
             started_at: std::time::SystemTime::now(),
             listen_port: 3000,
             managed_backends: Arc::new(RwLock::new(HashMap::new())),
+            static_backends: Arc::new(HashSet::new()),
         }
     }
 }

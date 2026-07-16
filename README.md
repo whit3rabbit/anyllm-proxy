@@ -220,13 +220,23 @@ See [docs/ENV.md](docs/ENV.md) for the full variable reference.
 
 ## Admin Web Interface
 
-Pass `--webui` (or `--admin`) to start the admin dashboard alongside the proxy:
+Running `anyllm-proxy` with **no arguments** starts the admin dashboard alongside the proxy and opens it in your default browser automatically:
+
+```bash
+anyllm-proxy
+# Proxy:     http://localhost:3000
+# Admin UI:  http://127.0.0.1:3001/admin/  (opened in your browser, token pre-filled)
+```
+
+Passing any other argument keeps the proxy CLI-only. To run the admin dashboard alongside other flags (without auto-opening a browser, e.g. on a server), pass `--webui` (or `--admin`) explicitly:
 
 ```bash
 anyllm-proxy --webui
 # Proxy:     http://localhost:3000
 # Admin UI:  http://127.0.0.1:3001/admin/?token=$(cat ~/.anyllm/.admin_token)
 ```
+
+Set `DISABLE_ADMIN=1` to force the admin server off in all cases (proxy only).
 
 If no backend is configured, the UI opens on the **Settings** tab with a getting-started guide and env file import.
 

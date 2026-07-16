@@ -7,6 +7,13 @@ Wants=network-online.target
 Type=simple
 User=anyllm
 Group=anyllm
+# The binary enables the admin UI by default on a bare (no-arg) launch, which
+# would otherwise start a loopback-only admin server (and attempt a browser
+# open) on every headless service start. Keep admin opt-in on servers: default
+# it off here. Set `DISABLE_ADMIN=` (blank) + admin bind vars in
+# /etc/default/anyllm-proxy to re-enable; the EnvironmentFile below overrides
+# this line.
+Environment=DISABLE_ADMIN=1
 EnvironmentFile=-/etc/default/anyllm-proxy
 ExecStart=/usr/bin/anyllm-proxy
 Restart=on-failure

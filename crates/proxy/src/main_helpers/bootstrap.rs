@@ -2,6 +2,36 @@ use std::path::{Path, PathBuf};
 
 pub use crate::config::helpers::resolve_data_dir;
 
+/// Whether the args request the admin/web UI, ignoring `DISABLE_ADMIN`.
+///
+/// True when `--webui`/`--admin` is passed OR the binary was run with no args at all
+/// (the default desktop case). Any other argument (e.g. `--env-file`,
+/// `--redact-secrets`) keeps the proxy CLI-only.
+///
+/// `bare = args.len() <= 1` is sound because the `run`/`providers` subcommands already
+/// exit before this is consulted, so a bare `args` really means no flags were passed.
+pub fn admin_requested(args: &[String]) -> bool {
+    let flag_set = args.iter().any(|a| a == "--webui" || a == "--admin");
+    let bare = args.len() <= 1; // only the program name -> zero-arg default
+    flag_set || bare
+}
+
+/// Whether the admin/web UI should actually start: [`admin_requested`] unless
+/// `DISABLE_ADMIN` (`1`/`true`/`yes`) force-disables it.
+pub fn admin_enabled(args: &[String]) -> bool {
+    let force_disabled = matches!(
+        std::env::var("DISABLE_ADMIN").as_deref(),
+        Ok("1") | Ok("true") | Ok("yes")
+    );
+    admin_requested(args) && !force_disabled
+}
+
+/// Whether this launch is the zero-arg default (bare binary, no flags). Used to gate
+/// desktop-only conveniences like auto-opening the browser.
+pub fn is_default_launch(args: &[String]) -> bool {
+    args.len() <= 1
+}
+
 /// Resolve SQLite DB path: ADMIN_DB_PATH env var > data_dir/admin.db.
 pub fn resolve_db_path(data_dir: &Path) -> String {
     std::env::var("ADMIN_DB_PATH")
@@ -135,6 +165,28 @@ pub fn load_env_from_sqlite(db_path: &str) -> Vec<(String, String)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn admin_requested_truth_table() {
+        // Pure arg logic (no env), so no ENV_TEST_LOCK needed. The DISABLE_ADMIN
+        // override in admin_enabled() is a trivial matches! wrapper on top of this.
+        let prog = "anyllm-proxy".to_string();
+        let webui = "--webui".to_string();
+        let admin = "--admin".to_string();
+        let other = "--redact-secrets".to_string();
+
+        // Bare invocation -> default on.
+        assert!(admin_requested(&[]));
+        assert!(admin_requested(&[prog.clone()]));
+        assert!(is_default_launch(&[prog.clone()]));
+        // Explicit flags -> on (but not the zero-arg default path).
+        assert!(admin_requested(&[prog.clone(), webui.clone()]));
+        assert!(admin_requested(&[prog.clone(), admin]));
+        assert!(!is_default_launch(&[prog.clone(), webui]));
+        // Any other arg without a webui flag -> CLI only.
+        assert!(!admin_requested(&[prog.clone(), other.clone()]));
+        assert!(!is_default_launch(&[prog, other]));
+    }
 
     #[test]
     fn parse_env_file_double_quoted_newline_escape() {

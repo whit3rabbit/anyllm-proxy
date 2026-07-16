@@ -227,6 +227,7 @@ fn record_cost_with_shared_state_persists_spend() {
         started_at: std::time::SystemTime::now(),
         listen_port: 3000,
         managed_backends: Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
+        static_backends: Arc::new(std::collections::HashSet::new()),
     };
 
     let vk_ctx = VirtualKeyContext {

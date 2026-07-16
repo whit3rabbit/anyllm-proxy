@@ -11,6 +11,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 ## [Unreleased]
 
 ### Changed
+- Running `anyllm-proxy` with **no arguments** now starts the admin web UI alongside the
+  proxy and auto-opens the default browser to the admin page (the zero-arg desktop
+  default). Passing `--webui`/`--admin` still forces the UI on alongside other flags but
+  no longer opens a browser (server-friendly). Passing any other argument (e.g.
+  `--env-file`, `--redact-secrets`) keeps the proxy CLI-only, as before. `DISABLE_ADMIN=1`
+  force-disables the admin server in all cases.
 - Admin UI **Router** and **Routes** tabs merged into a single **Routing** tab with two
   subtabs: **Auto Router** (route by request shape) and **Model Routes** (named model
   aliases, load-balanced). The old `#/router` and `#/routes` URLs redirect to the matching

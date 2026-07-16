@@ -137,13 +137,19 @@ pub(crate) async fn put_config(
                         .into_response();
                 }
             };
-        // Reject tiers that point at a backend name we don't have. An empty
-        // backend_name means "unset" and is allowed.
+        // Reject *enabled* tiers that point at a backend name we don't have. An
+        // empty backend_name means "unset" and is allowed. Disabled tiers are
+        // skipped so a leftover/stale backend_name on an off tier can't block an
+        // unrelated router save (the tier is re-validated if it's ever enabled).
+        // "Known" = managed backends (SQLite CRUD) OR statically-configured
+        // backends (`static_backends`), matching both registries the request-time
+        // resolver (`effective_state_for_backend`) checks.
         {
             let known = shared
                 .managed_backends
                 .read()
                 .unwrap_or_else(|e| e.into_inner());
+            let static_known = &shared.static_backends;
             for (tier_name, t) in [
                 ("default", &cfg.default),
                 ("background", &cfg.background),
@@ -152,7 +158,11 @@ pub(crate) async fn put_config(
                 ("web_search", &cfg.web_search),
                 ("image", &cfg.image),
             ] {
-                if !t.backend_name.is_empty() && !known.contains_key(&t.backend_name) {
+                if t.enabled
+                    && !t.backend_name.is_empty()
+                    && !known.contains_key(&t.backend_name)
+                    && !static_known.contains(&t.backend_name)
+                {
                     return (
                         StatusCode::BAD_REQUEST,
                         Json(serde_json::json!({

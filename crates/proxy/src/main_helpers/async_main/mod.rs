@@ -349,6 +349,16 @@ pub async fn async_main(args: Vec<String>, data_dir: PathBuf) {
             None
         };
 
+    // Zero-arg launch (bare binary, no flags): the user just double-clicked / ran it,
+    // so open the admin UI in their default browser. Explicit --webui stays quiet so
+    // headless servers never trigger a browser. Uses the token-authenticated loopback
+    // URL already built for the banner.
+    if super::bootstrap::is_default_launch(&args) {
+        if let Some(admin_url) = &admin_startup_info {
+            super::browser::open(admin_url);
+        }
+    }
+
     shutdown_signal().await;
     let _ = shutdown_tx.send(true);
 

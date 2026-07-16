@@ -86,3 +86,25 @@ async fn put_router_accepts_unset_tiers_and_round_trips() {
     assert_eq!(json["router"]["enabled"], true);
     assert_eq!(json["router"]["context_threshold"], 12345);
 }
+
+#[tokio::test]
+async fn put_router_accepts_statically_configured_backend() {
+    let mut shared = SharedState::new_for_test();
+    // Simulate a YAML/TOML/LiteLLM backend reachable via AppState.all_backends
+    // (populated only under a model router). No managed backend of this name.
+    shared.static_backends = Arc::new(std::collections::HashSet::from(["yaml-be".to_string()]));
+    let token = "k".repeat(64);
+    shared.issued_csrf_tokens.insert(token.clone(), ());
+
+    // Enabled tier points at the static-config backend -> accepted, not 400.
+    let body = r#"{"router":{"enabled":true,"default":{"backend_name":"yaml-be","model":"m","enabled":true}}}"#;
+    let resp = admin_app(&shared)
+        .oneshot(put_router(&token, body))
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::OK);
+    let cfg = shared.runtime_config.read().unwrap();
+    assert!(cfg.router.enabled);
+    assert_eq!(cfg.router.default.backend_name, "yaml-be");
+}
