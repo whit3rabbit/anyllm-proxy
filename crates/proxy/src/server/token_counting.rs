@@ -88,6 +88,56 @@ fn count_segment(text: &str) -> usize {
     TOKENIZER.encode_with_special_tokens(text).len()
 }
 
+fn count_content(content: &anthropic::Content) -> usize {
+    match content {
+        anthropic::Content::Text(t) => count_segment(t),
+        anthropic::Content::Blocks(blocks) => {
+            let mut total = 0;
+            for block in blocks {
+                match block {
+                    anthropic::ContentBlock::Text { text } => total += count_segment(text),
+                    anthropic::ContentBlock::ToolUse { name, input, .. } => {
+                        total += count_segment(name);
+                        if let Ok(s) = serde_json::to_string(input) {
+                            total += count_segment(&s);
+                        }
+                    }
+                    anthropic::ContentBlock::ToolResult {
+                        content: Some(c),
+                        is_error,
+                        ..
+                    } => {
+                        // The translation layer prepends "Error: " for error
+                        // tool results (message_map.rs), so count that prefix.
+                        if *is_error == Some(true) {
+                            total += count_segment("Error: ");
+                        }
+                        match c {
+                            anthropic::messages::ToolResultContent::Text(t) => {
+                                total += count_segment(t);
+                            }
+                            anthropic::messages::ToolResultContent::Blocks(inner) => {
+                                for b in inner {
+                                    if let anthropic::ContentBlock::Text { text } = b {
+                                        total += count_segment(text);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    anthropic::ContentBlock::Thinking { thinking, .. } => {
+                        total += count_segment(thinking);
+                    }
+                    // Images and documents have their own token costs in
+                    // the actual APIs, which we can't compute client-side.
+                    _ => {}
+                }
+            }
+            total
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -265,55 +315,5 @@ mod tests {
             },
         ])]);
         assert!(count_request_tokens_sync(&r) > 0);
-    }
-}
-
-fn count_content(content: &anthropic::Content) -> usize {
-    match content {
-        anthropic::Content::Text(t) => count_segment(t),
-        anthropic::Content::Blocks(blocks) => {
-            let mut total = 0;
-            for block in blocks {
-                match block {
-                    anthropic::ContentBlock::Text { text } => total += count_segment(text),
-                    anthropic::ContentBlock::ToolUse { name, input, .. } => {
-                        total += count_segment(name);
-                        if let Ok(s) = serde_json::to_string(input) {
-                            total += count_segment(&s);
-                        }
-                    }
-                    anthropic::ContentBlock::ToolResult {
-                        content: Some(c),
-                        is_error,
-                        ..
-                    } => {
-                        // The translation layer prepends "Error: " for error
-                        // tool results (message_map.rs), so count that prefix.
-                        if *is_error == Some(true) {
-                            total += count_segment("Error: ");
-                        }
-                        match c {
-                            anthropic::messages::ToolResultContent::Text(t) => {
-                                total += count_segment(t);
-                            }
-                            anthropic::messages::ToolResultContent::Blocks(inner) => {
-                                for b in inner {
-                                    if let anthropic::ContentBlock::Text { text } = b {
-                                        total += count_segment(text);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    anthropic::ContentBlock::Thinking { thinking, .. } => {
-                        total += count_segment(thinking);
-                    }
-                    // Images and documents have their own token costs in
-                    // the actual APIs, which we can't compute client-side.
-                    _ => {}
-                }
-            }
-            total
-        }
     }
 }

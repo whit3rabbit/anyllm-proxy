@@ -1121,7 +1121,7 @@ async fn responses_api_messages_passthrough_preserves_content() {
     assert_eq!(resp.status(), 200);
     let body: serde_json::Value = resp.json().await.unwrap();
     assert!(
-        body["content"].as_array().map_or(false, |c| !c.is_empty()),
+        body["content"].as_array().is_some_and(|c| !c.is_empty()),
         "content should be non-empty"
     );
     assert_eq!(body["content"][0]["type"], "text");

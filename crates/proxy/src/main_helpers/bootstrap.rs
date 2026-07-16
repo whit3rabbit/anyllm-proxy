@@ -177,8 +177,8 @@ mod tests {
 
         // Bare invocation -> default on.
         assert!(admin_requested(&[]));
-        assert!(admin_requested(&[prog.clone()]));
-        assert!(is_default_launch(&[prog.clone()]));
+        assert!(admin_requested(std::slice::from_ref(&prog)));
+        assert!(is_default_launch(std::slice::from_ref(&prog)));
         // Explicit flags -> on (but not the zero-arg default path).
         assert!(admin_requested(&[prog.clone(), webui.clone()]));
         assert!(admin_requested(&[prog.clone(), admin]));
