@@ -258,6 +258,25 @@ pub async fn update(
         map.get(&name).map(|(row, _)| row.clone())
     };
 
+    // Fall back to SQLite on an in-memory miss. `load_managed_backends` skips rows
+    // whose provider id or config was invalid at startup (e.g. a provider renamed
+    // by an upgrade), but the row stays in SQLite and still shows in the list. Without
+    // this fallback every edit-save 404s. Rebuilding the client below re-inserts it into
+    // memory ONLY if the patch makes the config valid; a row whose provider_id is still
+    // unknown returns 400 here instead (ManagedBackendPatch has no null sentinel to
+    // rewrite an already-set field), so such rows stay un-editable until deleted and
+    // recreated. Fixable-by-value configs (bad api_base, etc.) do heal.
+    let existing_row = match existing_row {
+        Some(r) => Some(r),
+        None => crate::admin::state::with_db(&shared.db, {
+            let name = name.clone();
+            move |conn| crate::admin::db::get_managed_backend(conn, &name)
+        })
+        .await
+        .and_then(Result::ok)
+        .flatten(),
+    };
+
     let existing_row = match existing_row {
         Some(r) => r,
         None => {

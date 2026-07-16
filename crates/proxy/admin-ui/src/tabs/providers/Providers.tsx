@@ -194,7 +194,7 @@ function ProviderDetailPanel({
           key={editing?.name ?? 'new'}
           provider={provider}
           existing={editing}
-          existingCount={backends.length}
+          siblingNames={backends.map((b) => b.name)}
           onDone={() => setEditing(null)}
         />
         {editing && (

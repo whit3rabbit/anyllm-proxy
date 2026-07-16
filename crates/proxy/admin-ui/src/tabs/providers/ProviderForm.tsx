@@ -1,11 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   useCreateManagedBackend,
   useUpdateManagedBackend,
   useDiscoverModels,
+  useCatalogProviderModels,
 } from '../../api/queries'
 import type { CatalogProvider, ManagedBackend } from '../../api/types'
 import { getProviderFields, resolveDiscoveryUrl } from '../../utils/providerFields'
+import { catalogModelIds } from '../../utils/catalogModels'
 import { AdminButton } from '../../components/shared/Performative'
 
 // A provider is "local" when its default endpoint is a loopback address.
@@ -30,21 +33,33 @@ function errorMessage(err: Error | null, fallback: string): string {
  * pre-seeded and resent on save: ManagedBackendPatch has no null sentinel, so
  * omitting a field would silently keep the stale value.
  */
+// Lowest `${provider}-N` (N from 1) not already taken by a sibling backend, so the
+// suggested name can't collide with an existing one after a lower-numbered delete.
+function nextBackendName(providerId: string, siblingNames: string[]): string {
+  const taken = new Set(siblingNames)
+  let n = 1
+  while (taken.has(`${providerId}-${n}`)) n++
+  return `${providerId}-${n}`
+}
+
 export default function ProviderForm({
   provider,
   existing,
-  existingCount,
+  siblingNames,
   onDone,
 }: {
   provider: CatalogProvider
   existing?: ManagedBackend | null
-  existingCount: number
+  siblingNames: string[]
   onDone?: () => void
 }) {
   const isEdit = !!existing
+  const qc = useQueryClient()
   const create = useCreateManagedBackend()
   const update = useUpdateManagedBackend()
   const discover = useDiscoverModels()
+  // Previously-discovered model names for this provider, persisted server-side.
+  const cached = useCatalogProviderModels(provider.id)
 
   const initialForm = (): Record<string, string> => {
     if (existing) {
@@ -56,7 +71,7 @@ export default function ProviderForm({
       if (existing.tpm != null) seeded.tpm = String(existing.tpm)
       return seeded
     }
-    const base: Record<string, string> = { name: `${provider.id}-${existingCount + 1}` }
+    const base: Record<string, string> = { name: nextBackendName(provider.id, siblingNames) }
     if (isLocalProvider(provider) && provider.default_base_url) {
       base.api_base = provider.default_base_url
     }
@@ -73,6 +88,20 @@ export default function ProviderForm({
     setModels([])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [provider.id, existing?.name])
+
+  // Seed the persisted (previously-discovered) model names once, the first time they
+  // load, so saved names reappear on reopen without clobbering names added this session.
+  // Seed-once (not re-union on every refetch) is deliberate: otherwise a later cache
+  // refetch (staleTime, or the invalidate after discover) would re-add any chip the
+  // user removed via the ✕, making removal cosmetic-only.
+  const seededPersisted = useRef(false)
+  useEffect(() => {
+    if (seededPersisted.current) return
+    const persisted = catalogModelIds(cached.data)
+    if (persisted.length === 0) return
+    seededPersisted.current = true
+    setModels(prev => [...new Set([...prev, ...persisted])])
+  }, [cached.data])
 
   const fields = getProviderFields(provider)
 
@@ -102,6 +131,9 @@ export default function ProviderForm({
             for (const m of data.models) merged.add(m.id)
             return [...merged]
           })
+          // Backend persisted the discovered ids; refresh the cache the autorouter
+          // datalist and this form read from.
+          qc.invalidateQueries({ queryKey: ['catalog-provider-models', provider.id] })
         },
       },
     )
@@ -214,8 +246,10 @@ export default function ProviderForm({
         )
       })}
 
-      {/* Models (informational): discovered or hand-added names. Not persisted
-          on the backend today; used to sanity-check connectivity. */}
+      {/* Models: discovered names are persisted to the provider model cache (server-side,
+          on Query models) and feed the autorouter's suggestions. Hand-added names are
+          session-only, shown for reference; submit() sends no models field, so they are
+          not saved. */}
       <div className="form-group">
         <label className="form-label" htmlFor="pf-model">Models</label>
         <div style={{ display: 'flex', gap: 6 }}>

@@ -392,6 +392,27 @@ pub(super) async fn discover_models(
 
     models.sort_unstable_by(|a, b| a.id.cmp(&b.id));
 
+    // Persist discovered ids to provider_models_cache so they survive the request
+    // and feed the autorouter datalist (which reads cached_models). Keyed by
+    // provider id; mirrors refresh_provider_models. Skip an empty result: the upsert
+    // is DELETE-then-INSERT, so persisting zero ids (a 200 with no `data`, or a
+    // non-OpenAI JSON shape) would wipe a previously-good cache. Awaited on purpose so
+    // the client's follow-up cache refetch observes the write (read-after-write).
+    if let Some(pid) = body.provider_id.clone() {
+        let ids: Vec<String> = models.iter().map(|m| m.id.clone()).collect();
+        if !ids.is_empty() {
+            let db_arc = shared.db.clone();
+            let _ = tokio::task::spawn_blocking(move || {
+                let mut conn = db_arc.lock().unwrap_or_else(|e| e.into_inner());
+                if let Err(e) = crate::admin::db::upsert_provider_models_cache(&mut conn, &pid, &ids)
+                {
+                    tracing::warn!(provider = %pid, error = %e, "failed to cache discovered models");
+                }
+            })
+            .await;
+        }
+    }
+
     (
         StatusCode::OK,
         Json(DiscoverResponse {

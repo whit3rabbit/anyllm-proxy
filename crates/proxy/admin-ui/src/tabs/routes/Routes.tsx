@@ -378,7 +378,9 @@ function RouteDetail({ route, onClose }: { route: Route; onClose: () => void }) 
           <ProviderForm
             provider={catalogProviderFor(editingBackend.provider_id)!}
             existing={editingBackend}
-            existingCount={backends.filter((b) => b.provider_id === editingBackend.provider_id).length}
+            siblingNames={backends
+              .filter((b) => b.provider_id === editingBackend.provider_id)
+              .map((b) => b.name)}
             onDone={() => setEditingBackend(null)}
           />
         </Modal>

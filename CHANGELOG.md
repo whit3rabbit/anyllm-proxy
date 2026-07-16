@@ -10,6 +10,24 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ## [Unreleased]
 
+## [0.15.1] - 2026-07-15
+
+### Fixed
+- Admin UI provider model cache no longer gets wiped by a model-discovery call that
+  returns zero models. "Query models" (and the provider **Refresh**) persist discovered
+  ids via a DELETE-then-INSERT upsert; a `200` with an empty `data` array (or a non-OpenAI
+  JSON shape) parsed to zero ids and cleared the whole cache, dropping the autorouter's
+  model suggestions. Both paths now skip the write when the result is empty.
+- Admin UI provider editor: removing a model chip (the ✕) now sticks. Previously the
+  persisted-model list was re-unioned into the form on every cache refetch (staleTime or
+  the invalidate after discovery), so a removed chip reappeared. Persisted names are now
+  seeded once on first load.
+- Admin UI managed-backend edit: a row that was skipped at startup (invalid/renamed
+  `provider_id` or config) but still shown in the list no longer 404s on every edit-save.
+  The update handler falls back to SQLite on an in-memory miss and heals value-fixable
+  configs on save (an already-unknown `provider_id` still returns 400, as it cannot be
+  rewritten through the null-less patch).
+
 ## [0.15.0] - 2026-07-15
 
 ### Changed
@@ -378,7 +396,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 ### Changed
 - Dependency bumps (rand 0.8.5 → 0.8.6).
 
-[Unreleased]: https://github.com/whit3rabbit/anyllm-proxy/compare/v0.15.0...HEAD
+[Unreleased]: https://github.com/whit3rabbit/anyllm-proxy/compare/v0.15.1...HEAD
+[0.15.1]: https://github.com/whit3rabbit/anyllm-proxy/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/whit3rabbit/anyllm-proxy/compare/v0.14.1...v0.15.0
 [0.14.1]: https://github.com/whit3rabbit/anyllm-proxy/compare/v0.13.0...v0.14.1
 [0.13.0]: https://github.com/whit3rabbit/anyllm-proxy/compare/v0.12.0...v0.13.0

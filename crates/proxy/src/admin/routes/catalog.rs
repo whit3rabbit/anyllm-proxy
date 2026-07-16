@@ -296,16 +296,21 @@ pub(super) async fn refresh_provider_models(
     let count = model_ids.len();
 
     // Persist to SQLite via spawn_blocking (transaction needs &mut Connection).
-    let db_arc = shared.db.clone();
-    let pid = provider_id.clone();
-    let ids = model_ids.clone();
-    let _ = tokio::task::spawn_blocking(move || {
-        let mut conn = db_arc.lock().unwrap_or_else(|e| e.into_inner());
-        if let Err(e) = crate::admin::db::upsert_provider_models_cache(&mut conn, &pid, &ids) {
-            tracing::warn!(provider = %pid, error = %e, "failed to cache provider models");
-        }
-    })
-    .await;
+    // Skip an empty result: the upsert is DELETE-then-INSERT, so persisting zero ids
+    // (auth failure returning an empty list, or a non-OpenAI JSON shape) would wipe a
+    // previously-good cache.
+    if !model_ids.is_empty() {
+        let db_arc = shared.db.clone();
+        let pid = provider_id.clone();
+        let ids = model_ids.clone();
+        let _ = tokio::task::spawn_blocking(move || {
+            let mut conn = db_arc.lock().unwrap_or_else(|e| e.into_inner());
+            if let Err(e) = crate::admin::db::upsert_provider_models_cache(&mut conn, &pid, &ids) {
+                tracing::warn!(provider = %pid, error = %e, "failed to cache provider models");
+            }
+        })
+        .await;
+    }
 
     tracing::info!(provider = %provider_id, count = count, "refreshed provider model cache");
 

@@ -179,6 +179,41 @@ pub fn list_managed_backends(conn: &Connection) -> rusqlite::Result<Vec<ManagedB
     rows.collect()
 }
 
+/// Fetch a single managed backend by name. Returns `None` if no row matches.
+pub fn get_managed_backend(
+    conn: &Connection,
+    name: &str,
+) -> rusqlite::Result<Option<ManagedBackendRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, name, provider_id, api_key, api_base, deployment, api_version,
+                project, region, aws_access_key_id, aws_secret_access_key, aws_session_token,
+                rpm, tpm, enabled, created_at, updated_at
+         FROM managed_backends WHERE name = ?1",
+    )?;
+    let mut rows = stmt.query_map(params![name], |r| {
+        Ok(ManagedBackendRow {
+            id: r.get(0)?,
+            name: r.get(1)?,
+            provider_id: r.get(2)?,
+            api_key: r.get(3)?,
+            api_base: r.get(4)?,
+            deployment: r.get(5)?,
+            api_version: r.get(6)?,
+            project: r.get(7)?,
+            region: r.get(8)?,
+            aws_access_key_id: r.get(9)?,
+            aws_secret_access_key: r.get(10)?,
+            aws_session_token: r.get(11)?,
+            rpm: r.get(12)?,
+            tpm: r.get(13)?,
+            enabled: r.get::<_, i32>(14)? != 0,
+            created_at: r.get(15)?,
+            updated_at: r.get(16)?,
+        })
+    })?;
+    rows.next().transpose()
+}
+
 /// Apply a partial update to a managed backend identified by `name`.
 /// Returns `true` if a row was updated, `false` if no row matched.
 /// Only non-None fields in `patch` are written; None fields are left as-is.
@@ -304,6 +339,18 @@ mod tests {
         assert_eq!(rows[0].api_key.as_deref(), Some("sk-test"));
         assert_eq!(rows[0].rpm, Some(100));
         assert_eq!(rows[0].tpm, Some(10_000));
+    }
+
+    #[test]
+    fn managed_backend_get_by_name_round_trips_and_misses() {
+        let conn = in_memory_db();
+        insert_managed_backend(&conn, &test_row("get-me")).unwrap();
+
+        let got = get_managed_backend(&conn, "get-me").unwrap();
+        assert_eq!(got.as_ref().map(|r| r.name.as_str()), Some("get-me"));
+        assert_eq!(got.and_then(|r| r.rpm), Some(100));
+
+        assert!(get_managed_backend(&conn, "absent").unwrap().is_none());
     }
 
     #[test]

@@ -12,8 +12,8 @@ name = "optimize"
 harness = false
 
 [dependencies]
-anyllm_optimize_core = { path = "../crates/optimize-core", version = "0.15.0" }
-anyllm_optimize_passes = { path = "../crates/optimize-passes", version = "0.15.0" }
+anyllm_optimize_core = { path = "../crates/optimize-core", version = "0.15.1" }
+anyllm_optimize_passes = { path = "../crates/optimize-passes", version = "0.15.1" }
 
 [dev-dependencies]
 criterion = "0.5"
