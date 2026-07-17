@@ -110,35 +110,43 @@ impl RouterConfig {
     /// Background, Default. A matched-but-inactive tier is skipped, so an image
     /// request whose Image tier is unconfigured still falls back to Default.
     pub fn pick_tier(&self, s: &RouterSignals) -> Option<&TierTarget> {
+        self.pick_tier_named(s).map(|(_, t)| t)
+    }
+
+    /// Same as [`pick_tier`](Self::pick_tier) but also returns the selected
+    /// tier's name (`"image"`, `"web_search"`, `"think"`, `"long_context"`,
+    /// `"background"`, `"default"`) for logging. `pick_tier` is the thin
+    /// label-dropping wrapper so its callers and tests stay unchanged.
+    pub fn pick_tier_named(&self, s: &RouterSignals) -> Option<(&'static str, &TierTarget)> {
         if !self.enabled {
             return None;
         }
         if s.has_image {
             if let Some(t) = self.image.active() {
-                return Some(t);
+                return Some(("image", t));
             }
         }
         if s.has_web_search {
             if let Some(t) = self.web_search.active() {
-                return Some(t);
+                return Some(("web_search", t));
             }
         }
         if s.thinking {
             if let Some(t) = self.think.active() {
-                return Some(t);
+                return Some(("think", t));
             }
         }
         if s.long_context {
             if let Some(t) = self.long_context.active() {
-                return Some(t);
+                return Some(("long_context", t));
             }
         }
         if s.is_background {
             if let Some(t) = self.background.active() {
-                return Some(t);
+                return Some(("background", t));
             }
         }
-        self.default.active()
+        self.default.active().map(|t| ("default", t))
     }
 }
 
@@ -234,6 +242,36 @@ mod tests {
                 .unwrap()
                 .backend_name,
             "def"
+        );
+    }
+
+    #[test]
+    fn pick_tier_named_reports_label() {
+        let cfg = full_config();
+        let label = |s| cfg.pick_tier_named(&s).unwrap().0;
+        assert_eq!(label(RouterSignals::default()), "default");
+        assert_eq!(
+            label(RouterSignals {
+                is_background: true,
+                ..Default::default()
+            }),
+            "background"
+        );
+        assert_eq!(
+            label(RouterSignals {
+                has_image: true,
+                thinking: true,
+                ..Default::default()
+            }),
+            "image"
+        );
+        assert_eq!(
+            label(RouterSignals {
+                long_context: true,
+                is_background: true,
+                ..Default::default()
+            }),
+            "long_context"
         );
     }
 

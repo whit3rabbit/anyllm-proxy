@@ -101,6 +101,38 @@ async fn spawn_mock_chat_backend() -> String {
     format!("http://{addr}")
 }
 
+// OpenAI-compat mock that records the request body it receives, so tests can
+// assert what the proxy actually forwarded upstream.
+async fn spawn_mock_chat_backend_capturing(
+    captured_body: Arc<Mutex<Option<serde_json::Value>>>,
+) -> String {
+    let app = Router::new().route(
+        "/v1/chat/completions",
+        post(move |axum::Json(body): axum::Json<serde_json::Value>| {
+            let captured_body = captured_body.clone();
+            async move {
+                *captured_body.lock().unwrap() = Some(body.clone());
+                axum::Json(json!({
+                    "id": "chatcmpl-mock123",
+                    "object": "chat.completion",
+                    "created": 1700000000,
+                    "model": "gpt-4o",
+                    "choices": [{
+                        "index": 0,
+                        "message": {"role": "assistant", "content": "Hello from mock!"},
+                        "finish_reason": "stop"
+                    }],
+                    "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
+                }))
+            }
+        }),
+    );
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    format!("http://{addr}")
+}
+
 async fn spawn_mock_anthropic_backend(
     captured_body: Arc<Mutex<Option<serde_json::Value>>>,
     captured_headers: Arc<Mutex<Vec<(String, String)>>>,
@@ -596,9 +628,13 @@ async fn chat_completions_does_not_execute_client_advertised_server_tool_name() 
     assert_eq!(tool_executions.load(Ordering::SeqCst), 0);
 }
 
+// OpenAI treats max_tokens as optional. For an OpenAI-compat backend, omitting
+// it must NOT 400 (old behavior); the proxy strips its internal placeholder so
+// the backend applies its own default. See OMIT_MAX_TOKENS_MARKER.
 #[tokio::test]
-async fn chat_completions_missing_max_tokens_returns_400() {
-    let mock = spawn_mock_chat_backend().await;
+async fn chat_completions_missing_max_tokens_uses_backend_default() {
+    let captured_body: Arc<Mutex<Option<serde_json::Value>>> = Arc::new(Mutex::new(None));
+    let mock = spawn_mock_chat_backend_capturing(captured_body.clone()).await;
     let proxy = spawn_proxy(openai_config_with_base(&mock)).await;
 
     let client = Client::new();
@@ -614,9 +650,49 @@ async fn chat_completions_missing_max_tokens_returns_400() {
         .await
         .unwrap();
 
-    assert_eq!(resp.status(), 400);
-    let body: serde_json::Value = resp.json().await.unwrap();
-    assert_eq!(body["error"]["type"], "invalid_request_error");
+    assert_eq!(resp.status(), 200);
+    let sent = captured_body.lock().unwrap().take().unwrap();
+    // Neither the placeholder nor the internal marker reaches the backend.
+    assert!(
+        sent.get("max_tokens").is_none() || sent["max_tokens"].is_null(),
+        "max_tokens must be stripped so the backend uses its own default: {sent}"
+    );
+    assert!(
+        sent.get("max_completion_tokens").is_none() || sent["max_completion_tokens"].is_null(),
+        "max_completion_tokens must be stripped too: {sent}"
+    );
+    assert!(
+        sent.get("__anyllm_omit_max_tokens").is_none(),
+        "internal marker must not leak upstream: {sent}"
+    );
+}
+
+// When the caller DOES send max_tokens, it is forwarded verbatim (no strip).
+#[tokio::test]
+async fn chat_completions_explicit_max_tokens_forwarded() {
+    let captured_body: Arc<Mutex<Option<serde_json::Value>>> = Arc::new(Mutex::new(None));
+    let mock = spawn_mock_chat_backend_capturing(captured_body.clone()).await;
+    let proxy = spawn_proxy(openai_config_with_base(&mock)).await;
+
+    let resp = Client::new()
+        .post(format!("{proxy}/v1/chat/completions"))
+        .header("x-api-key", "test")
+        .header("content-type", "application/json")
+        .json(&json!({
+            "model": "claude-sonnet-4-20250514",
+            "messages": [{"role": "user", "content": "Hello"}],
+            "max_tokens": 77
+        }))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), 200);
+    let sent = captured_body.lock().unwrap().take().unwrap();
+    assert_eq!(
+        sent["max_tokens"], 77,
+        "explicit max_tokens must pass through: {sent}"
+    );
 }
 
 #[tokio::test]

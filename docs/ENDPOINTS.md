@@ -55,6 +55,12 @@ Every proxy API endpoint except `/health` requires authentication.
 
 Unauthenticated requests return `401 Unauthorized` with an Anthropic-shaped error body.
 
+### Loopback-open default
+
+When **no** proxy auth is configured (no `PROXY_API_KEYS`, no `PROXY_OPEN_RELAY=true`, no virtual keys, no OIDC), the proxy accepts unauthenticated requests **from loopback (localhost) peers only**; LAN/remote peers still get `401`. This makes local dev work out of the box while keeping the port closed to the network. The decision uses the real TCP peer address (`ConnectInfo`), not the client-spoofable `X-Forwarded-For`.
+
+Caveat: behind a reverse proxy running on localhost, every request appears to come from loopback, so the proxy is effectively open. Set `PROXY_API_KEYS` in that topology. The effective posture is reported as `auth_mode` (`keys` / `open_relay` / `loopback_only`) by `GET /admin/api/status` and surfaced as a warning banner in the admin UI.
+
 ### IP allowlist
 
 Optional. Set `IP_ALLOWLIST=<cidr,...>` to reject any source IP not in the list (403). Applied before auth.

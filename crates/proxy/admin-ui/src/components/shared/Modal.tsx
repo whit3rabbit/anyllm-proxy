@@ -34,6 +34,7 @@ export default function Modal({
 }: ModalProps) {
   const cardRef = useRef<HTMLDivElement | null>(null)
   const lastFocusedRef = useRef<HTMLElement | null>(null)
+  const pressStartedOnBackdrop = useRef(false)
 
   // Preserve and restore the element that had focus before the modal opened.
   useEffect(() => {
@@ -97,8 +98,16 @@ export default function Modal({
   return createPortal(
     <div
       className="modal-backdrop-v2"
-      onClick={() => {
-        if (dismissable) onClose()
+      onMouseDown={(e) => {
+        // Only a press that BEGINS on the backdrop counts as a dismiss gesture.
+        // A text-selection drag starts on the card and must not close the modal.
+        pressStartedOnBackdrop.current = e.target === e.currentTarget
+      }}
+      onClick={(e) => {
+        if (dismissable && pressStartedOnBackdrop.current && e.target === e.currentTarget) {
+          onClose()
+        }
+        pressStartedOnBackdrop.current = false
       }}
     >
       <div

@@ -71,3 +71,30 @@ fn forward_client_auth_allows_exactly_one_key() {
 fn forward_client_auth_allows_zero_keys() {
     assert!(!forward_client_auth_misconfigured(0, false));
 }
+
+#[test]
+fn peer_is_loopback_reads_connect_info() {
+    use axum::extract::ConnectInfo;
+    use std::net::SocketAddr;
+
+    let loopback = |addr: &str| {
+        let mut req = axum::http::Request::new(axum::body::Body::empty());
+        req.extensions_mut()
+            .insert(ConnectInfo(addr.parse::<SocketAddr>().unwrap()));
+        peer_is_loopback(&req)
+    };
+    assert!(loopback("127.0.0.1:5000"));
+    assert!(loopback("[::1]:5000"));
+    // IPv4-mapped IPv6: dual-stack listeners present IPv4 loopback peers as
+    // `::ffff:127.0.0.1`, which std `Ipv6Addr::is_loopback()` (only `::1`)
+    // would reject. Must still count as loopback.
+    assert!(loopback("[::ffff:127.0.0.1]:5000"));
+    // ... but a mapped non-loopback IPv4 must not.
+    assert!(!loopback("[::ffff:192.168.1.5]:5000"));
+    assert!(!loopback("192.168.1.5:5000"));
+    assert!(!loopback("10.0.0.3:5000"));
+
+    // No ConnectInfo present -> fail closed (never auto-open).
+    let bare = axum::http::Request::new(axum::body::Body::empty());
+    assert!(!peer_is_loopback(&bare));
+}

@@ -223,7 +223,13 @@ pub(crate) async fn init_admin(
     let admin_addr = format!("{admin_bind}:{admin_port}");
     let admin_listener = tokio::net::TcpListener::bind(&admin_addr)
         .await
-        .unwrap_or_else(|e| panic!("failed to bind admin to {admin_addr}: {e}"));
+        .unwrap_or_else(|e| {
+            eprintln!(
+                "error: failed to bind admin server to {admin_addr}: {e}\n\
+                 The port may already be in use. You can choose a different admin port by setting the ADMIN_PORT environment variable (e.g. `ADMIN_PORT=3002 anyllm-proxy`)."
+            );
+            std::process::exit(1);
+        });
     tracing::info!("admin listening on {admin_addr}");
 
     Some((

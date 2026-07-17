@@ -10,6 +10,12 @@ pub struct ProxyStatus {
     pub proxy_port: u16,
     /// Whether the proxy's own port accepts a TCP connection right now.
     pub proxy_running: bool,
+    /// Effective proxy auth posture: `"keys"` (enforced), `"open_relay"` (any
+    /// key accepted on all interfaces), or `"loopback_only"` (no auth; localhost
+    /// open, LAN rejected, the default). Drives the admin UI warning banner.
+    pub auth_mode: crate::server::middleware::EffectiveAuthMode,
+    /// Number of distinct static `PROXY_API_KEYS` entries (deduplicated).
+    pub proxy_key_count: usize,
 }
 
 /// GET /admin/api/status -- returns whether the proxy has a backend configured.
@@ -30,6 +36,8 @@ pub async fn get_status(State(shared): State<SharedState>) -> Json<ProxyStatus> 
         configured: is_backend_configured() || has_managed_backend,
         proxy_port: shared.listen_port,
         proxy_running: proxy_reachable(shared.listen_port),
+        auth_mode: crate::server::middleware::effective_auth_mode(),
+        proxy_key_count: crate::server::middleware::distinct_static_key_count(),
     })
 }
 

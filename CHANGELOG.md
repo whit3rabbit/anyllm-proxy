@@ -10,6 +10,34 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ## [Unreleased]
 
+### Changed
+- Auth default is now **loopback-open** instead of reject-all. With no `PROXY_API_KEYS`,
+  no `PROXY_OPEN_RELAY`, no virtual keys and no OIDC, the proxy accepts unauthenticated
+  requests from localhost only; LAN/remote peers still get `401`. Decision uses the real
+  TCP peer (`ConnectInfo`), not the spoofable `X-Forwarded-For`. Set `PROXY_API_KEYS` when
+  running behind a reverse proxy. `GET /admin/api/status` now reports `auth_mode`
+  (`keys` / `open_relay` / `loopback_only`) and `proxy_key_count`.
+- Proxy start-up now pre-checks the listen port and fails fast with a hint when it is
+  already in use; the `wait_for_port` readiness timeout rose from 10s to 30s.
+
+### Fixed
+- `POST /v1/chat/completions` no longer returns `400 "max_tokens ... is required"` when the
+  client omits max_tokens for an OpenAI-compatible backend (lm_studio, vLLM, ollama, etc.).
+  OpenAI treats max_tokens as optional; the proxy now forwards no max_tokens so the backend
+  applies its own default (e.g. LM Studio's 8192). An explicitly-sent max_tokens is still
+  forwarded verbatim. Anthropic backends and `/v1/messages` are unchanged.
+- Listener bind failures now print a clear, actionable message and `exit(1)` instead of
+  panicking.
+- Admin UI modal no longer dismisses when a text-selection drag starts inside the card.
+
+### Added
+- Admin UI shows a top-of-page warning banner when the proxy has no API key set
+  (open-relay or loopback-only).
+- Tier router logs the selected tier at `info` (`router selected tier tier=… backend=… model=…`),
+  so routing is visible in the log instead of silent.
+- `--port`/`-p` CLI flag sets `LISTEN_PORT` for the current run
+  (e.g. `anyllm-proxy --port 3001`).
+
 ## [0.15.1] - 2026-07-15
 
 ### Fixed

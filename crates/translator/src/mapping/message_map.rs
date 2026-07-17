@@ -11,6 +11,6 @@ pub mod warnings;
 #[cfg(test)]
 mod tests;
 
-pub use request::anthropic_to_openai_request;
+pub use request::{anthropic_to_openai_request, OMIT_MAX_TOKENS_MARKER};
 pub use response::openai_to_anthropic_response;
 pub use warnings::{compute_request_warnings, extract_system_text};

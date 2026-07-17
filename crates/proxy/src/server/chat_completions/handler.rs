@@ -144,7 +144,13 @@ pub(crate) async fn chat_completions(
         body.max_tokens.is_none() && body.max_completion_tokens.is_none();
 
     let mut translated_body = body.clone();
-    if is_anthropic_backend(&effective) && caller_omitted_max_tokens {
+    // Anthropic requires max_tokens; the internal OpenAI->Anthropic translation
+    // 400s without it. Inject a default for BOTH backend kinds when the caller
+    // omitted it. For Anthropic backends 4096 is the real default. For
+    // OpenAI-compat backends it is a placeholder that we strip back out on the
+    // outbound request (via OMIT_MAX_TOKENS_MARKER, set below) so the backend
+    // applies its OWN default (e.g. LM Studio's 8192) instead of being capped.
+    if caller_omitted_max_tokens {
         translated_body.max_tokens = Some(4096);
     }
 
@@ -177,6 +183,22 @@ pub(crate) async fn chat_completions(
             }
         }
     };
+    // OpenAI treats max_tokens as optional; when the caller omitted it and this
+    // targets an OpenAI-compat backend, mark the request so the outbound
+    // OpenAI translation clears the placeholder and the backend uses its own
+    // default (e.g. LM Studio's 8192). Remove any client-supplied marker first
+    // so the proxy stays authoritative. Anthropic backends never get the marker
+    // and never call the OpenAI back-mapper, so they keep the 4096 default.
+    anthropic_req
+        .extra
+        .remove(mapping::message_map::OMIT_MAX_TOKENS_MARKER);
+    if caller_omitted_max_tokens && !is_anthropic_backend(&effective) {
+        anthropic_req.extra.insert(
+            mapping::message_map::OMIT_MAX_TOKENS_MARKER.to_string(),
+            serde_json::Value::Bool(true),
+        );
+    }
+
     let mut anthropic_extensions = AnthropicChatExtensions::default();
     if is_anthropic_backend(&effective) {
         anthropic_extensions = match apply_anthropic_chat_extensions(

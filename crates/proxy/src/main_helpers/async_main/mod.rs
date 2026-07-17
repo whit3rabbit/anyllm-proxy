@@ -183,6 +183,12 @@ pub async fn async_main(args: Vec<String>, data_dir: PathBuf) {
     )
     .await;
 
+    // Log the effective auth posture once OIDC (init_oidc above) and virtual
+    // keys (registered inside init_admin) are both set, so an OIDC-only or
+    // virtual-key-only deployment is labeled correctly instead of misreported
+    // as "loopback-only" by the earlier static-key LazyLock warn.
+    anyllm_proxy::server::middleware::log_effective_auth_posture();
+
     let mut admin_redirect_port: Option<u16> = None;
     let mut admin_startup_info: Option<String> = None;
     // Bare token printed on its own banner line for easy copy/paste. Only set on
@@ -275,7 +281,14 @@ pub async fn async_main(args: Vec<String>, data_dir: PathBuf) {
     let proxy_addr = format!("0.0.0.0:{listen_port}");
     let proxy_listener = tokio::net::TcpListener::bind(&proxy_addr)
         .await
-        .unwrap_or_else(|e| panic!("failed to bind proxy to {proxy_addr}: {e}"));
+        .unwrap_or_else(|e| {
+            eprintln!(
+                "error: failed to bind proxy to {proxy_addr}: {e}\n\
+                 The port may already be in use by another process. Please check if another instance of anyllm-proxy or another service is running.\n\
+                 You can choose a different port by setting the LISTEN_PORT environment variable (e.g. `LISTEN_PORT=3001 anyllm-proxy`) or using the --port flag (e.g. `anyllm-proxy --port 3001`)."
+            );
+            std::process::exit(1);
+        });
     tracing::info!("proxy listening on {proxy_addr}");
 
     // Print non-secret startup details once both servers are bound.
@@ -323,12 +336,17 @@ pub async fn async_main(args: Vec<String>, data_dir: PathBuf) {
     let (shutdown_tx, mut shutdown_rx1) = tokio::sync::watch::channel(false);
 
     let proxy_handle = tokio::spawn(async move {
-        axum::serve(proxy_listener, app)
-            .with_graceful_shutdown(async move {
-                shutdown_rx1.changed().await.ok();
-            })
-            .await
-            .expect("proxy server error");
+        // connect-info supplies the TCP peer SocketAddr to request extensions;
+        // auth's loopback-open default and the IP allowlist read it.
+        axum::serve(
+            proxy_listener,
+            app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+        )
+        .with_graceful_shutdown(async move {
+            shutdown_rx1.changed().await.ok();
+        })
+        .await
+        .expect("proxy server error");
     });
 
     let admin_handle: Option<tokio::task::JoinHandle<()>> =

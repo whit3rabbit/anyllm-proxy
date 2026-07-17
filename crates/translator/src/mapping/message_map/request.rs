@@ -3,6 +3,15 @@ use crate::mapping::tools_map;
 use crate::openai;
 use crate::util;
 
+/// Proxy-internal marker key placed on an Anthropic request's `extra` map to
+/// signal that the original caller omitted `max_tokens` and the request targets
+/// an OpenAI-compatible backend (where max_tokens is optional). When present,
+/// [`anthropic_to_openai_request`] clears the placeholder max_tokens on the
+/// outbound OpenAI request so the backend applies its own default, and removes
+/// the marker so it never leaks upstream. The proxy sets this authoritatively;
+/// see `chat_completions/handler.rs`.
+pub const OMIT_MAX_TOKENS_MARKER: &str = "__anyllm_omit_max_tokens";
+
 /// Convert an Anthropic MessageCreateRequest to an OpenAI ChatCompletionRequest.
 ///
 /// Anthropic: <https://docs.anthropic.com/en/api/messages>
@@ -178,6 +187,15 @@ pub fn anthropic_to_openai_request(
         if let Some(ref mut tools) = oai_req.tools {
             apply_strict_mode_to_tool(tools, &forced_name);
         }
+    }
+
+    // Proxy-internal marker (see OMIT_MAX_TOKENS_MARKER): the caller omitted
+    // max_tokens for an OpenAI-compat backend, where it is optional. Clear the
+    // placeholder so the backend uses its own default (e.g. LM Studio's 8192),
+    // and strip the marker so it never leaks upstream.
+    if oai_req.extra.remove(OMIT_MAX_TOKENS_MARKER).is_some() {
+        oai_req.max_tokens = None;
+        oai_req.max_completion_tokens = None;
     }
 
     oai_req

@@ -161,6 +161,9 @@ mod tests {
         assert!(client_auth_forwardable(Some(ClientAuthPath::OpenRelay)));
         assert!(!client_auth_forwardable(Some(ClientAuthPath::VirtualKey)));
         assert!(!client_auth_forwardable(Some(ClientAuthPath::OidcJwt)));
+        // Loopback-open is not a real credential, so it must never be forwarded
+        // upstream (locks the security-relevant default against future regressions).
+        assert!(!client_auth_forwardable(Some(ClientAuthPath::LoopbackOpen)));
         assert!(!client_auth_forwardable(None));
     }
 

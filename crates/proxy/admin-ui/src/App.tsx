@@ -8,6 +8,7 @@ import { useStatus } from './api/queries'
 import LoginPage from './components/layout/LoginPage'
 import Sidebar from './components/layout/Sidebar'
 import ToastProvider from './components/shared/Toast'
+import AppBanner from './components/shared/AppBanner'
 import Dashboard from './tabs/dashboard/Dashboard'
 import RequestLog from './tabs/requests/RequestLog'
 import Settings from './tabs/settings/Settings'
@@ -68,6 +69,7 @@ export default function App() {
       <div className="app-layout">
         <Sidebar />
         <div className="tab-content">
+          <AppBanner />
           <RouterRoutes>
             <Route
               path="/"

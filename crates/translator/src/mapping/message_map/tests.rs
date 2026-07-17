@@ -1892,3 +1892,23 @@ fn forced_tool_choice_enables_strict_mode_in_openai_request() {
     assert!(required.iter().any(|v| v == "name"));
     assert!(required.iter().any(|v| v == "value"));
 }
+
+#[test]
+fn omit_max_tokens_marker_clears_and_is_stripped() {
+    // Without the marker: max_tokens is round-tripped from the Anthropic request.
+    let mut req = basic_request();
+    req.max_tokens = 1024;
+    let oai = anthropic_to_openai_request(&req);
+    assert_eq!(oai.max_tokens, Some(1024));
+    assert_eq!(oai.max_completion_tokens, Some(1024));
+
+    // With the marker: both cleared so the backend applies its own default,
+    // and the marker itself is stripped so it never leaks upstream.
+    let mut req = basic_request();
+    req.extra
+        .insert(OMIT_MAX_TOKENS_MARKER.to_string(), json!(true));
+    let oai = anthropic_to_openai_request(&req);
+    assert_eq!(oai.max_tokens, None);
+    assert_eq!(oai.max_completion_tokens, None);
+    assert!(!oai.extra.contains_key(OMIT_MAX_TOKENS_MARKER));
+}

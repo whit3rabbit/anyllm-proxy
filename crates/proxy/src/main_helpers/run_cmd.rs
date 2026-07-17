@@ -120,6 +120,26 @@ pub fn run_subcommand(proxy_args: Vec<String>, tool_argv: Vec<String>) -> i32 {
         .ok()
         .and_then(|p| p.parse().ok())
         .unwrap_or(3000);
+
+    // Check if the port is already in use by attempting to bind to 127.0.0.1:listen_port
+    let bind_addr = format!("127.0.0.1:{listen_port}");
+    if std::net::TcpListener::bind(&bind_addr).is_err() {
+        eprintln!(
+            "error: port {listen_port} is already in use.\n\
+             Please choose a different port using the LISTEN_PORT environment variable,\n\
+             for example:\n\
+             \n\
+             LISTEN_PORT=3001 anyllm-proxy run {}\n\
+             \n\
+             Or specify it using the --port flag:\n\
+             \n\
+             anyllm-proxy --port 3001 run {}",
+            tool_argv.join(" "),
+            tool_argv.join(" ")
+        );
+        return 1;
+    }
+
     let auth_token = derive_auth_token();
     let proxy_url = format!("http://localhost:{listen_port}");
 
@@ -147,10 +167,10 @@ pub fn run_subcommand(proxy_args: Vec<String>, tool_argv: Vec<String>) -> i32 {
         }
     };
 
-    // Wait up to 10 seconds for the proxy to start accepting connections.
+    // Wait up to 30 seconds for the proxy to start accepting connections.
     eprintln!("anyllm_proxy: waiting for proxy on port {listen_port}...");
-    if !wait_for_port(listen_port, 10_000) {
-        eprintln!("anyllm_proxy: proxy did not start within 10 seconds on port {listen_port}");
+    if !wait_for_port(listen_port, 30_000) {
+        eprintln!("anyllm_proxy: proxy did not start within 30 seconds on port {listen_port}");
         let _ = proxy_child.kill();
         let _ = proxy_child.wait();
         return 1;
