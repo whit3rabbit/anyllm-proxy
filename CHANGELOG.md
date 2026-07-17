@@ -10,6 +10,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-07-16
+
 ### Changed
 - Auth default is now **loopback-open** instead of reject-all. With no `PROXY_API_KEYS`,
   no `PROXY_OPEN_RELAY`, no virtual keys and no OIDC, the proxy accepts unauthenticated
@@ -424,7 +426,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 ### Changed
 - Dependency bumps (rand 0.8.5 → 0.8.6).
 
-[Unreleased]: https://github.com/whit3rabbit/anyllm-proxy/compare/v0.15.1...HEAD
+[Unreleased]: https://github.com/whit3rabbit/anyllm-proxy/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/whit3rabbit/anyllm-proxy/compare/v0.15.1...v0.16.0
 [0.15.1]: https://github.com/whit3rabbit/anyllm-proxy/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/whit3rabbit/anyllm-proxy/compare/v0.14.1...v0.15.0
 [0.14.1]: https://github.com/whit3rabbit/anyllm-proxy/compare/v0.13.0...v0.14.1
