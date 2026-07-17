@@ -9,6 +9,8 @@ import type { ConfigResponse, RouterConfig, RouterTierTarget, ManagedBackend } f
 import AsyncBoundary from '../../components/shared/AsyncBoundary'
 import { AdminButton, AdminSurface } from '../../components/shared/Performative'
 import { catalogModelIds } from '../../utils/catalogModels'
+import { pushToast } from '../../store/toast'
+import { copyToClipboard } from '../../utils/clipboard'
 
 // The six Claude Code request tiers, in the order they are shown (and the same
 // precedence the backend applies: image > web_search > think > long_context >
@@ -38,13 +40,21 @@ export default function Router() {
         evaluated on <code>/v1/messages</code> only). Disabled by default.
       </p>
       <AsyncBoundary query={configQuery} errorTitle="Failed to load router config">
-        {(config: ConfigResponse) => <RouterForm config={config.router} backends={backends} />}
+        {(config: ConfigResponse) => <RouterForm config={config.router} backends={backends} env={config.env} />}
       </AsyncBoundary>
     </div>
   )
 }
 
-function RouterForm({ config, backends }: { config: RouterConfig; backends: ManagedBackend[] }) {
+function RouterForm({
+  config,
+  backends,
+  env,
+}: {
+  config: RouterConfig
+  backends: ManagedBackend[]
+  env: Record<string, string>
+}) {
   const save = useSaveConfig()
   const [draft, setDraft] = useState<RouterConfig>(config)
 
@@ -63,6 +73,11 @@ function RouterForm({ config, backends }: { config: RouterConfig; backends: Mana
   function handleSave() {
     save.mutate({ router: draft })
   }
+
+  const proxyPort = env.LISTEN_PORT || '3000'
+  const proxyHost = window.location.hostname
+  const proxyUrl = `http://${proxyHost === '127.0.0.1' || proxyHost === 'localhost' ? 'localhost' : proxyHost}:${proxyPort}`
+  const commandText = `ANTHROPIC_BASE_URL=${proxyUrl} ANTHROPIC_API_KEY=proxy-user claude`
 
   return (
     <AdminSurface>
@@ -108,10 +123,47 @@ function RouterForm({ config, backends }: { config: RouterConfig; backends: Mana
         ))}
       </div>
 
-      <div style={{ marginTop: 16 }}>
+      <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <AdminButton tone="primary" loading={save.isPending} onClick={handleSave}>
           Save router
         </AdminButton>
+      </div>
+
+      <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+        <h4 style={{ margin: '0 0 4px', fontSize: '0.95rem', fontWeight: 600 }}>Start Claude Code</h4>
+        <p style={{ color: 'var(--text-2)', fontSize: '0.82rem', margin: '0 0 10px' }}>
+          Run Claude Code pointing to your proxy with this command:
+        </p>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input
+            type="text"
+            readOnly
+            value={commandText}
+            onClick={e => (e.target as HTMLInputElement).select()}
+            style={{
+              flex: 1,
+              fontFamily: 'var(--font-mono)',
+              fontSize: '0.8rem',
+              padding: '6px 10px',
+              backgroundColor: 'var(--bg-hover)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--r)',
+            }}
+          />
+          <AdminButton
+            size="sm"
+            onClick={async () => {
+              const ok = await copyToClipboard(commandText)
+              pushToast(
+                ok
+                  ? { variant: 'success', message: 'Command copied to clipboard' }
+                  : { variant: 'error', message: 'Copy failed — select and copy manually' }
+              )
+            }}
+          >
+            Copy
+          </AdminButton>
+        </div>
       </div>
     </AdminSurface>
   )
