@@ -107,6 +107,8 @@ pub mod meta_llama;
 pub mod minimax;
 /// Mistral provider definition.
 pub mod mistral;
+/// mlx-v provider definition.
+pub mod mlx_v;
 /// Moonshot provider definition.
 pub mod moonshot;
 /// Morph provider definition.
