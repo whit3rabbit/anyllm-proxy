@@ -76,23 +76,31 @@ pub(crate) async fn messages(
     };
     let (body, router_tier) = match router_cfg {
         Some(rc) => {
-            // LongContext needs a token count. Offload the CPU-bound tokenizer to
-            // the blocking pool (per CLAUDE.md), moving `body` in and back out to
-            // avoid cloning a potentially large request.
-            let (body, long_context) = if rc.long_context_tier_active() {
-                let threshold = rc.context_threshold;
-                tokio::task::spawn_blocking(move || {
-                    let over = super::super::router_signals::is_long_context(&body, threshold);
-                    (body, over)
-                })
-                .await
-                .expect("router token-count task panicked")
+            // Explicit model pick (selected from /v1/models gateway discovery):
+            // route it straight to the backend that offers it, skipping tier-signal
+            // classification. resolve_explicit_pick returns None for claude-* alias
+            // traffic and unknown models, which then fall through to the tiers below.
+            if let Some(pick) = state.resolve_explicit_pick(&body.model) {
+                (body, Some(pick))
             } else {
-                (body, false)
-            };
-            let signals = super::super::router_signals::anthropic_signals(&body, long_context);
-            let tier = state.resolve_router_tier(&rc, &signals);
-            (body, tier)
+                // LongContext needs a token count. Offload the CPU-bound tokenizer
+                // to the blocking pool (per CLAUDE.md), moving `body` in and back
+                // out to avoid cloning a potentially large request.
+                let (body, long_context) = if rc.long_context_tier_active() {
+                    let threshold = rc.context_threshold;
+                    tokio::task::spawn_blocking(move || {
+                        let over = super::super::router_signals::is_long_context(&body, threshold);
+                        (body, over)
+                    })
+                    .await
+                    .expect("router token-count task panicked")
+                } else {
+                    (body, false)
+                };
+                let signals = super::super::router_signals::anthropic_signals(&body, long_context);
+                let tier = state.resolve_router_tier(&rc, &signals);
+                (body, tier)
+            }
         }
         None => (body, None),
     };

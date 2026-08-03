@@ -13,7 +13,6 @@ struct CachedAnthropicCatalogRows {
 
 struct AnthropicCatalogRows {
     rows: Arc<[serde_json::Value]>,
-    ids: Arc<HashSet<String>>,
 }
 
 static ANTHROPIC_CATALOG_ROWS_CACHE: LazyLock<Mutex<HashMap<usize, CachedAnthropicCatalogRows>>> =
@@ -55,13 +54,8 @@ fn cached_anthropic_catalog_model_rows(
     // Build outside the lock so a miss doesn't serialize concurrent /v1/models
     // callers behind the row construction.
     let rows = anthropic_catalog_model_rows(catalog);
-    let ids = rows
-        .iter()
-        .filter_map(|model| model["id"].as_str().map(str::to_string))
-        .collect();
     let rows = Arc::new(AnthropicCatalogRows {
         rows: Arc::from(rows),
-        ids: Arc::new(ids),
     });
     let mut cache = ANTHROPIC_CATALOG_ROWS_CACHE
         .lock()
@@ -103,16 +97,88 @@ fn claude_display_name(model_id: &str) -> String {
     format!("Claude {name}")
 }
 
-/// GET /v1/models -- returns catalog Claude models merged with model_list entries.
-pub async fn models(State(state): State<AppState>) -> Json<serde_json::Value> {
-    let cached_rows = cached_anthropic_catalog_model_rows(&state.provider_catalog);
-    let mut data = cached_rows.rows.iter().cloned().collect::<Vec<_>>();
+/// Push a model row, deduping by id. Empty ids are skipped. `display_name`
+/// mirrors the id: it stays a real, routable name (what Claude Code sends back),
+/// and is a large improvement over synthesizing "Claude Sonnet/Opus/Haiku" for
+/// backends that are not Anthropic.
+fn push_model_row(
+    data: &mut Vec<serde_json::Value>,
+    seen: &mut HashSet<String>,
+    id: &str,
+    owned_by: &str,
+) {
+    if !id.is_empty() && seen.insert(id.to_string()) {
+        data.push(serde_json::json!({
+            "id": id,
+            "object": "model",
+            "created": 0,
+            "owned_by": owned_by,
+            "display_name": id,
+        }));
+    }
+}
 
-    // Merge models from the model router (LiteLLM model_list config).
+/// GET /v1/models -- returns the real routable models the proxy can serve, so
+/// Claude Code's gateway model discovery
+/// (`CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1`) can populate its `/model`
+/// picker with models a user can actually pick and have routed. Sources, in
+/// dedup order: autorouter tier targets (operator-typed, covers local/custom
+/// models), each enabled managed backend's provider catalog, then LiteLLM
+/// `model_list` virtual models. Falls back to the static Anthropic catalog only
+/// when none of those produce anything, preserving simple single-backend installs.
+pub async fn models(State(state): State<AppState>) -> Json<serde_json::Value> {
+    let mut data: Vec<serde_json::Value> = Vec::new();
+    let mut seen: HashSet<String> = HashSet::new();
+
+    // 1+2. Autorouter tier targets and managed-backend catalog models. Gated on
+    //      `router.enabled` because the explicit-pick routing that makes these
+    //      directly pickable only runs when the autorouter is on; advertising
+    //      them otherwise would list models a pick would not route.
+    let router_enabled = {
+        let cfg = state
+            .runtime_config
+            .read()
+            .unwrap_or_else(|e| e.into_inner());
+        cfg.router.enabled
+    };
+    if router_enabled {
+        // Tier targets: clone out so the lock is held only briefly.
+        let tier_models: Vec<(String, String)> = {
+            let cfg = state
+                .runtime_config
+                .read()
+                .unwrap_or_else(|e| e.into_inner());
+            cfg.router
+                .active_tiers()
+                .map(|(_, t)| (t.model.clone(), t.backend_name.clone()))
+                .collect()
+        };
+        for (model, backend) in &tier_models {
+            push_model_row(&mut data, &mut seen, model, backend);
+        }
+
+        // Each enabled managed backend's provider catalog models (static catalog
+        // only; no DB read so the request path stays DB-free).
+        if let Some(shared) = state.shared.as_ref() {
+            if let Ok(guard) = shared.managed_backends.read() {
+                for (name, (row, _client)) in guard.iter() {
+                    if !row.enabled {
+                        continue;
+                    }
+                    for m in state.provider_catalog.list_models(&row.provider_id).iter() {
+                        push_model_row(&mut data, &mut seen, m.id.as_str(), name);
+                    }
+                }
+            }
+        }
+    }
+
+    // 3. LiteLLM model_list virtual models (routed via ModelRouter regardless of
+    //    the autorouter, so always advertised).
     if let Some(ref router_lock) = state.model_router {
         let router = router_lock.read().unwrap_or_else(|e| e.into_inner());
         for model_name in router.known_models() {
-            if !cached_rows.ids.contains(model_name) {
+            if seen.insert(model_name.to_string()) {
                 data.push(serde_json::json!({
                     "id": model_name,
                     "object": "model",
@@ -121,6 +187,15 @@ pub async fn models(State(state): State<AppState>) -> Json<serde_json::Value> {
                 }));
             }
         }
+    }
+
+    // Fallback: no real models configured -> static Anthropic catalog (unchanged
+    // behavior for a simple single-backend install with no managed backends and
+    // the autorouter off).
+    if data.is_empty() {
+        let cached_rows = cached_anthropic_catalog_model_rows(&state.provider_catalog);
+        let fallback = cached_rows.rows.iter().cloned().collect::<Vec<_>>();
+        return Json(serde_json::json!({ "object": "list", "data": fallback }));
     }
 
     Json(serde_json::json!({
@@ -215,4 +290,25 @@ pub async fn completions(
         return resp;
     }
     passthrough_to_backend(&state, &headers, body, "/v1/completions").await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn push_model_row_dedups_and_skips_empty() {
+        let mut data = Vec::new();
+        let mut seen = HashSet::new();
+        push_model_row(&mut data, &mut seen, "gpt-4o", "openai-be");
+        push_model_row(&mut data, &mut seen, "gpt-4o", "other-be"); // dup id -> dropped
+        push_model_row(&mut data, &mut seen, "", "empty-be"); // empty -> dropped
+        push_model_row(&mut data, &mut seen, "deepseek-chat", "deepseek-be");
+
+        assert_eq!(data.len(), 2);
+        assert_eq!(data[0]["id"], "gpt-4o");
+        assert_eq!(data[0]["owned_by"], "openai-be"); // first writer wins
+        assert_eq!(data[0]["display_name"], "gpt-4o");
+        assert_eq!(data[1]["id"], "deepseek-chat");
+    }
 }

@@ -103,6 +103,22 @@ impl RouterConfig {
         self.enabled && self.long_context.active().is_some()
     }
 
+    /// Iterate over this router's active (enabled + configured) tier targets as
+    /// `(tier_name, target)`. Order is fixed (default first) so `/v1/models`
+    /// advertises them deterministically. No-op when the router is disabled.
+    pub fn active_tiers(&self) -> impl Iterator<Item = (&'static str, &TierTarget)> {
+        [
+            ("default", &self.default),
+            ("background", &self.background),
+            ("think", &self.think),
+            ("long_context", &self.long_context),
+            ("web_search", &self.web_search),
+            ("image", &self.image),
+        ]
+        .into_iter()
+        .filter_map(|(name, t)| t.active().map(|a| (name, a)))
+    }
+
     /// Select the routing target for a request, or `None` to fall through to
     /// normal model-name routing.
     ///
@@ -318,5 +334,37 @@ mod tests {
         let partial: RouterConfig = serde_json::from_str(r#"{"enabled":true}"#).unwrap();
         assert_eq!(partial.context_threshold, DEFAULT_CONTEXT_THRESHOLD);
         assert!(partial.default.backend_name.is_empty());
+    }
+
+    #[test]
+    fn active_tiers_lists_only_configured() {
+        let cfg = full_config();
+        let names: Vec<_> = cfg.active_tiers().map(|(n, _)| n).collect();
+        assert_eq!(
+            names,
+            [
+                "default",
+                "background",
+                "think",
+                "long_context",
+                "web_search",
+                "image"
+            ]
+        );
+
+        // A tier missing a model is dropped.
+        let mut cfg = full_config();
+        cfg.think.model = String::new();
+        let names: Vec<_> = cfg.active_tiers().map(|(n, _)| n).collect();
+        assert!(!names.contains(&"think"));
+    }
+
+    #[test]
+    fn active_tiers_empty_for_default_config() {
+        // active_tiers itself does not gate on the master `enabled` switch
+        // (callers gate via `router_cfg`); an all-default config yields nothing
+        // because no tier is configured, not because the router is disabled.
+        let cfg = RouterConfig::default();
+        assert!(cfg.active_tiers().next().is_none());
     }
 }

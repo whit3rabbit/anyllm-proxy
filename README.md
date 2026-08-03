@@ -1,4 +1,3 @@
-
 <p align="center">
   <pre style="display: inline-block; text-align: left;">
  █████╗ ███╗   ██╗██╗   ██╗██╗     ██╗     ███╗   ███╗
@@ -84,8 +83,10 @@ anyllm-proxy
 2. **Point your tools at the Proxy:**
    - **Claude Code:**
      ```bash
-     ANTHROPIC_BASE_URL=http://localhost:3000 ANTHROPIC_API_KEY=proxy-user claude
+     ANTHROPIC_BASE_URL=http://localhost:3000 ANTHROPIC_API_KEY=proxy-user \
+     CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=true claude
      ```
+     The gateway discovery flag makes Claude Code fetch the proxy's `/v1/models`, so its `/model` picker lists the real backend models you configured (especially with the Auto Router, where each pick routes straight to that model). The Auto Router tab also gives you a copy-paste version of this command.
    - **Cursor / Cline / Windsurf:** Configure the custom Anthropic endpoint to point to `http://localhost:3000`.
 
 ### Custom Ports & Auth Token

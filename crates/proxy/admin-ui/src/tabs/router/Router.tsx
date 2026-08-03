@@ -77,7 +77,10 @@ function RouterForm({
   const proxyPort = env.LISTEN_PORT || '3000'
   const proxyHost = window.location.hostname
   const proxyUrl = `http://${proxyHost === '127.0.0.1' || proxyHost === 'localhost' ? 'localhost' : proxyHost}:${proxyPort}`
-  const commandText = `ANTHROPIC_BASE_URL=${proxyUrl} ANTHROPIC_API_KEY=proxy-user claude`
+  // CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY makes Claude Code fetch the
+  // proxy's /v1/models and add those real models to its /model picker, so the
+  // rows show the actual backend models instead of fake Claude names.
+  const commandText = `ANTHROPIC_BASE_URL=${proxyUrl} ANTHROPIC_API_KEY=proxy-user CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=true claude`
 
   return (
     <AdminSurface>
@@ -132,7 +135,9 @@ function RouterForm({
       <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
         <h4 style={{ margin: '0 0 4px', fontSize: '0.95rem', fontWeight: 600 }}>Start Claude Code</h4>
         <p style={{ color: 'var(--text-2)', fontSize: '0.82rem', margin: '0 0 10px' }}>
-          Run Claude Code pointing to your proxy with this command:
+          Run Claude Code pointing to your proxy with this command. The discovery flag
+          populates its <code>/model</code> picker from the proxy&apos;s configured models, so you
+          can pick a real backend model directly.
         </p>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <input

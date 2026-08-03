@@ -10,6 +10,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ## [Unreleased]
 
+### Added
+
+- Gateway model discovery for Claude Code: when the Auto Router is enabled, `GET /v1/models` advertises the real backend models (autorouter tier targets + each managed backend's catalog) instead of a static Claude catalog, so Claude Code's `/model` picker can show and pick them. The Auto Router tab's "Start Claude Code" command now includes `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=true`.
+- Explicit-pick routing: a model picked from `/v1/models` routes straight to the managed backend that offers it, bypassing autorouter tier signals. `claude-*` alias traffic still flows through the configured tiers.
+
 ## [0.16.0] - 2026-07-16
 
 ### Changed

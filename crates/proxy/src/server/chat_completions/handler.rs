@@ -89,9 +89,19 @@ pub(crate) async fn chat_completions(
             .unwrap_or_else(|e| e.into_inner());
         cfg.router.enabled.then(|| cfg.router.clone())
     };
-    let router_tier = router_cfg.and_then(|rc| {
-        let signals = crate::server::router_signals::openai_signals(&body);
-        state.resolve_router_tier(&rc, &signals)
+    // Explicit model pick (selected from /v1/models gateway discovery): route it
+    // straight to the backend that offers it, skipping tier-signal classification.
+    // claude-* alias traffic and unknown models fall through to the tiers below.
+    let explicit_pick = if router_cfg.is_some() {
+        state.resolve_explicit_pick(&original_model)
+    } else {
+        None
+    };
+    let router_tier = explicit_pick.or_else(|| {
+        router_cfg.and_then(|rc| {
+            let signals = crate::server::router_signals::openai_signals(&body);
+            state.resolve_router_tier(&rc, &signals)
+        })
     });
     let (mapped_model, effective, deployment) = match router_tier {
         Some((model, effective, deployment)) => (

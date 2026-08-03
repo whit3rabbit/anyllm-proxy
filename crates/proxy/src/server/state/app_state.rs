@@ -270,6 +270,62 @@ impl AppState {
         Some((tier.model.clone(), effective, None))
     }
 
+    /// Find the name of an enabled managed backend whose provider catalog offers
+    /// `model`. Used to route an explicitly-picked real model, one a client
+    /// selected from `/v1/models` gateway discovery, to the backend that serves
+    /// it, bypassing autorouter tier signals. Static catalog only (no DB cache
+    /// read) so the request path stays DB-free and "advertised == routable"
+    /// holds. First enabled match wins.
+    pub(crate) fn backend_for_real_model(&self, model: &str) -> Option<String> {
+        let shared = self.shared.as_ref()?;
+        let guard = shared.managed_backends.read().ok().or_else(|| {
+            tracing::warn!("managed_backends RwLock is poisoned; skipping real-model lookup");
+            None
+        })?;
+        for (name, (row, _client)) in guard.iter() {
+            if !row.enabled {
+                continue;
+            }
+            if self
+                .provider_catalog
+                .list_models(&row.provider_id)
+                .iter()
+                .any(|m| m.id.as_str() == model)
+            {
+                return Some(name.clone());
+            }
+        }
+        None
+    }
+
+    /// Resolve an explicitly-picked real model to its backend's effective state.
+    /// Returns `(model, effective_state, None)` mirroring [`resolve_router_tier`]
+    /// so a handler can treat a tier match and an explicit pick uniformly. `None`
+    /// if no enabled managed backend offers the model (caller falls back to
+    /// normal model-name routing). No RPM accounting, same as the router path.
+    pub(crate) fn resolve_explicit_pick(
+        &self,
+        model: &str,
+    ) -> Option<(
+        String,
+        AppState,
+        Option<Arc<crate::config::model_router::Deployment>>,
+    )> {
+        // claude-* aliases go through the autorouter tiers, never explicit-pick,
+        // even if an Anthropic managed backend's catalog happens to list them.
+        if model.starts_with("claude-") {
+            return None;
+        }
+        let backend_name = self.backend_for_real_model(model)?;
+        let effective = self.effective_state_for_backend(&backend_name)?;
+        tracing::info!(
+            backend = %backend_name,
+            model = %model,
+            "explicit model pick routed directly (autorouter deferred)"
+        );
+        Some((model.to_string(), effective, None))
+    }
+
     /// Whether request/response body logging is enabled.
     pub(crate) fn log_bodies(&self) -> bool {
         self.runtime_config

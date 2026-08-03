@@ -136,6 +136,12 @@ For security safeguards on client auth forwarding, see [ENV.md](ENV.md).
 
 You can define multiple backends using TOML or LiteLLM YAML config files. Point the proxy to the config file via `PROXY_CONFIG`.
 
+### Auto Router & Claude Code Model Discovery
+
+The admin UI's **Auto Router** tab maps Claude Code request tiers (Default, Background, Think, Long Context, Web Search, Image) to a specific backend and model. When the router is enabled, `GET /v1/models` advertises the real backend models (the tier targets plus each managed backend's catalog) instead of a static Claude catalog, so Claude Code can show and pick the actual models.
+
+The tab's **Start Claude Code** command includes `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=true`, which makes Claude Code fetch `/v1/models` and add those real models to its `/model` picker. A model picked from that list is routed straight to the backend that offers it (explicit pick wins, bypassing tier-signal routing); `claude-*` alias traffic still flows through the configured tiers as before.
+
 ### TOML Format
 ```toml
 # config.toml
