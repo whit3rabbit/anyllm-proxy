@@ -43,6 +43,22 @@ PRICING_FILES = [
     REPO_ROOT / "crates" / "proxy" / "assets" / "model_pricing.json",
 ]
 
+# Hand-maintained: Anthropic models that reject
+# `thinking: {"type": "enabled", "budget_tokens": N}` with a 400 (adaptive-only).
+# NOT derivable from LiteLLM flags -- `extended_thinking` is true for every
+# thinking-capable model, so it cannot separate "accepts budget_tokens"
+# (Opus 4.6 / Sonnet 4.6, deprecated) from "rejects it" (4.7+). Source of truth:
+# Anthropic docs, "Configurations each model rejects" table. Add new adaptive-only
+# releases here (Opus 4.7+, Sonnet 5+, Fable 5, Mythos 5).
+ANTHROPIC_ADAPTIVE_ONLY_THINKING: list[str] = [
+    "claude-fable-5",
+    "claude-opus-4-7",
+    "claude-opus-4-7-20260416",
+    "claude-opus-4-8",
+    "claude-opus-5",
+    "claude-sonnet-5",
+]
+
 SOURCE_PROVIDER_ALIASES = {
     "aiml": "ai_ml_api",
     "amazon_nova": "bedrock",
@@ -797,6 +813,24 @@ def write_rust_snapshot(path: Path, raw: dict[str, Any], allowed_modes: set[str]
             if row[flag]:
                 lines.append(f"    {rust_string(model)},")
         lines.extend(["];", ""])
+
+    # ANTHROPIC_ADAPTIVE_ONLY_THINKING_MODELS is hand-maintained (above), not
+    # data-driven. Emitted verbatim so the generated file is self-contained and
+    # the constant survives every regeneration.
+    lines.extend(
+        [
+            "/// Anthropic models where `thinking: {\"type\": \"enabled\", \"budget_tokens\": N}`",
+            "/// is rejected with a 400 (adaptive-only). Opus 4.6 and Sonnet 4.6 still",
+            "/// accept it as a deprecated transitional escape hatch, so they are NOT here",
+            "/// even though they are in `ANTHROPIC_ADAPTIVE_THINKING_MODELS`. Hand-maintained",
+            "/// in check_litellm_providers.py (ANTHROPIC_ADAPTIVE_ONLY_THINKING); not",
+            "/// derivable from LiteLLM flags.",
+            "pub static ANTHROPIC_ADAPTIVE_ONLY_THINKING_MODELS: &[&str] = &[",
+        ]
+    )
+    for model in ANTHROPIC_ADAPTIVE_ONLY_THINKING:
+        lines.append(f"    {rust_string(model)},")
+    lines.extend(["];", ""])
 
     lines.append("pub static ALL_PROVIDERS: &[&ProviderDef] = &[")
     for provider_const in provider_const_names:

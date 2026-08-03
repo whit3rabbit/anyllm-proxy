@@ -396,9 +396,10 @@ mod tests {
     #[test]
     fn anthropic_models_match_litellm_snapshot() {
         let models = list_models("anthropic");
-        assert_eq!(models.len(), 23);
+        assert_eq!(models.len(), 24);
 
         for id in [
+            "claude-opus-5",
             "claude-fable-5",
             "claude-opus-4-7",
             "claude-opus-4-7-20260416",
@@ -459,6 +460,15 @@ mod tests {
         assert!(model_requires_anthropic_adaptive_thinking(
             "anthropic",
             "claude-fable-5"
+        ));
+        // Opus 5 and Sonnet 5 are adaptive-only: budget_tokens is rejected (400).
+        assert!(model_requires_anthropic_adaptive_thinking(
+            "anthropic",
+            "claude-opus-5"
+        ));
+        assert!(model_requires_anthropic_adaptive_thinking(
+            "anthropic",
+            "claude-sonnet-5"
         ));
         // Opus 4.6 / Sonnet 4.6 support adaptive thinking but still accept
         // budget_tokens as a deprecated transitional escape hatch.

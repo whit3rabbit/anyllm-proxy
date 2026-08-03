@@ -756,6 +756,20 @@ pub const MODELS_ANTHROPIC: &[ModelDef] = &[
         status: ModelStatus::Available,
     },
     ModelDef {
+        id: "claude-opus-5",
+        provider_id: "anthropic",
+        context_window: 1000000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
         id: "claude-sonnet-4-20250514",
         provider_id: "anthropic",
         context_window: 1000000,
@@ -1338,7 +1352,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         context_window: 128000,
         max_output_tokens: 4096,
         capabilities: ModelCapabilities {
-            streaming: true,
+            streaming: false,
             tool_use: true,
             tool_choice: true,
             vision: false,
@@ -1352,7 +1366,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         context_window: 128000,
         max_output_tokens: 4096,
         capabilities: ModelCapabilities {
-            streaming: true,
+            streaming: false,
             tool_use: true,
             tool_choice: true,
             vision: false,
@@ -1366,7 +1380,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         context_window: 128000,
         max_output_tokens: 4096,
         capabilities: ModelCapabilities {
-            streaming: true,
+            streaming: false,
             tool_use: true,
             tool_choice: true,
             vision: false,
@@ -1462,6 +1476,118 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         id: "eu/gpt-5.1-codex-mini",
         provider_id: "azure",
         context_window: 272000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "eu/gpt-5.4",
+        provider_id: "azure",
+        context_window: 1050000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "eu/gpt-5.4-2026-03-05",
+        provider_id: "azure",
+        context_window: 1050000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "eu/gpt-5.5",
+        provider_id: "azure",
+        context_window: 1050000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "eu/gpt-5.5-2026-04-23",
+        provider_id: "azure",
+        context_window: 1050000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "eu/gpt-5.6",
+        provider_id: "azure",
+        context_window: 1050000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "eu/gpt-5.6-luna",
+        provider_id: "azure",
+        context_window: 1050000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "eu/gpt-5.6-sol",
+        provider_id: "azure",
+        context_window: 1050000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "eu/gpt-5.6-terra",
+        provider_id: "azure",
+        context_window: 1050000,
         max_output_tokens: 128000,
         capabilities: ModelCapabilities {
             streaming: true,
@@ -2094,7 +2220,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         context_window: 128000,
         max_output_tokens: 4096,
         capabilities: ModelCapabilities {
-            streaming: true,
+            streaming: false,
             tool_use: true,
             tool_choice: true,
             vision: false,
@@ -2136,7 +2262,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         context_window: 128000,
         max_output_tokens: 4096,
         capabilities: ModelCapabilities {
-            streaming: true,
+            streaming: false,
             tool_use: true,
             tool_choice: true,
             vision: false,
@@ -2150,7 +2276,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         context_window: 128000,
         max_output_tokens: 4096,
         capabilities: ModelCapabilities {
-            streaming: true,
+            streaming: false,
             tool_use: true,
             tool_choice: true,
             vision: false,
@@ -2609,7 +2735,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
     ModelDef {
         id: "gpt-5.4-mini",
         provider_id: "azure",
-        context_window: 1050000,
+        context_window: 272000,
         max_output_tokens: 128000,
         capabilities: ModelCapabilities {
             streaming: true,
@@ -2623,7 +2749,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
     ModelDef {
         id: "gpt-5.4-mini-2026-03-17",
         provider_id: "azure",
-        context_window: 1050000,
+        context_window: 272000,
         max_output_tokens: 128000,
         capabilities: ModelCapabilities {
             streaming: true,
@@ -2637,7 +2763,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
     ModelDef {
         id: "gpt-5.4-nano",
         provider_id: "azure",
-        context_window: 1050000,
+        context_window: 272000,
         max_output_tokens: 128000,
         capabilities: ModelCapabilities {
             streaming: true,
@@ -2651,7 +2777,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
     ModelDef {
         id: "gpt-5.4-nano-2026-03-17",
         provider_id: "azure",
-        context_window: 1050000,
+        context_window: 272000,
         max_output_tokens: 128000,
         capabilities: ModelCapabilities {
             streaming: true,
@@ -2734,6 +2860,62 @@ pub const MODELS_AZURE: &[ModelDef] = &[
     },
     ModelDef {
         id: "gpt-5.5-pro-2026-04-23",
+        provider_id: "azure",
+        context_window: 1050000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "gpt-5.6",
+        provider_id: "azure",
+        context_window: 1050000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "gpt-5.6-luna",
+        provider_id: "azure",
+        context_window: 1050000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "gpt-5.6-sol",
+        provider_id: "azure",
+        context_window: 1050000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "gpt-5.6-terra",
         provider_id: "azure",
         context_window: 1050000,
         max_output_tokens: 128000,
@@ -2878,7 +3060,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         context_window: 32000,
         max_output_tokens: 4096,
         capabilities: ModelCapabilities {
-            streaming: true,
+            streaming: false,
             tool_use: true,
             tool_choice: true,
             vision: false,
@@ -2892,7 +3074,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         context_window: 32000,
         max_output_tokens: 4096,
         capabilities: ModelCapabilities {
-            streaming: true,
+            streaming: false,
             tool_use: true,
             tool_choice: true,
             vision: false,
@@ -2906,7 +3088,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         context_window: 32000,
         max_output_tokens: 4096,
         capabilities: ModelCapabilities {
-            streaming: true,
+            streaming: false,
             tool_use: true,
             tool_choice: true,
             vision: false,
@@ -3760,7 +3942,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         context_window: 128000,
         max_output_tokens: 4096,
         capabilities: ModelCapabilities {
-            streaming: true,
+            streaming: false,
             tool_use: true,
             tool_choice: true,
             vision: false,
@@ -3774,7 +3956,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         context_window: 128000,
         max_output_tokens: 4096,
         capabilities: ModelCapabilities {
-            streaming: true,
+            streaming: false,
             tool_use: true,
             tool_choice: true,
             vision: false,
@@ -3788,7 +3970,7 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         context_window: 128000,
         max_output_tokens: 4096,
         capabilities: ModelCapabilities {
-            streaming: true,
+            streaming: false,
             tool_use: true,
             tool_choice: true,
             vision: false,
@@ -3884,6 +4066,118 @@ pub const MODELS_AZURE: &[ModelDef] = &[
         id: "us/gpt-5.1-codex-mini",
         provider_id: "azure",
         context_window: 272000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "us/gpt-5.4",
+        provider_id: "azure",
+        context_window: 1050000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "us/gpt-5.4-2026-03-05",
+        provider_id: "azure",
+        context_window: 1050000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "us/gpt-5.5",
+        provider_id: "azure",
+        context_window: 1050000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "us/gpt-5.5-2026-04-23",
+        provider_id: "azure",
+        context_window: 1050000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "us/gpt-5.6",
+        provider_id: "azure",
+        context_window: 1050000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "us/gpt-5.6-luna",
+        provider_id: "azure",
+        context_window: 1050000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "us/gpt-5.6-sol",
+        provider_id: "azure",
+        context_window: 1050000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "us/gpt-5.6-terra",
+        provider_id: "azure",
+        context_window: 1050000,
         max_output_tokens: 128000,
         capabilities: ModelCapabilities {
             streaming: true,
@@ -4508,7 +4802,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
     ModelDef {
         id: "claude-opus-4-6",
         provider_id: "azure_ai",
-        context_window: 200000,
+        context_window: 1000000,
         max_output_tokens: 128000,
         capabilities: ModelCapabilities {
             streaming: true,
@@ -4522,7 +4816,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
     ModelDef {
         id: "claude-opus-4-7",
         provider_id: "azure_ai",
-        context_window: 200000,
+        context_window: 1000000,
         max_output_tokens: 128000,
         capabilities: ModelCapabilities {
             streaming: true,
@@ -4536,7 +4830,21 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
     ModelDef {
         id: "claude-opus-4-8",
         provider_id: "azure_ai",
-        context_window: 200000,
+        context_window: 1000000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "claude-opus-5",
+        provider_id: "azure_ai",
+        context_window: 1000000,
         max_output_tokens: 128000,
         capabilities: ModelCapabilities {
             streaming: true,
@@ -4900,7 +5208,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
     ModelDef {
         id: "gpt-5.4-mini",
         provider_id: "azure_ai",
-        context_window: 400000,
+        context_window: 272000,
         max_output_tokens: 128000,
         capabilities: ModelCapabilities {
             streaming: true,
@@ -4914,7 +5222,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
     ModelDef {
         id: "gpt-5.4-mini-2026-03-17",
         provider_id: "azure_ai",
-        context_window: 400000,
+        context_window: 272000,
         max_output_tokens: 128000,
         capabilities: ModelCapabilities {
             streaming: true,
@@ -4928,7 +5236,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
     ModelDef {
         id: "gpt-5.4-nano",
         provider_id: "azure_ai",
-        context_window: 400000,
+        context_window: 272000,
         max_output_tokens: 128000,
         capabilities: ModelCapabilities {
             streaming: true,
@@ -4942,7 +5250,7 @@ pub const MODELS_AZURE_AI: &[ModelDef] = &[
     ModelDef {
         id: "gpt-5.4-nano-2026-03-17",
         provider_id: "azure_ai",
-        context_window: 400000,
+        context_window: 272000,
         max_output_tokens: 128000,
         capabilities: ModelCapabilities {
             streaming: true,
@@ -9582,6 +9890,20 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         status: ModelStatus::Available,
     },
     ModelDef {
+        id: "anthropic.claude-opus-5",
+        provider_id: "bedrock_converse",
+        context_window: 1000000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
         id: "anthropic.claude-sonnet-4-20250514-v1:0",
         provider_id: "bedrock_converse",
         context_window: 1000000,
@@ -9779,6 +10101,20 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
     },
     ModelDef {
         id: "au.anthropic.claude-opus-4-8",
+        provider_id: "bedrock_converse",
+        context_window: 1000000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "au.anthropic.claude-opus-5",
         provider_id: "bedrock_converse",
         context_window: 1000000,
         max_output_tokens: 128000,
@@ -10044,6 +10380,20 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         status: ModelStatus::Available,
     },
     ModelDef {
+        id: "eu.anthropic.claude-opus-5",
+        provider_id: "bedrock_converse",
+        context_window: 1000000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
         id: "eu.anthropic.claude-sonnet-4-20250514-v1:0",
         provider_id: "bedrock_converse",
         context_window: 1000000,
@@ -10226,6 +10576,20 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         status: ModelStatus::Available,
     },
     ModelDef {
+        id: "global.anthropic.claude-opus-5",
+        provider_id: "bedrock_converse",
+        context_window: 1000000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
         id: "global.anthropic.claude-sonnet-4-20250514-v1:0",
         provider_id: "bedrock_converse",
         context_window: 1000000,
@@ -10339,6 +10703,34 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
     },
     ModelDef {
         id: "jp.anthropic.claude-opus-4-7",
+        provider_id: "bedrock_converse",
+        context_window: 1000000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "jp.anthropic.claude-opus-4-8",
+        provider_id: "bedrock_converse",
+        context_window: 1000000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "jp.anthropic.claude-opus-5",
         provider_id: "bedrock_converse",
         context_window: 1000000,
         max_output_tokens: 128000,
@@ -11052,6 +11444,20 @@ pub const MODELS_BEDROCK_CONVERSE: &[ModelDef] = &[
         status: ModelStatus::Available,
     },
     ModelDef {
+        id: "us.anthropic.claude-opus-5",
+        provider_id: "bedrock_converse",
+        context_window: 1000000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
         id: "us.anthropic.claude-sonnet-4-20250514-v1:0",
         provider_id: "bedrock_converse",
         context_window: 1000000,
@@ -11370,6 +11776,48 @@ pub const MODELS_BEDROCK_MANTLE: &[ModelDef] = &[
     },
     ModelDef {
         id: "openai.gpt-5.5",
+        provider_id: "bedrock_mantle",
+        context_window: 272000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "openai.gpt-5.6-luna",
+        provider_id: "bedrock_mantle",
+        context_window: 272000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "openai.gpt-5.6-sol",
+        provider_id: "bedrock_mantle",
+        context_window: 272000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "openai.gpt-5.6-terra",
         provider_id: "bedrock_mantle",
         context_window: 272000,
         max_output_tokens: 128000,
@@ -13364,6 +13812,34 @@ pub const MODELS_DASHSCOPE: &[ModelDef] = &[
     },
     ModelDef {
         id: "qwen3.5-plus",
+        provider_id: "dashscope",
+        context_window: 991808,
+        max_output_tokens: 65536,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "qwen3.7-max",
+        provider_id: "dashscope",
+        context_window: 991808,
+        max_output_tokens: 65536,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: false,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "qwen3.7-plus",
         provider_id: "dashscope",
         context_window: 991808,
         max_output_tokens: 65536,
@@ -15445,7 +15921,7 @@ pub const MODELS_DEEPSEEK: &[ModelDef] = &[
             tool_use: true,
             tool_choice: true,
             vision: false,
-            extended_thinking: false,
+            extended_thinking: true,
         },
         status: ModelStatus::Available,
     },
@@ -15459,7 +15935,7 @@ pub const MODELS_DEEPSEEK: &[ModelDef] = &[
             tool_use: true,
             tool_choice: true,
             vision: false,
-            extended_thinking: false,
+            extended_thinking: true,
         },
         status: ModelStatus::Available,
     },
@@ -17358,7 +17834,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         id: "accounts/fireworks/models/kimi-k2p5",
         provider_id: "fireworks_ai",
         context_window: 262144,
-        max_output_tokens: 262144,
+        max_output_tokens: 32768,
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
@@ -17372,7 +17848,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         id: "accounts/fireworks/models/kimi-k2p6",
         provider_id: "fireworks_ai",
         context_window: 262144,
-        max_output_tokens: 262144,
+        max_output_tokens: 32768,
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
@@ -17386,7 +17862,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         id: "accounts/fireworks/models/kimi-k2p7-code",
         provider_id: "fireworks_ai",
         context_window: 262144,
-        max_output_tokens: 262144,
+        max_output_tokens: 32768,
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
@@ -19696,7 +20172,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         id: "accounts/fireworks/routers/kimi-k2p6-fast",
         provider_id: "fireworks_ai",
         context_window: 262144,
-        max_output_tokens: 262144,
+        max_output_tokens: 32768,
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
@@ -19710,7 +20186,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         id: "accounts/fireworks/routers/kimi-k2p7-code-fast",
         provider_id: "fireworks_ai",
         context_window: 262144,
-        max_output_tokens: 262144,
+        max_output_tokens: 32768,
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
@@ -19920,7 +20396,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         id: "kimi-k2p5",
         provider_id: "fireworks_ai",
         context_window: 262144,
-        max_output_tokens: 262144,
+        max_output_tokens: 32768,
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
@@ -19934,7 +20410,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         id: "kimi-k2p6",
         provider_id: "fireworks_ai",
         context_window: 262144,
-        max_output_tokens: 262144,
+        max_output_tokens: 32768,
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
@@ -19948,7 +20424,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         id: "kimi-k2p6-fast",
         provider_id: "fireworks_ai",
         context_window: 262144,
-        max_output_tokens: 262144,
+        max_output_tokens: 32768,
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
@@ -19962,7 +20438,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         id: "kimi-k2p7-code",
         provider_id: "fireworks_ai",
         context_window: 262144,
-        max_output_tokens: 262144,
+        max_output_tokens: 32768,
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
@@ -19976,7 +20452,7 @@ pub const MODELS_FIREWORKS_AI: &[ModelDef] = &[
         id: "kimi-k2p7-code-fast",
         provider_id: "fireworks_ai",
         context_window: 262144,
-        max_output_tokens: 262144,
+        max_output_tokens: 32768,
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
@@ -20686,6 +21162,34 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
         status: ModelStatus::Available,
     },
     ModelDef {
+        id: "gemini-3.5-flash-lite",
+        provider_id: "gemini",
+        context_window: 1048576,
+        max_output_tokens: 65536,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "gemini-3.6-flash",
+        provider_id: "gemini",
+        context_window: 1048576,
+        max_output_tokens: 65536,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
         id: "gemini-embedding-001",
         provider_id: "gemini",
         context_window: 2048,
@@ -20822,6 +21326,20 @@ pub const MODELS_GEMINI: &[ModelDef] = &[
             tool_choice: true,
             vision: true,
             extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "gemini-omni-flash-preview",
+        provider_id: "gemini",
+        context_window: 1048576,
+        max_output_tokens: 65535,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            tool_choice: false,
+            vision: true,
+            extended_thinking: true,
         },
         status: ModelStatus::Available,
     },
@@ -23671,6 +24189,41 @@ pub const MODELS_LLAMAGATE: &[ModelDef] = &[
         status: ModelStatus::Available,
     },
 ];
+
+pub const PROVIDER_META: ProviderDef = ProviderDef {
+    id: "meta",
+    display_name: "Meta",
+    default_base_url: "",
+    protocol: ProviderProtocol::OpenAICompat,
+    auth: AuthKind::Bearer,
+    status: ProviderStatus::Stub,
+    env_vars: &["META_API_KEY"],
+    litellm_prefix: "meta/",
+    capabilities: ProviderCapabilities {
+        chat_completions: true,
+        streaming: true,
+        tool_use: true,
+        tool_choice: true,
+        embeddings: false,
+        vision: true,
+        batch: false,
+    },
+};
+
+pub const MODELS_META: &[ModelDef] = &[ModelDef {
+    id: "muse-spark-1.1",
+    provider_id: "meta",
+    context_window: 1048576,
+    max_output_tokens: 131072,
+    capabilities: ModelCapabilities {
+        streaming: true,
+        tool_use: true,
+        tool_choice: true,
+        vision: true,
+        extended_thinking: true,
+    },
+    status: ModelStatus::Available,
+}];
 
 pub const PROVIDER_META_LLAMA: ProviderDef = ProviderDef {
     id: "meta_llama",
@@ -29029,7 +29582,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         context_window: 128000,
         max_output_tokens: 4096,
         capabilities: ModelCapabilities {
-            streaming: true,
+            streaming: false,
             tool_use: true,
             tool_choice: true,
             vision: false,
@@ -29043,7 +29596,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         context_window: 128000,
         max_output_tokens: 4096,
         capabilities: ModelCapabilities {
-            streaming: true,
+            streaming: false,
             tool_use: true,
             tool_choice: true,
             vision: false,
@@ -29169,7 +29722,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         context_window: 128000,
         max_output_tokens: 4096,
         capabilities: ModelCapabilities {
-            streaming: true,
+            streaming: false,
             tool_use: true,
             tool_choice: true,
             vision: false,
@@ -29183,7 +29736,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         context_window: 128000,
         max_output_tokens: 4096,
         capabilities: ModelCapabilities {
-            streaming: true,
+            streaming: false,
             tool_use: true,
             tool_choice: true,
             vision: false,
@@ -29197,7 +29750,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         context_window: 128000,
         max_output_tokens: 4096,
         capabilities: ModelCapabilities {
-            streaming: true,
+            streaming: false,
             tool_use: true,
             tool_choice: true,
             vision: false,
@@ -29670,7 +30223,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
     ModelDef {
         id: "gpt-5.4-mini",
         provider_id: "openai",
-        context_window: 1050000,
+        context_window: 272000,
         max_output_tokens: 128000,
         capabilities: ModelCapabilities {
             streaming: true,
@@ -29684,7 +30237,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
     ModelDef {
         id: "gpt-5.4-mini-2026-03-17",
         provider_id: "openai",
-        context_window: 1050000,
+        context_window: 272000,
         max_output_tokens: 128000,
         capabilities: ModelCapabilities {
             streaming: true,
@@ -29698,7 +30251,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
     ModelDef {
         id: "gpt-5.4-nano",
         provider_id: "openai",
-        context_window: 1050000,
+        context_window: 272000,
         max_output_tokens: 128000,
         capabilities: ModelCapabilities {
             streaming: true,
@@ -29712,7 +30265,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
     ModelDef {
         id: "gpt-5.4-nano-2026-03-17",
         provider_id: "openai",
-        context_window: 1050000,
+        context_window: 272000,
         max_output_tokens: 128000,
         capabilities: ModelCapabilities {
             streaming: true,
@@ -29795,6 +30348,62 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
     },
     ModelDef {
         id: "gpt-5.5-pro-2026-04-23",
+        provider_id: "openai",
+        context_window: 1050000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "gpt-5.6",
+        provider_id: "openai",
+        context_window: 1050000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "gpt-5.6-luna",
+        provider_id: "openai",
+        context_window: 1050000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "gpt-5.6-sol",
+        provider_id: "openai",
+        context_window: 1050000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "gpt-5.6-terra",
         provider_id: "openai",
         context_window: 1050000,
         max_output_tokens: 128000,
@@ -29981,7 +30590,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         context_window: 32000,
         max_output_tokens: 4096,
         capabilities: ModelCapabilities {
-            streaming: true,
+            streaming: false,
             tool_use: true,
             tool_choice: true,
             vision: false,
@@ -29995,7 +30604,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         context_window: 32000,
         max_output_tokens: 4096,
         capabilities: ModelCapabilities {
-            streaming: true,
+            streaming: false,
             tool_use: true,
             tool_choice: true,
             vision: false,
@@ -30009,7 +30618,35 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         context_window: 32000,
         max_output_tokens: 4096,
         capabilities: ModelCapabilities {
-            streaming: true,
+            streaming: false,
+            tool_use: true,
+            tool_choice: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "gpt-realtime-2.1",
+        provider_id: "openai",
+        context_window: 128000,
+        max_output_tokens: 32000,
+        capabilities: ModelCapabilities {
+            streaming: false,
+            tool_use: true,
+            tool_choice: true,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "gpt-realtime-2.1-mini",
+        provider_id: "openai",
+        context_window: 128000,
+        max_output_tokens: 4096,
+        capabilities: ModelCapabilities {
+            streaming: false,
             tool_use: true,
             tool_choice: true,
             vision: false,
@@ -30023,7 +30660,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         context_window: 32000,
         max_output_tokens: 4096,
         capabilities: ModelCapabilities {
-            streaming: true,
+            streaming: false,
             tool_use: true,
             tool_choice: true,
             vision: false,
@@ -30037,7 +30674,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         context_window: 128000,
         max_output_tokens: 4096,
         capabilities: ModelCapabilities {
-            streaming: true,
+            streaming: false,
             tool_use: true,
             tool_choice: true,
             vision: false,
@@ -30051,7 +30688,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         context_window: 128000,
         max_output_tokens: 4096,
         capabilities: ModelCapabilities {
-            streaming: true,
+            streaming: false,
             tool_use: true,
             tool_choice: true,
             vision: false,
@@ -30065,7 +30702,7 @@ pub const MODELS_OPENAI: &[ModelDef] = &[
         context_window: 128000,
         max_output_tokens: 4096,
         capabilities: ModelCapabilities {
-            streaming: true,
+            streaming: false,
             tool_use: true,
             tool_choice: true,
             vision: false,
@@ -35022,11 +35659,11 @@ pub const MODELS_SARVAM: &[ModelDef] = &[ModelDef {
 pub const PROVIDER_SCALEWAY: ProviderDef = ProviderDef {
     id: "scaleway",
     display_name: "Scaleway",
-    default_base_url: "https://api.scaleway.ai",
+    default_base_url: "",
     protocol: ProviderProtocol::OpenAICompat,
     auth: AuthKind::Bearer,
     status: ProviderStatus::Stub,
-    env_vars: &["SCW_SECRET_KEY"],
+    env_vars: &["SCALEWAY_API_KEY"],
     litellm_prefix: "scaleway/",
     capabilities: ProviderCapabilities {
         chat_completions: true,
@@ -38951,6 +39588,20 @@ pub const MODELS_VERTEX_AI: &[ModelDef] = &[
         status: ModelStatus::Available,
     },
     ModelDef {
+        id: "chirp_3",
+        provider_id: "vertex_ai",
+        context_window: 0,
+        max_output_tokens: 0,
+        capabilities: ModelCapabilities {
+            streaming: false,
+            tool_use: false,
+            tool_choice: false,
+            vision: false,
+            extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
         id: "deepseek-ai/deepseek-ocr-maas",
         provider_id: "vertex_ai",
         context_window: 0,
@@ -39025,6 +39676,20 @@ pub const MODELS_VERTEX_AI: &[ModelDef] = &[
         provider_id: "vertex_ai",
         context_window: 1048576,
         max_output_tokens: 65535,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "gemini-3.6-flash",
+        provider_id: "vertex_ai",
+        context_window: 1048576,
+        max_output_tokens: 65536,
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
@@ -39647,6 +40312,34 @@ pub const MODELS_VERTEX_AI_ANTHROPIC_MODELS: &[ModelDef] = &[
         provider_id: "vertex_ai-anthropic_models",
         context_window: 200000,
         max_output_tokens: 32000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "vertex_ai/claude-opus-5",
+        provider_id: "vertex_ai-anthropic_models",
+        context_window: 1000000,
+        max_output_tokens: 128000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "vertex_ai/claude-opus-5@default",
+        provider_id: "vertex_ai-anthropic_models",
+        context_window: 1000000,
+        max_output_tokens: 128000,
         capabilities: ModelCapabilities {
             streaming: true,
             tool_use: true,
@@ -40537,6 +41230,34 @@ pub const MODELS_VERTEX_AI_LANGUAGE_MODELS: &[ModelDef] = &[
         status: ModelStatus::Available,
     },
     ModelDef {
+        id: "gemini-3.5-flash-lite",
+        provider_id: "vertex_ai-language-models",
+        context_window: 1048576,
+        max_output_tokens: 65536,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "gemini-3.6-flash",
+        provider_id: "vertex_ai-language-models",
+        context_window: 1048576,
+        max_output_tokens: 65536,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
         id: "gemini-flash-experimental",
         provider_id: "vertex_ai-language-models",
         context_window: 1000000,
@@ -40561,6 +41282,20 @@ pub const MODELS_VERTEX_AI_LANGUAGE_MODELS: &[ModelDef] = &[
             tool_choice: true,
             vision: true,
             extended_thinking: false,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "gemini-omni-flash-preview",
+        provider_id: "vertex_ai-language-models",
+        context_window: 1048576,
+        max_output_tokens: 65535,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: false,
+            tool_choice: false,
+            vision: true,
+            extended_thinking: true,
         },
         status: ModelStatus::Available,
     },
@@ -40706,6 +41441,20 @@ pub const MODELS_VERTEX_AI_LANGUAGE_MODELS: &[ModelDef] = &[
     },
     ModelDef {
         id: "vertex_ai/gemini-3.1-flash-lite-preview",
+        provider_id: "vertex_ai-language-models",
+        context_window: 1048576,
+        max_output_tokens: 65536,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "vertex_ai/gemini-3.5-flash-lite",
         provider_id: "vertex_ai-language-models",
         context_window: 1048576,
         max_output_tokens: 65536,
@@ -43343,6 +44092,34 @@ pub const MODELS_XAI: &[ModelDef] = &[
         status: ModelStatus::Available,
     },
     ModelDef {
+        id: "grok-4.5",
+        provider_id: "xai",
+        context_window: 500000,
+        max_output_tokens: 500000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
+        id: "grok-4.5-latest",
+        provider_id: "xai",
+        context_window: 500000,
+        max_output_tokens: 500000,
+        capabilities: ModelCapabilities {
+            streaming: true,
+            tool_use: true,
+            tool_choice: true,
+            vision: true,
+            extended_thinking: true,
+        },
+        status: ModelStatus::Available,
+    },
+    ModelDef {
         id: "grok-beta",
         provider_id: "xai",
         context_window: 131072,
@@ -43661,6 +44438,7 @@ pub static ANTHROPIC_ADAPTIVE_THINKING_MODELS: &[&str] = &[
     "claude-opus-4-7",
     "claude-opus-4-7-20260416",
     "claude-opus-4-8",
+    "claude-opus-5",
     "claude-sonnet-4-6",
     "claude-sonnet-5",
 ];
@@ -43672,6 +44450,7 @@ pub static ANTHROPIC_MAX_REASONING_EFFORT_MODELS: &[&str] = &[
     "claude-opus-4-7",
     "claude-opus-4-7-20260416",
     "claude-opus-4-8",
+    "claude-opus-5",
     "claude-sonnet-4-6",
     "claude-sonnet-5",
 ];
@@ -43681,18 +44460,23 @@ pub static ANTHROPIC_XHIGH_REASONING_EFFORT_MODELS: &[&str] = &[
     "claude-opus-4-7",
     "claude-opus-4-7-20260416",
     "claude-opus-4-8",
+    "claude-opus-5",
     "claude-sonnet-5",
 ];
 
 /// Anthropic models where `thinking: {"type": "enabled", "budget_tokens": N}`
-/// is fully removed (400) rather than merely deprecated. Opus 4.6 and Sonnet
-/// 4.6 still accept it as a transitional escape hatch, so they are NOT here
-/// even though they're in `ANTHROPIC_ADAPTIVE_THINKING_MODELS`.
+/// is rejected with a 400 (adaptive-only). Opus 4.6 and Sonnet 4.6 still
+/// accept it as a deprecated transitional escape hatch, so they are NOT here
+/// even though they are in `ANTHROPIC_ADAPTIVE_THINKING_MODELS`. Hand-maintained
+/// in check_litellm_providers.py (ANTHROPIC_ADAPTIVE_ONLY_THINKING); not
+/// derivable from LiteLLM flags.
 pub static ANTHROPIC_ADAPTIVE_ONLY_THINKING_MODELS: &[&str] = &[
     "claude-fable-5",
     "claude-opus-4-7",
     "claude-opus-4-7-20260416",
     "claude-opus-4-8",
+    "claude-opus-5",
+    "claude-sonnet-5",
 ];
 
 pub static ALL_PROVIDERS: &[&ProviderDef] = &[
@@ -43751,6 +44535,7 @@ pub static ALL_PROVIDERS: &[&ProviderDef] = &[
     &PROVIDER_LIBERTAI,
     &PROVIDER_LINKUP,
     &PROVIDER_LLAMAGATE,
+    &PROVIDER_META,
     &PROVIDER_META_LLAMA,
     &PROVIDER_MINIMAX,
     &PROVIDER_MISTRAL,
@@ -43878,6 +44663,7 @@ pub static ALL_MODELS: &[(&str, &[ModelDef])] = &[
     ("libertai", MODELS_LIBERTAI),
     ("linkup", MODELS_LINKUP),
     ("llamagate", MODELS_LLAMAGATE),
+    ("meta", MODELS_META),
     ("meta_llama", MODELS_META_LLAMA),
     ("minimax", MODELS_MINIMAX),
     ("mistral", MODELS_MISTRAL),
