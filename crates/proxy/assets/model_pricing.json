@@ -366,6 +366,18 @@
     "provider": "google"
   },
   {
+    "model_pattern": "gemini-robotics-er-1.6-preview",
+    "input_cost_per_token": 1e-06,
+    "output_cost_per_token": 5e-06,
+    "provider": "google"
+  },
+  {
+    "model_pattern": "gemini-robotics-er-2-preview",
+    "input_cost_per_token": 2e-06,
+    "output_cost_per_token": 1e-05,
+    "provider": "google"
+  },
+  {
     "model_pattern": "vertex_ai/gemini-3-flash-preview",
     "input_cost_per_token": 5e-07,
     "output_cost_per_token": 3e-06,
