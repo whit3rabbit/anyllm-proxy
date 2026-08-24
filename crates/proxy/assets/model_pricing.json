@@ -306,9 +306,15 @@
     "provider": "google"
   },
   {
+    "model_pattern": "gemini-3.5-live-translate-preview",
+    "input_cost_per_token": 3.5e-06,
+    "output_cost_per_token": 2.1e-05,
+    "provider": "google"
+  },
+  {
     "model_pattern": "gemini-3.6-flash",
-    "input_cost_per_token": 1.5e-06,
-    "output_cost_per_token": 7.5e-06,
+    "input_cost_per_token": 7.5e-07,
+    "output_cost_per_token": 3.75e-06,
     "provider": "google"
   },
   {
@@ -451,8 +457,8 @@
   },
   {
     "model_pattern": "vertex_ai/gemini-3.6-flash",
-    "input_cost_per_token": 1.5e-06,
-    "output_cost_per_token": 7.5e-06,
+    "input_cost_per_token": 7.5e-07,
+    "output_cost_per_token": 3.75e-06,
     "provider": "google"
   },
   {
@@ -498,9 +504,27 @@
     "provider": "google"
   },
   {
+    "model_pattern": "chat-latest",
+    "input_cost_per_token": 5e-06,
+    "output_cost_per_token": 3e-05,
+    "provider": "openai"
+  },
+  {
     "model_pattern": "chatgpt-4o-latest",
     "input_cost_per_token": 5e-06,
     "output_cost_per_token": 1.5e-05,
+    "provider": "openai"
+  },
+  {
+    "model_pattern": "daybreak-blue-latest",
+    "input_cost_per_token": 4e-06,
+    "output_cost_per_token": 2e-05,
+    "provider": "openai"
+  },
+  {
+    "model_pattern": "daybreak-red-latest",
+    "input_cost_per_token": 1.25e-05,
+    "output_cost_per_token": 7.5e-05,
     "provider": "openai"
   },
   {
@@ -925,8 +949,14 @@
   },
   {
     "model_pattern": "gpt-5.6",
-    "input_cost_per_token": 5e-06,
-    "output_cost_per_token": 3e-05,
+    "input_cost_per_token": 4e-06,
+    "output_cost_per_token": 2e-05,
+    "provider": "openai"
+  },
+  {
+    "model_pattern": "gpt-5.6-cyber",
+    "input_cost_per_token": 1.25e-05,
+    "output_cost_per_token": 7.5e-05,
     "provider": "openai"
   },
   {
@@ -937,8 +967,8 @@
   },
   {
     "model_pattern": "gpt-5.6-sol",
-    "input_cost_per_token": 5e-06,
-    "output_cost_per_token": 3e-05,
+    "input_cost_per_token": 4e-06,
+    "output_cost_per_token": 2e-05,
     "provider": "openai"
   },
   {
