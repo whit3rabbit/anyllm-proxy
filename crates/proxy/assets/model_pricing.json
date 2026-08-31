@@ -217,20 +217,20 @@
   },
   {
     "model_pattern": "gemini-2.5-flash-native-audio-latest",
-    "input_cost_per_token": 3e-07,
-    "output_cost_per_token": 2.5e-06,
+    "input_cost_per_token": 5e-07,
+    "output_cost_per_token": 2e-06,
     "provider": "google"
   },
   {
     "model_pattern": "gemini-2.5-flash-native-audio-preview-09-2025",
-    "input_cost_per_token": 3e-07,
-    "output_cost_per_token": 2.5e-06,
+    "input_cost_per_token": 5e-07,
+    "output_cost_per_token": 2e-06,
     "provider": "google"
   },
   {
     "model_pattern": "gemini-2.5-flash-native-audio-preview-12-2025",
-    "input_cost_per_token": 3e-07,
-    "output_cost_per_token": 2.5e-06,
+    "input_cost_per_token": 5e-07,
+    "output_cost_per_token": 2e-06,
     "provider": "google"
   },
   {
@@ -247,8 +247,8 @@
   },
   {
     "model_pattern": "gemini-2.5-pro-preview-tts",
-    "input_cost_per_token": 1.25e-06,
-    "output_cost_per_token": 1e-05,
+    "input_cost_per_token": 1e-06,
+    "output_cost_per_token": 2e-05,
     "provider": "google"
   },
   {
@@ -369,6 +369,12 @@
     "model_pattern": "gemini-gemma-2-9b-it",
     "input_cost_per_token": 3.5e-07,
     "output_cost_per_token": 1.05e-06,
+    "provider": "google"
+  },
+  {
+    "model_pattern": "gemini-omni-1.1-flash",
+    "input_cost_per_token": 1.5e-06,
+    "output_cost_per_token": 9e-06,
     "provider": "google"
   },
   {
