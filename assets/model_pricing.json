@@ -36,6 +36,12 @@
     "provider": "anthropic"
   },
   {
+    "model_pattern": "claude-fable-5-1",
+    "input_cost_per_token": 1e-05,
+    "output_cost_per_token": 5e-05,
+    "provider": "anthropic"
+  },
+  {
     "model_pattern": "claude-haiku-4-5",
     "input_cost_per_token": 1e-06,
     "output_cost_per_token": 5e-06,
@@ -49,6 +55,12 @@
   },
   {
     "model_pattern": "claude-mythos-5",
+    "input_cost_per_token": 1e-05,
+    "output_cost_per_token": 5e-05,
+    "provider": "anthropic"
+  },
+  {
+    "model_pattern": "claude-mythos-5-1",
     "input_cost_per_token": 1e-05,
     "output_cost_per_token": 5e-05,
     "provider": "anthropic"
@@ -216,24 +228,6 @@
     "provider": "google"
   },
   {
-    "model_pattern": "gemini-2.5-flash-native-audio-latest",
-    "input_cost_per_token": 5e-07,
-    "output_cost_per_token": 2e-06,
-    "provider": "google"
-  },
-  {
-    "model_pattern": "gemini-2.5-flash-native-audio-preview-09-2025",
-    "input_cost_per_token": 5e-07,
-    "output_cost_per_token": 2e-06,
-    "provider": "google"
-  },
-  {
-    "model_pattern": "gemini-2.5-flash-native-audio-preview-12-2025",
-    "input_cost_per_token": 5e-07,
-    "output_cost_per_token": 2e-06,
-    "provider": "google"
-  },
-  {
     "model_pattern": "gemini-2.5-flash-preview-09-2025",
     "input_cost_per_token": 3e-07,
     "output_cost_per_token": 2.5e-06,
@@ -276,12 +270,6 @@
     "provider": "google"
   },
   {
-    "model_pattern": "gemini-3.1-flash-live-preview",
-    "input_cost_per_token": 7.5e-07,
-    "output_cost_per_token": 4.5e-06,
-    "provider": "google"
-  },
-  {
     "model_pattern": "gemini-3.1-pro-preview",
     "input_cost_per_token": 2e-06,
     "output_cost_per_token": 1.2e-05,
@@ -306,12 +294,6 @@
     "provider": "google"
   },
   {
-    "model_pattern": "gemini-3.5-live-translate-preview",
-    "input_cost_per_token": 3.5e-06,
-    "output_cost_per_token": 2.1e-05,
-    "provider": "google"
-  },
-  {
     "model_pattern": "gemini-3.6-flash",
     "input_cost_per_token": 7.5e-07,
     "output_cost_per_token": 3.75e-06,
@@ -319,6 +301,12 @@
   },
   {
     "model_pattern": "gemini-3.7-flash",
+    "input_cost_per_token": 7.5e-07,
+    "output_cost_per_token": 3.75e-06,
+    "provider": "google"
+  },
+  {
+    "model_pattern": "gemini-3.8-flash",
     "input_cost_per_token": 7.5e-07,
     "output_cost_per_token": 3.75e-06,
     "provider": "google"
@@ -469,6 +457,12 @@
   },
   {
     "model_pattern": "vertex_ai/gemini-3.7-flash",
+    "input_cost_per_token": 7.5e-07,
+    "output_cost_per_token": 3.75e-06,
+    "provider": "google"
+  },
+  {
+    "model_pattern": "vertex_ai/gemini-3.8-flash",
     "input_cost_per_token": 7.5e-07,
     "output_cost_per_token": 3.75e-06,
     "provider": "google"
@@ -981,6 +975,12 @@
     "model_pattern": "gpt-5.6-terra",
     "input_cost_per_token": 2e-06,
     "output_cost_per_token": 1.2e-05,
+    "provider": "openai"
+  },
+  {
+    "model_pattern": "gpt-6-astra",
+    "input_cost_per_token": 1e-05,
+    "output_cost_per_token": 5e-05,
     "provider": "openai"
   },
   {
