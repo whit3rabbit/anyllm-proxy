@@ -10,6 +10,51 @@
 //! A native Anthropic Messages passthrough client ([`AnthropicMessagesClient`]) is also
 //! available for forwarding requests directly to the Anthropic API without translation.
 //!
+//! # Application-side `success_callback` hook
+//!
+//! Register a [`SuccessCallback`] to observe each completed non-streaming
+//! `messages()` call. The hook fires synchronously before `messages()` returns,
+//! carrying the original Anthropic request, the translated Anthropic response,
+//! the resolved backend model, wall-clock duration, and (when pricing is
+//! configured) the computed `cost_usd`. Streaming and failure paths are
+//! intentionally out of scope for v1.
+//!
+//! ```rust,no_run
+//! use std::sync::Arc;
+//! use anyllm_client::{
+//!     Client, ClientConfig, Auth, PricingConfig, SuccessCallback,
+//! };
+//! use anyllm_translate::anthropic::MessageCreateRequest;
+//!
+//! # async fn example() -> Result<(), anyllm_client::ClientError> {
+//! // Hook fires on every successful messages() call.
+//! let callback: SuccessCallback = Arc::new(|input| {
+//!     println!(
+//!         "{} -> {} ({} tokens in, {} out, ${:?})",
+//!         input.request_model,
+//!         input.backend_model,
+//!         input.response.usage.input_tokens,
+//!         input.response.usage.output_tokens,
+//!         input.cost_usd,
+//!     );
+//! });
+//!
+//! let pricing = PricingConfig::new()
+//!     .with_price("gpt-4o-mini", 0.15, 0.60); // $ per 1M tokens
+//!
+//! let config = ClientConfig::builder()
+//!     .backend_url("https://api.openai.com/v1/chat/completions")
+//!     .auth(Auth::Bearer("sk-...".into()))
+//!     .success_callback(callback)
+//!     .pricing(pricing)
+//!     .build();
+//!
+//! let client = Client::new(config);
+//! // client.messages(&req).await?;
+//! # Ok(())
+//! # }
+//! ```
+//!
 //! # Quick start
 //!
 //! ```rust,no_run
@@ -67,6 +112,8 @@ compile_error!(
 
 /// Native Anthropic Messages API passthrough client.
 pub mod anthropic_client;
+/// Application-side `success_callback` hook fired after each successful completion.
+pub mod callback;
 /// High-level HTTP Client for routing translated requests to OpenAI-compatible backends.
 pub mod client;
 /// Error definitions for the client.
@@ -85,6 +132,7 @@ pub mod tools;
 
 // Convenience re-exports
 pub use anthropic_client::AnthropicMessagesClient;
+pub use callback::{CallbackInput, ModelPrice, PricingConfig, SuccessCallback};
 pub use client::{Auth, Client, ClientBuilder, ClientConfig, ClientConfigBuilder};
 pub use error::ClientError;
 pub use http::{build_http_client, HttpClientConfig};

@@ -147,3 +147,5 @@ fn client_builder_extra_header() {
         .unwrap();
     assert_eq!(client.config.http.extra_headers.len(), 2);
 }
+
+mod callback_tests;

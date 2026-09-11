@@ -8,7 +8,9 @@ use anyllm_translate::anthropic::MessageCreateRequest;
 use anyllm_translate::openai::{ChatCompletionRequest, ChatCompletionResponse};
 use anyllm_translate::{translate_request, translate_response, TranslationConfig};
 use futures::Stream;
+use std::sync::Arc;
 
+use crate::callback::{CallbackContext, PricingConfig, SuccessCallback};
 use crate::error::ClientError;
 use crate::http::{build_http_client, HttpClientConfig};
 use crate::rate_limit::RateLimitHeaders;
@@ -25,7 +27,7 @@ pub enum Auth {
 }
 
 /// Configuration for the [`Client`].
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct ClientConfig {
     /// URL for the chat completions endpoint (e.g., `https://api.openai.com/v1/chat/completions`).
     pub chat_completions_url: String,
@@ -35,6 +37,26 @@ pub struct ClientConfig {
     pub http: HttpClientConfig,
     /// Translation configuration (model mapping, lossy behavior).
     pub translation: TranslationConfig,
+    /// Optional [`SuccessCallback`] fired after each successful completion.
+    pub success_callback: Option<SuccessCallback>,
+    /// Optional pricing table used to populate `cost_usd` on the callback payload.
+    pub pricing: PricingConfig,
+}
+
+impl std::fmt::Debug for ClientConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ClientConfig")
+            .field("chat_completions_url", &self.chat_completions_url)
+            .field("auth", &self.auth)
+            .field("http", &self.http)
+            .field("translation", &self.translation)
+            .field(
+                "success_callback",
+                &self.success_callback.as_ref().map(|_| "<fn>"),
+            )
+            .field("pricing", &self.pricing)
+            .finish()
+    }
 }
 
 impl ClientConfig {
@@ -51,6 +73,8 @@ pub struct ClientConfigBuilder {
     auth: Option<Auth>,
     http: Option<HttpClientConfig>,
     translation: Option<TranslationConfig>,
+    success_callback: Option<SuccessCallback>,
+    pricing: PricingConfig,
 }
 
 impl ClientConfigBuilder {
@@ -79,6 +103,27 @@ impl ClientConfigBuilder {
         self
     }
 
+    /// Install a [`SuccessCallback`] fired after each successful completion.
+    ///
+    /// The callback runs synchronously on the calling task before `messages()`
+    /// returns. Panics inside the closure are caught and logged; they do not
+    /// propagate to the caller.
+    ///
+    /// Pass an `Arc<...>` to share the same callback across multiple clients
+    /// or to install a runtime-mutable callback (see
+    /// [`Client::set_success_callback`]).
+    pub fn success_callback(mut self, cb: SuccessCallback) -> Self {
+        self.success_callback = Some(cb);
+        self
+    }
+
+    /// Install the pricing table used to populate `cost_usd` on the callback
+    /// payload. Replaces any previously configured pricing.
+    pub fn pricing(mut self, pricing: PricingConfig) -> Self {
+        self.pricing = pricing;
+        self
+    }
+
     /// Finalize the builder into a `ClientConfig`. Missing fields use secure defaults.
     pub fn build(self) -> ClientConfig {
         ClientConfig {
@@ -92,6 +137,8 @@ impl ClientConfigBuilder {
             }),
             http: self.http.unwrap_or_default(),
             translation: self.translation.unwrap_or_default(),
+            success_callback: self.success_callback,
+            pricing: self.pricing,
         }
     }
 }
@@ -274,6 +321,8 @@ impl ClientBuilder {
             auth: Auth::Bearer(self.api_key.unwrap_or_default()),
             http: http_config,
             translation: TranslationConfig::default(),
+            success_callback: None,
+            pricing: PricingConfig::default(),
         };
 
         let mut client = Client::new(config);
@@ -309,16 +358,23 @@ pub struct Client {
     http: reqwest::Client,
     config: ClientConfig,
     retry: RetryPolicy,
+    callbacks: Arc<CallbackContext>,
 }
 
 impl Client {
     /// Create a new client from configuration.
     pub fn new(config: ClientConfig) -> Self {
         let http = build_http_client(&config.http);
+        let callbacks = Arc::new(CallbackContext {
+            callback: config.success_callback.clone(),
+            pricing: config.pricing.clone(),
+            warned_missing_pricing: std::sync::Mutex::new(Default::default()),
+        });
         Self {
             http,
             config,
             retry: RetryPolicy::default(),
+            callbacks,
         }
     }
 
@@ -348,10 +404,16 @@ impl Client {
     /// Call [`with_max_retries`](Self::with_max_retries) or
     /// [`with_transport_retries`](Self::with_transport_retries) after construction to override.
     pub fn with_http_client(http: reqwest::Client, config: ClientConfig) -> Self {
+        let callbacks = Arc::new(CallbackContext {
+            callback: config.success_callback.clone(),
+            pricing: config.pricing.clone(),
+            warned_missing_pricing: std::sync::Mutex::new(Default::default()),
+        });
         Self {
             http,
             config,
             retry: RetryPolicy::default(),
+            callbacks,
         }
     }
 
@@ -372,6 +434,23 @@ impl Client {
         self.retry
     }
 
+    /// Install or replace the [`SuccessCallback`] for this client.
+    ///
+    /// Takes `&mut self` because the callback is stored inside an
+    /// `Arc<CallbackContext>` shared across `Client` clones — runtime mutation
+    /// of a shared Arc requires unique ownership. For shared-client scenarios
+    /// (where `Client` is cloned), build the callback into `ClientConfig`
+    /// before cloning.
+    pub fn set_success_callback(&mut self, cb: Option<SuccessCallback>) {
+        // `Arc::get_mut` succeeds only when this `Client` is the sole owner of
+        // its `Arc<CallbackContext>`. If any clone exists, refcount > 1 and
+        // `get_mut` returns None — we silently keep the old callback in that
+        // case. Logging here would be too noisy for a hot-path SDK.
+        if let Some(ctx_mut) = Arc::get_mut(&mut self.callbacks) {
+            ctx_mut.callback = cb;
+        }
+    }
+
     fn auth(&self) -> retry::RequestAuth<'_> {
         match &self.config.auth {
             Auth::Bearer(token) => retry::RequestAuth::Bearer(token),
@@ -383,13 +462,38 @@ impl Client {
     ///
     /// Translates the request to OpenAI format, sends it, and translates the
     /// response back. Retries on 429/5xx with exponential backoff.
+    ///
+    /// If a [`SuccessCallback`] was registered, it fires exactly once on
+    /// successful completion with the original Anthropic request, the translated
+    /// Anthropic response, the resolved backend model, the wall-clock duration,
+    /// and (when pricing is configured) the computed `cost_usd`. The callback
+    /// does NOT fire on transport errors or non-2xx API errors.
     pub async fn messages(
         &self,
         req: &MessageCreateRequest,
     ) -> Result<MessageResponse, ClientError> {
+        let started = std::time::Instant::now();
         let openai_req = translate_request(req, &self.config.translation)?;
         let (resp, _status, _rate_limits) = self.chat_completion(&openai_req).await?;
         let anthropic_resp = translate_response(&resp, &req.model);
+
+        // Fire the success callback if one is configured. The callback runs
+        // synchronously on this task before `messages()` returns. Panics inside
+        // the callback are caught by `CallbackContext::fire`.
+        let input = crate::callback::CallbackInput {
+            request: req.clone(),
+            response: anthropic_resp.clone(),
+            request_model: req.model.clone(),
+            backend_model: openai_req.model.clone(),
+            duration: started.elapsed(),
+            cost_usd: self.callbacks.cost_for(
+                &openai_req.model,
+                u64::from(anthropic_resp.usage.input_tokens),
+                u64::from(anthropic_resp.usage.output_tokens),
+            ),
+        };
+        self.callbacks.fire(input);
+
         Ok(anthropic_resp)
     }
 
