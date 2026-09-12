@@ -72,10 +72,10 @@ audit:
 	cargo audit
 
 run:
-	PROXY_OPEN_RELAY=true cargo run -p anyllm_proxy
+	cargo run -p anyllm_proxy
 
 run-webui:
-	PROXY_OPEN_RELAY=true cargo run -p anyllm_proxy -- --webui
+	cargo run -p anyllm_proxy -- --webui
 
 ui-install:
 	cd crates/proxy/admin-ui && npm ci --legacy-peer-deps
