@@ -277,7 +277,7 @@ pub(crate) fn load_managed_backends(
     Arc::new(std::sync::RwLock::new(map))
 }
 
-pub(crate) fn resolve_admin_token(data_dir: &Path) -> (String, Arc<zeroize::Zeroizing<String>>) {
+pub(crate) fn resolve_admin_token(data_dir: &Path) -> Arc<zeroize::Zeroizing<String>> {
     let admin_token = match std::env::var("ADMIN_TOKEN") {
         Ok(t) => {
             if t.len() < 32 {
@@ -309,7 +309,5 @@ pub(crate) fn resolve_admin_token(data_dir: &Path) -> (String, Arc<zeroize::Zero
             token
         }
     };
-    let admin_token_plain = admin_token.clone();
-    let admin_token_wrapped = Arc::new(zeroize::Zeroizing::new(admin_token));
-    (admin_token_plain, admin_token_wrapped)
+    Arc::new(zeroize::Zeroizing::new(admin_token))
 }

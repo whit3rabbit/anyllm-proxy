@@ -23,7 +23,6 @@ pub(crate) async fn init_admin(
     axum::Router,
     tokio::net::TcpListener,
     u16,
-    String,
 )> {
     if !crate::main_helpers::bootstrap::admin_enabled(args) {
         return None;
@@ -147,7 +146,7 @@ pub(crate) async fn init_admin(
     };
 
     // Resolve admin token
-    let (admin_token_plain, admin_token) = config::resolve_admin_token(data_dir);
+    let admin_token = config::resolve_admin_token(data_dir);
 
     let shared = admin::state::SharedState {
         db: db.clone(),
@@ -232,11 +231,5 @@ pub(crate) async fn init_admin(
         });
     tracing::info!("admin listening on {admin_addr}");
 
-    Some((
-        shared,
-        admin_app,
-        admin_listener,
-        admin_port,
-        admin_token_plain,
-    ))
+    Some((shared, admin_app, admin_listener, admin_port))
 }
