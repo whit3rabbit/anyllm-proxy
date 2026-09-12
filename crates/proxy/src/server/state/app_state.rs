@@ -270,60 +270,59 @@ impl AppState {
         Some((tier.model.clone(), effective, None))
     }
 
-    /// Find the name of an enabled managed backend whose provider catalog offers
-    /// `model`. Used to route an explicitly-picked real model, one a client
-    /// selected from `/v1/models` gateway discovery, to the backend that serves
-    /// it, bypassing autorouter tier signals. Static catalog only (no DB cache
-    /// read) so the request path stays DB-free and "advertised == routable"
-    /// holds. First enabled match wins.
-    pub(crate) fn backend_for_real_model(&self, model: &str) -> Option<String> {
-        let shared = self.shared.as_ref()?;
-        let guard = shared.managed_backends.read().ok().or_else(|| {
-            tracing::warn!("managed_backends RwLock is poisoned; skipping real-model lookup");
-            None
-        })?;
-        for (name, (row, _client)) in guard.iter() {
-            if !row.enabled {
-                continue;
-            }
-            if self
-                .provider_catalog
-                .list_models(&row.provider_id)
-                .iter()
-                .any(|m| m.id.as_str() == model)
-            {
-                return Some(name.clone());
-            }
-        }
-        None
-    }
-
-    /// Resolve an explicitly-picked real model to its backend's effective state.
-    /// Returns `(model, effective_state, None)` mirroring [`resolve_router_tier`]
-    /// so a handler can treat a tier match and an explicit pick uniformly. `None`
-    /// if no enabled managed backend offers the model (caller falls back to
-    /// normal model-name routing). No RPM accounting, same as the router path.
+    /// Resolve an explicitly-picked real model through configured model routing.
+    ///
+    /// This lets a user-picked `/v1/models` entry beat autorouter signal tiers
+    /// without bypassing operator policy: only `model_list` / route-router
+    /// models are accepted, route options are carried forward, and deployment
+    /// RPM/TPM accounting remains attached. Provider catalog membership alone is
+    /// intentionally not routable.
+    #[allow(clippy::result_large_err)]
     pub(crate) fn resolve_explicit_pick(
         &self,
         model: &str,
-    ) -> Option<(
-        String,
-        AppState,
-        Option<Arc<crate::config::model_router::Deployment>>,
-    )> {
+    ) -> Result<
+        Option<(
+            String,
+            AppState,
+            Option<Arc<crate::config::model_router::Deployment>>,
+        )>,
+        Response,
+    > {
         // claude-* aliases go through the autorouter tiers, never explicit-pick,
-        // even if an Anthropic managed backend's catalog happens to list them.
+        // so Claude aliases continue to resolve from request characteristics.
         if model.starts_with("claude-") {
-            return None;
+            return Ok(None);
         }
-        let backend_name = self.backend_for_real_model(model)?;
-        let effective = self.effective_state_for_backend(&backend_name)?;
-        tracing::info!(
-            backend = %backend_name,
-            model = %model,
-            "explicit model pick routed directly (autorouter deferred)"
-        );
-        Some((model.to_string(), effective, None))
+
+        match self.resolve_model(model) {
+            ResolvedModel::Routed {
+                backend_name,
+                model: mapped,
+                deployment,
+                options,
+            } => {
+                let mut effective = self
+                    .effective_state_for_backend(&backend_name)
+                    .unwrap_or_else(|| self.clone());
+                effective.route_options = options;
+                tracing::info!(
+                    backend = %backend_name,
+                    model = %model,
+                    "explicit model pick routed through configured model policy"
+                );
+                Ok(Some((mapped, effective, Some(deployment))))
+            }
+            ResolvedModel::AllAtLimit => {
+                let err = mapping::errors_map::create_anthropic_error(
+                    anthropic::ErrorType::RateLimitError,
+                    "all deployments for this model are at their RPM limit".to_string(),
+                    None,
+                );
+                Err((StatusCode::TOO_MANY_REQUESTS, Json(err)).into_response())
+            }
+            ResolvedModel::UnknownModel | ResolvedModel::Legacy(_) => Ok(None),
+        }
     }
 
     /// Whether request/response body logging is enabled.
@@ -412,6 +411,7 @@ impl AppState {
 mod router_tier_tests {
     use super::*;
     use crate::admin::state::RuntimeConfig;
+    use crate::config::model_router::{Deployment, ModelRouter};
     use crate::config::router_config::{RouterConfig, RouterSignals, TierTarget};
     use crate::config::{
         BackendAuth, BackendKind, Config, ModelMapping, OpenAIApiFormat, TlsConfig,
@@ -495,6 +495,42 @@ mod router_tier_tests {
             model: model.into(),
             enabled: true,
         }
+    }
+
+    #[test]
+    fn explicit_pick_does_not_route_provider_catalog_only_model() {
+        let state = base_state("primary", None);
+
+        assert!(state
+            .resolve_explicit_pick("gpt-5")
+            .expect("catalog-only model should not error")
+            .is_none());
+    }
+
+    #[test]
+    fn explicit_pick_uses_configured_model_router_deployment() {
+        let mut backends = HashMap::new();
+        backends.insert("picked".to_string(), base_state("picked", None));
+        let mut state = base_state("primary", Some(Arc::new(backends)));
+
+        let deployment = Arc::new(Deployment::new(
+            "picked".to_string(),
+            "actual-model".to_string(),
+            None,
+            None,
+        ));
+        let mut routes = HashMap::new();
+        routes.insert("picker-model".to_string(), vec![deployment.clone()]);
+        state.model_router = Some(Arc::new(RwLock::new(ModelRouter::new(routes))));
+
+        let (model, effective, routed_deployment) = state
+            .resolve_explicit_pick("picker-model")
+            .expect("configured model should not error")
+            .expect("configured model should resolve");
+
+        assert_eq!(model, "actual-model");
+        assert_eq!(effective.backend_name, "picked");
+        assert!(routed_deployment.is_some());
     }
 
     // The live routing path: an enabled tier must produce the tier's model and an

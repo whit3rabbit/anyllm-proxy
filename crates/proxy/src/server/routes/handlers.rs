@@ -123,17 +123,17 @@ fn push_model_row(
 /// (`CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1`) can populate its `/model`
 /// picker with models a user can actually pick and have routed. Sources, in
 /// dedup order: autorouter tier targets (operator-typed, covers local/custom
-/// models), each enabled managed backend's provider catalog, then LiteLLM
-/// `model_list` virtual models. Falls back to the static Anthropic catalog only
-/// when none of those produce anything, preserving simple single-backend installs.
+/// models), then LiteLLM `model_list` virtual models. Falls back to the static
+/// Anthropic catalog only when none of those produce anything, preserving simple
+/// single-backend installs.
 pub async fn models(State(state): State<AppState>) -> Json<serde_json::Value> {
     let mut data: Vec<serde_json::Value> = Vec::new();
     let mut seen: HashSet<String> = HashSet::new();
 
-    // 1+2. Autorouter tier targets and managed-backend catalog models. Gated on
-    //      `router.enabled` because the explicit-pick routing that makes these
-    //      directly pickable only runs when the autorouter is on; advertising
-    //      them otherwise would list models a pick would not route.
+    // 1. Autorouter tier targets. Gated on `router.enabled` because picking a
+    //    tier target relies on the autorouter path. Do not advertise entire
+    //    provider catalogs here: only operator-configured tiers and model_list
+    //    entries below are intentionally routable.
     let router_enabled = {
         let cfg = state
             .runtime_config
@@ -156,24 +156,9 @@ pub async fn models(State(state): State<AppState>) -> Json<serde_json::Value> {
         for (model, backend) in &tier_models {
             push_model_row(&mut data, &mut seen, model, backend);
         }
-
-        // Each enabled managed backend's provider catalog models (static catalog
-        // only; no DB read so the request path stays DB-free).
-        if let Some(shared) = state.shared.as_ref() {
-            if let Ok(guard) = shared.managed_backends.read() {
-                for (name, (row, _client)) in guard.iter() {
-                    if !row.enabled {
-                        continue;
-                    }
-                    for m in state.provider_catalog.list_models(&row.provider_id).iter() {
-                        push_model_row(&mut data, &mut seen, m.id.as_str(), name);
-                    }
-                }
-            }
-        }
     }
 
-    // 3. LiteLLM model_list virtual models (routed via ModelRouter regardless of
+    // 2. LiteLLM model_list virtual models (routed via ModelRouter regardless of
     //    the autorouter, so always advertised).
     if let Some(ref router_lock) = state.model_router {
         let router = router_lock.read().unwrap_or_else(|e| e.into_inner());

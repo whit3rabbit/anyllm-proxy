@@ -89,11 +89,14 @@ pub(crate) async fn chat_completions(
             .unwrap_or_else(|e| e.into_inner());
         cfg.router.enabled.then(|| cfg.router.clone())
     };
-    // Explicit model pick (selected from /v1/models gateway discovery): route it
-    // straight to the backend that offers it, skipping tier-signal classification.
-    // claude-* alias traffic and unknown models fall through to the tiers below.
+    // Explicit model pick (selected from /v1/models gateway discovery):
+    // resolve it through configured model routing before tier-signal classification.
+    // claude-* alias traffic and unconfigured models fall through to the tiers below.
     let explicit_pick = if router_cfg.is_some() {
-        state.resolve_explicit_pick(&original_model)
+        match state.resolve_explicit_pick(&original_model) {
+            Ok(pick) => pick,
+            Err(resp) => return resp,
+        }
     } else {
         None
     };
