@@ -103,6 +103,15 @@ pub(crate) async fn chat_completions(
             state.resolve_router_tier(&rc, &signals)
         })
     });
+    if let (Some(ref ctx), Some((model, _, _))) = (&vk_ctx, &router_tier) {
+        if !crate::server::policy::is_model_allowed(model, &ctx.allowed_models) {
+            return openai_error_response(
+                &format!("Model '{model}' is not allowed for this API key."),
+                "permission_error",
+                StatusCode::FORBIDDEN,
+            );
+        }
+    }
     let (mapped_model, effective, deployment) = match router_tier {
         Some((model, effective, deployment)) => (
             mapped_model_for_backend(&original_model, model, &effective),
