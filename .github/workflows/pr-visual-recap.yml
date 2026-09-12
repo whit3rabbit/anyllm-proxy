@@ -55,16 +55,16 @@ jobs:
               reasons.push('closed without merge');
             }
 
-            // Fork PRs only receive repo secrets when the org/repo opts into
-            // GitHub's "Send secrets to workflows from pull requests" setting
-            // (common in private orgs that use forks heavily). Gate on secret
-            // availability, not fork-ness: run on forks that have the token,
-            // and skip — with an actionable hint — those that don't.
+            // Never run the secret-backed recap agent for fork PRs. The agent
+            // consumes PR-controlled diff text as a prompt and can write output
+            // that later steps publish, so fork content must not share a job
+            // with API keys or write-scoped repository tokens even if GitHub is
+            // configured to send secrets to pull_request workflows.
             const headRepo = pr && pr.head && pr.head.repo && pr.head.repo.full_name;
             const isFork = !!(pr && headRepo && headRepo !== process.env.GITHUB_REPOSITORY);
             const isPrivate = !!(context.payload.repository && context.payload.repository.private);
-            if (isFork && process.env.HAS_PLAN !== 'true') {
-              reasons.push(`fork PR (${headRepo}) without secret access — enable "Send secrets to workflows from pull requests" (and write tokens) in the repo/org Actions settings to run recaps on forks`);
+            if (isFork) {
+              reasons.push(`fork PR (${headRepo}) — visual recaps require a trusted same-repository branch so untrusted PR prompts never run with secrets`);
             }
 
             const login = (pr && pr.user && pr.user.login || '').toLowerCase();
@@ -206,8 +206,6 @@ jobs:
       pull-requests: write
     env:
       PLAN_RECAP_APP_URL: ${{ secrets.PLAN_RECAP_APP_URL || 'https://plan.agent-native.com' }}
-      PLAN_RECAP_TOKEN: ${{ secrets.PLAN_RECAP_TOKEN }}
-      GH_TOKEN: ${{ github.token }}
       PR_NUMBER: ${{ github.event.pull_request.number }}
       PR_STATE: ${{ github.event.pull_request.state }}
       PR_MERGED: ${{ github.event.pull_request.merged }}
@@ -288,6 +286,8 @@ jobs:
       - name: Start visual recap check
         id: recap_check
         continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -uo pipefail
           $RECAP_CLI recap check start --sha "$HEAD_SHA" --workflow-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
@@ -304,6 +304,8 @@ jobs:
         id: auth_probe
         if: steps.diff.outputs.tiny != 'true'
         continue-on-error: true
+        env:
+          PLAN_RECAP_TOKEN: ${{ secrets.PLAN_RECAP_TOKEN }}
         run: |
           set -uo pipefail
           # Hit the plan app's action surface with the publish token. A 401 means
@@ -326,6 +328,8 @@ jobs:
         id: route_health
         if: steps.diff.outputs.tiny != 'true'
         continue-on-error: true
+        env:
+          PLAN_RECAP_TOKEN: ${{ secrets.PLAN_RECAP_TOKEN }}
         run: |
           set -uo pipefail
           # Pre-publish health gate: confirm the plan app's recap action routes
@@ -384,6 +388,8 @@ jobs:
       - name: Read previous plan id
         id: prev
         continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           PLAN_ID="$($RECAP_CLI recap comment find-plan-id --repo "$GITHUB_REPOSITORY" --issue "$PR_NUMBER" --token "$GH_TOKEN")"
@@ -393,6 +399,8 @@ jobs:
         id: block_reference
         if: steps.diff.outputs.tiny != 'true' && steps.scan.outputs.suppressed != 'true'
         continue-on-error: true
+        env:
+          PLAN_RECAP_TOKEN: ${{ secrets.PLAN_RECAP_TOKEN }}
         run: |
           set -uo pipefail
           if $RECAP_CLI recap block-reference --app-url "$PLAN_RECAP_APP_URL" --out recap-blocks.md; then
@@ -500,6 +508,7 @@ jobs:
         continue-on-error: true
         env:
           PREV_PLAN_ID: ${{ steps.prev.outputs.plan_id }}
+          PLAN_RECAP_TOKEN: ${{ secrets.PLAN_RECAP_TOKEN }}
         run: |
           set -uo pipefail
           ARGS=(--source recap-source.json --out recap-url.txt --repo "$GITHUB_REPOSITORY" --pr "$PR_NUMBER" --app-url "$PLAN_RECAP_APP_URL" --token "$PLAN_RECAP_TOKEN")
@@ -626,6 +635,7 @@ jobs:
         continue-on-error: true
         env:
           PLAN_URL: ${{ steps.url.outputs.plan_url }}
+          PLAN_RECAP_TOKEN: ${{ secrets.PLAN_RECAP_TOKEN }}
           # Use the gate-normalized agent so "Codex" still selects the right file.
           RECAP_AGENT: ${{ needs.gate.outputs.agent }}
         run: |
@@ -648,6 +658,7 @@ jobs:
         env:
           # recap-url.txt is untrusted agent output; pass via env, never ${{ }}.
           PLAN_URL: ${{ steps.url.outputs.plan_url }}
+          PLAN_RECAP_TOKEN: ${{ secrets.PLAN_RECAP_TOKEN }}
         run: |
           set -uo pipefail
           if [ -n "${RECAP_PLAYWRIGHT:-}" ] && [ -x "$RECAP_PLAYWRIGHT" ]; then
@@ -708,6 +719,7 @@ jobs:
         if: always() && !cancelled()
         continue-on-error: true
         env:
+          GH_TOKEN: ${{ github.token }}
           PLAN_URL: ${{ steps.url.outputs.plan_url }}
           RECAP_IMAGE_URL: ${{ steps.shot.outputs.image_url }}
           RECAP_LIGHT_IMAGE_URL: ${{ steps.shot.outputs.light_image_url }}
@@ -731,6 +743,7 @@ jobs:
         if: always() && !cancelled() && steps.recap_check.outputs.check_run_id != ''
         continue-on-error: true
         env:
+          GH_TOKEN: ${{ github.token }}
           # Untrusted/step values via env (NOT ${{ }}-interpolated into the run
           # body): the agent-written plan URL and the scan JSON could inject shell.
           CHECK_RUN_ID: ${{ steps.recap_check.outputs.check_run_id }}
