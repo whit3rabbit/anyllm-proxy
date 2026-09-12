@@ -429,3 +429,38 @@ fn redacted_thinking_round_trip() {
         _ => panic!("expected ContentBlock::RedactedThinking"),
     }
 }
+
+#[test]
+fn normalize_anthropic_request_json_injects_default_max_tokens_and_promotes_system() {
+    let mut body = json!({
+        "model": "claude-3-7-sonnet",
+        "messages": [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": "hello"}
+        ]
+    });
+    super::normalize_anthropic_request_json(&mut body, Some(2048));
+    assert_eq!(body["max_tokens"], 2048);
+    assert_eq!(body["system"], "You are a helpful assistant.");
+    let msgs = body["messages"].as_array().unwrap();
+    assert_eq!(msgs.len(), 1);
+    assert_eq!(msgs[0]["role"], "user");
+}
+
+#[test]
+fn normalize_anthropic_request_json_leaves_existing_system_and_max_tokens_alone() {
+    let mut body = json!({
+        "model": "claude-3-7-sonnet",
+        "max_tokens": 100,
+        "system": "Existing system",
+        "messages": [
+            {"role": "system", "content": "Ignored system"},
+            {"role": "user", "content": "hello"}
+        ]
+    });
+    super::normalize_anthropic_request_json(&mut body, Some(2048));
+    assert_eq!(body["max_tokens"], 100);
+    assert_eq!(body["system"], "Existing system");
+    let msgs = body["messages"].as_array().unwrap();
+    assert_eq!(msgs.len(), 2);
+}

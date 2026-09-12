@@ -91,7 +91,7 @@ pub fn anthropic_to_gemini_request(
     let mut contents: Vec<gemini::Content> = Vec::new();
     for msg in &req.messages {
         let role = match msg.role {
-            anthropic::Role::User => "user",
+            anthropic::Role::User | anthropic::Role::System => "user",
             anthropic::Role::Assistant => "model",
         };
         let parts = content_blocks_to_parts(&msg.content, &tool_id_map);

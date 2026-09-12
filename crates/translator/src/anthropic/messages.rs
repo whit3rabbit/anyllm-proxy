@@ -87,6 +87,8 @@ pub struct InputMessage {
 pub enum Role {
     User,
     Assistant,
+    #[serde(alias = "developer")]
+    System,
 }
 
 /// Message content: plain string or array of typed content blocks.
@@ -337,6 +339,54 @@ pub struct ServerToolUsage {
     pub tool_search_requests: Option<u32>,
     #[serde(flatten)]
     pub extra: serde_json::Map<String, serde_json::Value>,
+}
+
+/// Normalizes an incoming Anthropic Messages API JSON value so that clients
+/// (such as Claude Code) that send `role: "system"` or `role: "developer"`
+/// in `messages`, or that omit `max_tokens`, deserialize cleanly into
+/// [`MessageCreateRequest`].
+///
+/// If the first message has role "system" or "developer" and there is no
+/// top-level "system" field and there are subsequent messages, it is promoted
+/// to the top-level "system" field. If `default_max_tokens` is provided and
+/// `max_tokens` is absent or null, it injects `max_tokens`.
+pub fn normalize_anthropic_request_json(
+    body: &mut serde_json::Value,
+    default_max_tokens: Option<u32>,
+) {
+    let Some(obj) = body.as_object_mut() else {
+        return;
+    };
+
+    if !obj.contains_key("max_tokens") || obj["max_tokens"].is_null() {
+        if let Some(default_val) = default_max_tokens {
+            obj.insert("max_tokens".to_string(), serde_json::json!(default_val));
+        }
+    }
+
+    let has_top_level_system = obj.get("system").is_some_and(|s| !s.is_null());
+    let mut promoted_system = None;
+
+    if let Some(messages) = obj.get_mut("messages").and_then(|m| m.as_array_mut()) {
+        if !messages.is_empty() {
+            let first_is_system = messages[0]
+                .get("role")
+                .and_then(|r| r.as_str())
+                .map(|r| r.eq_ignore_ascii_case("system") || r.eq_ignore_ascii_case("developer"))
+                .unwrap_or(false);
+
+            if first_is_system && !has_top_level_system && messages.len() > 1 {
+                let first = messages.remove(0);
+                if let Some(content) = first.get("content") {
+                    promoted_system = Some(content.clone());
+                }
+            }
+        }
+    }
+
+    if let Some(system_content) = promoted_system {
+        obj.insert("system".to_string(), system_content);
+    }
 }
 
 fn deserialize_null_u32_as_zero<'de, D>(deserializer: D) -> Result<u32, D::Error>

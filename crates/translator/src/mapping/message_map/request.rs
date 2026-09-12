@@ -255,6 +255,7 @@ fn convert_anthropic_message(msg: &anthropic::InputMessage, out: &mut Vec<openai
     let role = match msg.role {
         anthropic::Role::User => openai::ChatRole::User,
         anthropic::Role::Assistant => openai::ChatRole::Assistant,
+        anthropic::Role::System => openai::ChatRole::System,
     };
 
     match &msg.content {
@@ -270,14 +271,37 @@ fn convert_anthropic_message(msg: &anthropic::InputMessage, out: &mut Vec<openai
                 thinking_blocks: None,
             });
         }
-        anthropic::Content::Blocks(blocks) => {
-            if msg.role == anthropic::Role::Assistant {
-                convert_assistant_blocks(blocks, out);
-            } else {
-                convert_user_blocks(blocks, out);
-            }
+        anthropic::Content::Blocks(blocks) => match msg.role {
+            anthropic::Role::Assistant => convert_assistant_blocks(blocks, out),
+            anthropic::Role::User => convert_user_blocks(blocks, out),
+            anthropic::Role::System => convert_system_blocks(blocks, out),
+        },
+    }
+}
+
+/// System blocks: text parts become content.
+fn convert_system_blocks(blocks: &[anthropic::ContentBlock], out: &mut Vec<openai::ChatMessage>) {
+    let mut text_parts = Vec::new();
+    for block in blocks {
+        if let anthropic::ContentBlock::Text { text } = block {
+            text_parts.push(text.clone());
         }
     }
+    let content = if text_parts.is_empty() {
+        None
+    } else {
+        Some(openai::ChatContent::Text(text_parts.join("")))
+    };
+    out.push(openai::ChatMessage {
+        role: openai::ChatRole::System,
+        content,
+        name: None,
+        tool_calls: None,
+        tool_call_id: None,
+        refusal: None,
+        reasoning_content: None,
+        thinking_blocks: None,
+    });
 }
 
 /// Assistant blocks: text parts become content, tool_use blocks become tool_calls.

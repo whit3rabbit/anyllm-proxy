@@ -102,6 +102,7 @@ fn build_input_items(messages: &[anthropic::InputMessage]) -> ResponsesInput {
         let role = match msg.role {
             anthropic::Role::User => "user",
             anthropic::Role::Assistant => "assistant",
+            anthropic::Role::System => "system",
         };
 
         match &msg.content {

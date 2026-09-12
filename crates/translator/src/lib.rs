@@ -56,6 +56,7 @@ pub mod translate;
 pub mod util;
 
 // Convenience re-exports
+pub use anthropic::normalize_anthropic_request_json;
 pub use config::{LossyBehavior, TranslationConfig, TranslationConfigBuilder};
 pub use error::TranslateError;
 pub use mapping::gemini_message_map::{

@@ -1912,3 +1912,52 @@ fn omit_max_tokens_marker_clears_and_is_stripped() {
     assert_eq!(oai.max_completion_tokens, None);
     assert!(!oai.extra.contains_key(OMIT_MAX_TOKENS_MARKER));
 }
+
+#[test]
+fn system_role_message_in_messages_translates_to_system_chat_message() {
+    let json_data = json!({
+        "model": "claude-3-7-sonnet",
+        "max_tokens": 100,
+        "messages": [
+            {
+                "role": "user",
+                "content": "hello"
+            },
+            {
+                "role": "system",
+                "content": "<system-reminder>SessionStart</system-reminder>"
+            }
+        ]
+    });
+    let req: anthropic::MessageCreateRequest = serde_json::from_value(json_data).unwrap();
+    let oai = anthropic_to_openai_request(&req);
+    assert_eq!(oai.messages.len(), 2);
+    assert_eq!(oai.messages[0].role, openai::ChatRole::User);
+    assert_eq!(oai.messages[1].role, openai::ChatRole::System);
+    assert_eq!(
+        oai.messages[1].effective_text().as_deref(),
+        Some("<system-reminder>SessionStart</system-reminder>")
+    );
+}
+
+#[test]
+fn developer_role_message_in_messages_deserializes_and_translates() {
+    let json_data = json!({
+        "model": "claude-3-7-sonnet",
+        "max_tokens": 100,
+        "messages": [
+            {
+                "role": "developer",
+                "content": [{"type": "text", "text": "dev instruction"}]
+            }
+        ]
+    });
+    let req: anthropic::MessageCreateRequest = serde_json::from_value(json_data).unwrap();
+    let oai = anthropic_to_openai_request(&req);
+    assert_eq!(oai.messages.len(), 1);
+    assert_eq!(oai.messages[0].role, openai::ChatRole::System);
+    assert_eq!(
+        oai.messages[0].effective_text().as_deref(),
+        Some("dev instruction")
+    );
+}
