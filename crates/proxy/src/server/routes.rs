@@ -149,6 +149,7 @@ pub fn app_multi_with_shared(
             shared: shared.clone(),
             // Set per-request by resolve_model_and_state when a DB route is hit.
             route_options: None,
+            selected_route_id: None,
             backend_name: name.clone(),
             provider_id: bc.provider_id.clone(),
             concurrency: Arc::new(Semaphore::new(super::middleware::MAX_CONCURRENT_REQUESTS)),
@@ -476,8 +477,7 @@ async fn enforce_route_scope(
 
     if allowed_routes.is_some() {
         if let Err(error) =
-            super::policy::enforce_route_scope(&state.backend_name, &state.shared, &allowed_routes)
-                .await
+            super::policy::enforce_route_scope(None, &state.backend_name, &allowed_routes)
         {
             let err = mapping::errors_map::create_anthropic_error(
                 anthropic::ErrorType::PermissionError,
