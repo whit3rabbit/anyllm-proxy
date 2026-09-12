@@ -8,10 +8,10 @@ export interface ProxyStatus {
   proxy_running: boolean
   /**
    * Effective proxy auth posture. "keys": a key is required. "open_relay": any
-   * key accepted on all interfaces. "loopback_only": no auth, localhost open and
-   * LAN rejected (the default). Drives the top-of-app warning banner.
+   * key accepted on all interfaces. "auth_required": no authentication source is
+   * configured, so all requests are rejected. Drives the top-of-app warning banner.
    */
-  auth_mode: 'keys' | 'open_relay' | 'loopback_only'
+  auth_mode: 'keys' | 'open_relay' | 'auth_required'
   /** Number of distinct static PROXY_API_KEYS entries. */
   proxy_key_count: number
 }

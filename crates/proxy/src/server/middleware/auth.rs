@@ -74,7 +74,7 @@ pub struct VirtualKeyContext {
     pub(crate) period_reset: Option<String>,
 }
 
-/// Which of `validate_auth`'s four success paths authenticated this request.
+/// Which of `validate_auth`'s success paths authenticated this request.
 /// Inserted into request extensions at every success branch so a handler can
 /// tell what kind of credential got it in -- used by `ANTHROPIC_FORWARD_CLIENT_AUTH`
 /// to decide whether it's safe to forward that same credential upstream as the
@@ -93,10 +93,6 @@ pub enum ClientAuthPath {
     VirtualKey,
     /// `PROXY_OPEN_RELAY=true`: any non-empty credential accepted.
     OpenRelay,
-    /// Loopback-open default: no proxy auth configured at all, request came
-    /// from a loopback peer. Not a real credential, so never forwarded upstream
-    /// (`client_auth_forwardable` returns false for it).
-    LoopbackOpen,
 }
 
 /// Controls which authentication paths are active.
@@ -155,7 +151,7 @@ static ALLOWED_KEY_HASHES: LazyLock<Vec<[u8; 32]>> = LazyLock::new(|| {
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
         .collect();
-    // Posture logging (open-relay warn / loopback-open warn) is emitted once at
+    // Posture logging is emitted once at
     // startup by `log_effective_auth_posture`, AFTER virtual keys and OIDC are
     // registered, so it reflects the true posture instead of the partial
     // static-key/open-relay state visible at this LazyLock's init time.
@@ -202,10 +198,7 @@ fn has_virtual_keys() -> bool {
     VIRTUAL_KEYS.get().map(|m| !m.is_empty()).unwrap_or(false)
 }
 
-/// Whether the proxy has NO auth configured at all: no static keys, no open
-/// relay, no virtual keys, no OIDC. In this state the proxy falls back to the
-/// loopback-open default (see [`validate_auth`]): localhost is accepted without
-/// a credential, LAN/remote peers are still rejected with 401.
+/// Whether the proxy has no usable authentication source configured.
 fn no_auth_configured() -> bool {
     ALLOWED_KEY_HASHES.is_empty()
         && !*OPEN_RELAY
@@ -225,21 +218,21 @@ pub enum EffectiveAuthMode {
     OpenRelay,
     /// At least one static key, virtual key, or OIDC configured (auth enforced).
     Keys,
-    /// Nothing configured: localhost open, LAN rejected (the default).
-    LoopbackOnly,
+    /// Nothing configured: every request is rejected.
+    AuthRequired,
 }
 
 /// The effective auth posture for this process:
 /// - [`EffectiveAuthMode::OpenRelay`] when `PROXY_OPEN_RELAY=true` (any non-empty
 ///   key accepted on all interfaces).
-/// - [`EffectiveAuthMode::LoopbackOnly`] when nothing is configured (localhost
-///   open, LAN rejected, the default).
+/// - [`EffectiveAuthMode::AuthRequired`] when nothing is configured (all
+///   requests are rejected, the default).
 /// - [`EffectiveAuthMode::Keys`] otherwise (auth enforced).
 pub fn effective_auth_mode() -> EffectiveAuthMode {
     if open_relay_active() {
         EffectiveAuthMode::OpenRelay
     } else if no_auth_configured() {
-        EffectiveAuthMode::LoopbackOnly
+        EffectiveAuthMode::AuthRequired
     } else {
         EffectiveAuthMode::Keys
     }
@@ -249,50 +242,21 @@ pub fn effective_auth_mode() -> EffectiveAuthMode {
 /// from `async_main` after virtual keys and OIDC are registered, so the message
 /// is accurate even for an OIDC-only or virtual-key-only deployment (unlike the
 /// old boot-time warn, which fired from the static-key `LazyLock` before those
-/// sources existed and could mislabel such setups as "loopback-only").
+/// sources existed and could mislabel such setups as unconfigured).
 pub fn log_effective_auth_posture() {
     match effective_auth_mode() {
         EffectiveAuthMode::OpenRelay => tracing::warn!(
             "PROXY_OPEN_RELAY=true: proxy accepts ANY non-empty key on all \
              interfaces. Set PROXY_API_KEYS to restrict access."
         ),
-        EffectiveAuthMode::LoopbackOnly => tracing::warn!(
+        EffectiveAuthMode::AuthRequired => tracing::warn!(
             "No PROXY_API_KEYS, virtual keys, OIDC, or PROXY_OPEN_RELAY set: \
-             accepting unauthenticated requests from localhost only; LAN/remote \
-             peers get 401. Set PROXY_API_KEYS to require a key, or \
-             PROXY_OPEN_RELAY=true to accept any key on all interfaces."
+             rejecting all proxy requests. Set PROXY_API_KEYS to allow \
+             authenticated access, or PROXY_OPEN_RELAY=true to accept any key \
+             on all interfaces."
         ),
         EffectiveAuthMode::Keys => {
             tracing::info!("proxy auth enforced via keys / virtual keys / OIDC")
-        }
-    }
-}
-
-/// Whether the request's TCP peer is a loopback address. Reads `ConnectInfo`
-/// (the real connection peer), NOT `X-Forwarded-For`, which is client-spoofable.
-/// Fails closed: if `ConnectInfo` is absent (proxy not served with connect
-/// info), returns false so the loopback-open default never accidentally opens.
-fn peer_is_loopback(request: &Request<Body>) -> bool {
-    request
-        .extensions()
-        .get::<axum::extract::ConnectInfo<std::net::SocketAddr>>()
-        .map(|ci| is_loopback_ip(ci.0.ip()))
-        .unwrap_or(false)
-}
-
-/// Loopback test that also accepts IPv4-mapped IPv6 (`::ffff:127.0.0.1`):
-/// dual-stack listeners present IPv4 loopback peers as mapped v6, which std's
-/// `Ipv6Addr::is_loopback()` (only `::1`) would wrongly classify as remote and
-/// reject with 401. Never widens the surface beyond a genuine loopback peer.
-fn is_loopback_ip(ip: std::net::IpAddr) -> bool {
-    match ip {
-        std::net::IpAddr::V4(v4) => v4.is_loopback(),
-        std::net::IpAddr::V6(v6) => {
-            v6.is_loopback()
-                || v6
-                    .to_ipv4_mapped()
-                    .map(|v4| v4.is_loopback())
-                    .unwrap_or(false)
         }
     }
 }
@@ -310,7 +274,8 @@ pub fn forward_client_auth_misconfigured(key_count: usize, open_relay: bool) -> 
 
 /// Validate that the request carries a valid API key.
 /// If `PROXY_API_KEYS` is set, the caller's key must be in the allowlist.
-/// Otherwise, any non-empty key is accepted (backward-compatible open mode).
+/// `PROXY_OPEN_RELAY=true` explicitly accepts any non-empty key; otherwise,
+/// requests are rejected when no authentication source is configured.
 ///
 /// Anthropic: <https://docs.anthropic.com/en/api/messages>
 #[allow(clippy::result_large_err)]
@@ -319,20 +284,6 @@ pub async fn validate_auth(
     mut request: Request<Body>,
     next: Next,
 ) -> Result<Response, Response> {
-    // Loopback-open default: when NO proxy auth is configured (no static keys,
-    // no open relay, no virtual keys, no OIDC), accept requests whose TCP peer
-    // is loopback so `localhost` works out of the box. LAN/remote peers fall
-    // through to the checks below and get 401. Runs before credential parsing so
-    // a header-less localhost call succeeds.
-    // ponytail: trusts the TCP peer. Behind a reverse proxy on localhost every
-    // request looks loopback -> effectively open; set PROXY_API_KEYS then.
-    if no_auth_configured() && peer_is_loopback(&request) {
-        request
-            .extensions_mut()
-            .insert(ClientAuthPath::LoopbackOpen);
-        return Ok(next.run(request).await);
-    }
-
     // Accept x-api-key (Anthropic), x-goog-api-key (Gemini CLI), or Authorization: Bearer.
     let api_key = headers
         .get("x-api-key")
@@ -598,12 +549,11 @@ pub async fn validate_auth(
         return Ok(next.run(request).await);
     }
 
-    // No match found: reject. `no_auth_configured()` here means the peer is
-    // non-loopback (loopback short-circuits at the top), so explain the
-    // localhost-only default rather than a generic "not configured".
+    // No match found: reject. When no auth source is configured, fail closed
+    // rather than exposing a browser-reachable local proxy.
     let message = if no_auth_configured() {
-        "This proxy accepts unauthenticated requests from localhost only. \
-         Set PROXY_API_KEYS to allow authenticated remote access."
+        "Authentication is not configured. Set PROXY_API_KEYS to allow \
+         authenticated access."
     } else {
         "Invalid API key."
     };
