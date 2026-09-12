@@ -10,10 +10,30 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ## [Unreleased]
 
-### Added
+## [0.16.2] - 2026-09-12
 
+### Added
 - Gateway model discovery for Claude Code: when the Auto Router is enabled, `GET /v1/models` advertises the real backend models (autorouter tier targets + each managed backend's catalog) instead of a static Claude catalog, so Claude Code's `/model` picker can show and pick them. The Auto Router tab's "Start Claude Code" command now includes `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=true`.
 - Explicit-pick routing: a model picked from `/v1/models` routes straight to the managed backend that offers it, bypassing autorouter tier signals. `claude-*` alias traffic still flows through the configured tiers.
+- Account for Anthropic web search costs in token and cost tracking for virtual keys.
+
+### Fixed
+- Enforce virtual key policy after auto routing: policies and model allowlists are re-evaluated against the post-routing model selection.
+- Virtual key route scoping: enforce exact route IDs against database routes when selected, while falling back to backend route assignment for direct backend prefix access.
+- Constrain explicit model picks to valid advertised gateway models.
+- Restored pricing for Gemini live-preview models and OpenAI realtime audio models to prevent virtual key budget bypasses.
+- Reject unauthenticated loopback requests when open relay is disabled.
+- Stop printing admin token in startup banner.
+- Remove open relay flags from Makefile run targets.
+
+### CI & Security
+- Hardened PR visual recap workflow permissions and inputs.
+- Added crate ownership verification before publish reruns in CI.
+
+### Changed
+- Bumped `react-router` and `react-router-dom` to `7.18.3` in `/crates/proxy/admin-ui`.
+- Bumped `mermaid` from `11.15.0` to `11.16.1` in `/crates/proxy/admin-ui`.
+- Bumped `decode-uri-component`, `query-string`, `@humanfs/node`, `colord`, and `js-yaml` in `/crates/proxy/admin-ui`.
 
 ## [0.16.1] - 2026-09-12
 
@@ -435,7 +455,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 ### Changed
 - Dependency bumps (rand 0.8.5 → 0.8.6).
 
-[Unreleased]: https://github.com/whit3rabbit/anyllm-proxy/compare/v0.16.1...HEAD
+[Unreleased]: https://github.com/whit3rabbit/anyllm-proxy/compare/v0.16.2...HEAD
+[0.16.2]: https://github.com/whit3rabbit/anyllm-proxy/compare/v0.16.1...v0.16.2
 [0.16.1]: https://github.com/whit3rabbit/anyllm-proxy/compare/v0.16.0...v0.16.1
 [0.16.0]: https://github.com/whit3rabbit/anyllm-proxy/compare/v0.15.1...v0.16.0
 [0.15.1]: https://github.com/whit3rabbit/anyllm-proxy/compare/v0.15.0...v0.15.1
