@@ -96,6 +96,16 @@ pub(crate) async fn messages(
         }
         None => (body, None),
     };
+    if let (Some(ref ctx), Some((model, _, _))) = (&vk_ctx, &router_tier) {
+        if !super::super::policy::is_model_allowed(model, &ctx.allowed_models) {
+            let err = mapping::errors_map::create_anthropic_error(
+                anthropic::ErrorType::PermissionError,
+                format!("Model '{model}' is not allowed for this API key."),
+                None,
+            );
+            return (StatusCode::FORBIDDEN, Json(err)).into_response();
+        }
+    }
     let (mapped_model, effective, deployment) = match router_tier {
         Some(v) => v,
         None => match state.resolve_model_and_state(&body.model) {
