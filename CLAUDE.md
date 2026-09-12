@@ -161,8 +161,7 @@ CI does the rest on tag push: builds binaries (Linux/macOS/Windows), packages de
   heredoc content (col 0) breaks YAML parsing. Use `printf '%s\n' ...` or `{ echo ...; } > file`.
 - **`gh release upload` requires the release to exist.** Add a `create-release` job before upload
   jobs: `gh release create "$TAG" --notes-file release_notes.txt || echo "already exists"`.
-- **cargo publish exit 101** = version already exists on crates.io (not an error for re-runs).
-  Pattern: `cargo publish -p FOO || { ec=$?; [ "$ec" -eq 101 ] && echo "already published" || exit "$ec"; }`
+- **Do not treat cargo publish exit 101 as "already published" by itself.** Cargo returns 101 for most errors. Use `scripts/publish_crate.sh FOO [--no-verify]` so re-runs are accepted only after verifying the exact crate/version exists on crates.io and is owned by this project.
 
 ## npm / Frontend
 
@@ -176,8 +175,9 @@ anyllm_translate → anyllm_providers → anyllm_client → anyllm_batch_engine 
 
 `anyllm_proxy` depends on all of the above, so every new leaf crate (`pxpipe`, `rtk`,
 `optimize_*`) MUST be added to the `publish` job in `ci.yml` before `anyllm_proxy`, or
-`cargo publish -p anyllm_proxy` fails on the missing dep. The `exit 101` guard masks that
-failure (cargo returns 101 for most errors), so the job goes green while proxy never lands.
+`cargo publish -p anyllm_proxy` fails on the missing dep. Publish steps must call
+`scripts/publish_crate.sh`, which preserves idempotent re-runs without masking generic
+Cargo exit-101 failures or accepting a crate/version owned by someone else.
 
 ## Version Bumping
 

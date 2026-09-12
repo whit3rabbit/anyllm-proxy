@@ -292,64 +292,64 @@ jobs:
       # Publish in dependency order. --no-verify skips re-building from the
       # packed tarball; the test job already verified the build.
       # Sleeps give the crates.io index time to propagate before dependents publish.
-      # exit 101 = version already exists; the per-step shell swallows it so
-      # re-runs are idempotent without masking real failures.
+      # scripts/publish_crate.sh makes re-runs idempotent only after verifying
+      # the exact crate/version exists on crates.io and is owned by this project.
       - name: Publish anyllm_translate
-        run: cargo publish -p anyllm_translate || { ec=$?; [ "$ec" -eq 101 ] && echo "already published" || exit "$ec"; }
+        run: scripts/publish_crate.sh anyllm_translate
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
       - name: Wait for index propagation
         run: sleep 30
       - name: Publish anyllm_providers
-        run: cargo publish -p anyllm_providers --no-verify || { ec=$?; [ "$ec" -eq 101 ] && echo "already published" || exit "$ec"; }
+        run: scripts/publish_crate.sh anyllm_providers --no-verify
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
       - name: Wait for index propagation
         run: sleep 30
       - name: Publish anyllm_client
-        run: cargo publish -p anyllm_client --no-verify || { ec=$?; [ "$ec" -eq 101 ] && echo "already published" || exit "$ec"; }
+        run: scripts/publish_crate.sh anyllm_client --no-verify
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
       - name: Wait for index propagation
         run: sleep 30
       - name: Publish anyllm_batch_engine
-        run: cargo publish -p anyllm_batch_engine --no-verify || { ec=$?; [ "$ec" -eq 101 ] && echo "already published" || exit "$ec"; }
+        run: scripts/publish_crate.sh anyllm_batch_engine --no-verify
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
       - name: Wait for index propagation
         run: sleep 30
       - name: Publish anyllm_pxpipe
-        run: cargo publish -p anyllm_pxpipe --no-verify || { ec=$?; [ "$ec" -eq 101 ] && echo "already published" || exit "$ec"; }
+        run: scripts/publish_crate.sh anyllm_pxpipe --no-verify
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
       - name: Wait for index propagation
         run: sleep 30
       - name: Publish anyllm_rtk
-        run: cargo publish -p anyllm_rtk --no-verify || { ec=$?; [ "$ec" -eq 101 ] && echo "already published" || exit "$ec"; }
+        run: scripts/publish_crate.sh anyllm_rtk --no-verify
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
       - name: Wait for index propagation
         run: sleep 30
       - name: Publish anyllm_optimize_core
-        run: cargo publish -p anyllm_optimize_core --no-verify || { ec=$?; [ "$ec" -eq 101 ] && echo "already published" || exit "$ec"; }
+        run: scripts/publish_crate.sh anyllm_optimize_core --no-verify
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
       - name: Wait for index propagation
         run: sleep 30
       - name: Publish anyllm_optimize_passes
-        run: cargo publish -p anyllm_optimize_passes --no-verify || { ec=$?; [ "$ec" -eq 101 ] && echo "already published" || exit "$ec"; }
+        run: scripts/publish_crate.sh anyllm_optimize_passes --no-verify
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
       - name: Wait for index propagation
         run: sleep 30
       - name: Publish anyllm_optimize_scorer
-        run: cargo publish -p anyllm_optimize_scorer --no-verify || { ec=$?; [ "$ec" -eq 101 ] && echo "already published" || exit "$ec"; }
+        run: scripts/publish_crate.sh anyllm_optimize_scorer --no-verify
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
       - name: Wait for index propagation
         run: sleep 30
       - name: Publish anyllm_proxy
-        run: cargo publish -p anyllm_proxy --no-verify || { ec=$?; [ "$ec" -eq 101 ] && echo "already published" || exit "$ec"; }
+        run: scripts/publish_crate.sh anyllm_proxy --no-verify
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
