@@ -278,11 +278,25 @@ fn record_cost_with_shared_state_persists_spend() {
 
     // record_cost uses tokio::task::spawn_blocking, so we need a runtime.
     let rt = tokio::runtime::Runtime::new().unwrap();
+    let shared_opt = Some(shared);
+    let vk_ctx_opt = Some(vk_ctx);
     rt.block_on(async {
-        let cost = record_cost(&Some(shared), &Some(vk_ctx), "gpt-4o", 1000, 500);
+        let cost = record_cost(&shared_opt, &vk_ctx_opt, "gpt-4o", 1000, 500);
         assert!(cost > 0.0);
 
         // Wait for the spawned blocking task to complete.
+        tokio::task::yield_now().await;
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+        let extra_only_cost = record_cost_with_extra(
+            &shared_opt,
+            &vk_ctx_opt,
+            "unknown-anthropic-model",
+            0,
+            0,
+            0.03,
+        );
+        assert!((extra_only_cost - 0.03).abs() < 1e-12);
         tokio::task::yield_now().await;
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     });
@@ -290,10 +304,23 @@ fn record_cost_with_shared_state_persists_spend() {
     // Verify the spend was persisted.
     let conn = db.lock().unwrap();
     let spend = db::get_key_spend(&conn, key_id).unwrap().unwrap();
-    assert!(spend.total_cost_usd > 0.0);
+    assert!(spend.total_cost_usd > 0.03);
     assert_eq!(spend.total_input_tokens, 1000);
     assert_eq!(spend.total_output_tokens, 500);
-    assert_eq!(spend.request_count, 1);
+    assert_eq!(spend.request_count, 2);
+}
+
+#[test]
+fn anthropic_server_tool_usage_cost_counts_web_search_only() {
+    let usage = anyllm_translate::anthropic::messages::ServerToolUsage {
+        web_search_requests: Some(3),
+        web_fetch_requests: Some(9),
+        tool_search_requests: Some(7),
+        extra: serde_json::Map::new(),
+    };
+
+    assert!((anthropic_server_tool_usage_cost(Some(&usage)) - 0.03).abs() < 1e-12);
+    assert_eq!(anthropic_server_tool_usage_cost(None), 0.0);
 }
 
 // -- Spend threshold detection tests --

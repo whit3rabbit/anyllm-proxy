@@ -35,7 +35,8 @@ pub(crate) use context::{inject_gemini_thinking, inject_glm_thinking};
 pub(super) use helpers::backend_error_to_response;
 pub(crate) use helpers::{
     cache_auth_identity, cache_header_value, inject_degradation_header, log_request,
-    record_virtual_key_usage, set_backend_error_kind, try_cache_response,
+    record_virtual_key_usage, record_virtual_key_usage_with_extra, set_backend_error_kind,
+    try_cache_response,
 };
 pub use helpers::{get_callbacks, set_callbacks};
 

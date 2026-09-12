@@ -203,15 +203,20 @@ pub(super) async fn anthropic_chat_completions_stream(
         }
 
         let tokens = usage.tokens();
-        let cost = tokens.map(|(input_t, output_t)| {
-            crate::server::routes::record_virtual_key_usage(
+        let server_tool_cost = crate::cost::anthropic_web_search_cost(usage.web_search_requests());
+        let cost = if tokens.is_some() || server_tool_cost > 0.0 {
+            let (input_t, output_t) = tokens.unwrap_or((0, 0));
+            Some(crate::server::routes::record_virtual_key_usage_with_extra(
                 &log_shared,
                 &vk_ctx,
                 &mapped_model,
                 input_t,
                 output_t,
-            )
-        });
+                server_tool_cost,
+            ))
+        } else {
+            None
+        };
         let (status, err) = outcome.record(&metrics);
         log_request(
             &log_shared,

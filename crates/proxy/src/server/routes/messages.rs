@@ -1,7 +1,7 @@
 use super::super::streaming::messages_stream;
 use super::helpers::{
     backend_error_to_response, cache_auth_identity, cache_header_value, inject_degradation_header,
-    log_request, record_virtual_key_usage, set_backend_error_kind, try_cache_response,
+    log_request, record_virtual_key_usage_with_extra, set_backend_error_kind, try_cache_response,
 };
 use crate::backend::{BackendClient, BackendError};
 use crate::cache::{self, CacheBackend, CacheNamespace};
@@ -426,12 +426,16 @@ pub(crate) async fn messages(
                             "response body"
                         );
                     }
-                    let cost = record_virtual_key_usage(
+                    let server_tool_cost = crate::cost::anthropic_server_tool_usage_cost(
+                        anthropic_resp.usage.server_tool_use.as_ref(),
+                    );
+                    let cost = record_virtual_key_usage_with_extra(
                         &state.shared,
                         &vk_ctx,
                         &mapped_model,
                         anthropic_resp.usage.input_tokens as u64,
                         anthropic_resp.usage.output_tokens as u64,
+                        server_tool_cost,
                     );
                     log_request(
                         &state.shared,
@@ -514,12 +518,16 @@ pub(crate) async fn messages(
                             "response body"
                         );
                     }
-                    let cost = record_virtual_key_usage(
+                    let server_tool_cost = crate::cost::anthropic_server_tool_usage_cost(
+                        anthropic_resp.usage.server_tool_use.as_ref(),
+                    );
+                    let cost = record_virtual_key_usage_with_extra(
                         &state.shared,
                         &vk_ctx,
                         &mapped_model,
                         anthropic_resp.usage.input_tokens as u64,
                         anthropic_resp.usage.output_tokens as u64,
+                        server_tool_cost,
                     );
                     log_request(
                         &state.shared,

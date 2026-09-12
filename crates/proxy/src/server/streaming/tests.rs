@@ -21,6 +21,16 @@ data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop
 }
 
 #[test]
+fn anthropic_stream_usage_counts_successful_web_search_results() {
+    let mut usage = AnthropicStreamUsage::default();
+
+    usage.observe_data(r#"{"type":"content_block_start","index":1,"content_block":{"type":"web_search_tool_result","tool_use_id":"srvtoolu_ok","content":[]}}"#);
+    usage.observe_data(r#"{"type":"content_block_start","index":2,"content_block":{"type":"web_search_tool_result","tool_use_id":"srvtoolu_err","is_error":true}}"#);
+
+    assert_eq!(usage.web_search_requests(), 1);
+}
+
+#[test]
 fn observe_anthropic_sse_frames_records_thinking_blocks_when_recorder_attached() {
     let mut usage = AnthropicStreamUsage::default();
     let mut buffer = BytesMut::from(&b"data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"model\":\"claude-haiku-4-5\",\"usage\":{\"input_tokens\":1,\"output_tokens\":0}}}\n\n\

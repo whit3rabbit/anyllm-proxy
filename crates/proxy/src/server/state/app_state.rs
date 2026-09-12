@@ -284,7 +284,7 @@ impl AppState {
     /// models are accepted, route options are carried forward, and deployment
     /// RPM/TPM accounting remains attached. Provider catalog membership alone is
     /// intentionally not routable.
-    #[allow(clippy::result_large_err)]
+    #[allow(clippy::result_large_err, clippy::type_complexity)]
     pub(crate) fn resolve_explicit_pick(
         &self,
         model: &str,

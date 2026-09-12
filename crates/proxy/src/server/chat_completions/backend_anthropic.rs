@@ -102,12 +102,16 @@ pub(crate) async fn execute_anthropic_backend(
                 original_model,
                 tool_context,
             );
-            let cost = record_virtual_key_usage(
+            let server_tool_cost = crate::cost::anthropic_server_tool_usage_cost(
+                anthropic_resp.usage.server_tool_use.as_ref(),
+            );
+            let cost = crate::server::routes::record_virtual_key_usage_with_extra(
                 &state.shared,
                 vk_ctx,
                 mapped_model,
                 anthropic_resp.usage.input_tokens as u64,
                 anthropic_resp.usage.output_tokens as u64,
+                server_tool_cost,
             );
             log_request(
                 &state.shared,

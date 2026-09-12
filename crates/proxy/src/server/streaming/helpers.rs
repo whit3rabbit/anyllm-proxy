@@ -91,6 +91,7 @@ impl StreamOutcome {
 pub(crate) struct AnthropicStreamUsage {
     input_tokens: Option<u64>,
     output_tokens: Option<u64>,
+    web_search_requests: u64,
 }
 
 impl AnthropicStreamUsage {
@@ -110,6 +111,20 @@ impl AnthropicStreamUsage {
             } => {
                 self.output_tokens = Some(usage.output_tokens as u64);
             }
+            anthropic::StreamEvent::ContentBlockStart {
+                content_block:
+                    anthropic::ContentBlock::WebSearchToolResult {
+                        is_error: Some(true),
+                        ..
+                    },
+                ..
+            } => {}
+            anthropic::StreamEvent::ContentBlockStart {
+                content_block: anthropic::ContentBlock::WebSearchToolResult { .. },
+                ..
+            } => {
+                self.web_search_requests = self.web_search_requests.saturating_add(1);
+            }
             _ => {}
         }
     }
@@ -121,6 +136,10 @@ impl AnthropicStreamUsage {
             (None, Some(output)) => Some((0, output)),
             (None, None) => None,
         }
+    }
+
+    pub(crate) fn web_search_requests(&self) -> u64 {
+        self.web_search_requests
     }
 }
 

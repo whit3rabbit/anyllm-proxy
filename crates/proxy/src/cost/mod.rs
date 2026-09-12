@@ -231,6 +231,26 @@ impl ModelPricing {
     }
 }
 
+const ANTHROPIC_WEB_SEARCH_COST_USD: f64 = 0.01;
+
+/// Calculate the non-token cost Anthropic reports for hosted server tools.
+///
+/// Anthropic bills web search at $10 per 1,000 successful searches, in addition
+/// to the model tokens reported in the same usage object. Other server-tool
+/// counters are deliberately ignored until they have separate billable pricing.
+pub fn anthropic_web_search_cost(requests: u64) -> f64 {
+    requests as f64 * ANTHROPIC_WEB_SEARCH_COST_USD
+}
+
+pub fn anthropic_server_tool_usage_cost(
+    usage: Option<&anyllm_translate::anthropic::messages::ServerToolUsage>,
+) -> f64 {
+    usage
+        .and_then(|usage| usage.web_search_requests)
+        .map(|requests| anthropic_web_search_cost(requests as u64))
+        .unwrap_or(0.0)
+}
+
 /// Record cost for a completed request against a virtual key.
 ///
 /// Calculates cost from token usage and the resolved model name, then
@@ -243,7 +263,24 @@ pub fn record_cost(
     input_tokens: u64,
     output_tokens: u64,
 ) -> f64 {
-    let cost = pricing().cost_for_usage(model, input_tokens, output_tokens);
+    record_cost_with_extra(shared, vk_ctx, model, input_tokens, output_tokens, 0.0)
+}
+
+/// Record token cost plus an explicit non-token surcharge against a virtual key.
+pub fn record_cost_with_extra(
+    shared: &Option<crate::admin::state::SharedState>,
+    vk_ctx: &Option<crate::server::middleware::VirtualKeyContext>,
+    model: &str,
+    input_tokens: u64,
+    output_tokens: u64,
+    extra_cost_usd: f64,
+) -> f64 {
+    let token_cost = if input_tokens == 0 && output_tokens == 0 {
+        0.0
+    } else {
+        pricing().cost_for_usage(model, input_tokens, output_tokens)
+    };
+    let cost = token_cost + extra_cost_usd.max(0.0);
     if cost <= 0.0 {
         return cost;
     }
