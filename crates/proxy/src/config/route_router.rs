@@ -60,6 +60,7 @@ struct CompiledRoute {
 
 /// A successful route resolution.
 pub struct RouteResolved {
+    pub route_id: String,
     pub backend_name: String,
     pub model: String,
     pub deployment: Arc<Deployment>,
@@ -219,6 +220,7 @@ impl RouteRouter {
         let deps: Vec<Arc<Deployment>> = matched.iter().map(|p| p.deployment.clone()).collect();
         match select_from(&deps, &route.counter, route.strategy) {
             Some(idx) => RouteResolution::Routed(RouteResolved {
+                route_id: route.id.clone(),
                 backend_name: matched[idx].backend_name.clone(),
                 model: model.to_string(),
                 deployment: matched[idx].deployment.clone(),
@@ -422,6 +424,7 @@ mod tests {
                 assert_eq!(res.options.redact_secrets, Some(true));
                 assert_eq!(res.options.guardrail_mode.as_deref(), Some("standard"));
                 assert_eq!(res.model, "m");
+                assert_eq!(res.route_id, "r1");
             }
             _ => panic!("expected routed"),
         }

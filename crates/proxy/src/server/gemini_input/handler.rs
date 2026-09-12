@@ -69,12 +69,10 @@ pub(crate) async fn gemini_input_handler(
         };
     if let Some(ref ctx) = vk_ctx {
         if let Err(error) = crate::server::policy::enforce_route_scope(
+            effective.selected_route_id.as_deref(),
             &effective.backend_name,
-            &effective.shared,
             &ctx.allowed_routes,
-        )
-        .await
-        {
+        ) {
             return (
                 StatusCode::FORBIDDEN,
                 Json(serde_json::json!({

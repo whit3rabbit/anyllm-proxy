@@ -48,13 +48,13 @@ impl RouteScopeError {
     }
 }
 
-/// Enforce virtual-key route scoping for a resolved backend name.
+/// Enforce virtual-key route scoping for an exact selected route.
 ///
-/// Scoped keys fail closed when shared route state cannot be resolved. Route
-/// IDs are the operator-facing `routes.id` UUIDs stored in `allowed_routes`.
-pub(crate) async fn enforce_route_scope(
+/// Scoped keys fail closed when no admin DB route was selected. Route IDs are
+/// the operator-facing `routes.id` UUIDs stored in `allowed_routes`.
+pub(crate) fn enforce_route_scope(
+    selected_route_id: Option<&str>,
     backend_name: &str,
-    shared: &Option<crate::admin::state::SharedState>,
     allowed_routes: &Option<Vec<String>>,
 ) -> Result<(), RouteScopeError> {
     let Some(allowed) = allowed_routes else {
@@ -66,48 +66,26 @@ pub(crate) async fn enforce_route_scope(
         return Err(RouteScopeError);
     }
 
-    let Some(shared) = shared else {
+    let Some(route_id) = selected_route_id else {
         tracing::warn!(
             backend_name,
-            "route scope denied because shared state is unavailable"
+            "route scope denied because no admin route was selected"
         );
         return Err(RouteScopeError);
     };
 
-    let backend = backend_name.to_string();
-    let result = crate::admin::state::with_db(&shared.db, move |conn| {
-        crate::admin::db::enabled_route_ids_for_backend_name(conn, &backend)
-    })
-    .await;
-
-    match result {
-        Some(Ok(route_ids)) => {
-            if route_ids.iter().any(|route_id| allowed.contains(route_id)) {
-                Ok(())
-            } else {
-                tracing::warn!(
-                    backend_name,
-                    route_count = route_ids.len(),
-                    "route scope denied because backend is not in an allowed route"
-                );
-                Err(RouteScopeError)
-            }
-        }
-        Some(Err(error)) => {
-            tracing::error!(
-                backend_name,
-                %error,
-                "route scope denied because route lookup failed"
-            );
-            Err(RouteScopeError)
-        }
-        None => {
-            tracing::error!(
-                backend_name,
-                "route scope denied because route lookup task failed"
-            );
-            Err(RouteScopeError)
-        }
+    if allowed
+        .iter()
+        .any(|allowed_route| allowed_route == route_id)
+    {
+        Ok(())
+    } else {
+        tracing::warn!(
+            backend_name,
+            route_id,
+            "route scope denied because selected route is not allowed"
+        );
+        Err(RouteScopeError)
     }
 }
 
@@ -176,6 +154,21 @@ mod tests {
         assert!(is_route_allowed("route-abc", &policy));
         assert!(is_route_allowed("route-def", &policy));
         assert!(!is_route_allowed("route-xyz", &policy));
+    }
+
+    #[test]
+    fn route_scope_enforces_exact_selected_route() {
+        let policy = Some(vec!["route-allowed".to_string()]);
+
+        assert!(enforce_route_scope(Some("route-allowed"), "shared-backend", &policy).is_ok());
+        assert!(enforce_route_scope(Some("route-denied"), "shared-backend", &policy).is_err());
+    }
+
+    #[test]
+    fn route_scope_fails_closed_without_selected_route() {
+        let policy = Some(vec!["route-allowed".to_string()]);
+
+        assert!(enforce_route_scope(None, "shared-backend", &policy).is_err());
     }
 
     #[test]

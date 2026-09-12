@@ -4,6 +4,7 @@ use std::sync::Arc;
 pub(crate) enum ResolvedModel {
     /// Routed via model_list to a specific backend and actual model name.
     Routed {
+        route_id: Option<String>,
         backend_name: String,
         model: String,
         /// The deployment Arc for recording in-flight/latency stats.

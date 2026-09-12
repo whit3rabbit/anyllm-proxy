@@ -34,6 +34,9 @@ pub struct AppState {
     /// Read by the option accessors (`redact_secrets`, `effective_tool_guardrails`,
     /// `active_pxpipe`, `pxpipe_models`).
     pub route_options: Option<Arc<crate::config::route_router::RouteOptions>>,
+    /// Selected admin route ID for the request, when DB route dispatch matched.
+    /// Used to enforce virtual-key route scopes against the exact selected route.
+    pub selected_route_id: Option<String>,
     /// Backend name for logging purposes.
     pub backend_name: String,
     /// Canonical provider id used for provider/model policy decisions.
@@ -121,6 +124,7 @@ impl AppState {
                     match rr.resolve(model) {
                         RouteResolution::Routed(res) => {
                             return ResolvedModel::Routed {
+                                route_id: Some(res.route_id),
                                 backend_name: res.backend_name,
                                 model: res.model,
                                 deployment: res.deployment,
@@ -138,6 +142,7 @@ impl AppState {
             let router = router_lock.read().unwrap_or_else(|e| e.into_inner());
             if let Some(routed) = router.route(model) {
                 return ResolvedModel::Routed {
+                    route_id: None,
                     backend_name: routed.backend_name.to_string(),
                     model: routed.actual_model.to_string(),
                     deployment: routed.deployment.clone(),
@@ -170,6 +175,7 @@ impl AppState {
     > {
         match self.resolve_model(model) {
             ResolvedModel::Routed {
+                route_id,
                 backend_name,
                 model: mapped,
                 deployment,
@@ -181,6 +187,7 @@ impl AppState {
                 // Carry the per-route option overrides onto the effective state so
                 // the option accessors resolve route-first, global-fallback.
                 effective.route_options = options;
+                effective.selected_route_id = route_id;
                 Ok((mapped, effective, Some(deployment)))
             }
             ResolvedModel::AllAtLimit => {
@@ -297,6 +304,7 @@ impl AppState {
 
         match self.resolve_model(model) {
             ResolvedModel::Routed {
+                route_id,
                 backend_name,
                 model: mapped,
                 deployment,
@@ -306,6 +314,7 @@ impl AppState {
                     .effective_state_for_backend(&backend_name)
                     .unwrap_or_else(|| self.clone());
                 effective.route_options = options;
+                effective.selected_route_id = route_id;
                 tracing::info!(
                     backend = %backend_name,
                     model = %model,
@@ -470,6 +479,7 @@ mod router_tier_tests {
             runtime_config,
             shared: None,
             route_options: None,
+            selected_route_id: None,
             backend_name: backend_name.to_string(),
             provider_id: None,
             concurrency: Arc::new(Semaphore::new(64)),
