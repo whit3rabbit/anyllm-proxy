@@ -313,6 +313,7 @@ pub fn forward_client_auth_misconfigured(key_count: usize, open_relay: bool) -> 
 /// Otherwise, any non-empty key is accepted (backward-compatible open mode).
 ///
 /// Anthropic: <https://docs.anthropic.com/en/api/messages>
+#[allow(clippy::result_large_err)]
 pub async fn validate_auth(
     headers: HeaderMap,
     mut request: Request<Body>,

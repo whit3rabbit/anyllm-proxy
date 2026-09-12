@@ -63,6 +63,7 @@ pub fn ip_allowlist_active() -> bool {
 
 /// Middleware that rejects requests from IPs not in the allowlist.
 /// Applied before auth so blocked IPs never reach authentication.
+#[allow(clippy::result_large_err)]
 pub async fn check_ip_allowlist(request: Request<Body>, next: Next) -> Result<Response, Response> {
     // Extract client IP from X-Forwarded-For (if trusted) or connection info.
     //
