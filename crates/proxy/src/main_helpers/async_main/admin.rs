@@ -20,9 +20,6 @@ pub(crate) async fn init_admin(
     axum::Router,
     tokio::net::TcpListener,
     u16,
-    // Plaintext admin token, returned so the caller can print a ready-to-click
-    // tokenized URL on loopback binds. Dropped right after the startup banner.
-    String,
 )> {
     let flag_set = args.iter().any(|a| a == "--webui" || a == "--admin");
     let force_disabled = matches!(
@@ -425,9 +422,6 @@ pub(crate) async fn init_admin(
             token
         }
     };
-    // Keep a plaintext copy to return for the loopback startup URL before the
-    // token is wrapped/zeroized and moved into the router.
-    let admin_token_plain = admin_token.clone();
     let admin_token = Arc::new(zeroize::Zeroizing::new(admin_token));
 
     let shared = admin::state::SharedState {
@@ -660,11 +654,5 @@ pub(crate) async fn init_admin(
         .unwrap_or_else(|e| panic!("failed to bind admin to {admin_addr}: {e}"));
     tracing::info!("admin listening on {admin_addr}");
 
-    Some((
-        shared,
-        admin_app,
-        admin_listener,
-        admin_port,
-        admin_token_plain,
-    ))
+    Some((shared, admin_app, admin_listener, admin_port))
 }
