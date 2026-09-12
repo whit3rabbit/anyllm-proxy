@@ -15,6 +15,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 - Gateway model discovery for Claude Code: when the Auto Router is enabled, `GET /v1/models` advertises the real backend models (autorouter tier targets + each managed backend's catalog) instead of a static Claude catalog, so Claude Code's `/model` picker can show and pick them. The Auto Router tab's "Start Claude Code" command now includes `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=true`.
 - Explicit-pick routing: a model picked from `/v1/models` routes straight to the managed backend that offers it, bypassing autorouter tier signals. `claude-*` alias traffic still flows through the configured tiers.
 
+## [0.16.1] - 2026-09-12
+
+### Added
+- Added `Role::System` (with `#[serde(alias = "developer")]`) to Anthropic Messages API `Role` enum, allowing `system` and `developer` role messages in `messages` array to deserialize and translate to OpenAI `ChatRole::System`.
+- Added `normalize_anthropic_request_json` helper function to handle client normalization (e.g. promoting first system message when top-level system is absent, and injecting default `max_tokens` when omitted).
+
 ## [0.16.0] - 2026-07-16
 
 ### Changed
