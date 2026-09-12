@@ -108,6 +108,31 @@ fn embedded_pricing_covers_gemini_live_preview_models() {
 }
 
 #[test]
+fn embedded_pricing_includes_realtime_models() {
+    let pricing = ModelPricing::load_with_optional_override(None);
+
+    let realtime_cases = [
+        ("gpt-4o-realtime-preview", 5e-06, 2e-05),
+        ("gpt-4o-mini-realtime-preview", 6e-07, 2.4e-06),
+        ("gpt-realtime", 4e-06, 1.6e-05),
+        ("gpt-realtime-2.1", 4e-06, 2.4e-05),
+        ("gpt-realtime-mini", 6e-07, 2.4e-06),
+    ];
+
+    for (model, input_cost, output_cost) in realtime_cases {
+        assert_eq!(
+            pricing.price_for_model(model),
+            Some((input_cost, output_cost)),
+            "{model} should have an exact realtime pricing entry"
+        );
+        assert!(
+            pricing.cost_for_usage(model, 1000, 500) > 0.0,
+            "{model} should never be treated as a zero-cost billing miss"
+        );
+    }
+}
+
+#[test]
 fn load_with_optional_override_uses_file() {
     use std::io::Write;
     let dir = std::env::temp_dir();
