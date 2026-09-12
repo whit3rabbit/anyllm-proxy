@@ -214,6 +214,26 @@ impl ModelPricing {
     }
 }
 
+const ANTHROPIC_WEB_SEARCH_COST_USD: f64 = 0.01;
+
+/// Calculate the non-token cost Anthropic reports for hosted server tools.
+///
+/// Anthropic bills web search at $10 per 1,000 successful searches, in addition
+/// to the model tokens reported in the same usage object. Other server-tool
+/// counters are deliberately ignored until they have separate billable pricing.
+pub fn anthropic_web_search_cost(requests: u64) -> f64 {
+    requests as f64 * ANTHROPIC_WEB_SEARCH_COST_USD
+}
+
+pub fn anthropic_server_tool_usage_cost(
+    usage: Option<&anyllm_translate::anthropic::messages::ServerToolUsage>,
+) -> f64 {
+    usage
+        .and_then(|usage| usage.web_search_requests)
+        .map(|requests| anthropic_web_search_cost(requests as u64))
+        .unwrap_or(0.0)
+}
+
 /// Record cost for a completed request against a virtual key.
 ///
 /// Calculates cost from token usage and the resolved model name, then
@@ -226,7 +246,24 @@ pub fn record_cost(
     input_tokens: u64,
     output_tokens: u64,
 ) -> f64 {
-    let cost = pricing().cost_for_usage(model, input_tokens, output_tokens);
+    record_cost_with_extra(shared, vk_ctx, model, input_tokens, output_tokens, 0.0)
+}
+
+/// Record token cost plus an explicit non-token surcharge against a virtual key.
+pub fn record_cost_with_extra(
+    shared: &Option<crate::admin::state::SharedState>,
+    vk_ctx: &Option<crate::server::middleware::VirtualKeyContext>,
+    model: &str,
+    input_tokens: u64,
+    output_tokens: u64,
+    extra_cost_usd: f64,
+) -> f64 {
+    let token_cost = if input_tokens == 0 && output_tokens == 0 {
+        0.0
+    } else {
+        pricing().cost_for_usage(model, input_tokens, output_tokens)
+    };
+    let cost = token_cost + extra_cost_usd.max(0.0);
     if cost <= 0.0 {
         return cost;
     }
@@ -293,6 +330,19 @@ mod tests {
                 },
             ],
         }
+    }
+
+    #[test]
+    fn anthropic_server_tool_usage_cost_counts_web_search_only() {
+        let usage = anyllm_translate::anthropic::messages::ServerToolUsage {
+            web_search_requests: Some(3),
+            web_fetch_requests: Some(9),
+            tool_search_requests: Some(7),
+            extra: serde_json::Map::new(),
+        };
+
+        assert!((anthropic_server_tool_usage_cost(Some(&usage)) - 0.03).abs() < 1e-12);
+        assert_eq!(anthropic_server_tool_usage_cost(None), 0.0);
     }
 
     #[test]
@@ -467,24 +517,39 @@ mod tests {
             period_reset: None,
         };
 
+        let shared_opt = Some(shared);
+        let vk_ctx_opt = Some(vk_ctx);
+
         // record_cost uses tokio::task::spawn_blocking, so we need a runtime.
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
-            let cost = record_cost(&Some(shared), &Some(vk_ctx), "gpt-4o", 1000, 500);
+            let cost = record_cost(&shared_opt, &vk_ctx_opt, "gpt-4o", 1000, 500);
             assert!(cost > 0.0);
 
             // Wait for the spawned blocking task to complete.
             tokio::task::yield_now().await;
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+            let extra_only_cost = record_cost_with_extra(
+                &shared_opt,
+                &vk_ctx_opt,
+                "unknown-anthropic-model",
+                0,
+                0,
+                0.03,
+            );
+            assert!((extra_only_cost - 0.03).abs() < 1e-12);
+            tokio::task::yield_now().await;
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         });
 
-        // Verify the spend was persisted.
+        // Verify the spend was persisted, including an extra-cost-only hosted tool charge.
         let conn = db.lock().unwrap();
         let spend = db::get_key_spend(&conn, key_id).unwrap().unwrap();
-        assert!(spend.total_cost_usd > 0.0);
+        assert!(spend.total_cost_usd > 0.03);
         assert_eq!(spend.total_input_tokens, 1000);
         assert_eq!(spend.total_output_tokens, 500);
-        assert_eq!(spend.request_count, 1);
+        assert_eq!(spend.request_count, 2);
     }
 
     // -- Spend threshold detection tests --

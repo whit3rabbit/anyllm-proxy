@@ -333,12 +333,16 @@ pub(crate) async fn chat_completions(
 
                     let oai_response =
                         translate_anthropic_to_openai_response(&anthropic_resp, &original_model);
-                    let cost = super::routes::record_virtual_key_usage(
+                    let server_tool_cost = crate::cost::anthropic_server_tool_usage_cost(
+                        anthropic_resp.usage.server_tool_use.as_ref(),
+                    );
+                    let cost = super::routes::record_virtual_key_usage_with_extra(
                         &state.shared,
                         &vk_ctx,
                         &mapped_model,
                         anthropic_resp.usage.input_tokens as u64,
                         anthropic_resp.usage.output_tokens as u64,
+                        server_tool_cost,
                     );
                     log_request(
                         &state.shared,
@@ -415,12 +419,16 @@ pub(crate) async fn chat_completions(
                         );
                     let oai_response =
                         translate_anthropic_to_openai_response(&anthropic_resp, &original_model);
-                    let cost = super::routes::record_virtual_key_usage(
+                    let server_tool_cost = crate::cost::anthropic_server_tool_usage_cost(
+                        anthropic_resp.usage.server_tool_use.as_ref(),
+                    );
+                    let cost = super::routes::record_virtual_key_usage_with_extra(
                         &state.shared,
                         &vk_ctx,
                         &mapped_model,
                         anthropic_resp.usage.input_tokens as u64,
                         anthropic_resp.usage.output_tokens as u64,
+                        server_tool_cost,
                     );
                     log_request(
                         &state.shared,
@@ -536,12 +544,16 @@ pub(crate) async fn chat_completions(
                         &original_model,
                         &tool_context,
                     );
-                    let cost = super::routes::record_virtual_key_usage(
+                    let server_tool_cost = crate::cost::anthropic_server_tool_usage_cost(
+                        anthropic_resp.usage.server_tool_use.as_ref(),
+                    );
+                    let cost = super::routes::record_virtual_key_usage_with_extra(
                         &state.shared,
                         &vk_ctx,
                         &mapped_model,
                         anthropic_resp.usage.input_tokens as u64,
                         anthropic_resp.usage.output_tokens as u64,
+                        server_tool_cost,
                     );
                     log_request(
                         &state.shared,

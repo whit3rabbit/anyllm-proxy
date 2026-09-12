@@ -82,12 +82,23 @@ data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop
         assert_eq!(usage.tokens(), Some((11, 7)));
         assert!(buffer.is_empty());
     }
+
+    #[test]
+    fn anthropic_stream_usage_counts_successful_web_search_results() {
+        let mut usage = AnthropicStreamUsage::default();
+
+        usage.observe_data(r#"{"type":"content_block_start","index":1,"content_block":{"type":"web_search_tool_result","tool_use_id":"srvtoolu_ok","content":[]}}"#);
+        usage.observe_data(r#"{"type":"content_block_start","index":2,"content_block":{"type":"web_search_tool_result","tool_use_id":"srvtoolu_err","is_error":true}}"#);
+
+        assert_eq!(usage.web_search_requests(), 1);
+    }
 }
 
 #[derive(Debug, Default, Clone, Copy)]
 pub(crate) struct AnthropicStreamUsage {
     input_tokens: Option<u64>,
     output_tokens: Option<u64>,
+    web_search_requests: u64,
 }
 
 impl AnthropicStreamUsage {
@@ -107,6 +118,20 @@ impl AnthropicStreamUsage {
             } => {
                 self.output_tokens = Some(usage.output_tokens as u64);
             }
+            anthropic::StreamEvent::ContentBlockStart {
+                content_block:
+                    anthropic::ContentBlock::WebSearchToolResult {
+                        is_error: Some(true),
+                        ..
+                    },
+                ..
+            } => {}
+            anthropic::StreamEvent::ContentBlockStart {
+                content_block: anthropic::ContentBlock::WebSearchToolResult { .. },
+                ..
+            } => {
+                self.web_search_requests = self.web_search_requests.saturating_add(1);
+            }
             _ => {}
         }
     }
@@ -118,6 +143,10 @@ impl AnthropicStreamUsage {
             (None, Some(output)) => Some((0, output)),
             (None, None) => None,
         }
+    }
+
+    pub(crate) fn web_search_requests(&self) -> u64 {
+        self.web_search_requests
     }
 }
 

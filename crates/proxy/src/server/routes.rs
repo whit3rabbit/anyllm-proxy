@@ -1292,9 +1292,27 @@ pub(crate) fn record_virtual_key_usage(
     input_tokens: u64,
     output_tokens: u64,
 ) -> f64 {
+    record_virtual_key_usage_with_extra(shared, vk_ctx, model, input_tokens, output_tokens, 0.0)
+}
+
+pub(crate) fn record_virtual_key_usage_with_extra(
+    shared: &Option<SharedState>,
+    vk_ctx: &Option<super::middleware::VirtualKeyContext>,
+    model: &str,
+    input_tokens: u64,
+    output_tokens: u64,
+    extra_cost_usd: f64,
+) -> f64 {
     let capped_output = output_tokens.min(u32::MAX as u64) as u32;
     record_vk_tpm(vk_ctx, capped_output);
-    crate::cost::record_cost(shared, vk_ctx, model, input_tokens, output_tokens)
+    crate::cost::record_cost_with_extra(
+        shared,
+        vk_ctx,
+        model,
+        input_tokens,
+        output_tokens,
+        extra_cost_usd,
+    )
 }
 
 /// Global webhook callback config, set once at startup.
