@@ -95,6 +95,19 @@ fn load_embedded_pricing() {
 }
 
 #[test]
+fn embedded_pricing_covers_gemini_live_preview_models() {
+    let pricing = ModelPricing::load();
+
+    assert!(
+        (pricing.cost_for_usage("gemini-3.1-flash-live-preview", 10, 5) - 0.00003).abs() < 1e-12
+    );
+    assert!(
+        (pricing.cost_for_usage("gemini-3.5-live-translate-preview", 10, 5) - 0.00014).abs()
+            < 1e-12
+    );
+}
+
+#[test]
 fn load_with_optional_override_uses_file() {
     use std::io::Write;
     let dir = std::env::temp_dir();
