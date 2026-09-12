@@ -20,7 +20,7 @@
     "performative-ui": "^0.6.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-router-dom": "^6.30.4",
+    "react-router-dom": "^6.30.6",
     "zustand": "^5.0.0"
   },
   "devDependencies": {
