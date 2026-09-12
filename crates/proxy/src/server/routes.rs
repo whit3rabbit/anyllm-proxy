@@ -513,8 +513,13 @@ async fn enforce_route_scope(
         .and_then(|ctx| ctx.allowed_routes.clone());
 
     if allowed_routes.is_some() {
-        if let Err(error) =
-            super::policy::enforce_route_scope(None, &state.backend_name, &allowed_routes)
+        if let Err(error) = super::policy::enforce_route_scope(
+            None,
+            &state.backend_name,
+            &state.shared,
+            &allowed_routes,
+        )
+        .await
         {
             let err = mapping::errors_map::create_anthropic_error(
                 anthropic::ErrorType::PermissionError,
