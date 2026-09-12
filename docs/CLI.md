@@ -214,6 +214,8 @@ The proxy supports direct LiteLLM-style environment variable overrides:
 
 See [COMPARISON_LITELLM.md](COMPARISON_LITELLM.md) for full details.
 
+See also [COMPARISON_LITELM.md](COMPARISON_LITELM.md) for the positioning against the litelm Python library (different category — gateway vs in-process SDK).
+
 ---
 
 ## Admin API & Virtual Key Management
