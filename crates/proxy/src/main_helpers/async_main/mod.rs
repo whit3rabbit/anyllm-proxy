@@ -336,8 +336,7 @@ pub async fn async_main(args: Vec<String>, data_dir: PathBuf) {
     let (shutdown_tx, mut shutdown_rx1) = tokio::sync::watch::channel(false);
 
     let proxy_handle = tokio::spawn(async move {
-        // connect-info supplies the TCP peer SocketAddr to request extensions;
-        // auth's loopback-open default and the IP allowlist read it.
+        // ConnectInfo supplies the TCP peer SocketAddr for the IP allowlist.
         axum::serve(
             proxy_listener,
             app.into_make_service_with_connect_info::<std::net::SocketAddr>(),

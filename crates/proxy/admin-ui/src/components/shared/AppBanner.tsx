@@ -14,7 +14,7 @@ const box = (accent: string): CSSProperties => ({
 /**
  * Site-wide warning banners rendered above every tab. Reflects live state
  * (cleared automatically when fixed): proxy auth is open (open_relay) or unset
- * (loopback_only). useStatus is React Query-cached, so no extra fetch.
+ * (auth_required). useStatus is React Query-cached, so no extra fetch.
  *
  * Deliberately does NOT warn on an empty Models tab: that lists only
  * model-router deployments (virtual model aliases), which are optional. A
@@ -35,13 +35,11 @@ export default function AppBanner() {
         <span className="mono">PROXY_API_KEYS</span> to require a key.
       </div>,
     )
-  } else if (status?.auth_mode === 'loopback_only') {
+  } else if (status?.auth_mode === 'auth_required') {
     banners.push(
       <div key="auth" style={box('var(--warn)')}>
-        <strong>No API key set.</strong> The proxy is open on localhost only;
-        LAN/remote requests are rejected. Set{' '}
-        <span className="mono">PROXY_API_KEYS</span> to require a key for remote
-        access.
+        <strong>No API key set.</strong> The proxy rejects all requests. Set{' '}
+        <span className="mono">PROXY_API_KEYS</span> to allow authenticated access.
       </div>,
     )
   }

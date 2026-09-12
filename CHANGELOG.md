@@ -13,12 +13,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 ## [0.16.0] - 2026-07-16
 
 ### Changed
-- Auth default is now **loopback-open** instead of reject-all. With no `PROXY_API_KEYS`,
-  no `PROXY_OPEN_RELAY`, no virtual keys and no OIDC, the proxy accepts unauthenticated
-  requests from localhost only; LAN/remote peers still get `401`. Decision uses the real
-  TCP peer (`ConnectInfo`), not the spoofable `X-Forwarded-For`. Set `PROXY_API_KEYS` when
-  running behind a reverse proxy. `GET /admin/api/status` now reports `auth_mode`
-  (`keys` / `open_relay` / `loopback_only`) and `proxy_key_count`.
+- Auth default is **reject-all**. With no `PROXY_API_KEYS`, no `PROXY_OPEN_RELAY`, no
+  virtual keys, and no OIDC, every proxy request returns `401`, including from localhost.
+  Set `PROXY_API_KEYS` to allow authenticated access. `GET /admin/api/status` reports `auth_mode`
+  (`keys` / `open_relay` / `auth_required`) and `proxy_key_count`.
 - Proxy start-up now pre-checks the listen port and fails fast with a hint when it is
   already in use; the `wait_for_port` readiness timeout rose from 10s to 30s.
 

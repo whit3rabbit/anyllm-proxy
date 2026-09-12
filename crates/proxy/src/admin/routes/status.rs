@@ -11,8 +11,8 @@ pub struct ProxyStatus {
     /// Whether the proxy's own port accepts a TCP connection right now.
     pub proxy_running: bool,
     /// Effective proxy auth posture: `"keys"` (enforced), `"open_relay"` (any
-    /// key accepted on all interfaces), or `"loopback_only"` (no auth; localhost
-    /// open, LAN rejected, the default). Drives the admin UI warning banner.
+    /// key accepted on all interfaces), or `"auth_required"` (no authentication
+    /// source configured; all requests rejected). Drives the admin UI warning banner.
     pub auth_mode: crate::server::middleware::EffectiveAuthMode,
     /// Number of distinct static `PROXY_API_KEYS` entries (deduplicated).
     pub proxy_key_count: usize,
