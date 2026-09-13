@@ -984,7 +984,7 @@ async fn spawn_proxy_with_shared_vk(config: Config) -> String {
 }
 
 #[tokio::test]
-async fn route_allowlist_denies_unassigned_backend_prefix() {
+async fn route_allowlist_denies_direct_backend_prefix() {
     let (allowed_base, allowed_hits) = spawn_counting_chat_backend().await;
     let (denied_base, denied_hits) = spawn_counting_chat_backend().await;
     let state = shared_state();
@@ -1014,8 +1014,8 @@ async fn route_allowlist_denies_unassigned_backend_prefix() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.status(), 200);
-    assert_eq!(allowed_hits.load(Ordering::SeqCst), 1);
+    assert_eq!(resp.status(), 403);
+    assert_eq!(allowed_hits.load(Ordering::SeqCst), 0);
 
     let resp = client
         .post(format!("{proxy_url}/denied/v1/messages"))
