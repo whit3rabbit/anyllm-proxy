@@ -175,8 +175,8 @@
   },
   {
     "model_pattern": "gemini-2.0-flash",
-    "input_cost_per_token": 1e-07,
-    "output_cost_per_token": 4e-07,
+    "input_cost_per_token": 1.5e-07,
+    "output_cost_per_token": 6e-07,
     "provider": "google"
   },
   {
@@ -337,14 +337,14 @@
   },
   {
     "model_pattern": "gemini-flash-latest",
-    "input_cost_per_token": 3e-07,
-    "output_cost_per_token": 2.5e-06,
+    "input_cost_per_token": 7.5e-07,
+    "output_cost_per_token": 3.75e-06,
     "provider": "google"
   },
   {
     "model_pattern": "gemini-flash-lite-latest",
-    "input_cost_per_token": 1e-07,
-    "output_cost_per_token": 4e-07,
+    "input_cost_per_token": 3e-07,
+    "output_cost_per_token": 2.5e-06,
     "provider": "google"
   },
   {
@@ -373,8 +373,8 @@
   },
   {
     "model_pattern": "gemini-pro-latest",
-    "input_cost_per_token": 1.25e-06,
-    "output_cost_per_token": 1e-05,
+    "input_cost_per_token": 2e-06,
+    "output_cost_per_token": 1.2e-05,
     "provider": "google"
   },
   {
@@ -391,8 +391,8 @@
   },
   {
     "model_pattern": "gemini-robotics-er-2-preview",
-    "input_cost_per_token": 2e-06,
-    "output_cost_per_token": 1e-05,
+    "input_cost_per_token": 1e-06,
+    "output_cost_per_token": 5e-06,
     "provider": "google"
   },
   {
@@ -477,6 +477,24 @@
     "model_pattern": "vertex_ai/gemini-embedding-2-preview",
     "input_cost_per_token": 2e-07,
     "output_cost_per_token": 0,
+    "provider": "google"
+  },
+  {
+    "model_pattern": "vertex_ai/gemini-omni-1.1-flash",
+    "input_cost_per_token": 1.5e-06,
+    "output_cost_per_token": 9e-06,
+    "provider": "google"
+  },
+  {
+    "model_pattern": "vertex_ai/gemini-robotics-er-2",
+    "input_cost_per_token": 1e-06,
+    "output_cost_per_token": 5e-06,
+    "provider": "google"
+  },
+  {
+    "model_pattern": "vertex_ai/gemma-4-26b-a4b-it",
+    "input_cost_per_token": 1.5e-07,
+    "output_cost_per_token": 6e-07,
     "provider": "google"
   },
   {
@@ -966,6 +984,12 @@
     "provider": "openai"
   },
   {
+    "model_pattern": "gpt-5.5-cyber",
+    "input_cost_per_token": 1.25e-05,
+    "output_cost_per_token": 7.5e-05,
+    "provider": "openai"
+  },
+  {
     "model_pattern": "gpt-5.6",
     "input_cost_per_token": 4e-06,
     "output_cost_per_token": 2e-05,
@@ -1035,6 +1059,12 @@
     "model_pattern": "gpt-audio-mini-2025-12-15",
     "input_cost_per_token": 6e-07,
     "output_cost_per_token": 2.4e-06,
+    "provider": "openai"
+  },
+  {
+    "model_pattern": "gpt-rosalind-research",
+    "input_cost_per_token": 5e-06,
+    "output_cost_per_token": 2.5e-05,
     "provider": "openai"
   },
   {
