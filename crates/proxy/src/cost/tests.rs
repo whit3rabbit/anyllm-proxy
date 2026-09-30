@@ -95,6 +95,28 @@ fn load_embedded_pricing() {
 }
 
 #[test]
+fn embedded_pricing_retains_routable_legacy_models() {
+    let pricing = ModelPricing::load_with_optional_override(None);
+    let expected = [
+        ("claude-3-haiku-20240307", 2.5e-7, 1.25e-6),
+        ("claude-opus-4-20250514", 1.5e-5, 7.5e-5),
+        ("claude-sonnet-4-20250514", 3e-6, 1.5e-5),
+        ("gemini-2.0-flash", 1.5e-7, 6e-7),
+        ("gemini-3-pro-preview", 2e-6, 1.2e-5),
+        ("chatgpt-4o-latest", 5e-6, 1.5e-5),
+    ];
+
+    for (model, input_cost, output_cost) in expected {
+        assert_eq!(
+            pricing.price_for_model(model),
+            Some((input_cost, output_cost)),
+            "{model} must retain pricing while it remains routable"
+        );
+        assert!(pricing.cost_for_usage(model, 1, 1) > 0.0);
+    }
+}
+
+#[test]
 fn embedded_pricing_covers_gemini_live_preview_models() {
     let pricing = ModelPricing::load();
 
