@@ -33,6 +33,19 @@ PROVIDER_MAP = {
 
 ALLOWED_MODES = {"chat", "embedding", "completion"}
 
+# LiteLLM occasionally removes pricing before providers stop accepting a model.
+# Keep the last known prices for routable legacy models so a catalog refresh
+# cannot turn their virtual-key usage into unmetered spend. Entries supplied by
+# LiteLLM still take precedence when they are present.
+RETAINED_LEGACY_PRICING = [
+    ("claude-3-haiku-20240307", 2.5e-7, 1.25e-6, "anthropic"),
+    ("claude-opus-4-20250514", 1.5e-5, 7.5e-5, "anthropic"),
+    ("claude-sonnet-4-20250514", 3e-6, 1.5e-5, "anthropic"),
+    ("gemini-2.0-flash", 1.5e-7, 6e-7, "google"),
+    ("gemini-3-pro-preview", 2e-6, 1.2e-5, "google"),
+    ("chatgpt-4o-latest", 5e-6, 1.5e-5, "openai"),
+]
+
 # Repo root is one level up from this script.
 REPO_ROOT = Path(__file__).parent.parent
 DEFAULT_OUTPUT = REPO_ROOT / "assets" / "model_pricing.json"
@@ -103,6 +116,17 @@ def transform(raw: dict) -> list[dict]:
                 "output_cost_per_token": output_cost,
                 "provider": PROVIDER_MAP[litellm_provider],
             }
+
+    for model, input_cost, output_cost, provider in RETAINED_LEGACY_PRICING:
+        entries.setdefault(
+            model,
+            {
+                "model_pattern": model,
+                "input_cost_per_token": input_cost,
+                "output_cost_per_token": output_cost,
+                "provider": provider,
+            },
+        )
 
     result = sorted(entries.values(), key=lambda e: (e["provider"], e["model_pattern"]))
     return result

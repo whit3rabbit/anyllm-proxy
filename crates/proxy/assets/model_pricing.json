@@ -1,5 +1,11 @@
 [
   {
+    "model_pattern": "claude-3-haiku-20240307",
+    "input_cost_per_token": 2.5e-07,
+    "output_cost_per_token": 1.25e-06,
+    "provider": "anthropic"
+  },
+  {
     "model_pattern": "claude-fable-5",
     "input_cost_per_token": 1e-05,
     "output_cost_per_token": 5e-05,
@@ -39,6 +45,12 @@
     "model_pattern": "claude-mythos-preview",
     "input_cost_per_token": 1e-05,
     "output_cost_per_token": 5e-05,
+    "provider": "anthropic"
+  },
+  {
+    "model_pattern": "claude-opus-4-20250514",
+    "input_cost_per_token": 1.5e-05,
+    "output_cost_per_token": 7.5e-05,
     "provider": "anthropic"
   },
   {
@@ -96,6 +108,12 @@
     "provider": "anthropic"
   },
   {
+    "model_pattern": "claude-sonnet-4-20250514",
+    "input_cost_per_token": 3e-06,
+    "output_cost_per_token": 1.5e-05,
+    "provider": "anthropic"
+  },
+  {
     "model_pattern": "claude-sonnet-4-5",
     "input_cost_per_token": 3e-06,
     "output_cost_per_token": 1.5e-05,
@@ -129,6 +147,12 @@
     "model_pattern": "deep-research-preview-04-2026",
     "input_cost_per_token": 2e-06,
     "output_cost_per_token": 1.2e-05,
+    "provider": "google"
+  },
+  {
+    "model_pattern": "gemini-2.0-flash",
+    "input_cost_per_token": 1.5e-07,
+    "output_cost_per_token": 6e-07,
     "provider": "google"
   },
   {
@@ -177,6 +201,12 @@
     "model_pattern": "gemini-3-flash-preview",
     "input_cost_per_token": 5e-07,
     "output_cost_per_token": 3e-06,
+    "provider": "google"
+  },
+  {
+    "model_pattern": "gemini-3-pro-preview",
+    "input_cost_per_token": 2e-06,
+    "output_cost_per_token": 1.2e-05,
     "provider": "google"
   },
   {
@@ -477,6 +507,12 @@
     "model_pattern": "chat-latest",
     "input_cost_per_token": 5e-06,
     "output_cost_per_token": 3e-05,
+    "provider": "openai"
+  },
+  {
+    "model_pattern": "chatgpt-4o-latest",
+    "input_cost_per_token": 5e-06,
+    "output_cost_per_token": 1.5e-05,
     "provider": "openai"
   },
   {
