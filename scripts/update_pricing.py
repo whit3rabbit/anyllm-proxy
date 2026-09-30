@@ -33,17 +33,58 @@ PROVIDER_MAP = {
 
 ALLOWED_MODES = {"chat", "embedding", "completion"}
 
-# LiteLLM occasionally removes pricing before providers stop accepting a model.
-# Keep the last known prices for routable legacy models so a catalog refresh
-# cannot turn their virtual-key usage into unmetered spend. Entries supplied by
-# LiteLLM still take precedence when they are present.
+# LiteLLM occasionally removes pricing before providers stop accepting a model,
+# and models whose LiteLLM `mode` is outside ALLOWED_MODES (e.g. realtime/audio)
+# never enter the generated file at all. Keep the last known prices for routable
+# models so a catalog refresh cannot turn their virtual-key usage into
+# unmetered spend. Entries supplied by LiteLLM still take precedence when they
+# are present.
 RETAINED_LEGACY_PRICING = [
     ("claude-3-haiku-20240307", 2.5e-7, 1.25e-6, "anthropic"),
+    ("claude-3-7-sonnet-20250219", 3e-06, 1.5e-05, "anthropic"),
+    ("claude-3-opus-20240229", 1.5e-05, 7.5e-05, "anthropic"),
+    ("claude-4-opus-20250514", 1.5e-05, 7.5e-05, "anthropic"),
+    ("claude-4-sonnet-20250514", 3e-06, 1.5e-05, "anthropic"),
     ("claude-opus-4-20250514", 1.5e-5, 7.5e-5, "anthropic"),
+    ("claude-opus-4-1", 1.5e-05, 7.5e-05, "anthropic"),
+    ("claude-opus-4-1-20250805", 1.5e-05, 7.5e-05, "anthropic"),
     ("claude-sonnet-4-20250514", 3e-6, 1.5e-5, "anthropic"),
+    ("gemini-1.5-flash", 7.5e-08, 0, "google"),
     ("gemini-2.0-flash", 1.5e-7, 6e-7, "google"),
+    ("gemini-2.0-flash-001", 1.5e-07, 6e-07, "google"),
+    ("gemini-2.0-flash-lite", 7.5e-08, 3e-07, "google"),
+    ("gemini-2.0-flash-lite-001", 7.5e-08, 3e-07, "google"),
+    ("gemini-2.5-flash-lite-preview-06-17", 1e-07, 4e-07, "google"),
+    ("gemini-2.5-flash-native-audio-latest", 3e-07, 2.5e-06, "google"),
+    ("gemini-2.5-flash-native-audio-preview-09-2025", 3e-07, 2.5e-06, "google"),
+    ("gemini-2.5-flash-native-audio-preview-12-2025", 3e-07, 2.5e-06, "google"),
     ("gemini-3-pro-preview", 2e-6, 1.2e-5, "google"),
+    ("gemini-3.1-flash-live-preview", 7.5e-07, 4.5e-06, "google"),
+    ("gemini-3.5-live-translate-preview", 3.5e-06, 2.1e-05, "google"),
+    ("gemini-robotics-er-1.6-preview", 1e-06, 5e-06, "google"),
     ("chatgpt-4o-latest", 5e-6, 1.5e-5, "openai"),
+    ("gpt-4-0125-preview", 1e-05, 3e-05, "openai"),
+    ("gpt-4-0314", 3e-05, 6e-05, "openai"),
+    ("gpt-4-turbo-preview", 1e-05, 3e-05, "openai"),
+    ("gpt-4o-audio-preview", 2.5e-06, 1e-05, "openai"),
+    ("gpt-4o-mini-audio-preview", 1.5e-07, 6e-07, "openai"),
+    ("gpt-4o-mini-realtime-preview", 6e-07, 2.4e-06, "openai"),
+    ("gpt-4o-mini-realtime-preview-2024-12-17", 6e-07, 2.4e-06, "openai"),
+    ("gpt-4o-mini-search-preview-2025-03-11", 1.5e-07, 6e-07, "openai"),
+    ("gpt-4o-realtime-preview", 5e-06, 2e-05, "openai"),
+    ("gpt-4o-realtime-preview-2024-12-17", 5e-06, 2e-05, "openai"),
+    ("gpt-4o-realtime-preview-2025-06-03", 5e-06, 2e-05, "openai"),
+    ("gpt-4o-search-preview-2025-03-11", 2.5e-06, 1e-05, "openai"),
+    ("gpt-audio-mini-2025-10-06", 6e-07, 2.4e-06, "openai"),
+    ("gpt-realtime", 4e-06, 1.6e-05, "openai"),
+    ("gpt-realtime-1.5", 4e-06, 1.6e-05, "openai"),
+    ("gpt-realtime-2", 4e-06, 1.6e-05, "openai"),
+    ("gpt-realtime-2.1", 4e-06, 2.4e-05, "openai"),
+    ("gpt-realtime-2.1-mini", 6e-07, 2.4e-06, "openai"),
+    ("gpt-realtime-2025-08-28", 4e-06, 1.6e-05, "openai"),
+    ("gpt-realtime-mini", 6e-07, 2.4e-06, "openai"),
+    ("gpt-realtime-mini-2025-10-06", 6e-07, 2.4e-06, "openai"),
+    ("gpt-realtime-mini-2025-12-15", 6e-07, 2.4e-06, "openai"),
 ]
 
 # Repo root is one level up from this script.

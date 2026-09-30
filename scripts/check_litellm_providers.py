@@ -25,6 +25,11 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
+# Retained legacy pricing entries are intentionally kept even though LiteLLM
+# no longer lists them (or lists them outside ALLOWED_MODES); exempt them so
+# `--check` does not flag them as extra pricing models.
+from update_pricing import RETAINED_LEGACY_PRICING
+
 
 LITELLM_URL = (
     "https://raw.githubusercontent.com/BerriAI/litellm/main/"
@@ -385,6 +390,11 @@ def diff_provider(
         model for model, row in litellm.items() if row.get("pricing_eligible")
     }
     catalog_ids = set(catalog)
+    retained_pricing_ids = {
+        model
+        for model, _input_cost, _output_cost, retained_provider in RETAINED_LEGACY_PRICING
+        if retained_provider == provider
+    }
     result: dict[str, Any] = {
         "provider": provider,
         "local_provider": {
@@ -425,7 +435,9 @@ def diff_provider(
             "missing_litellm_models": sorted(litellm_pricing_ids - pricing_ids)
             if managed_pricing
             else [],
-            "extra_pricing_models": sorted(pricing_ids - litellm_pricing_ids)
+            "extra_pricing_models": sorted(
+                pricing_ids - litellm_pricing_ids - retained_pricing_ids
+            )
             if managed_pricing
             else [],
         }
@@ -743,8 +755,11 @@ def write_rust_snapshot(path: Path, raw: dict[str, Any], allowed_modes: set[str]
         metadata = provider_metadata(provider, rows, source_catalogs, sources_by_litellm)
         caps = metadata["capabilities"]
 
+        # #[rustfmt::skip] keeps short single-element arrays expanded so a
+        # freshly generated snapshot passes `cargo fmt --check`.
         lines.extend(
             [
+                "#[rustfmt::skip]",
                 f"pub const {provider_const}: ProviderDef = ProviderDef {{",
                 f"    id: {rust_string(provider)},",
                 f"    display_name: {rust_string(metadata['display_name'])},",
@@ -765,6 +780,7 @@ def write_rust_snapshot(path: Path, raw: dict[str, Any], allowed_modes: set[str]
                 "    },",
                 "};",
                 "",
+                "#[rustfmt::skip]",
                 f"pub const {model_const}: &[ModelDef] = &[",
             ]
         )
@@ -808,7 +824,7 @@ def write_rust_snapshot(path: Path, raw: dict[str, Any], allowed_modes: set[str]
         ),
     ]
     for const_name, flag in support_tables:
-        lines.append(f"pub static {const_name}: &[&str] = &[")
+        lines.extend(["#[rustfmt::skip]", f"pub static {const_name}: &[&str] = &["])
         for model, row in sorted(anthropic_rows.items()):
             if row[flag]:
                 lines.append(f"    {rust_string(model)},")
@@ -825,6 +841,7 @@ def write_rust_snapshot(path: Path, raw: dict[str, Any], allowed_modes: set[str]
             "/// even though they are in `ANTHROPIC_ADAPTIVE_THINKING_MODELS`. Hand-maintained",
             "/// in check_litellm_providers.py (ANTHROPIC_ADAPTIVE_ONLY_THINKING); not",
             "/// derivable from LiteLLM flags.",
+            "#[rustfmt::skip]",
             "pub static ANTHROPIC_ADAPTIVE_ONLY_THINKING_MODELS: &[&str] = &[",
         ]
     )
@@ -832,12 +849,12 @@ def write_rust_snapshot(path: Path, raw: dict[str, Any], allowed_modes: set[str]
         lines.append(f"    {rust_string(model)},")
     lines.extend(["];", ""])
 
-    lines.append("pub static ALL_PROVIDERS: &[&ProviderDef] = &[")
+    lines.extend(["#[rustfmt::skip]", "pub static ALL_PROVIDERS: &[&ProviderDef] = &["])
     for provider_const in provider_const_names:
         lines.append(f"    &{provider_const},")
     lines.extend(["];", ""])
 
-    lines.append("pub static ALL_MODELS: &[(&str, &[ModelDef])] = &[")
+    lines.extend(["#[rustfmt::skip]", "pub static ALL_MODELS: &[(&str, &[ModelDef])] = &["])
     for provider, model_const in model_const_names:
         lines.append(f"    ({rust_string(provider)}, {model_const}),")
     lines.extend(["];", ""])

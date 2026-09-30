@@ -396,11 +396,14 @@ mod tests {
     #[test]
     fn anthropic_models_match_litellm_snapshot() {
         let models = list_models("anthropic");
-        assert_eq!(models.len(), 24);
+        assert_eq!(models.len(), 21);
 
         for id in [
+            "claude-opus-5-5",
+            "claude-sonnet-5-5",
             "claude-opus-5",
             "claude-fable-5",
+            "claude-mythos-5",
             "claude-opus-4-7",
             "claude-opus-4-7-20260416",
             "claude-opus-4-8",
@@ -408,9 +411,6 @@ mod tests {
             "claude-haiku-4-5",
             "claude-opus-4-5",
             "claude-sonnet-4-5",
-            "claude-opus-4-1",
-            "claude-3-7-sonnet-20250219",
-            "claude-3-opus-20240229",
         ] {
             assert!(get_model("anthropic", id).is_some(), "missing {id}");
         }
@@ -419,9 +419,9 @@ mod tests {
         assert_eq!(opus_47.context_window, 1_000_000);
         assert_eq!(opus_47.max_output_tokens, 128_000);
 
-        let sonnet_40 = get_model("anthropic", "claude-sonnet-4-20250514").unwrap();
-        assert_eq!(sonnet_40.context_window, 1_000_000);
-        assert_eq!(sonnet_40.status, crate::model::ModelStatus::Deprecated);
+        let mythos_preview = get_model("anthropic", "claude-mythos-preview").unwrap();
+        assert_eq!(mythos_preview.context_window, 1_000_000);
+        assert_eq!(mythos_preview.status, crate::model::ModelStatus::Deprecated);
     }
 
     #[test]

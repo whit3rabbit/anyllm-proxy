@@ -1,8 +1,32 @@
 [
   {
+    "model_pattern": "claude-3-7-sonnet-20250219",
+    "input_cost_per_token": 3e-06,
+    "output_cost_per_token": 1.5e-05,
+    "provider": "anthropic"
+  },
+  {
     "model_pattern": "claude-3-haiku-20240307",
     "input_cost_per_token": 2.5e-07,
     "output_cost_per_token": 1.25e-06,
+    "provider": "anthropic"
+  },
+  {
+    "model_pattern": "claude-3-opus-20240229",
+    "input_cost_per_token": 1.5e-05,
+    "output_cost_per_token": 7.5e-05,
+    "provider": "anthropic"
+  },
+  {
+    "model_pattern": "claude-4-opus-20250514",
+    "input_cost_per_token": 1.5e-05,
+    "output_cost_per_token": 7.5e-05,
+    "provider": "anthropic"
+  },
+  {
+    "model_pattern": "claude-4-sonnet-20250514",
+    "input_cost_per_token": 3e-06,
+    "output_cost_per_token": 1.5e-05,
     "provider": "anthropic"
   },
   {
@@ -45,6 +69,18 @@
     "model_pattern": "claude-mythos-preview",
     "input_cost_per_token": 1e-05,
     "output_cost_per_token": 5e-05,
+    "provider": "anthropic"
+  },
+  {
+    "model_pattern": "claude-opus-4-1",
+    "input_cost_per_token": 1.5e-05,
+    "output_cost_per_token": 7.5e-05,
+    "provider": "anthropic"
+  },
+  {
+    "model_pattern": "claude-opus-4-1-20250805",
+    "input_cost_per_token": 1.5e-05,
+    "output_cost_per_token": 7.5e-05,
     "provider": "anthropic"
   },
   {
@@ -138,6 +174,12 @@
     "provider": "anthropic"
   },
   {
+    "model_pattern": "claude-sonnet-5-5",
+    "input_cost_per_token": 2e-06,
+    "output_cost_per_token": 1e-05,
+    "provider": "anthropic"
+  },
+  {
     "model_pattern": "deep-research-max-preview-04-2026",
     "input_cost_per_token": 2e-06,
     "output_cost_per_token": 1.2e-05,
@@ -150,9 +192,39 @@
     "provider": "google"
   },
   {
+    "model_pattern": "deep-research-pro-preview-12-2025",
+    "input_cost_per_token": 2e-06,
+    "output_cost_per_token": 1.2e-05,
+    "provider": "google"
+  },
+  {
+    "model_pattern": "gemini-1.5-flash",
+    "input_cost_per_token": 7.5e-08,
+    "output_cost_per_token": 0,
+    "provider": "google"
+  },
+  {
     "model_pattern": "gemini-2.0-flash",
     "input_cost_per_token": 1.5e-07,
     "output_cost_per_token": 6e-07,
+    "provider": "google"
+  },
+  {
+    "model_pattern": "gemini-2.0-flash-001",
+    "input_cost_per_token": 1.5e-07,
+    "output_cost_per_token": 6e-07,
+    "provider": "google"
+  },
+  {
+    "model_pattern": "gemini-2.0-flash-lite",
+    "input_cost_per_token": 7.5e-08,
+    "output_cost_per_token": 3e-07,
+    "provider": "google"
+  },
+  {
+    "model_pattern": "gemini-2.0-flash-lite-001",
+    "input_cost_per_token": 7.5e-08,
+    "output_cost_per_token": 3e-07,
     "provider": "google"
   },
   {
@@ -174,9 +246,33 @@
     "provider": "google"
   },
   {
+    "model_pattern": "gemini-2.5-flash-lite-preview-06-17",
+    "input_cost_per_token": 1e-07,
+    "output_cost_per_token": 4e-07,
+    "provider": "google"
+  },
+  {
     "model_pattern": "gemini-2.5-flash-lite-preview-09-2025",
     "input_cost_per_token": 1e-07,
     "output_cost_per_token": 4e-07,
+    "provider": "google"
+  },
+  {
+    "model_pattern": "gemini-2.5-flash-native-audio-latest",
+    "input_cost_per_token": 3e-07,
+    "output_cost_per_token": 2.5e-06,
+    "provider": "google"
+  },
+  {
+    "model_pattern": "gemini-2.5-flash-native-audio-preview-09-2025",
+    "input_cost_per_token": 3e-07,
+    "output_cost_per_token": 2.5e-06,
+    "provider": "google"
+  },
+  {
+    "model_pattern": "gemini-2.5-flash-native-audio-preview-12-2025",
+    "input_cost_per_token": 3e-07,
+    "output_cost_per_token": 2.5e-06,
     "provider": "google"
   },
   {
@@ -222,6 +318,12 @@
     "provider": "google"
   },
   {
+    "model_pattern": "gemini-3.1-flash-live-preview",
+    "input_cost_per_token": 7.5e-07,
+    "output_cost_per_token": 4.5e-06,
+    "provider": "google"
+  },
+  {
     "model_pattern": "gemini-3.1-pro-preview",
     "input_cost_per_token": 2e-06,
     "output_cost_per_token": 1.2e-05,
@@ -243,6 +345,12 @@
     "model_pattern": "gemini-3.5-flash-lite",
     "input_cost_per_token": 3e-07,
     "output_cost_per_token": 2.5e-06,
+    "provider": "google"
+  },
+  {
+    "model_pattern": "gemini-3.5-live-translate-preview",
+    "input_cost_per_token": 3.5e-06,
+    "output_cost_per_token": 2.1e-05,
     "provider": "google"
   },
   {
@@ -339,6 +447,12 @@
     "model_pattern": "gemini-robotics-er-1.5-preview",
     "input_cost_per_token": 3e-07,
     "output_cost_per_token": 2.5e-06,
+    "provider": "google"
+  },
+  {
+    "model_pattern": "gemini-robotics-er-1.6-preview",
+    "input_cost_per_token": 1e-06,
+    "output_cost_per_token": 5e-06,
     "provider": "google"
   },
   {
@@ -636,6 +750,18 @@
     "provider": "openai"
   },
   {
+    "model_pattern": "gpt-4-0125-preview",
+    "input_cost_per_token": 1e-05,
+    "output_cost_per_token": 3e-05,
+    "provider": "openai"
+  },
+  {
+    "model_pattern": "gpt-4-0314",
+    "input_cost_per_token": 3e-05,
+    "output_cost_per_token": 6e-05,
+    "provider": "openai"
+  },
+  {
     "model_pattern": "gpt-4-0613",
     "input_cost_per_token": 3e-05,
     "output_cost_per_token": 6e-05,
@@ -655,6 +781,12 @@
   },
   {
     "model_pattern": "gpt-4-turbo-2024-04-09",
+    "input_cost_per_token": 1e-05,
+    "output_cost_per_token": 3e-05,
+    "provider": "openai"
+  },
+  {
+    "model_pattern": "gpt-4-turbo-preview",
     "input_cost_per_token": 1e-05,
     "output_cost_per_token": 3e-05,
     "provider": "openai"
@@ -720,6 +852,12 @@
     "provider": "openai"
   },
   {
+    "model_pattern": "gpt-4o-audio-preview",
+    "input_cost_per_token": 2.5e-06,
+    "output_cost_per_token": 1e-05,
+    "provider": "openai"
+  },
+  {
     "model_pattern": "gpt-4o-audio-preview-2024-12-17",
     "input_cost_per_token": 2.5e-06,
     "output_cost_per_token": 1e-05,
@@ -744,9 +882,27 @@
     "provider": "openai"
   },
   {
+    "model_pattern": "gpt-4o-mini-audio-preview",
+    "input_cost_per_token": 1.5e-07,
+    "output_cost_per_token": 6e-07,
+    "provider": "openai"
+  },
+  {
     "model_pattern": "gpt-4o-mini-audio-preview-2024-12-17",
     "input_cost_per_token": 1.5e-07,
     "output_cost_per_token": 6e-07,
+    "provider": "openai"
+  },
+  {
+    "model_pattern": "gpt-4o-mini-realtime-preview",
+    "input_cost_per_token": 6e-07,
+    "output_cost_per_token": 2.4e-06,
+    "provider": "openai"
+  },
+  {
+    "model_pattern": "gpt-4o-mini-realtime-preview-2024-12-17",
+    "input_cost_per_token": 6e-07,
+    "output_cost_per_token": 2.4e-06,
     "provider": "openai"
   },
   {
@@ -756,7 +912,37 @@
     "provider": "openai"
   },
   {
+    "model_pattern": "gpt-4o-mini-search-preview-2025-03-11",
+    "input_cost_per_token": 1.5e-07,
+    "output_cost_per_token": 6e-07,
+    "provider": "openai"
+  },
+  {
+    "model_pattern": "gpt-4o-realtime-preview",
+    "input_cost_per_token": 5e-06,
+    "output_cost_per_token": 2e-05,
+    "provider": "openai"
+  },
+  {
+    "model_pattern": "gpt-4o-realtime-preview-2024-12-17",
+    "input_cost_per_token": 5e-06,
+    "output_cost_per_token": 2e-05,
+    "provider": "openai"
+  },
+  {
+    "model_pattern": "gpt-4o-realtime-preview-2025-06-03",
+    "input_cost_per_token": 5e-06,
+    "output_cost_per_token": 2e-05,
+    "provider": "openai"
+  },
+  {
     "model_pattern": "gpt-4o-search-preview",
+    "input_cost_per_token": 2.5e-06,
+    "output_cost_per_token": 1e-05,
+    "provider": "openai"
+  },
+  {
+    "model_pattern": "gpt-4o-search-preview-2025-03-11",
     "input_cost_per_token": 2.5e-06,
     "output_cost_per_token": 1e-05,
     "provider": "openai"
@@ -966,6 +1152,12 @@
     "provider": "openai"
   },
   {
+    "model_pattern": "gpt-6.1-sol",
+    "input_cost_per_token": 2e-06,
+    "output_cost_per_token": 1e-05,
+    "provider": "openai"
+  },
+  {
     "model_pattern": "gpt-audio",
     "input_cost_per_token": 2.5e-06,
     "output_cost_per_token": 1e-05,
@@ -990,7 +1182,67 @@
     "provider": "openai"
   },
   {
+    "model_pattern": "gpt-audio-mini-2025-10-06",
+    "input_cost_per_token": 6e-07,
+    "output_cost_per_token": 2.4e-06,
+    "provider": "openai"
+  },
+  {
     "model_pattern": "gpt-audio-mini-2025-12-15",
+    "input_cost_per_token": 6e-07,
+    "output_cost_per_token": 2.4e-06,
+    "provider": "openai"
+  },
+  {
+    "model_pattern": "gpt-realtime",
+    "input_cost_per_token": 4e-06,
+    "output_cost_per_token": 1.6e-05,
+    "provider": "openai"
+  },
+  {
+    "model_pattern": "gpt-realtime-1.5",
+    "input_cost_per_token": 4e-06,
+    "output_cost_per_token": 1.6e-05,
+    "provider": "openai"
+  },
+  {
+    "model_pattern": "gpt-realtime-2",
+    "input_cost_per_token": 4e-06,
+    "output_cost_per_token": 1.6e-05,
+    "provider": "openai"
+  },
+  {
+    "model_pattern": "gpt-realtime-2.1",
+    "input_cost_per_token": 4e-06,
+    "output_cost_per_token": 2.4e-05,
+    "provider": "openai"
+  },
+  {
+    "model_pattern": "gpt-realtime-2.1-mini",
+    "input_cost_per_token": 6e-07,
+    "output_cost_per_token": 2.4e-06,
+    "provider": "openai"
+  },
+  {
+    "model_pattern": "gpt-realtime-2025-08-28",
+    "input_cost_per_token": 4e-06,
+    "output_cost_per_token": 1.6e-05,
+    "provider": "openai"
+  },
+  {
+    "model_pattern": "gpt-realtime-mini",
+    "input_cost_per_token": 6e-07,
+    "output_cost_per_token": 2.4e-06,
+    "provider": "openai"
+  },
+  {
+    "model_pattern": "gpt-realtime-mini-2025-10-06",
+    "input_cost_per_token": 6e-07,
+    "output_cost_per_token": 2.4e-06,
+    "provider": "openai"
+  },
+  {
+    "model_pattern": "gpt-realtime-mini-2025-12-15",
     "input_cost_per_token": 6e-07,
     "output_cost_per_token": 2.4e-06,
     "provider": "openai"
