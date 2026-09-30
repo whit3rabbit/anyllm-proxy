@@ -10,6 +10,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ## [Unreleased]
 
+### Fixed
+- Route-scoped virtual keys fail closed: removed the permissive backend-membership fallback in `enforce_route_scope`, so a route-scoped key with no selected admin route gets `403` instead of implicit backend-wide access.
+- Pricing for routable legacy models is retained durably: 39 models (Anthropic/OpenAI legacy chat, OpenAI realtime/audio/search, Gemini live/audio) that weekly LiteLLM pricing refreshes kept stripping are now pinned in `RETAINED_LEGACY_PRICING` in `scripts/update_pricing.py`, preventing virtual-key budget bypasses. `check_litellm_providers.py --check` no longer flags retained entries as drift.
+
+### Security
+- Updated `rustls` 0.23.41 → 0.23.45, fixing RUSTSEC-2026-0285 (TLS 1.3 handshake messages incorrectly accepted across encryption level boundaries). `cargo audit` is now clean apart from one allowed `paste` unmaintained warning; the previously flagged `rustls-pemfile`, `event-listener`, `chacha20`, and `spin` warnings are resolved.
+
+### Changed
+- Refreshed `Cargo.lock` with semver-compatible updates across the workspace (~150 crates), dropping duplicate `axum` 0.7 and stale `reqwest` copies from the lockfile. Optional `otel`/`qdrant` feature builds now compile `aws-lc-sys` via `rustls`'s current default crypto provider; default-feature builds (CI, Docker, `cargo build`) are unaffected.
+- Regenerated the LiteLLM provider snapshot: added `agentcore` and `aihubmix` providers, added `claude-mythos-5`, `claude-mythos-5-1`, `claude-mythos-preview`, `claude-fable-5-1`, `claude-opus-5-5`, and `claude-sonnet-5-5`; dropped 9 legacy Claude models LiteLLM removed. Generated snapshot consts now carry `#[rustfmt::skip]` so a fresh `--write-rust-snapshot` run passes `cargo fmt --check`.
+
 ## [0.16.2] - 2026-09-12
 
 ### Added
