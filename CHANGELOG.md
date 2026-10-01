@@ -10,6 +10,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-09-30
+
 ### Fixed
 - Route-scoped virtual keys fail closed: removed the permissive backend-membership fallback in `enforce_route_scope`, so a route-scoped key with no selected admin route gets `403` instead of implicit backend-wide access.
 - Pricing for routable legacy models is retained durably: 39 models (Anthropic/OpenAI legacy chat, OpenAI realtime/audio/search, Gemini live/audio) that weekly LiteLLM pricing refreshes kept stripping are now pinned in `RETAINED_LEGACY_PRICING` in `scripts/update_pricing.py`, preventing virtual-key budget bypasses. `check_litellm_providers.py --check` no longer flags retained entries as drift.
