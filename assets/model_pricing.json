@@ -1194,9 +1194,21 @@
     "provider": "openai"
   },
   {
+    "model_pattern": "gpt-6-astra-law",
+    "input_cost_per_token": 1e-05,
+    "output_cost_per_token": 5e-05,
+    "provider": "openai"
+  },
+  {
     "model_pattern": "gpt-6-luna",
     "input_cost_per_token": 1e-07,
     "output_cost_per_token": 5e-07,
+    "provider": "openai"
+  },
+  {
+    "model_pattern": "gpt-6-rosalind",
+    "input_cost_per_token": 1.5e-05,
+    "output_cost_per_token": 7.5e-05,
     "provider": "openai"
   },
   {
@@ -1209,6 +1221,12 @@
     "model_pattern": "gpt-6.1-sol",
     "input_cost_per_token": 2e-06,
     "output_cost_per_token": 1e-05,
+    "provider": "openai"
+  },
+  {
+    "model_pattern": "gpt-6.1-terra",
+    "input_cost_per_token": 1e-06,
+    "output_cost_per_token": 5e-06,
     "provider": "openai"
   },
   {
