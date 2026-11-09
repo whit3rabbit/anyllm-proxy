@@ -444,6 +444,12 @@
     "provider": "google"
   },
   {
+    "model_pattern": "gemini-omni-1.2-flash",
+    "input_cost_per_token": 1.5e-06,
+    "output_cost_per_token": 9e-06,
+    "provider": "google"
+  },
+  {
     "model_pattern": "gemini-omni-flash-preview",
     "input_cost_per_token": 1.5e-06,
     "output_cost_per_token": 9e-06,
@@ -601,6 +607,12 @@
   },
   {
     "model_pattern": "vertex_ai/gemini-omni-1.1-flash-preview",
+    "input_cost_per_token": 1.5e-06,
+    "output_cost_per_token": 9e-06,
+    "provider": "google"
+  },
+  {
+    "model_pattern": "vertex_ai/gemini-omni-1.2-flash",
     "input_cost_per_token": 1.5e-06,
     "output_cost_per_token": 9e-06,
     "provider": "google"
@@ -1197,6 +1209,12 @@
     "model_pattern": "gpt-6-astra-law",
     "input_cost_per_token": 1e-05,
     "output_cost_per_token": 5e-05,
+    "provider": "openai"
+  },
+  {
+    "model_pattern": "gpt-6-cyber",
+    "input_cost_per_token": 2e-05,
+    "output_cost_per_token": 0.0001,
     "provider": "openai"
   },
   {
