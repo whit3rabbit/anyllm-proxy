@@ -42,6 +42,12 @@
     "provider": "anthropic"
   },
   {
+    "model_pattern": "claude-fable-5-2",
+    "input_cost_per_token": 8e-06,
+    "output_cost_per_token": 4e-05,
+    "provider": "anthropic"
+  },
+  {
     "model_pattern": "claude-haiku-4-5",
     "input_cost_per_token": 1e-06,
     "output_cost_per_token": 5e-06,
@@ -69,6 +75,12 @@
     "model_pattern": "claude-mythos-5-1",
     "input_cost_per_token": 1e-05,
     "output_cost_per_token": 5e-05,
+    "provider": "anthropic"
+  },
+  {
+    "model_pattern": "claude-mythos-5-2",
+    "input_cost_per_token": 8e-06,
+    "output_cost_per_token": 4e-05,
     "provider": "anthropic"
   },
   {
@@ -390,6 +402,18 @@
     "provider": "google"
   },
   {
+    "model_pattern": "gemini-4-carbon",
+    "input_cost_per_token": 2e-06,
+    "output_cost_per_token": 1e-05,
+    "provider": "google"
+  },
+  {
+    "model_pattern": "gemini-4-hydrogen",
+    "input_cost_per_token": 1.5e-06,
+    "output_cost_per_token": 7.5e-06,
+    "provider": "google"
+  },
+  {
     "model_pattern": "gemini-embedding-001",
     "input_cost_per_token": 1.5e-07,
     "output_cost_per_token": 0,
@@ -483,6 +507,12 @@
     "model_pattern": "gemini-robotics-er-2-streaming-preview",
     "input_cost_per_token": 1e-06,
     "output_cost_per_token": 5e-06,
+    "provider": "google"
+  },
+  {
+    "model_pattern": "vertex_ai/deep-research-preview-04-2026",
+    "input_cost_per_token": 2e-06,
+    "output_cost_per_token": 1.2e-05,
     "provider": "google"
   },
   {
@@ -585,6 +615,24 @@
     "model_pattern": "vertex_ai/gemini-4-argon-cyber-permissive",
     "input_cost_per_token": 4e-06,
     "output_cost_per_token": 2e-05,
+    "provider": "google"
+  },
+  {
+    "model_pattern": "vertex_ai/gemini-4-carbon",
+    "input_cost_per_token": 2e-06,
+    "output_cost_per_token": 1e-05,
+    "provider": "google"
+  },
+  {
+    "model_pattern": "vertex_ai/gemini-4-carbon-cyber-permissive",
+    "input_cost_per_token": 4e-06,
+    "output_cost_per_token": 2e-05,
+    "provider": "google"
+  },
+  {
+    "model_pattern": "vertex_ai/gemini-4-hydrogen",
+    "input_cost_per_token": 1.5e-06,
+    "output_cost_per_token": 7.5e-06,
     "provider": "google"
   },
   {
